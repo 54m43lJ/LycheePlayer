@@ -18,6 +18,7 @@ dist/
 dist-ssr/
 out/
 coverage/
+*.tsbuildinfo
 
 # Rust (Tauri backend / native client)
 target/
