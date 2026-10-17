@@ -28,6 +28,9 @@ POC 实现了 README 路线图中的 MVP 主链路，并提前验证了 MPRIS / 
 
 要求：Node.js ≥ 22.12，Linux 桌面会话（X11 / Wayland 均可）。窗口最小尺寸为 680×540；更窄时侧栏自动收为图标栏、登录与设置改为单列。
 
+- Wayland 会话下默认使用 Wayland（`--ozone-platform=wayland` + Wayland IME）；无 `WAYLAND_DISPLAY` 时回退 X11。
+- 可用 `QQY_OZONE_PLATFORM=x11` 或命令行 `--ozone-platform=x11` 强制 X11；`npm run dev` / `npm start` 同时设置 `ELECTRON_OZONE_PLATFORM_HINT=auto` 作为兜底。
+
 ```bash
 npm install
 npm run dev          # electron-vite 开发模式
@@ -70,6 +73,7 @@ PASS  qr poll  status=66（66=待扫码）
 - 登录账号下的“我的歌单”：成功载入 24 个歌单。
 - VIP 歌曲《晴天》：320k 与 FLAC 均播放成功，音质切换后进度继续推进。
 - 窄屏 680×540：侧栏收为 64px 图标栏，搜索/设置/登录单列显示，无横向溢出；登录页内容可纵向滚动。
+- Wayland 启动：不额外传 `--ozone-platform` 启动，进程参数自动包含 `--ozone-platform=wayland`，并启用 Wayland IME；`QQY_OZONE_PLATFORM=x11` 可强制回退 X11。
 - MPRIS：`playerctl -p qqy status` 返回 `Playing`，元数据包含标题 / 专辑 / 封面；
   `playerctl -p qqy pause/play` 能反向控制播放器。
 - 类型检查与生产构建通过，运行时控制台无应用错误。

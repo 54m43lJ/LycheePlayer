@@ -7,8 +7,8 @@
   "license": "Apache-2.0",
   "private": true,
   "scripts": {
-    "dev": "electron-vite dev",
-    "start": "electron-vite preview",
+    "dev": "ELECTRON_OZONE_PLATFORM_HINT=auto electron-vite dev",
+    "start": "ELECTRON_OZONE_PLATFORM_HINT=auto electron-vite preview",
     "build": "npm run typecheck && electron-vite build",
     "typecheck": "npm run typecheck:node && npm run typecheck:web",
     "typecheck:node": "tsc --noEmit -p tsconfig.node.json",

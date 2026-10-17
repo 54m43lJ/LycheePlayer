@@ -12,6 +12,29 @@ let quitting = false
 let refreshTimer: NodeJS.Timeout | null = null
 
 app.setName('qqy')
+
+/**
+ * Linux 默认 Wayland：检测到 WAYLAND_DISPLAY 时强制使用 Ozone Wayland，
+ * 并启用 Wayland IME；无 Wayland 会话时保持 Electron 默认（通常为 X11）。
+ * 可用 QQY_OZONE_PLATFORM=x11/wayland 或命令行 --ozone-platform 覆盖。
+ */
+function configureLinuxDisplay(): void {
+  if (process.platform !== 'linux') return
+  if (process.argv.some((arg) => arg.startsWith('--ozone-platform'))) return
+
+  const override = process.env.QQY_OZONE_PLATFORM
+  if (override === 'x11') {
+    app.commandLine.appendSwitch('ozone-platform', 'x11')
+    return
+  }
+  if (override === 'wayland' || process.env.WAYLAND_DISPLAY) {
+    app.commandLine.appendSwitch('ozone-platform', 'wayland')
+    app.commandLine.appendSwitch('enable-wayland-ime')
+    console.info('[startup] Ozone Wayland enabled')
+  }
+}
+
+configureLinuxDisplay()
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
 function iconPath(): string {
