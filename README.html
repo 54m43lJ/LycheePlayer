@@ -43,27 +43,16 @@
   <li>系统集成：MPRIS、托盘常驻、全局快捷键。</li>
 </ul>
 
-<h2>3. 候选技术栈（待定，见下方对比）</h2>
+<h2>3. 技术栈</h2>
 <table>
-  <tr><th>方案</th><th>技术栈</th><th>优势</th><th>代价</th></tr>
-  <tr>
-    <td>A. Electron</td>
-    <td>Electron + Vue 3 + TypeScript + Vite + Pinia；内嵌 Node 版 QQ 音乐 API；libmpv / HTML5 Audio 播放</td>
-    <td>参考项目最多、生态最成熟、开发最快</td>
-    <td>内存占用大，与“轻量”目标相悖</td>
-  </tr>
-  <tr>
-    <td>B. Tauri 2</td>
-    <td>Tauri 2 + Vue 3 前端 + Rust 后端（reqwest 调 QQ 音乐接口）；rodio 或 libmpv 播放；zbus 实现 MPRIS</td>
-    <td>体积小、占用低、保留 Web 前端开发效率</td>
-    <td>API 层需用 Rust 重写（签名、加密），工作量居中</td>
-  </tr>
-  <tr>
-    <td>C. 原生 GUI</td>
-    <td>Rust + GPUI / iced / Slint，或 Python + PyQt6 + qqmusic-api-python</td>
-    <td>最轻量、最原生（Lyrune 路线）；Python 版后端现成且活跃维护</td>
-    <td>UI 开发效率最低；GPUI 在 Linux 需要补丁</td>
-  </tr>
+  <tr><th>层次</th><th>选型</th></tr>
+  <tr><td>桌面壳</td><td>Electron</td></tr>
+  <tr><td>前端</td><td>Vue 3 + TypeScript + Vite + Pinia + Vue Router</td></tr>
+  <tr><td>API 层</td><td>Electron 主进程内嵌 Node 版 QQ 音乐接口服务（参考 jsososo/QQMusicApi 的请求实现），独立模块隔离接口细节</td></tr>
+  <tr><td>播放引擎</td><td>HTML5 Audio 起步，必要时引入 libmpv（参考 EchoMusic 的 napi 内嵌方案）</td></tr>
+  <tr><td>歌词</td><td>LRC 解析渲染起步；逐字歌词参考 jixunmoe-go/qrc 做 QRC 解密</td></tr>
+  <tr><td>系统集成</td><td>MPRIS（mpris-service / dbus）、系统托盘、密钥环存凭证（keytar 或 safeStorage）</td></tr>
+  <tr><td>打包分发</td><td>electron-builder：deb / rpm / AppImage / pacman，x64 + arm64</td></tr>
 </table>
 
 <h2>4. 功能路线图</h2>
