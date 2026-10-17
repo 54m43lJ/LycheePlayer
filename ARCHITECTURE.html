@@ -12,10 +12,10 @@
 <h2 id="s1">1. TERMS</h2>
 <table>
   <tr><th>术语</th><th>定义</th></tr>
-  <tr><td><code>songMid</code></td><td>歌曲在 QQ 音乐的业务主键（字符串）。上游接口调用与播放链接拼装均以它为标识。</td></tr>
-  <tr><td><code>mediaMid</code></td><td>音频文件级标识。付费歌曲的 <code>mediaMid</code> 可能与 <code>songMid</code> 不同，拼装流 URL 必须使用它；不进入本地数据模型。</td></tr>
+  <tr><td><code>songMid</code></td><td>歌曲在 QQ 音乐的业务主键（字符串）。上游接口调用与 vkey 请求均以它为标识。</td></tr>
+  <tr><td><code>mediaMid</code></td><td>音频文件级标识。付费歌曲的 <code>mediaMid</code> 可能与 <code>songMid</code> 不同，vkey 请求的 <code>filename</code> 必须使用它；不进入本地数据模型。</td></tr>
   <tr><td><code>vkey</code></td><td>上游签发的音频流访问令牌，附于流 URL 查询参数，有时效，失效需重新获取。</td></tr>
-  <tr><td>播放链接</td><td>由流域名、文件前缀、<code>mediaMid</code>、扩展名与 <code>vkey</code> 等查询参数拼成的音频流 URL，拼装规则见 <a href="#s43">§4.3</a>。</td></tr>
+  <tr><td>播放链接</td><td>由上游 vkey 接口返回的相对 URL（<code>purl</code>，含 <code>guid</code> / <code>vkey</code> / <code>uin</code> / <code>fromtag</code> 等查询参数）拼成的音频流 URL，拼装规则见 <a href="#s43">§4.3</a>。</td></tr>
   <tr><td>音质（<code>Quality</code>）</td><td><code>128k</code> / <code>320k</code> / <code>flac</code> 三档枚举。</td></tr>
   <tr><td>凭证（<code>Credential</code>）</td><td><code>musicid</code> 与 <code>musickey</code> 组成的登录态，可含过期时间戳。加密存储于系统密钥环。</td></tr>
   <tr><td>权限</td><td>某歌曲对当前凭证的可播属性，分免费（<code>free</code>）、VIP（<code>vip</code>）、数字专辑（<code>album</code>）三类，对应 <code>PayInfo</code>。</td></tr>
@@ -49,6 +49,7 @@
 <div class="diagram"><img src="diagram/seq-login.svg" alt="扫码登录时序图"></div>
 <ul class="note">
   <li>轮询由主进程定时器驱动；渲染进程只消费 <code>login:status</code> 推送，不参与轮询。</li>
+  <li>二维码图片由 <code>login.createQrKey()</code> 随创建结果返回（data URL），<code>login:status</code> 只承载状态推进。</li>
   <li>凭证在主进程内直接入库（密钥环），任何状态下都不跨 IPC 下发。</li>
 </ul>
 
@@ -67,7 +68,9 @@
 行为细节见对应时序图（<a href="#s3">§3</a>）。
 </p>
 <pre><code>// 登录（时序见 §3.2；状态经 login:status 推送，无轮询型返回）
-login.createQrKey(): Promise&lt;IpcResult&lt;null&gt;&gt;;
+login.createQrKey(): Promise&lt;IpcResult&lt;QrSession&gt;&gt;;
+login.getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
+login.loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.logout(): Promise&lt;IpcResult&lt;null&gt;&gt;;
 
 // 搜索
@@ -82,6 +85,9 @@ playlist.listMine(): Promise&lt;IpcResult&lt;PlaylistMeta[]&gt;&gt;;
 
 // 歌词
 lyric.get(songMid: string): Promise&lt;IpcResult&lt;Lyric&gt;&gt;;
+
+// 用户资料（仅界面展示；失败不影响登录）
+user.getProfile(): Promise&lt;IpcResult&lt;UserProfile&gt;&gt;;
 
 // 设置
 settings.get(): Promise&lt;IpcResult&lt;Settings&gt;&gt;;
@@ -113,6 +119,16 @@ type ErrorCode =
   | 'INTERNAL';
 
 type QrStatus = { stage: 'waiting' | 'scanned' | 'ok' | 'expired' };
+
+interface QrSession {
+  imageDataUrl: string;
+  expiresAtMs: number;
+}
+
+interface AuthStatus {
+  loggedIn: boolean;
+  musicid: string | null;
+}
 
 type MprisCommand = 'play' | 'pause' | 'toggle' | 'next' | 'previous' | { seekTo: number };
 
@@ -194,6 +210,11 @@ interface Lyric {
   trans: string | null;
 }
 
+interface UserProfile {
+  nickname: string;
+  avatarUrl: string;
+}
+
 interface Credential {
   musicid: string;
   musickey: string;
@@ -224,12 +245,14 @@ interface Settings {
 <h4>数据转换</h4>
 <table>
   <tr><th>转换</th><th>规则</th></tr>
-  <tr><td>音质 → 流文件</td><td><code>128k</code> → 前缀 <code>M500</code> / <code>.mp3</code>；<code>320k</code> → <code>M800</code> / <code>.mp3</code>；<code>flac</code> → <code>F000</code> / <code>.flac</code></td></tr>
-  <tr><td>播放链接拼装</td><td><code>https://ws.stream.qqmusic.qq.com/{prefix}{mediaMid}.{ext}?guid={guid}&amp;vkey={vkey}&amp;uin={uin}&amp;fromtag=8</code></td></tr>
+  <tr><td>音质 → 流文件</td><td><code>128k</code> → 前缀 <code>M500</code> / <code>.mp3</code>；<code>320k</code> → <code>M800</code> / <code>.mp3</code>；<code>flac</code> → <code>F000</code> / <code>.flac</code>（仅用于 vkey 请求的 <code>filename</code>）</td></tr>
+  <tr><td>播放链接拼装</td><td><code>https://ws.stream.qqmusic.qq.com/{purl}</code>；<code>purl</code> 为 vkey 接口返回的相对 URL，其查询参数（<code>guid</code> / <code>vkey</code> / <code>uin</code> / <code>fromtag</code> 等）必须原样保留</td></tr>
   <tr><td>上游歌曲 → <code>Song</code></td><td><code>songmid</code> → <code>songMid</code> 透传；<code>songid</code> 数字转字符串；<code>interval</code>（秒）× 1000 → <code>durationMs</code>；<code>singer[]</code> / <code>album</code> 取 <code>mid</code> 与 <code>name</code>；<code>pay</code> 映射为 <code>PayInfo</code></td></tr>
+  <tr><td>上游 <code>pay</code> → <code>PayInfo</code></td><td><code>pay_play === 1</code> 且非数字专辑 → <code>vip</code>；<code>price_album &gt; 0</code> → <code>album</code>；<code>pay_play === 0</code> 且非数字专辑 → <code>free</code></td></tr>
 </table>
 <ul class="note">
   <li><code>mediaMid</code> 与 <code>guid</code> 仅在 <code>api/song.ts</code> 内部存在，不出现在 IPC 数据模型中。</li>
+  <li><code>vkey</code> 与 <code>purl</code> 的完整查询串绑定；按固定模板重建查询参数会触发 403，因此只拼接域名与 <code>purl</code>。</li>
   <li><code>UrlResult.url</code> 为 <code>null</code> 表示批量请求中该单曲无此档链接；整体请求失败以 <code>IpcError</code> 表达。</li>
 </ul>
 

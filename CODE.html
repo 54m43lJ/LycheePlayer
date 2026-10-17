@@ -12,20 +12,27 @@
 <h2 id="c1">1. File tree</h2>
 <pre><code>qqy/
 ├── diagram/                                  PlantUML 图源与导出 SVG（见 ARCHITECTURE §3）
+├── resources/                                应用与托盘图标
+├── scripts/
+│   └── probe.mjs                             上游接口可达性探针
 ├── src/
+│   ├── shared/                               IPC 类型（唯一契约来源）
+│   │   ├── types.ts
+│   │   └── ipc.ts
 │   ├── main/                                 Electron 主进程
 │   │   ├── <a href="#c31">index.ts</a>                        应用入口与生命周期
 │   │   ├── <a href="#c32">ipc.ts</a>                           IPC 路由注册
 │   │   ├── <a href="#c33">settings.ts</a>                      设置持久化
 │   │   ├── <a href="#c34">credential.ts</a>                    凭证存取
-│   │   ├── <a href="#c35">api/</a>                             上游接口层
+│   │   ├── api/                             上游接口层
 │   │   │   ├── <a href="#c35">client.ts</a>
 │   │   │   ├── <a href="#c36">search.ts</a>
 │   │   │   ├── <a href="#c37">song.ts</a>
 │   │   │   ├── <a href="#c38">playlist.ts</a>
 │   │   │   ├── <a href="#c39">user.ts</a>
 │   │   │   ├── <a href="#c310">lyric.ts</a>
-│   │   │   └── <a href="#c311">login.ts</a>
+│   │   │   ├── <a href="#c311">login.ts</a>
+│   │   │   └── hash.ts                        hash33 / g_tk
 │   │   └── integration/                      桌面集成
 │   │       ├── <a href="#c312">mpris.ts</a>
 │   │       └── <a href="#c313">tray.ts</a>
@@ -33,8 +40,12 @@
 │   │   └── <a href="#c314">index.ts</a>                        contextBridge 桥接
 │   └── renderer/                             Vue 3 SPA
 │       ├── main.ts / App.vue / router/ / views/ / components/
+│       ├── api.ts                             IpcResult 解包与错误文案
+│       ├── utils/                             LRC 解析、格式化
+│       ├── composables/                       歌词、Toast
 │       └── stores/
-│           └── <a href="#c315">player.ts</a>                     播放器状态
+│           ├── <a href="#c315">player.ts</a>                     播放器状态
+│           └── auth.ts / settings.ts / ui.ts
 ├── ARCHITECTURE.html
 ├── CODE.html
 ├── README.html
@@ -43,6 +54,7 @@
 </code></pre>
 <ul class="note">
   <li>renderer 的 views / components / router 与 stores 中非 player 部分属常规 UI 结构，设计阶段不单独立小节。</li>
+  <li><code>src/shared/</code> 是 IPC 类型契约的唯一来源，主进程、preload 与渲染进程均从这里导入。</li>
 </ul>
 
 <h2 id="c2">2. CONVENTIONS</h2>
@@ -56,12 +68,14 @@
 
 <h2 id="c3">3. Internal types &amp; method signatures</h2>
 <p>
-脚手架尚未建立，以下均为草案签名，统一标注待实现，可以根据实际情况调整；
-ARCHITECTURE 已定义的符号在此仅以引用形式出现，不再重复定义。
+以下签名是代码结构的基准；ARCHITECTURE 已定义的符号在此仅以引用形式出现，不再重复定义。
+标注「待实现，可以根据实际情况调整」的条目允许在实现时按上游实际形态调整。
 </p>
 <pre><code>type IpcResult&lt;T&gt;;          // 见 ARCHITECTURE §4.2
 interface IpcError;         // 见 ARCHITECTURE §4.2
 type QrStatus;              // 见 ARCHITECTURE §4.2
+interface QrSession;        // 见 ARCHITECTURE §4.2
+interface AuthStatus;       // 见 ARCHITECTURE §4.2
 type MprisCommand;          // 见 ARCHITECTURE §4.2
 interface PlayerState;      // 见 ARCHITECTURE §4.2
 type Quality;               // 见 ARCHITECTURE §4.3
@@ -71,6 +85,7 @@ interface SearchResult;     // 见 ARCHITECTURE §4.3
 interface PlaylistMeta;     // 见 ARCHITECTURE §4.3
 interface PlaylistDetail;   // 见 ARCHITECTURE §4.3
 interface Lyric;            // 见 ARCHITECTURE §4.3
+interface UserProfile;      // 见 ARCHITECTURE §4.3
 interface Credential;       // 见 ARCHITECTURE §4.3
 interface UrlResult;        // 见 ARCHITECTURE §4.3
 interface Settings;         // 见 ARCHITECTURE §4.3
@@ -121,7 +136,7 @@ interface UpstreamRequest {
 export function getStreamUrls(mids: string[], quality: Quality): Promise&lt;UrlResult[]&gt;;  // 待实现，可以根据实际情况调整
 </code></pre>
 <ul class="note">
-  <li><code>getStreamUrls</code> 含 ARCHITECTURE §2 的音质降级逻辑，是全应用唯一拼装播放链接的位置。</li>
+  <li><code>getStreamUrls</code> 含 ARCHITECTURE §2 的音质降级逻辑，是全应用唯一拼装播放链接的位置；链接使用上游返回的 <code>purl</code> 原样拼装（ARCHITECTURE §4.3）。</li>
 </ul>
 
 <h3 id="c38">3.8 src/main/api/playlist.ts</h3>
@@ -130,7 +145,7 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;  // 待实现，可�
 </code></pre>
 
 <h3 id="c39">3.9 src/main/api/user.ts</h3>
-<pre><code>export function getProfile(): Promise&lt;{ nickname: string; avatarUrl: string }&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function getProfile(): Promise&lt;UserProfile&gt;;  // 待实现，可以根据实际情况调整
 </code></pre>
 
 <h3 id="c310">3.10 src/main/api/lyric.ts</h3>
@@ -138,11 +153,19 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;  // 待实现，可�
 </code></pre>
 
 <h3 id="c311">3.11 src/main/api/login.ts</h3>
-<pre><code>export function createQrKey(): Promise&lt;string&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function initLoginEvents(events: LoginEvents): void;  // 待实现，可以根据实际情况调整
+export function createQrKey(): Promise&lt;QrSession&gt;;  // 待实现，可以根据实际情况调整
+export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;  // 待实现，可以根据实际情况调整
 export function stopPolling(): void;  // 待实现，可以根据实际情况调整
+
+interface LoginEvents {
+  onStatus(status: QrStatus): void;
+  onCredential(credential: Credential): Promise&lt;void&gt;;
+}
 </code></pre>
 <ul class="note">
-  <li><code>createQrKey</code> 取得 qrcodeKey 后在主进程内启动轮询，状态经 <code>login:status</code> 推送（ARCHITECTURE §3.2）。</li>
+  <li><code>createQrKey</code> 返回二维码图片（data URL）并在主进程内启动轮询，状态经 <code>login:status</code> 推送（ARCHITECTURE §3.2）。</li>
+  <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
 </ul>
 
 <h3 id="c312">3.12 src/main/integration/mpris.ts</h3>
@@ -151,8 +174,16 @@ export function publishState(state: PlayerState | null): void;  // 待实现，�
 </code></pre>
 
 <h3 id="c313">3.13 src/main/integration/tray.ts</h3>
-<pre><code>export function initTray(): void;      // 待实现，可以根据实际情况调整
+<pre><code>export function initTray(actions: TrayActions): void;  // 待实现，可以根据实际情况调整
 export function destroyTray(): void;   // 待实现，可以根据实际情况调整
+
+interface TrayActions {
+  onShow(): void;
+  onToggle(): void;
+  onNext(): void;
+  onPrevious(): void;
+  onQuit(): void;
+}
 </code></pre>
 
 <h3 id="c314">3.14 src/preload/index.ts</h3>
@@ -170,6 +201,7 @@ interface PlayerStore {
   readonly queue: Song[];
   readonly status: 'stopped' | 'playing' | 'paused';
   playSong(song: Song): Promise&lt;void&gt;;
+  playList(songs: Song[], startIndex?: number): void;
   toggle(): void;
   next(): void;
   previous(): void;
@@ -196,8 +228,8 @@ interface PlayerStore {
 
 <h3>4.2 播放单曲</h3>
 <pre><code>stores/player::playSong(song)
-├── window.qqy.song.getUrls(song.songMid, settings.defaultQuality)
-├── 判断 url === null → 降档重试一次，仍失败提示 NO_STREAM 后返回
+├── window.qqy.song.getUrls([song.songMid], settings.defaultQuality)
+├── 判断 url === null → 提示 NO_STREAM 后返回
 ├── AudioEngine.play(url)
 ├── audio 事件 timeupdate / ended → send player:state
 │   └── integration/mpris::publishState(state)
