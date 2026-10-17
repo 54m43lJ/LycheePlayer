@@ -64,8 +64,10 @@ export const useAuthStore = defineStore('auth', () => {
 
   function handleQrStatus(status: QrStatus): void {
     qrStage.value = status.stage
+    if (status.message) qrError.value = status.message
     if (status.stage === 'ok') {
       qrImage.value = ''
+      qrError.value = ''
       void refresh()
     }
   }

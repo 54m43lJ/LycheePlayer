@@ -23,6 +23,7 @@ const remaining = computed(() => {
 const expired = computed(
   () => auth.qrStage === 'expired' || (Boolean(auth.qrImage) && remaining.value === 0)
 )
+const failed = computed(() => auth.qrStage === 'failed')
 
 const statusText = computed(() => {
   if (auth.qrLoading) return '正在获取二维码…'
@@ -32,6 +33,8 @@ const statusText = computed(() => {
       return '已扫码，请在手机上确认登录'
     case 'ok':
       return '登录成功'
+    case 'failed':
+      return auth.qrError || '登录失败，请重试'
     case 'expired':
       return '二维码已过期'
     default:
@@ -106,13 +109,19 @@ async function submitCookie(): Promise<void> {
             <button @click="auth.startQrLogin()">重新获取</button>
           </div>
 
-          <div v-if="expired && auth.qrImage" class="qr-mask">
-            <AppIcon name="refresh" :size="24" />
-            <span>二维码已过期</span>
-            <button @click="auth.startQrLogin()">点击刷新</button>
+          <div v-if="(expired || failed) && auth.qrImage" class="qr-mask">
+            <AppIcon :name="failed ? 'close' : 'refresh'" :size="24" />
+            <span>{{ failed ? auth.qrError || '登录失败' : '二维码已过期' }}</span>
+            <button @click="auth.startQrLogin()">重新获取</button>
           </div>
         </div>
-        <div class="qr-status" :class="{ ok: auth.qrStage === 'ok' }">{{ statusText }}</div>
+        <div
+          class="qr-status"
+          :class="{ ok: auth.qrStage === 'ok', error: failed }"
+        >{{ statusText }}</div>
+        <p v-if="failed" class="note" style="text-align: center; max-width: 260px">
+          扫码确认已收到但换取登录态失败。可展开下方 Cookie 登录先进入应用。
+        </p>
         <p class="note" style="text-align: center; max-width: 250px">
           二维码由腾讯 QQ 登录服务签发，扫码后状态由主进程轮询，凭证不下发到界面。
         </p>

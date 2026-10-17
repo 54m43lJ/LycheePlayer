@@ -27,7 +27,7 @@ POC 实现了 README 路线图中的 MVP 主链路，并提前验证了 MPRIS / 
 
 ## 2. 如何运行
 
-要求：Node.js ≥ 22.12，Linux 桌面会话（X11 / Wayland 均可）。
+要求：Node.js ≥ 22.12，Linux 桌面会话（X11 / Wayland 均可）。窗口最小尺寸为 680×540；更窄时侧栏自动收为图标栏、登录与设置改为单列。
 
 ```bash
 npm install
@@ -66,6 +66,7 @@ PASS  qr poll  status=66（66=待扫码）
 - 歌单 `7039749142`：99 首全部载入，封面正常。
 - 扫码：二维码 111×111 PNG，轮询返回 66（待扫码）。
 - 非法 Cookie：返回 `AUTH_EXPIRED`，不写入凭证。
+- 窄屏 680×540：侧栏收为 64px 图标栏，搜索/设置/登录单列显示，无横向溢出；登录页内容可纵向滚动。
 - MPRIS：`playerctl -p qqy status` 返回 `Playing`，元数据包含标题 / 专辑 / 封面；
   `playerctl -p qqy pause/play` 能反向控制播放器。
 - 类型检查与生产构建通过，运行时控制台无应用错误。
@@ -90,6 +91,7 @@ PASS  qr poll  status=66（66=待扫码）
 | --- | --- | --- |
 | `login.createQrKey()` 返回 `QrSession`（二维码 data URL + 过期时间） | 渲染进程必须拿到图片才能显示二维码；原接口只返回 `null` | 已更新 ARCHITECTURE §4.1 / §4.2、CODE §3.11 |
 | 新增 `login.getStatus()`、`login.loginWithCookie()` | 启动时恢复登录态；Cookie 是 PENDING #4 的兜底入口 | 已更新 ARCHITECTURE §4.1 / §4.2 |
+| `QrStatus` 增加 `failed` 阶段与 `message` | 扫码确认后换证失败时需要向用户展示具体原因，而不是静默过期 | 已更新 ARCHITECTURE §3.2 / §4.2 |
 | 播放链接拼接改为复用 `purl` | `vkey` 与查询串绑定，重建会 403 | 已更新 ARCHITECTURE §1 / §4.3、CODE §3.7 |
 | 托盘 `initTray(actions)` 需要回调 | 托盘菜单要控制播放器与退出 | 已更新 CODE §3.13 |
 | `closeToTray` 默认 `false` | PENDING #6 未拍板，POC 取保守值 | PENDING 保留 |
@@ -99,7 +101,7 @@ PASS  qr poll  status=66（66=待扫码）
 
 ## 6. POC 已知限制
 
-- 扫码登录只验证到“等待扫码”；授权换凭证链路需要真实手机确认。
+- 扫码登录只验证到“等待扫码”；授权换证链路已按公开实现对齐（优先直接访问 `ptqrlogin` 回调地址，失败再用回调中的 `uin` / `ptsigx` 重建 `check_sig`；`QQLogin` 使用 POST + `req` 信封），但仍需要真实账号回归。失败原因会显示在二维码遮罩上，并保留 Cookie 兜底入口。
 - Cookie 登录只验证了非法 Cookie 的拒绝路径，未用真实账号验证成功路径。
 - VIP / FLAC / 数字专辑的权限与降档提示未用付费账号验证。
 - 我的歌单接口需要登录，POC 未做真实账号联调，字段映射采用防御式别名。

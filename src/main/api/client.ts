@@ -197,7 +197,7 @@ export async function musicu<T>(
   throw new UpstreamError('QUOTA_LIMITED', '上游持续繁忙')
 }
 
-function mapUpstreamCode(code: number, context: string): UpstreamError {
+export function mapUpstreamCode(code: number, context: string): UpstreamError {
   if (code === 1000 || code === 104401 || code === 104400) {
     return new UpstreamError('AUTH_EXPIRED', '登录凭证已过期')
   }
@@ -206,6 +206,19 @@ function mapUpstreamCode(code: number, context: string): UpstreamError {
   }
   if (code === 104003) {
     return new UpstreamError('NO_STREAM', '当前账号无该音质权限')
+  }
+  const loginMessages: Record<number, string> = {
+    20261: '登录参数错误',
+    20271: '验证码错误',
+    20272: '账号绑定异常',
+    20274: '账号绑定缺失，请先在官方 QQ 音乐客户端登录一次',
+    20277: '账号受限',
+    20278: '账号受限',
+    20279: '登录设备数量超限',
+    20450: '账号已被封禁'
+  }
+  if (loginMessages[code]) {
+    return new UpstreamError('AUTH_EXPIRED', loginMessages[code])
   }
   return new UpstreamError('UPSTREAM_CHANGED', `上游返回错误码 ${code}（${context}）`)
 }

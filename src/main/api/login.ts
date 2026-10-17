@@ -1,9 +1,12 @@
 import type { Credential, QrSession, QrStatus } from '../../shared/types'
-import { musicu, UpstreamError, upstreamRequest } from './client'
+import { mapUpstreamCode, UpstreamError, upstreamRequest } from './client'
 import { hash33 } from './hash'
 
 const USER_AGENT =
   'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+const QR_TTL_MS = 2 * 60_000
+const MAX_POLL_ERRORS = 6
 
 interface LoginEvents {
   onStatus: (status: QrStatus) => void
@@ -16,6 +19,12 @@ interface QrState {
   lastStatus: QrStatus['stage'] | null
   errors: number
   stopped: boolean
+  expiresAt: number
+}
+
+interface PollResult {
+  stage: 'waiting' | 'scanned' | 'expired' | 'ok'
+  redirect?: string
 }
 
 let events: LoginEvents | null = null
@@ -25,10 +34,10 @@ export function initLoginEvents(next: LoginEvents): void {
   events = next
 }
 
-function emitStatus(stage: QrStatus['stage']): void {
-  if (state?.lastStatus === stage) return
+function emitStatus(stage: QrStatus['stage'], message?: string): void {
+  if (state?.lastStatus === stage && !message) return
   if (state) state.lastStatus = stage
-  events?.onStatus({ stage })
+  events?.onStatus(message ? { stage, message } : { stage })
 }
 
 export function stopPolling(): void {
@@ -39,9 +48,16 @@ export function stopPolling(): void {
   state = null
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error)
+}
+
 function setCookies(headers: Headers, jar: Record<string, string>): void {
   const withSetCookie = headers as Headers & { getSetCookie?: () => string[] }
-  const raw = withSetCookie.getSetCookie?.() ?? (headers.get('set-cookie') ? [headers.get('set-cookie')!] : [])
+  const combined = headers.get('set-cookie')
+  const raw =
+    withSetCookie.getSetCookie?.() ??
+    (combined ? combined.split(/,\s*(?=[A-Za-z0-9_-]+=)/) : [])
   for (const item of raw) {
     const pair = item.split(';', 1)[0]
     const index = pair.indexOf('=')
@@ -98,7 +114,7 @@ async function getQrImage(): Promise<{ imageDataUrl: string; qrsig: string }> {
   }
 }
 
-async function poll(qrsig: string): Promise<{ stage: 'waiting' | 'scanned' | 'expired' | 'ok'; redirect?: string }> {
+async function poll(qrsig: string): Promise<PollResult> {
   const url = new URL('https://ssl.ptlogin2.qq.com/ptqrlogin')
   const params: Record<string, string> = {
     u1: 'https://graph.qq.com/oauth2.0/login_jump',
@@ -148,55 +164,98 @@ async function poll(qrsig: string): Promise<{ stage: 'waiting' | 'scanned' | 'ex
   }
 }
 
-function readCookieValue(url: URL, key: string): string | null {
+function readParam(url: URL, key: string): string | null {
   const value = url.searchParams.get(key)
   return value && value.length > 0 ? value : null
 }
 
-async function authorizeQqQr(redirect: string): Promise<Credential> {
-  const redirectUrl = new URL(redirect)
-  const uin = readCookieValue(redirectUrl, 'uin')
-  const sigx = readCookieValue(redirectUrl, 'ptsigx')
-  if (!uin || !sigx) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '登录跳转缺少 uin / ptsigx')
-  }
+interface CheckSigResult {
+  jar: Record<string, string>
+  status: number
+}
 
-  const checkUrl = new URL('https://ssl.ptlogin2.graph.qq.com/check_sig')
-  const checkParams: Record<string, string> = {
-    uin,
-    pttype: '1',
-    service: 'ptqrlogin',
-    nodirect: '0',
-    ptsigx: sigx,
-    s_url: 'https://graph.qq.com/oauth2.0/login_jump',
-    ptlang: '2052',
-    ptredirect: '100',
-    aid: '716027609',
-    daid: '383',
-    j_later: '0',
-    low_login_hour: '0',
-    regmaster: '0',
-    pt_login_type: '3',
-    pt_aid: '0',
-    pt_aaid: '16',
-    pt_light: '0',
-    pt_3rd_aid: '100497308'
-  }
-  for (const [key, value] of Object.entries(checkParams)) checkUrl.searchParams.set(key, value)
-
-  const checkResponse = await fetch(checkUrl, {
-    redirect: 'manual',
-    headers: {
-      'User-Agent': USER_AGENT,
-      Referer: 'https://xui.ptlogin2.qq.com/'
-    },
-    signal: AbortSignal.timeout(15_000)
-  })
+async function fetchCheckSig(url: URL): Promise<CheckSigResult> {
   const jar: Record<string, string> = {}
-  setCookies(checkResponse.headers, jar)
-  if (!jar.p_skey) {
-    throw new UpstreamError('UPSTREAM_CHANGED', 'QQ 登录未返回 p_skey')
+  let current = url
+  let status = 0
+
+  // check_sig 成功时通常直接 302 并在 Set-Cookie 中带 p_skey；
+  // 少数情况下 p_skey 会出现在后续跳转的响应上，因此手动跟随有限跳转并累积 cookie。
+  for (let hop = 0; hop < 4; hop += 1) {
+    const response = await fetch(current, {
+      redirect: 'manual',
+      headers: {
+        'User-Agent': USER_AGENT,
+        Referer: 'https://xui.ptlogin2.qq.com/',
+        ...(cookieHeader(jar) ? { Cookie: cookieHeader(jar) } : {})
+      },
+      signal: AbortSignal.timeout(15_000)
+    })
+    status = response.status
+    setCookies(response.headers, jar)
+
+    const location = response.headers.get('location')
+    if (!jar.p_skey && status >= 300 && status < 400 && location) {
+      current = new URL(location, current)
+      continue
+    }
+    break
   }
+
+  return { jar, status }
+}
+
+async function requestOAuthCode(redirect: string): Promise<string> {
+  const redirectUrl = new URL(redirect)
+  console.info(`[login] 扫码成功，回调 ${redirectUrl.host}${redirectUrl.pathname}`)
+
+  // 优先直接访问 ptqrlogin 返回的回调地址（与网页登录一致）。
+  // 注意：不要携带 qrsig 等二维码 Cookie，回调地址本身已经绑定 ptsigx。
+  let check = await fetchCheckSig(redirectUrl)
+
+  if (!check.jar.p_skey) {
+    const uin = readParam(redirectUrl, 'uin')
+    const sigx = readParam(redirectUrl, 'ptsigx')
+    if (!uin || !sigx) {
+      throw new UpstreamError('UPSTREAM_CHANGED', '登录跳转缺少 uin / ptsigx')
+    }
+
+    const checkUrl = new URL('https://ssl.ptlogin2.graph.qq.com/check_sig')
+    const checkParams: Record<string, string> = {
+      uin,
+      pttype: '1',
+      service: 'ptqrlogin',
+      nodirect: '0',
+      ptsigx: sigx,
+      s_url: 'https://graph.qq.com/oauth2.0/login_jump',
+      ptlang: '2052',
+      ptredirect: '100',
+      aid: '716027609',
+      daid: '383',
+      j_later: '0',
+      low_login_hour: '0',
+      regmaster: '0',
+      pt_login_type: '3',
+      pt_aid: '0',
+      pt_aaid: '16',
+      pt_light: '0',
+      pt_3rd_aid: '100497308'
+    }
+    for (const [key, value] of Object.entries(checkParams)) checkUrl.searchParams.set(key, value)
+    check = await fetchCheckSig(checkUrl)
+  }
+
+  if (!check.jar.p_skey) {
+    throw new UpstreamError(
+      'AUTH_EXPIRED',
+      `QQ 登录未返回 p_skey（check_sig HTTP ${check.status}；cookies: ${
+        Object.keys(check.jar).join(', ') || 'none'
+      }）`
+    )
+  }
+  console.info(
+    `[login] check_sig 完成：HTTP ${check.status}，cookies=[${Object.keys(check.jar).join(',')}]`
+  )
 
   const authorizeUrl = new URL('https://graph.qq.com/oauth2.0/authorize')
   const form = new URLSearchParams({
@@ -211,7 +270,7 @@ async function authorizeQqQr(redirect: string): Promise<Credential> {
     src: '1',
     update_auth: '1',
     openapi: '1010_1030',
-    g_tk: String(hash33(jar.p_skey, 5381)),
+    g_tk: String(hash33(check.jar.p_skey, 5381)),
     auth_time: String(Date.now()),
     ui: crypto.randomUUID()
   })
@@ -221,27 +280,85 @@ async function authorizeQqQr(redirect: string): Promise<Credential> {
     redirect: 'manual',
     headers: {
       'User-Agent': USER_AGENT,
-      Referer: 'https://graph.qq.com/',
+      Referer: 'https://xui.ptlogin2.qq.com/',
       'Content-Type': 'application/x-www-form-urlencoded',
-      Cookie: cookieHeader(jar)
+      Cookie: cookieHeader(check.jar)
     },
     body: form.toString(),
     signal: AbortSignal.timeout(15_000)
   })
 
   const location = authorizeResponse.headers.get('location') ?? ''
-  const code = new URL(location, 'https://graph.qq.com').searchParams.get('code')
-  if (!code) {
-    throw new UpstreamError('UPSTREAM_CHANGED', 'QQ 授权未返回 code')
-  }
-
-  const data = await musicu<Record<string, unknown>>(
-    'QQConnectLogin.LoginServer',
-    'QQLogin',
-    { code },
-    { comm: { tmeLoginType: 2 }, credential: null }
+  const code = location
+    ? new URL(location, 'https://graph.qq.com').searchParams.get('code')
+    : null
+  console.info(
+    `[login] oauth authorize：HTTP ${authorizeResponse.status}，code ${code ? '已返回' : '缺失'}`
   )
-  return parseLoginCredential(data)
+  if (!code) {
+    throw new UpstreamError(
+      'AUTH_EXPIRED',
+      `QQ 授权未返回 code（HTTP ${authorizeResponse.status}）`
+    )
+  }
+  return code
+}
+
+async function authorizeQqQr(redirect: string): Promise<Credential> {
+  const code = await requestOAuthCode(redirect)
+
+  const payload = {
+    comm: { tmeLoginType: 2 },
+    req: {
+      module: 'QQConnectLogin.LoginServer',
+      method: 'QQLogin',
+      param: { code }
+    }
+  }
+  const response = await upstreamRequest<{
+    code: number
+    req?: { code: number; data?: Record<string, unknown>; message?: string }
+    req_0?: { code: number; data?: Record<string, unknown>; message?: string }
+  }>({
+    host: 'https://u.y.qq.com',
+    path: '/cgi-bin/musicu.fcg',
+    params: {},
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': 'Mozilla/5.0 (iPhone; CPU iPhone OS 13_0 like Mac OS X)',
+      Referer: 'https://y.qq.com/'
+    },
+    body: JSON.stringify(payload),
+    credential: null
+  })
+
+  const node = response.req ?? response.req_0
+  if (response.code !== 0) {
+    throw mapUpstreamCode(response.code, 'QQConnectLogin.LoginServer.QQLogin')
+  }
+  if (!node) {
+    throw new UpstreamError('UPSTREAM_CHANGED', 'QQLogin 响应缺少 req')
+  }
+  if (node.code !== 0) {
+    throw mapUpstreamCode(node.code, 'QQConnectLogin.LoginServer.QQLogin')
+  }
+  if (!node.data) {
+    throw new UpstreamError('UPSTREAM_CHANGED', 'QQLogin 响应缺少 data')
+  }
+  console.info('[login] QQLogin 成功，正在解析凭证')
+  return parseLoginCredential(node.data)
+}
+
+async function authorizeWithRetry(redirect: string): Promise<Credential> {
+  try {
+    return await authorizeQqQr(redirect)
+  } catch (error) {
+    if (error instanceof UpstreamError && error.code === 'UPSTREAM_NETWORK') {
+      return authorizeQqQr(redirect)
+    }
+    throw error
+  }
 }
 
 function findCredentialPayload(value: unknown, depth = 0): Record<string, unknown> | null {
@@ -269,8 +386,9 @@ function parseLoginCredential(data: unknown): Credential {
 
   const expiresIn = Number(payload.keyExpiresIn ?? 0)
   const createdAt = Number(payload.musickeyCreateTime ?? 0)
+  const createdAtMs = createdAt > 1_000_000_000_000 ? createdAt : createdAt * 1000
   const expiredAtMs =
-    createdAt > 0 && expiresIn > 0 ? (createdAt + expiresIn) * 1000 : null
+    createdAtMs > 0 && expiresIn > 0 ? createdAtMs + expiresIn * 1000 : null
 
   return { musicid, musickey, expiredAtMs }
 }
@@ -282,31 +400,51 @@ function schedulePoll(delay: number): void {
   }, delay)
 }
 
+function failLogin(error: unknown): void {
+  const message = errorMessage(error)
+  console.error(`[login] 登录失败：${message}`)
+  emitStatus('failed', message)
+  stopPolling()
+}
+
 async function runPoll(): Promise<void> {
-  if (!state || state.stopped) return
+  const snapshot = state
+  if (!snapshot || snapshot.stopped) return
   try {
-    const result = await poll(state.qrsig)
-    if (state.stopped) return
-    state.errors = 0
+    const result = await poll(snapshot.qrsig)
+    if (state !== snapshot || snapshot.stopped) return
+    snapshot.errors = 0
+
     if (result.stage === 'ok') {
       emitStatus('scanned')
-      const credential = await authorizeQqQr(result.redirect!)
-      await events?.onCredential(credential)
-      emitStatus('ok')
-      stopPolling()
+      try {
+        const credential = await authorizeWithRetry(result.redirect!)
+        if (state !== snapshot) return
+        await events?.onCredential(credential)
+        if (state !== snapshot) return
+        emitStatus('ok')
+        stopPolling()
+      } catch (error) {
+        failLogin(error)
+      }
       return
     }
+
     if (result.stage === 'expired') {
       emitStatus('expired')
       stopPolling()
       return
     }
+
     emitStatus(result.stage)
     schedulePoll(result.stage === 'scanned' ? 1000 : 1800)
-  } catch {
-    if (!state || state.stopped) return
-    state.errors += 1
-    if (state.errors >= 3) {
+  } catch (error) {
+    if (!state || state !== snapshot || snapshot.stopped) return
+    snapshot.errors += 1
+    console.warn(
+      `[login] 二维码轮询失败（${snapshot.errors}/${MAX_POLL_ERRORS}）：${errorMessage(error)}`
+    )
+    if (Date.now() >= snapshot.expiresAt || snapshot.errors >= MAX_POLL_ERRORS) {
       emitStatus('expired')
       stopPolling()
       return
@@ -319,16 +457,18 @@ async function runPoll(): Promise<void> {
 export async function createQrKey(): Promise<QrSession> {
   stopPolling()
   const { imageDataUrl, qrsig } = await getQrImage()
+  const expiresAt = Date.now() + QR_TTL_MS
   state = {
     qrsig,
     timer: null,
     lastStatus: null,
     errors: 0,
-    stopped: false
+    stopped: false,
+    expiresAt
   }
   emitStatus('waiting')
   schedulePoll(800)
-  return { imageDataUrl, expiresAtMs: Date.now() + 2 * 60_000 }
+  return { imageDataUrl, expiresAtMs: expiresAt }
 }
 
 function parseCookieString(cookie: string): { uin: string; key: string } {

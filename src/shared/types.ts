@@ -95,7 +95,10 @@ export interface Settings {
   closeToTray: boolean
 }
 
-export type QrStatus = { stage: 'waiting' | 'scanned' | 'ok' | 'expired' }
+export type QrStatus = {
+  stage: 'waiting' | 'scanned' | 'ok' | 'expired' | 'failed'
+  message?: string
+}
 
 /**
  * POC 扩展：二维码图片必须随创建结果返回，渲染进程才能显示。
