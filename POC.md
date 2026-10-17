@@ -67,6 +67,9 @@ PASS  qr poll  status=66（66=待扫码）
 - 扫码：二维码 111×111 PNG，轮询返回 66（待扫码）；扫码确认后的 `check_sig` 若返回 `p_skey_forbid`，界面会直接显示风控提示。
 - 官方网页登录窗口：弹窗加载 `https://y.qq.com/`，使用独立 session，登录完成后可从 Cookie 提取 `uin` / `qm_keyst`；需要真实账号完成登录后回归。
 - 非法 Cookie：返回 `AUTH_EXPIRED`，不写入凭证。
+- 官方网页登录窗口：实际完成登录，主进程读取 Cookie 后经 `safeStorage` 落盘；重启应用后仍保持登录态。
+- 登录账号下的“我的歌单”：成功载入 24 个歌单。
+- VIP 歌曲《晴天》：320k 与 FLAC 均播放成功，音质切换后进度继续推进。
 - 窄屏 680×540：侧栏收为 64px 图标栏，搜索/设置/登录单列显示，无横向溢出；登录页内容可纵向滚动。
 - MPRIS：`playerctl -p qqy status` 返回 `Playing`，元数据包含标题 / 专辑 / 封面；
   `playerctl -p qqy pause/play` 能反向控制播放器。
@@ -103,11 +106,10 @@ PASS  qr poll  status=66（66=待扫码）
 
 ## 6. POC 已知限制
 
-- 扫码登录只验证到“等待扫码”；授权换证链路已按公开实现对齐（优先直接访问 `ptqrlogin` 回调地址，失败再用回调中的 `uin` / `ptsigx` 重建 `check_sig`；`QQLogin` 使用 POST + `req` 信封），但仍需要真实账号回归。失败原因会显示在二维码遮罩上，并保留 Cookie 兜底入口。
-- 若 QQ 返回 `p_skey_forbid`（账号/IP 风控），应用会提示先在官方 QQ 音乐网页完成设备验证，或改用 Cookie 登录；这不是客户端可以绕过的状态。
-- Cookie 登录只验证了非法 Cookie 的拒绝路径，未用真实账号验证成功路径。
-- VIP / FLAC / 数字专辑的权限与降档提示未用付费账号验证。
-- 我的歌单接口需要登录，POC 未做真实账号联调，字段映射采用防御式别名。
+- 扫码登录已实测到 `check_sig`；当前网络环境下 QQ 侧返回 `p_skey_forbid`，拒绝下发 `p_skey`，应用会提示使用官方网页登录或 Cookie。网页登录窗口已实际完成登录并持久化，因此该风控不阻塞日常使用。
+- 手动粘贴 Cookie 的成功路径未单独验证；网页登录内部复用同一个 Cookie 校验入口并已成功。
+- 扫码在无风控环境下的完整 `p_skey → oauth code → QQLogin` 成功路径仍建议用另一网络/账号回归。
+- 数字专辑与无版权歌曲的不可播提示未专门验证；VIP 歌曲的 320k / FLAC 已验证。
 - 桌面歌词、逐字歌词、MV、下载、全局快捷键未实现。
 - 未配置 electron-builder，未生成 deb / rpm / AppImage。
 - 托盘在无 StatusNotifier 的极简桌面环境中可能不可见。
@@ -115,7 +117,7 @@ PASS  qr poll  status=66（66=待扫码）
 
 ## 7. 下一步建议
 
-1. 用真实账号跑通扫码授权、Cookie 登录、VIP 320k / FLAC、我的歌单。
+1. 在另一网络/账号回归扫码 `p_skey` 成功路径，并验证数字专辑的不可播提示与手动 Cookie 粘贴。
 2. 拍板 PENDING #2（许可证）、#5（默认音质与降档提示）、#6（关闭行为）、#7（应用名）。
 3. 引入 electron-builder 与 CI 双架构构建，补 BUILD.html。
 4. 为 `api/` 层加 fixture 回放测试，降低上游变更导致的回归成本。
