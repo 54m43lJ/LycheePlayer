@@ -43,17 +43,12 @@
 - 项目目录名 `qqy` 是否就是正式应用名？还是起个正式名字（影响 desktop 文件、`org.xxx.qqy` app-id、flatpak 提交、窗口标题）
 - 默认暂用 `qqy`，正式发布前必须定
 
-## 8. CODE.html 伪代码语言
-
-- GUIDELINES.md 原文写「CODE.html 中除引用行外必须是语法有效的 **Rust**」，本项目是 TypeScript
-- 当前按 **TypeScript** 理解执行（ARCHITECTURE §4 已全用 TS 伪代码）；若你要求严格回退 Rust 伪代码或计划修改 GUIDELINES.md，请明确
-
-## 9. UI 原型
+## 8. UI 原型
 
 - README §2 目前只有交互文字清单。是否先出线框图 / 可点原型再动手写界面？
 - 默认：MVP 页面直接实现，原型后补
 
-## 10. 范围外功能确认
+## 9. 范围外功能确认
 
 以下功能默认**全部延后**，如有想提前的请指出：
 
