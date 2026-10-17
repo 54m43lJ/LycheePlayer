@@ -1,0 +1,36 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editors / IDE
+.idea/
+.vscode/
+*.swp
+*~
+
+# Logs & temp
+*.log
+tmp/
+
+# Node (Electron / Tauri frontend)
+node_modules/
+dist/
+dist-ssr/
+out/
+coverage/
+
+# Rust (Tauri backend / native client)
+target/
+Cargo.lock
+
+# Python (if using qqmusic-api tooling)
+__pycache__/
+.venv/
+uv.lock
+
+# Tauri
+src-tauri/gen/
+
+# Local secrets (cookie, credential dumps)
+cookies.json
+*.credentials
