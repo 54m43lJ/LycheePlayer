@@ -145,7 +145,8 @@ async function poll(qrsig: string): Promise<PollResult> {
     signal: AbortSignal.timeout(15_000)
   })
   const text = await response.text()
-  const args = parseQuotedArgs(text)
+  const callback = [...text.matchAll(/ptuiCB\(([\s\S]*?)\)/g)].at(-1)
+  const args = callback ? parseQuotedArgs(callback[1]) : []
   if (args.length < 3 || !/^\d+$/.test(args[0])) {
     throw new UpstreamError('UPSTREAM_CHANGED', '无法解析二维码轮询响应')
   }
