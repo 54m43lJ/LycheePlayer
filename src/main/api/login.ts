@@ -3,7 +3,7 @@ import { mapUpstreamCode, UpstreamError, upstreamRequest } from './client'
 import { hash33 } from './hash'
 
 const USER_AGENT =
-  'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
 const QR_TTL_MS = 2 * 60_000
 const MAX_POLL_ERRORS = 6
@@ -247,15 +247,26 @@ async function requestOAuthCode(redirect: string): Promise<string> {
   }
 
   if (!check.jar.p_skey) {
+    const cookieSummary = Object.entries(check.jar)
+      .map(([key, value]) => `${key}(${value.length})`)
+      .join(', ')
+    if (check.jar.p_skey_forbid !== undefined) {
+      throw new UpstreamError(
+        'AUTH_EXPIRED',
+        'QQ 安全校验未通过（p_skey_forbid）。请先在官方 QQ 音乐网页完成登录/设备验证，或使用 Cookie 登录'
+      )
+    }
     throw new UpstreamError(
       'AUTH_EXPIRED',
       `QQ 登录未返回 p_skey（check_sig HTTP ${check.status}；cookies: ${
-        Object.keys(check.jar).join(', ') || 'none'
+        cookieSummary || 'none'
       }）`
     )
   }
   console.info(
-    `[login] check_sig 完成：HTTP ${check.status}，cookies=[${Object.keys(check.jar).join(',')}]`
+    `[login] check_sig 完成：HTTP ${check.status}，cookies=[${Object.entries(check.jar)
+      .map(([key, value]) => `${key}(${value.length})`)
+      .join(',')}]`
   )
 
   const authorizeUrl = new URL('https://graph.qq.com/oauth2.0/authorize')
