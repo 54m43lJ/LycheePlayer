@@ -21,6 +21,7 @@ export interface QqyApi {
     createQrKey(): Promise<IpcResult<QrSession>>
     getStatus(): Promise<IpcResult<AuthStatus>>
     loginWithCookie(cookie: string): Promise<IpcResult<AuthStatus>>
+    openWebLogin(): Promise<IpcResult<AuthStatus>>
     logout(): Promise<IpcResult<null>>
     onStatus(callback: (status: QrStatus) => void): () => void
   }

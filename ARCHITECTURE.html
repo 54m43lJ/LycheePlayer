@@ -51,6 +51,7 @@
   <li>轮询由主进程定时器驱动；渲染进程只消费 <code>login:status</code> 推送，不参与轮询。</li>
   <li>二维码图片由 <code>login.createQrKey()</code> 随创建结果返回（data URL），<code>login:status</code> 只承载状态推进。</li>
   <li>登录失败时 <code>login:status</code> 的 <code>stage</code> 为 <code>failed</code>，<code>message</code> 携带可展示的错误摘要（不含凭证）。</li>
+  <li><code>login.openWebLogin()</code> 在独立窗口中打开官方网页，用户完成扫码或安全验证后由主进程读取 Cookie 并落库，作为风控场景的兜底。</li>
   <li>凭证在主进程内直接入库（密钥环），任何状态下都不跨 IPC 下发。</li>
 </ul>
 
@@ -72,6 +73,7 @@
 login.createQrKey(): Promise&lt;IpcResult&lt;QrSession&gt;&gt;;
 login.getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
+login.openWebLogin(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.logout(): Promise&lt;IpcResult&lt;null&gt;&gt;;
 
 // 搜索

@@ -8,6 +8,7 @@ import type {
   Settings
 } from '../shared/types'
 import { createQrKey, initLoginEvents, loginWithCookie, stopPolling } from './api/login'
+import { openWebLogin } from './api/web-login'
 import { getLyric } from './api/lyric'
 import { getPlaylist, listMine } from './api/playlist'
 import { searchByType } from './api/search'
@@ -67,6 +68,12 @@ export function registerIpc(): void {
       throw new Error('Cookie 不能为空')
     }
     const credential = await loginWithCookie(cookie)
+    await saveCredential(credential)
+    broadcast('login:status', { stage: 'ok' })
+    return currentAuthStatus()
+  })
+  handle('login.openWebLogin', async () => {
+    const credential = await openWebLogin()
     await saveCredential(credential)
     broadcast('login:status', { stage: 'ok' })
     return currentAuthStatus()

@@ -16,7 +16,7 @@ POC 实现了 README 路线图中的 MVP 主链路，并提前验证了 MPRIS / 
 - 播放：HTML5 Audio、播放队列、上一首 / 下一首、进度、音量、播放模式。
 - 歌词：LRC + 翻译合并、滚动高亮、点击跳转。
 - 歌单：公开歌单详情与全部歌曲、我的歌单（登录后）。
-- 登录：手机 QQ 扫码（二维码生成、状态轮询）、Cookie 兜底验证、退出登录。
+- 登录：手机 QQ 扫码（二维码生成、状态轮询）、官方网页登录窗口、Cookie 兜底验证、退出登录。
 - 凭证：主进程内 `safeStorage` 加密落盘，不跨 IPC。
 - 设置：默认音质、关闭到托盘。
 - 集成：MPRIS（播放状态 / 元数据 / 反向控制）、系统托盘。
@@ -64,7 +64,8 @@ PASS  qr poll  status=66（66=待扫码）
 - 双击匿名可播歌曲「盛夏光年」：进度从 0:05 推进到 0:08，播放 / 暂停状态正确。
 - 歌词：39 行，当前行高亮，随播放推进。
 - 歌单 `7039749142`：99 首全部载入，封面正常。
-- 扫码：二维码 111×111 PNG，轮询返回 66（待扫码）。
+- 扫码：二维码 111×111 PNG，轮询返回 66（待扫码）；扫码确认后的 `check_sig` 若返回 `p_skey_forbid`，界面会直接显示风控提示。
+- 官方网页登录窗口：弹窗加载 `https://y.qq.com/`，使用独立 session，登录完成后可从 Cookie 提取 `uin` / `qm_keyst`；需要真实账号完成登录后回归。
 - 非法 Cookie：返回 `AUTH_EXPIRED`，不写入凭证。
 - 窄屏 680×540：侧栏收为 64px 图标栏，搜索/设置/登录单列显示，无横向溢出；登录页内容可纵向滚动。
 - MPRIS：`playerctl -p qqy status` 返回 `Playing`，元数据包含标题 / 专辑 / 封面；
@@ -91,6 +92,7 @@ PASS  qr poll  status=66（66=待扫码）
 | --- | --- | --- |
 | `login.createQrKey()` 返回 `QrSession`（二维码 data URL + 过期时间） | 渲染进程必须拿到图片才能显示二维码；原接口只返回 `null` | 已更新 ARCHITECTURE §4.1 / §4.2、CODE §3.11 |
 | 新增 `login.getStatus()`、`login.loginWithCookie()` | 启动时恢复登录态；Cookie 是 PENDING #4 的兜底入口 | 已更新 ARCHITECTURE §4.1 / §4.2 |
+| 新增 `login.openWebLogin()` | QQ 网页登录可能返回 `p_skey_forbid` 风控；独立窗口走官方页面，用户可完成安全验证后自动读取 Cookie | 已更新 ARCHITECTURE §3.2 / §4.1 |
 | `QrStatus` 增加 `failed` 阶段与 `message` | 扫码确认后换证失败时需要向用户展示具体原因，而不是静默过期 | 已更新 ARCHITECTURE §3.2 / §4.2 |
 | 播放链接拼接改为复用 `purl` | `vkey` 与查询串绑定，重建会 403 | 已更新 ARCHITECTURE §1 / §4.3、CODE §3.7 |
 | 托盘 `initTray(actions)` 需要回调 | 托盘菜单要控制播放器与退出 | 已更新 CODE §3.13 |

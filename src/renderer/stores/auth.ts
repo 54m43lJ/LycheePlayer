@@ -79,6 +79,14 @@ export const useAuthStore = defineStore('auth', () => {
     qrImage.value = ''
   }
 
+  async function openWebLogin(): Promise<void> {
+    const status = unwrap(await window.qqy.login.openWebLogin())
+    applyStatus(status)
+    qrStage.value = 'ok'
+    qrImage.value = ''
+    qrError.value = ''
+  }
+
   async function logout(): Promise<void> {
     unwrap(await window.qqy.login.logout())
     loggedIn.value = false
@@ -104,6 +112,7 @@ export const useAuthStore = defineStore('auth', () => {
     startQrLogin,
     handleQrStatus,
     loginWithCookie,
+    openWebLogin,
     logout
   }
 })

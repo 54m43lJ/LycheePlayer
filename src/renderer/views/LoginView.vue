@@ -12,6 +12,7 @@ const toast = useToast()
 
 const cookie = ref('')
 const cookieSubmitting = ref(false)
+const webLoginLoading = ref(false)
 const now = ref(Date.now())
 let ticker: number | undefined
 
@@ -76,6 +77,18 @@ async function submitCookie(): Promise<void> {
     cookieSubmitting.value = false
   }
 }
+
+async function submitWebLogin(): Promise<void> {
+  webLoginLoading.value = true
+  try {
+    await auth.openWebLogin()
+    toast.show('网页登录成功')
+  } catch (err) {
+    toast.error(describeError(err))
+  } finally {
+    webLoginLoading.value = false
+  }
+}
 </script>
 
 <template>
@@ -119,6 +132,15 @@ async function submitCookie(): Promise<void> {
           class="qr-status"
           :class="{ ok: auth.qrStage === 'ok', error: failed }"
         >{{ statusText }}</div>
+        <button
+          class="btn small"
+          :disabled="webLoginLoading"
+          title="在独立窗口中打开 y.qq.com，完成扫码或安全验证后自动读取登录态"
+          @click="submitWebLogin()"
+        >
+          <AppIcon name="login" :size="14" />
+          {{ webLoginLoading ? '请在窗口中完成登录…' : '官方网页登录' }}
+        </button>
         <p v-if="failed" class="note" style="text-align: center; max-width: 260px">
           扫码确认已收到但换取登录态失败。可展开下方 Cookie 登录先进入应用。
         </p>
