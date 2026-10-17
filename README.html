@@ -3,14 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <title>qqy — 第三方 QQ 音乐 Linux 客户端</title>
-<style>
-  body { font-family: sans-serif; max-width: 60em; margin: 2em auto; padding: 0 1em; line-height: 1.6; }
-  code, pre { background: #f4f4f4; border-radius: 4px; }
-  code { padding: 0.1em 0.3em; }
-  pre { padding: 0.8em; overflow-x: auto; }
-  table { border-collapse: collapse; }
-  th, td { border: 1px solid #ccc; padding: 0.3em 0.7em; text-align: left; }
-</style>
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
 
@@ -82,11 +75,24 @@
 
 <h2>6. 相关文档</h2>
 <ul>
-  <li><a href="ARCHITECTURE.html">ARCHITECTURE.html</a>（设计阶段编写）</li>
-  <li><a href="CODE.html">CODE.html</a>（设计阶段编写）</li>
-  <li><a href="BUILD.html">BUILD.html</a>（开发完成后编写）</li>
-  <li>技术选型调研中的参考开源项目清单见仓库 README 对应讨论或 design 笔记。</li>
+  <li><a href="ARCHITECTURE.html">ARCHITECTURE.html</a> — 架构：术语、约定、图与接口契约</li>
+  <li><a href="CODE.html">CODE.html</a> — 代码结构：文件树、草案签名与调用栈</li>
+  <li><a href="PENDING.md">PENDING.md</a> — 待拍板事项</li>
+  <li>BUILD.html — 开发完成后编写</li>
 </ul>
+
+<h2>7. 参考开源项目</h2>
+<table>
+  <tr><th>项目</th><th>技术栈</th><th>参考点</th></tr>
+  <tr><td>amtoaer/lyrune</td><td>Rust + GPUI</td><td>同为 Linux QQ 音乐第三方客户端，整体行为与 API 调用清单</td></tr>
+  <tr><td>jsososo/QQMusicApi</td><td>Node.js</td><td>上游接口行为与参数（维护放缓，仅作行为参考，不直接依赖）</td></tr>
+  <tr><td>L-1124/QQMusicApi</td><td>Python</td><td>凭证刷新、设备指纹、多平台请求（活跃维护）</td></tr>
+  <tr><td>jixunmoe-go/qrc</td><td>Go</td><td>QRC 逐字歌词解密（进阶歌词功能）</td></tr>
+  <tr><td>lyswhut/lx-music-desktop</td><td>Electron + Vue</td><td>工程化结构与免责声明范本（Apache-2.0）</td></tr>
+  <tr><td>imsyy/SPlayer</td><td>Electron + Vue3</td><td>MPRIS 实现、歌词 UI</td></tr>
+  <tr><td>MoeKoeMusic</td><td>Electron + Vue3</td><td>扫码登录流程</td></tr>
+  <tr><td>Team-Quaver/quaver-music</td><td>Electron + Vite</td><td>Wayland 适配、AppImage 双架构 CI</td></tr>
+</table>
 
 </body>
 </html>

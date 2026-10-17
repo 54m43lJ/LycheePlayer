@@ -1,0 +1,51 @@
+@startuml general-architecture
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam shadowing false
+
+package "renderer（Vue 3 SPA）" {
+  [views\n页面与播放条] as V
+  [stores（Pinia）\nplayer / library / settings] as ST
+  [AudioEngine\nHTML5 Audio] as AU
+}
+
+package "preload" {
+  [contextBridge\nwindow.qqy] as PB
+}
+
+package "main（Electron 主进程）" {
+  [ipc.ts\nIPC 路由] as IPC
+
+  package "api/" {
+    [client.ts\n签名 / Cookie / 重试] as CL
+    [search / song / playlist\nuser / lyric / login] as EP
+  }
+
+  [credential.ts\nsafeStorage + 系统密钥环] as CR
+  [settings.ts\n设置持久化] as SE
+
+  package "integration/" {
+    [mpris.ts] as MP
+    [tray.ts] as TR
+  }
+}
+
+cloud "上游" {
+  [y.qq.com CGI 接口] as UP1
+  [流服务器\n音频流] as UP2
+  [D-Bus\norg.mpris.MediaPlayer2] as BUS
+}
+
+V --> ST
+ST --> AU : 加载流 URL
+ST --> PB : invoke / on
+PB --> IPC
+IPC --> EP
+IPC --> CR
+IPC --> SE
+MP --> IPC : 播放控制命令
+EP --> CL
+CL --> UP1
+AU --> UP2
+MP --> BUS : MPRIS
+@enduml

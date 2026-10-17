@@ -1,0 +1,32 @@
+@startuml seq-login
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+actor 用户 as U
+participant "设置页\n(renderer)" as UI
+participant "ipc.ts\n(main)" as IPC
+participant "api/login.ts\n(main)" as LG
+participant "credential.ts\n(main)" as CR
+participant "上游 CGI" as UP
+
+U -> UI : 点击“扫码登录”
+UI -> IPC : invoke login.createQrKey()
+IPC -> LG : createQrKey()
+LG -> UP : 申请二维码 CGI
+UP --> LG : qrcodeKey
+IPC -->> UI : push login:status { scanning }
+UI -> UI : 渲染二维码
+
+loop 主进程定时器每 2 秒，直至确认或过期
+  IPC -> LG : poll(qrcodeKey)
+  LG -> UP : 轮询 CGI
+  UP --> LG : 待扫码 / 已扫码 / 已确认
+  LG --> IPC : 状态或 credential
+  IPC -->> UI : push login:status（状态轻量字段，凭证不下发）
+end
+
+LG -> CR : save(credential)
+CR -> CR : safeStorage 加密后写入系统密钥环
+IPC -->> UI : push login:status { ok }
+UI -> UI : 跳转首页
+@enduml

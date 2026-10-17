@@ -1,0 +1,31 @@
+@startuml seq-play
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+actor 用户 as U
+participant "playerStore\n(renderer)" as S
+participant "AudioEngine\n(renderer)" as A
+participant "ipc.ts\n(main)" as IPC
+participant "api/song.ts\n(main)" as SG
+participant "上游 CGI" as UP
+
+U -> S : 双击歌曲
+S -> IPC : invoke song.getUrls(songMid, quality)
+IPC -> SG : getStreamUrls(songMid, quality)
+SG -> UP : 播放链接 CGI
+UP --> SG : 响应
+SG -> SG : 解析 vkey 播放链接
+
+break 链接为空（无权限或已下架）
+  SG --> IPC : IpcError NO_STREAM
+  IPC --> S : { ok:false }
+  S --> U : 提示需 VIP / 数字专辑
+end
+
+SG --> IPC : UrlResult[]
+IPC --> S : { ok:true }
+S -> A : play(url)
+A --> S : timeupdate / ended
+S -> IPC : send player:state
+IPC -> IPC : integration/mpris.publishState(state)
+@enduml

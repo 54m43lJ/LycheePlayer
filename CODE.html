@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>CODE — qqy</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<h1>CODE — qqy</h1>
+
+<h2 id="c1">1. File tree</h2>
+<pre><code>qqy/
+├── diagram/                                  PlantUML 图源与导出 SVG（见 ARCHITECTURE §3）
+├── src/
+│   ├── main/                                 Electron 主进程
+│   │   ├── <a href="#c31">index.ts</a>                        应用入口与生命周期
+│   │   ├── <a href="#c32">ipc.ts</a>                           IPC 路由注册
+│   │   ├── <a href="#c33">settings.ts</a>                      设置持久化
+│   │   ├── <a href="#c34">credential.ts</a>                    凭证存取
+│   │   ├── <a href="#c35">api/</a>                             上游接口层
+│   │   │   ├── <a href="#c35">client.ts</a>
+│   │   │   ├── <a href="#c36">search.ts</a>
+│   │   │   ├── <a href="#c37">song.ts</a>
+│   │   │   ├── <a href="#c38">playlist.ts</a>
+│   │   │   ├── <a href="#c39">user.ts</a>
+│   │   │   ├── <a href="#c310">lyric.ts</a>
+│   │   │   └── <a href="#c311">login.ts</a>
+│   │   └── integration/                      桌面集成
+│   │       ├── <a href="#c312">mpris.ts</a>
+│   │       └── <a href="#c313">tray.ts</a>
+│   ├── preload/
+│   │   └── <a href="#c314">index.ts</a>                        contextBridge 桥接
+│   └── renderer/                             Vue 3 SPA
+│       ├── main.ts / App.vue / router/ / views/ / components/
+│       └── stores/
+│           └── <a href="#c315">player.ts</a>                     播放器状态
+├── ARCHITECTURE.html
+├── CODE.html
+├── README.html
+├── PENDING.md
+└── style.css
+</code></pre>
+<ul class="note">
+  <li>renderer 的 views / components / router 与 stores 中非 player 部分属常规 UI 结构，设计阶段不单独立小节。</li>
+</ul>
+
+<h2 id="c2">2. CONVENTIONS</h2>
+<table>
+  <tr><th>约定</th><th>内容</th></tr>
+  <tr><td>错误处理</td><td>主进程所有 IPC handler 经 <code>envelope</code> 包裹，异常一律转为 <code>IpcError</code> 信封返回，不向渲染进程抛异常。</td></tr>
+  <tr><td>上游响应</td><td>上游原始 JSON 只存在于 <code>api/</code> 层内部；离开该层的值必须是 ARCHITECTURE §4.3 的形态。</td></tr>
+  <tr><td>日志</td><td>日志只写主进程；不输出凭证、Cookie 与完整播放链接。</td></tr>
+  <tr><td>导入省略</td><td>本文档签名块省略 import 语句（如 <code>electron</code> 的 <code>BrowserWindow</code>），实现时按需引入。</td></tr>
+</table>
+
+<h2 id="c3">3. Internal types &amp; method signatures</h2>
+<p>
+脚手架尚未建立，以下均为草案签名，统一标注待实现，可以根据实际情况调整；
+ARCHITECTURE 已定义的符号在此仅以引用形式出现，不再重复定义。
+</p>
+<pre><code>type IpcResult&lt;T&gt;;          // 见 ARCHITECTURE §4.2
+interface IpcError;         // 见 ARCHITECTURE §4.2
+type QrStatus;              // 见 ARCHITECTURE §4.2
+type MprisCommand;          // 见 ARCHITECTURE §4.2
+interface PlayerState;      // 见 ARCHITECTURE §4.2
+type Quality;               // 见 ARCHITECTURE §4.3
+interface Song;             // 见 ARCHITECTURE §4.3
+interface SearchRequest;    // 见 ARCHITECTURE §4.3
+interface SearchResult;     // 见 ARCHITECTURE §4.3
+interface PlaylistMeta;     // 见 ARCHITECTURE §4.3
+interface PlaylistDetail;   // 见 ARCHITECTURE §4.3
+interface Lyric;            // 见 ARCHITECTURE §4.3
+interface Credential;       // 见 ARCHITECTURE §4.3
+interface UrlResult;        // 见 ARCHITECTURE §4.3
+interface Settings;         // 见 ARCHITECTURE §4.3
+</code></pre>
+
+<h3 id="c31">3.1 src/main/index.ts</h3>
+<pre><code>export function bootstrap(): void;                  // 待实现，可以根据实际情况调整
+export function createMainWindow(): BrowserWindow;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c32">3.2 src/main/ipc.ts</h3>
+<pre><code>export function registerIpc(): void;  // 待实现，可以根据实际情况调整
+
+function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;): Promise&lt;IpcResult&lt;T&gt;&gt;;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c33">3.3 src/main/settings.ts</h3>
+<pre><code>export function loadSettings(): Settings;  // 待实现，可以根据实际情况调整
+export function saveSettings(next: Settings): Promise&lt;void&gt;;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c34">3.4 src/main/credential.ts</h3>
+<pre><code>export function loadCredential(): Promise&lt;Credential | null&gt;;  // 待实现，可以根据实际情况调整
+export function saveCredential(credential: Credential): Promise&lt;void&gt;;  // 待实现，可以根据实际情况调整
+export function clearCredential(): Promise&lt;void&gt;;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c35">3.5 src/main/api/client.ts</h3>
+<pre><code>export function upstreamRequest&lt;T&gt;(req: UpstreamRequest): Promise&lt;T&gt;;  // 待实现，可以根据实际情况调整
+export function toIpcError(err: unknown): IpcError;  // 待实现，可以根据实际情况调整
+
+interface UpstreamRequest {
+  host: string;
+  path: string;
+  params: Record&lt;string, string&gt;;
+}
+</code></pre>
+<ul class="note">
+  <li><code>upstreamRequest</code> 内部承载签名、Cookie 注入、限流退避与 <code>UPSTREAM_CHANGED</code> 判定。</li>
+</ul>
+
+<h3 id="c36">3.6 src/main/api/search.ts</h3>
+<pre><code>export function searchByType(req: SearchRequest): Promise&lt;SearchResult&gt;;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c37">3.7 src/main/api/song.ts</h3>
+<pre><code>export function getDetail(mids: string[]): Promise&lt;Song[]&gt;;  // 待实现，可以根据实际情况调整
+export function getStreamUrls(mids: string[], quality: Quality): Promise&lt;UrlResult[]&gt;;  // 待实现，可以根据实际情况调整
+</code></pre>
+<ul class="note">
+  <li><code>getStreamUrls</code> 含 ARCHITECTURE §2 的音质降级逻辑，是全应用唯一拼装播放链接的位置。</li>
+</ul>
+
+<h3 id="c38">3.8 src/main/api/playlist.ts</h3>
+<pre><code>export function getPlaylist(id: string): Promise&lt;PlaylistDetail&gt;;  // 待实现，可以根据实际情况调整
+export function listMine(): Promise&lt;PlaylistMeta[]&gt;;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c39">3.9 src/main/api/user.ts</h3>
+<pre><code>export function getProfile(): Promise&lt;{ nickname: string; avatarUrl: string }&gt;;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c310">3.10 src/main/api/lyric.ts</h3>
+<pre><code>export function getLyric(songMid: string): Promise&lt;Lyric&gt;;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c311">3.11 src/main/api/login.ts</h3>
+<pre><code>export function createQrKey(): Promise&lt;string&gt;;  // 待实现，可以根据实际情况调整
+export function stopPolling(): void;  // 待实现，可以根据实际情况调整
+</code></pre>
+<ul class="note">
+  <li><code>createQrKey</code> 取得 qrcodeKey 后在主进程内启动轮询，状态经 <code>login:status</code> 推送（ARCHITECTURE §3.2）。</li>
+</ul>
+
+<h3 id="c312">3.12 src/main/integration/mpris.ts</h3>
+<pre><code>export function initMpris(onCommand: (command: MprisCommand) =&gt; void): void;  // 待实现，可以根据实际情况调整
+export function publishState(state: PlayerState | null): void;  // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c313">3.13 src/main/integration/tray.ts</h3>
+<pre><code>export function initTray(): void;      // 待实现，可以根据实际情况调整
+export function destroyTray(): void;   // 待实现，可以根据实际情况调整
+</code></pre>
+
+<h3 id="c314">3.14 src/preload/index.ts</h3>
+<pre><code>export function exposeApi(): void;  // 待实现，可以根据实际情况调整
+</code></pre>
+<ul class="note">
+  <li>经 contextBridge 暴露唯一命名空间 <code>window.qqy</code>，其类型面即 ARCHITECTURE §4.1。</li>
+</ul>
+
+<h3 id="c315">3.15 src/renderer/stores/player.ts</h3>
+<pre><code>export function usePlayerStore(): PlayerStore;  // 待实现，可以根据实际情况调整
+
+interface PlayerStore {
+  readonly current: Song | null;
+  readonly queue: Song[];
+  readonly status: 'stopped' | 'playing' | 'paused';
+  playSong(song: Song): Promise&lt;void&gt;;
+  toggle(): void;
+  next(): void;
+  previous(): void;
+  seek(positionMs: number): void;
+  setQuality(quality: Quality): void;
+}
+</code></pre>
+
+<h2 id="c4">4. Call stack tree</h2>
+
+<h3>4.1 启动</h3>
+<pre><code>index::bootstrap()
+├── settings::loadSettings()
+├── credential::loadCredential()
+├── integration/tray::initTray()
+├── integration/mpris::initMpris(onMprisCommand)
+├── ipc::registerIpc()
+└── index::createMainWindow()
+</code></pre>
+<ul class="note">
+  <li><code>loadCredential</code> 失败按未登录继续，不阻塞启动。</li>
+  <li><code>onMprisCommand</code> 由 ipc.ts 提供，把 MPRIS 命令转成 <code>player:command</code> 推送。</li>
+</ul>
+
+<h3>4.2 播放单曲</h3>
+<pre><code>stores/player::playSong(song)
+├── window.qqy.song.getUrls(song.songMid, settings.defaultQuality)
+├── 判断 url === null → 降档重试一次，仍失败提示 NO_STREAM 后返回
+├── AudioEngine.play(url)
+├── audio 事件 timeupdate / ended → send player:state
+│   └── integration/mpris::publishState(state)
+└── ended → queue 取下一曲 → stores/player::playSong(next)
+</code></pre>
+<ul class="note">
+  <li>音频流由渲染进程直接加载，主进程只经手链接字符串。</li>
+  <li>MPRIS 反向控制：D-Bus → mpris.ts → ipc.ts → <code>player:command</code> 推送 → playerStore 执行。</li>
+</ul>
+
+<h3>4.3 退出</h3>
+<pre><code>app::before-quit
+├── settings::saveSettings(current)
+├── integration/mpris::publishState(null)
+├── integration/tray::destroyTray()
+└── 窗口销毁 → 进程退出
+</code></pre>
+<ul class="note">
+  <li>凭证默认保留，支持下次自动登录；清除仅由 <code>login.logout()</code> 触发。</li>
+  <li><code>closeToTray</code> 生效时关闭窗口仅隐藏，<code>before-quit</code> 只在托盘退出时触发。</li>
+</ul>
+
+</body>
+</html>
