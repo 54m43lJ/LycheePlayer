@@ -33,6 +33,7 @@
   <tr><td>凭证边界</td><td>凭证只存在于主进程 <code>credential.ts</code>；不跨 IPC 下发、不写入日志、不进入渲染进程。</td></tr>
   <tr><td>上游隔离</td><td>上游响应在 <code>api/</code> 层完成规范化，跨入 IPC 的数据只有 <a href="#s43">§4.3</a> 定义的形态；上游原始结构不透传。</td></tr>
   <tr><td>音质降级</td><td>请求音质无权限时按 <code>flac → 320k → 128k</code> 单向降一档重试；降至 <code>128k</code> 仍无链接则报 <code>NO_STREAM</code>。</td></tr>
+  <tr><td>会话续期</td><td>登录凭证含 <code>refresh_token</code> 时，到期前 10 分钟或每 6 小时经 <code>music.login.LoginServer/Login</code> 换新 <code>musickey</code> 并写回密钥环；失败保留旧凭证等待重试。</td></tr>
 </table>
 
 <h2 id="s3">3. DIAGRAMS</h2>
@@ -49,6 +50,7 @@
 <div class="diagram"><img src="diagram/seq-login.svg" alt="扫码登录时序图"></div>
 <ul class="note">
   <li>轮询由主进程定时器驱动；渲染进程只消费 <code>login:status</code> 推送，不参与轮询。</li>
+  <li>默认登录界面通过 <code>login.openWebLogin()</code> 嵌入 QQ 官方 xlogin 扫码组件；<code>createQrKey</code> 的应用内二维码保留为实验路径。</li>
   <li>二维码图片由 <code>login.createQrKey()</code> 随创建结果返回（data URL），<code>login:status</code> 只承载状态推进。</li>
   <li>登录失败时 <code>login:status</code> 的 <code>stage</code> 为 <code>failed</code>，<code>message</code> 携带可展示的错误摘要（不含凭证）。</li>
   <li><code>login.openWebLogin()</code> 在独立窗口中打开官方网页，用户完成扫码或安全验证后由主进程读取 Cookie 并落库，作为风控场景的兜底。</li>
@@ -69,11 +71,12 @@
 渲染进程经 preload 暴露的单一命名空间 <code>window.qqy</code> 调用以下方法；签名即契约，
 行为细节见对应时序图（<a href="#s3">§3</a>）。
 </p>
-<pre><code>// 登录（时序见 §3.2；状态经 login:status 推送，无轮询型返回）
+<pre><code>// 登录（默认：openWebLogin 嵌入官方 xlogin 扫码组件；createQrKey 为实验性应用内二维码）
 login.createQrKey(): Promise&lt;IpcResult&lt;QrSession&gt;&gt;;
 login.getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.openWebLogin(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
+login.refreshSession(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.logout(): Promise&lt;IpcResult&lt;null&gt;&gt;;
 
 // 搜索
@@ -134,6 +137,8 @@ interface QrSession {
 interface AuthStatus {
   loggedIn: boolean;
   musicid: string | null;
+  expiresAtMs: number | null;
+  canRefresh: boolean;
 }
 
 type MprisCommand = 'play' | 'pause' | 'toggle' | 'next' | 'previous' | { seekTo: number };
@@ -225,6 +230,12 @@ interface Credential {
   musicid: string;
   musickey: string;
   expiredAtMs: number | null;
+  refreshKey?: string;
+  refreshToken?: string;
+  accessToken?: string;
+  openid?: string;
+  unionid?: string;
+  loginType?: number;
 }
 
 interface UrlResult {
@@ -258,6 +269,7 @@ interface Settings {
 </table>
 <ul class="note">
   <li><code>mediaMid</code> 与 <code>guid</code> 仅在 <code>api/song.ts</code> 内部存在，不出现在 IPC 数据模型中。</li>
+  <li><code>Credential</code> 的 <code>refreshKey</code> / <code>refreshToken</code> / <code>accessToken</code> / <code>openid</code> 等字段仅主进程使用，不跨 IPC。</li>
   <li><code>vkey</code> 与 <code>purl</code> 的完整查询串绑定；按固定模板重建查询参数会触发 403，因此只拼接域名与 <code>purl</code>。</li>
   <li><code>UrlResult.url</code> 为 <code>null</code> 表示批量请求中该单曲无此档链接；整体请求失败以 <code>IpcError</code> 表达。</li>
 </ul>

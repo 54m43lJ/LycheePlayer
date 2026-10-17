@@ -1,6 +1,7 @@
 import { app, BrowserWindow, shell } from 'electron'
 import { join } from 'node:path'
 import { loadCredential } from './credential'
+import { refreshIfNeeded } from './api/login'
 import { registerIpc, sendPlayerCommand } from './ipc'
 import { initMpris, publishState } from './integration/mpris'
 import { destroyTray, initTray } from './integration/tray'
@@ -8,6 +9,7 @@ import { getSettings, loadSettings, saveSettings } from './settings'
 
 let mainWindow: BrowserWindow | null = null
 let quitting = false
+let refreshTimer: NodeJS.Timeout | null = null
 
 app.setName('qqy')
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
@@ -88,6 +90,12 @@ export async function bootstrap(): Promise<void> {
   })
 
   createMainWindow()
+
+  // 登录态续期：启动后检查一次，此后每 30 分钟检查，到期前 10 分钟自动换新 musickey。
+  void refreshIfNeeded()
+  refreshTimer = setInterval(() => {
+    void refreshIfNeeded()
+  }, 30 * 60_000)
 }
 
 const hasLock = app.requestSingleInstanceLock()
@@ -111,6 +119,7 @@ if (!hasLock) {
 
   app.on('before-quit', () => {
     quitting = true
+    if (refreshTimer) clearInterval(refreshTimer)
     publishState(null)
     destroyTray()
     void saveSettings(getSettings())

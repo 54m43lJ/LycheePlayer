@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Quality } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
@@ -13,6 +14,19 @@ const auth = useAuthStore()
 const player = usePlayerStore()
 const router = useRouter()
 const toast = useToast()
+const sessionRefreshing = ref(false)
+
+const expiryText = computed(() => {
+  if (!auth.loggedIn) return '未登录'
+  if (!auth.expiresAtMs) return '未知（将定期续期）'
+  return new Date(auth.expiresAtMs).toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+})
 
 const QUALITIES: Array<{ value: Quality; label: string; hint: string }> = [
   { value: '128k', label: '标准', hint: '128 kbps MP3' },
@@ -51,6 +65,18 @@ async function logout(): Promise<void> {
     void router.push('/login')
   } catch (err) {
     toast.error(describeError(err))
+  }
+}
+
+async function refreshSession(): Promise<void> {
+  sessionRefreshing.value = true
+  try {
+    await auth.refreshSession()
+    toast.show('会话已续期')
+  } catch (err) {
+    toast.error(describeError(err))
+  } finally {
+    sessionRefreshing.value = false
   }
 }
 </script>
@@ -128,6 +154,22 @@ async function logout(): Promise<void> {
                 </div>
                 <span class="pay-badge" style="border-color: var(--accent-line); color: var(--accent-strong); background: var(--accent-soft)">已登录</span>
               </div>
+              <div class="setting-row">
+                <div>
+                  <div class="setting-name">凭证到期</div>
+                  <div class="setting-desc">{{ expiryText }}</div>
+                </div>
+                <button
+                  class="btn small"
+                  :disabled="sessionRefreshing || !auth.canRefresh"
+                  @click="refreshSession()"
+                >
+                  {{ sessionRefreshing ? '续期中…' : '立即续期' }}
+                </button>
+              </div>
+              <p class="note" style="margin: 0 0 14px">
+                登录态每 30 分钟检查一次，到期前自动换取新 musickey。若续期失败，旧凭证会保留到下一次重试。
+              </p>
               <div style="display: flex; gap: 8px; margin-top: 16px">
                 <button class="btn small" @click="router.push('/library')">我的歌单</button>
                 <button class="btn ghost small" @click="logout()">

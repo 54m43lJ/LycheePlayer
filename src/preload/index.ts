@@ -27,6 +27,7 @@ const api: QqyApi = {
     getStatus: () => invoke<AuthStatus>('login.getStatus'),
     loginWithCookie: (cookie) => invoke<AuthStatus>('login.loginWithCookie', cookie),
     openWebLogin: () => invoke<AuthStatus>('login.openWebLogin'),
+    refreshSession: () => invoke<AuthStatus>('login.refreshSession'),
     logout: () => invoke<null>('login.logout'),
     onStatus: (callback) => {
       const listener = (_event: Electron.IpcRendererEvent, status: QrStatus): void =>

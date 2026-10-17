@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { describeError } from '../api'
@@ -13,50 +13,8 @@ const toast = useToast()
 const cookie = ref('')
 const cookieSubmitting = ref(false)
 const webLoginLoading = ref(false)
-const now = ref(Date.now())
-let ticker: number | undefined
-
-const remaining = computed(() => {
-  if (!auth.qrExpiresAt) return 0
-  return Math.max(0, Math.ceil((auth.qrExpiresAt - now.value) / 1000))
-})
-
-const expired = computed(
-  () => auth.qrStage === 'expired' || (Boolean(auth.qrImage) && remaining.value === 0)
-)
-const failed = computed(() => auth.qrStage === 'failed')
-
-const statusText = computed(() => {
-  if (auth.qrLoading) return '正在获取二维码…'
-  if (!auth.qrImage && !auth.qrLoading) return auth.qrError || '点击刷新获取二维码'
-  switch (auth.qrStage) {
-    case 'scanned':
-      return '已扫码，请在手机上确认登录'
-    case 'ok':
-      return '登录成功'
-    case 'failed':
-      return auth.qrError || '登录失败，请重试'
-    case 'expired':
-      return '二维码已过期'
-    default:
-      return `请使用手机 QQ 扫码${remaining.value > 0 ? ` · ${remaining.value}s` : ''}`
-  }
-})
 
 const avatarLetter = computed(() => auth.displayName.slice(0, 1).toUpperCase())
-
-onMounted(() => {
-  ticker = window.setInterval(() => {
-    now.value = Date.now()
-  }, 1000)
-  if (!auth.loggedIn && !auth.qrImage && !auth.qrLoading) {
-    void auth.startQrLogin()
-  }
-})
-
-onBeforeUnmount(() => {
-  if (ticker) window.clearInterval(ticker)
-})
 
 watch(
   () => auth.qrStage,
@@ -82,7 +40,7 @@ async function submitWebLogin(): Promise<void> {
   webLoginLoading.value = true
   try {
     await auth.openWebLogin()
-    toast.show('网页登录成功')
+    toast.show('扫码登录成功')
   } catch (err) {
     toast.error(describeError(err))
   } finally {
@@ -113,39 +71,16 @@ async function submitWebLogin(): Promise<void> {
 
     <section v-else class="login-card">
       <div class="login-qr">
-        <div class="qr-frame">
-          <div v-if="auth.qrLoading" class="spinner lg" />
-          <img v-else-if="auth.qrImage" :src="auth.qrImage" alt="QQ 登录二维码" />
-          <div v-else class="qr-mask">
-            <AppIcon name="qrcode" :size="26" />
-            <span>{{ auth.qrError || '二维码未加载' }}</span>
-            <button @click="auth.startQrLogin()">重新获取</button>
-          </div>
-
-          <div v-if="(expired || failed) && auth.qrImage" class="qr-mask">
-            <AppIcon :name="failed ? 'close' : 'refresh'" :size="24" />
-            <span>{{ failed ? auth.qrError || '登录失败' : '二维码已过期' }}</span>
-            <button @click="auth.startQrLogin()">重新获取</button>
-          </div>
+        <div class="qr-placeholder">
+          <AppIcon name="qrcode" :size="86" />
         </div>
-        <div
-          class="qr-status"
-          :class="{ ok: auth.qrStage === 'ok', error: failed }"
-        >{{ statusText }}</div>
-        <button
-          class="btn small"
-          :disabled="webLoginLoading"
-          title="在独立窗口中打开 y.qq.com，完成扫码或安全验证后自动读取登录态"
-          @click="submitWebLogin()"
-        >
-          <AppIcon name="login" :size="14" />
-          {{ webLoginLoading ? '请在窗口中完成登录…' : '官方网页登录' }}
+        <div class="qr-status">使用手机 QQ 扫描官方窗口中的二维码</div>
+        <button class="btn primary" :disabled="webLoginLoading" @click="submitWebLogin()">
+          <AppIcon name="login" :size="15" />
+          {{ webLoginLoading ? '请在官方窗口中完成扫码…' : '打开官方扫码窗口' }}
         </button>
-        <p v-if="failed" class="note" style="text-align: center; max-width: 260px">
-          扫码确认已收到但换取登录态失败。可展开下方 Cookie 登录先进入应用。
-        </p>
-        <p class="note" style="text-align: center; max-width: 250px">
-          二维码由腾讯 QQ 登录服务签发，扫码后状态由主进程轮询，凭证不下发到界面。
+        <p class="note" style="text-align: center; max-width: 270px">
+          只加载 QQ 官方登录组件，不加载完整网页。扫码确认后应用自动读取登录态并加密保存。
         </p>
       </div>
 
@@ -153,8 +88,8 @@ async function submitWebLogin(): Promise<void> {
         <div class="eyebrow">Sign in</div>
         <h1>登录 QQ 音乐</h1>
         <p>
-          扫码登录是推荐方式。若二维码接口异常，可使用 Cookie 兜底登录；
-          凭证会经 <span class="mono">safeStorage</span> 加密后写入本机用户目录。
+          登录由 QQ 官方扫码窗口完成，可处理设备锁与安全验证。若窗口无法使用，可展开下方的
+          Cookie 兜底入口；凭证会经 <span class="mono">safeStorage</span> 加密后写入本机用户目录。
         </p>
 
         <details class="cookie-box">

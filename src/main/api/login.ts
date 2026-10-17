@@ -1,4 +1,5 @@
 import type { Credential, QrSession, QrStatus } from '../../shared/types'
+import { getCredential, saveCredential } from '../credential'
 import { mapUpstreamCode, UpstreamError, upstreamRequest } from './client'
 import { hash33 } from './hash'
 
@@ -269,6 +270,19 @@ async function requestOAuthCode(redirect: string): Promise<string> {
       .join(',')}]`
   )
 
+  return requestOAuthCodeWithCookies(check.jar)
+}
+
+/**
+ * 用已含 p_skey 的 Cookie 完成 OAuth authorize，返回 code。
+ * 官方扫码组件在 graph.qq.com/oauth2.0/login_jump 结束后会留下这组 Cookie。
+ */
+export async function requestOAuthCodeWithCookies(
+  jar: Record<string, string>
+): Promise<string> {
+  if (!jar.p_skey) {
+    throw new UpstreamError('AUTH_EXPIRED', '缺少 p_skey，无法完成 QQ 授权')
+  }
   const authorizeUrl = new URL('https://graph.qq.com/oauth2.0/authorize')
   const form = new URLSearchParams({
     response_type: 'code',
@@ -282,7 +296,7 @@ async function requestOAuthCode(redirect: string): Promise<string> {
     src: '1',
     update_auth: '1',
     openapi: '1010_1030',
-    g_tk: String(hash33(check.jar.p_skey, 5381)),
+    g_tk: String(hash33(jar.p_skey, 5381)),
     auth_time: String(Date.now()),
     ui: crypto.randomUUID()
   })
@@ -294,7 +308,7 @@ async function requestOAuthCode(redirect: string): Promise<string> {
       'User-Agent': USER_AGENT,
       Referer: 'https://xui.ptlogin2.qq.com/',
       'Content-Type': 'application/x-www-form-urlencoded',
-      Cookie: cookieHeader(check.jar)
+      Cookie: cookieHeader(jar)
     },
     body: form.toString(),
     signal: AbortSignal.timeout(15_000)
@@ -316,9 +330,7 @@ async function requestOAuthCode(redirect: string): Promise<string> {
   return code
 }
 
-async function authorizeQqQr(redirect: string): Promise<Credential> {
-  const code = await requestOAuthCode(redirect)
-
+export async function exchangeQqLoginCode(code: string): Promise<Credential> {
   const payload = {
     comm: { tmeLoginType: 2 },
     req: {
@@ -362,6 +374,11 @@ async function authorizeQqQr(redirect: string): Promise<Credential> {
   return parseLoginCredential(node.data)
 }
 
+async function authorizeQqQr(redirect: string): Promise<Credential> {
+  const code = await requestOAuthCode(redirect)
+  return exchangeQqLoginCode(code)
+}
+
 async function authorizeWithRetry(redirect: string): Promise<Credential> {
   try {
     return await authorizeQqQr(redirect)
@@ -402,7 +419,159 @@ function parseLoginCredential(data: unknown): Credential {
   const expiredAtMs =
     createdAtMs > 0 && expiresIn > 0 ? createdAtMs + expiresIn * 1000 : null
 
-  return { musicid, musickey, expiredAtMs }
+  return {
+    musicid,
+    musickey,
+    expiredAtMs,
+    refreshKey: typeof payload.refresh_key === 'string' ? payload.refresh_key : undefined,
+    refreshToken:
+      typeof payload.refresh_token === 'string' ? payload.refresh_token : undefined,
+    accessToken: typeof payload.access_token === 'string' ? payload.access_token : undefined,
+    openid: typeof payload.openid === 'string' ? payload.openid : undefined,
+    unionid: typeof payload.unionid === 'string' ? payload.unionid : undefined,
+    loginType: Number.isFinite(Number(payload.loginType))
+      ? Number(payload.loginType)
+      : undefined
+  }
+}
+
+interface RefreshResponse {
+  code?: number
+  req_0?: { code?: number; data?: Record<string, unknown> }
+  req?: { code?: number; data?: Record<string, unknown> }
+}
+
+/**
+ * 用 refresh_token 续期，返回新的完整凭证。
+ * 对应 music.login.LoginServer/Login（loginMode=2），musickey 有效期约 72 小时。
+ */
+async function refreshMusickey(current: Credential): Promise<Credential> {
+  if (!current.refreshToken) {
+    throw new UpstreamError('AUTH_EXPIRED', '当前凭证缺少 refresh_token，请重新登录')
+  }
+
+  const param = {
+    openid: current.openid ?? '',
+    access_token: current.accessToken ?? '',
+    refresh_token: current.refreshToken,
+    expired_in: current.expiredAtMs ? Math.floor(current.expiredAtMs / 1000) : 0,
+    musicid: Number(current.musicid),
+    musickey: current.musickey,
+    refresh_key: current.refreshKey ?? '',
+    loginMode: 2
+  }
+  const response = await upstreamRequest<RefreshResponse>({
+    host: 'https://u.y.qq.com',
+    path: '/cgi-bin/musicu.fcg',
+    params: {},
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': USER_AGENT,
+      Referer: 'https://y.qq.com/'
+    },
+    body: JSON.stringify({
+      comm: {
+        tmeLoginType: current.loginType ?? 2,
+        ct: 11,
+        cv: 20_090_008,
+        tmeAppID: 'qqmusic'
+      },
+      req_0: {
+        module: 'music.login.LoginServer',
+        method: 'Login',
+        param
+      }
+    }),
+    credential: current
+  })
+
+  const node = response.req_0 ?? response.req
+  if ((response.code ?? 0) !== 0) {
+    throw mapUpstreamCode(response.code ?? 0, 'music.login.LoginServer.Login(refresh)')
+  }
+  if (!node) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '续期响应缺少 req_0')
+  }
+  if ((node.code ?? 0) !== 0) {
+    throw mapUpstreamCode(node.code ?? 0, 'music.login.LoginServer.Login(refresh)')
+  }
+  const data = node.data
+  if (!data?.musickey) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '续期响应缺少 musickey')
+  }
+
+  const createdAt = Number(data.musickeyCreateTime ?? 0)
+  const expiresIn = Number(data.keyExpiresIn ?? 0)
+  const createdAtMs = createdAt > 1_000_000_000_000 ? createdAt : createdAt * 1000
+  const expiredAtMs =
+    createdAtMs > 0 && expiresIn > 0
+      ? createdAtMs + expiresIn * 1000
+      : Date.now() + 6 * 60 * 60_000
+
+  const merged: Credential = {
+    ...current,
+    musickey: String(data.musickey),
+    expiredAtMs
+  }
+  if (typeof data.refresh_token === 'string' && data.refresh_token.length > 0) {
+    merged.refreshToken = data.refresh_token
+  }
+  if (typeof data.access_token === 'string' && data.access_token.length > 0) {
+    merged.accessToken = data.access_token
+  }
+  if (typeof data.openid === 'string' && data.openid.length > 0) merged.openid = data.openid
+  if (typeof data.unionid === 'string' && data.unionid.length > 0) merged.unionid = data.unionid
+  if (typeof data.refresh_key === 'string' && data.refresh_key.length > 0) {
+    merged.refreshKey = data.refresh_key
+  }
+  if (Number.isFinite(Number(data.loginType))) merged.loginType = Number(data.loginType)
+  return merged
+}
+
+let lastRefreshAt = 0
+let refreshPromise: Promise<Credential> | null = null
+
+/** 立即用当前 musicid + musickey 续期并写回凭证。 */
+export function refreshSession(): Promise<Credential> {
+  if (refreshPromise) return refreshPromise
+  refreshPromise = (async () => {
+    const current = getCredential()
+    if (!current) {
+      throw new UpstreamError('AUTH_EXPIRED', '未登录，无法续期')
+    }
+    const refreshed = await refreshMusickey(current)
+    await saveCredential(refreshed)
+    lastRefreshAt = Date.now()
+    console.info(
+      `[login] 会话已自动续期，新 musickey ${refreshed.musickey.length} 字符`
+    )
+    return refreshed
+  })().finally(() => {
+    refreshPromise = null
+  })
+  return refreshPromise
+}
+
+/**
+ * 到期前 10 分钟或每 6 小时续期一次；无过期时间时启动后先续期一次。
+ * 上游若拒绝续期，保留旧凭证并等待下一次重试。
+ */
+export function refreshIfNeeded(force = false): Promise<void> {
+  const current = getCredential()
+  if (!current) return Promise.resolve()
+  const now = Date.now()
+  const due =
+    force ||
+    (current.expiredAtMs !== null
+      ? current.expiredAtMs - now <= 10 * 60_000
+      : now - lastRefreshAt >= 6 * 60 * 60_000)
+  if (!due) return Promise.resolve()
+  return refreshSession()
+    .then(() => undefined)
+    .catch((error) => {
+      console.warn(`[login] 会话续期失败：${errorMessage(error)}`)
+    })
 }
 
 function schedulePoll(delay: number): void {

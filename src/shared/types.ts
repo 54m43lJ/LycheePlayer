@@ -82,6 +82,13 @@ export interface Credential {
   musicid: string
   musickey: string
   expiredAtMs: number | null
+  /** 以下字段仅主进程内部使用，不跨 IPC 下发。 */
+  refreshKey?: string
+  refreshToken?: string
+  accessToken?: string
+  openid?: string
+  unionid?: string
+  loginType?: number
 }
 
 export interface UrlResult {
@@ -113,6 +120,8 @@ export interface QrSession {
 export interface AuthStatus {
   loggedIn: boolean
   musicid: string | null
+  expiresAtMs: number | null
+  canRefresh: boolean
 }
 
 export type MprisCommand = 'play' | 'pause' | 'toggle' | 'next' | 'previous' | { seekTo: number }

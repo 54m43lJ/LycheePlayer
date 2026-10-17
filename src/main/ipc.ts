@@ -7,7 +7,7 @@ import type {
   SearchRequest,
   Settings
 } from '../shared/types'
-import { createQrKey, initLoginEvents, loginWithCookie, stopPolling } from './api/login'
+import { createQrKey, initLoginEvents, loginWithCookie, refreshSession, stopPolling } from './api/login'
 import { openWebLogin } from './api/web-login'
 import { getLyric } from './api/lyric'
 import { getPlaylist, listMine } from './api/playlist'
@@ -44,7 +44,9 @@ function currentAuthStatus(): AuthStatus {
   const credential = getCredential()
   return {
     loggedIn: Boolean(credential),
-    musicid: credential?.musicid ?? null
+    musicid: credential?.musicid ?? null,
+    expiresAtMs: credential?.expiredAtMs ?? null,
+    canRefresh: Boolean(credential?.refreshToken)
   }
 }
 
@@ -76,6 +78,10 @@ export function registerIpc(): void {
     const credential = await openWebLogin()
     await saveCredential(credential)
     broadcast('login:status', { stage: 'ok' })
+    return currentAuthStatus()
+  })
+  handle('login.refreshSession', async () => {
+    await refreshSession()
     return currentAuthStatus()
   })
   handle('login.logout', async () => {

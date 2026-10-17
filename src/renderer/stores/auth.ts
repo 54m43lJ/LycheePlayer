@@ -8,6 +8,8 @@ export const useAuthStore = defineStore('auth', () => {
   const musicid = ref<string | null>(null)
   const profile = ref<UserProfile | null>(null)
   const ready = ref(false)
+  const expiresAtMs = ref<number | null>(null)
+  const canRefresh = ref(false)
 
   const qrImage = ref('')
   const qrStage = ref<QrStatus['stage'] | null>(null)
@@ -20,6 +22,8 @@ export const useAuthStore = defineStore('auth', () => {
   function applyStatus(status: AuthStatus): void {
     loggedIn.value = status.loggedIn
     musicid.value = status.musicid
+    expiresAtMs.value = status.expiresAtMs
+    canRefresh.value = status.canRefresh
     if (status.loggedIn) {
       void loadProfile()
     } else {
@@ -39,7 +43,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       applyStatus(unwrap(await window.qqy.login.getStatus()))
     } catch {
-      applyStatus({ loggedIn: false, musicid: null })
+      applyStatus({ loggedIn: false, musicid: null, expiresAtMs: null, canRefresh: false })
     } finally {
       ready.value = true
     }
@@ -87,11 +91,17 @@ export const useAuthStore = defineStore('auth', () => {
     qrError.value = ''
   }
 
+  async function refreshSession(): Promise<void> {
+    applyStatus(unwrap(await window.qqy.login.refreshSession()))
+  }
+
   async function logout(): Promise<void> {
     unwrap(await window.qqy.login.logout())
     loggedIn.value = false
     musicid.value = null
     profile.value = null
+    expiresAtMs.value = null
+    canRefresh.value = false
     qrStage.value = null
     qrImage.value = ''
     qrExpiresAt.value = 0
@@ -103,6 +113,8 @@ export const useAuthStore = defineStore('auth', () => {
     profile,
     ready,
     displayName,
+    expiresAtMs,
+    canRefresh,
     qrImage,
     qrStage,
     qrLoading,
@@ -113,6 +125,7 @@ export const useAuthStore = defineStore('auth', () => {
     handleQrStatus,
     loginWithCookie,
     openWebLogin,
+    refreshSession,
     logout
   }
 })

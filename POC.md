@@ -16,14 +16,13 @@ POC 实现了 README 路线图中的 MVP 主链路，并提前验证了 MPRIS / 
 - 播放：HTML5 Audio、播放队列、上一首 / 下一首、进度、音量、播放模式。
 - 歌词：LRC + 翻译合并、滚动高亮、点击跳转。
 - 歌单：公开歌单详情与全部歌曲、我的歌单（登录后）。
-- 登录：手机 QQ 扫码（二维码生成、状态轮询）、官方网页登录窗口、Cookie 兜底验证、退出登录。
+- 登录：嵌入 QQ 官方 xlogin 扫码组件（默认）、实验性应用内二维码、Cookie 兜底验证、退出登录。
+- 会话：保存完整凭证（含 `refresh_token`），每 30 分钟检查、到期前自动续期。
 - 凭证：主进程内 `safeStorage` 加密落盘，不跨 IPC。
-- 设置：默认音质、关闭到托盘。
+- 设置：默认音质、关闭到托盘、凭证到期时间与手动续期。
 - 集成：MPRIS（播放状态 / 元数据 / 反向控制）、系统托盘。
 
-不在 POC 范围：扫码确认后的真实登录、VIP / 数字专辑权限验证、MV、下载、全局快捷键、逐字歌词、
-歌单增删改、打包分发、自动更新。扫码登录的 `createQrKey` 与轮询已验证，但“手机确认后换取凭证”
-需要真实账号才能端到端验证。
+不在 POC 范围：数字专辑购买、MV、下载、全局快捷键、逐字歌词、歌单增删改、打包分发、自动更新。
 
 ## 2. 如何运行
 
@@ -64,10 +63,10 @@ PASS  qr poll  status=66（66=待扫码）
 - 双击匿名可播歌曲「盛夏光年」：进度从 0:05 推进到 0:08，播放 / 暂停状态正确。
 - 歌词：39 行，当前行高亮，随播放推进。
 - 歌单 `7039749142`：99 首全部载入，封面正常。
-- 扫码：二维码 111×111 PNG，轮询返回 66（待扫码）；扫码确认后的 `check_sig` 若返回 `p_skey_forbid`，界面会直接显示风控提示。
-- 官方网页登录窗口：弹窗加载 `https://y.qq.com/`，使用独立 session，登录完成后可从 Cookie 提取 `uin` / `qm_keyst`；需要真实账号完成登录后回归。
+- 官方扫码组件：窗口只加载 `xui.ptlogin2.qq.com/cgi-bin/xlogin`（与官方 Linux 客户端一致），不加载完整 y.qq.com；二维码 111×111。扫码确认后组件在 `graph.qq.com/oauth2.0/login_jump` 写入 `p_skey`，应用读取该 Cookie 完成 OAuth authorize + `QQLogin`。已实际完成登录、写入凭证，并在重启后保持登录态。
+- 应用内二维码（实验）：`createQrKey` 生成与轮询可用，但当前账号/IP 的 `check_sig` 返回 `p_skey_forbid`，因此不作为默认登录路径。
+- 会话续期：`keyExpiresIn = 259200`（72 小时）；`login.refreshSession()` 使用 `refresh_token` 调用 `music.login.LoginServer/Login` 成功，新 musickey 写入后到期时间向后延长 72 小时。
 - 非法 Cookie：返回 `AUTH_EXPIRED`，不写入凭证。
-- 官方网页登录窗口：实际完成登录，主进程读取 Cookie 后经 `safeStorage` 落盘；重启应用后仍保持登录态。
 - 登录账号下的“我的歌单”：成功载入 24 个歌单。
 - VIP 歌曲《晴天》：320k 与 FLAC 均播放成功，音质切换后进度继续推进。
 - 窄屏 680×540：侧栏收为 64px 图标栏，搜索/设置/登录单列显示，无横向溢出；登录页内容可纵向滚动。
@@ -88,6 +87,10 @@ PASS  qr poll  status=66（66=待扫码）
    权限最终以 vkey 结果为准；`PayInfo` 只用于 UI 角标。映射规则已写入 ARCHITECTURE §4.3。
 5. **瞬时错误 2001**：上游偶发返回 `req_0.code = 2001`，客户端做 3 次短退避重试。
 6. **二维码图片很小**：QQ 登录二维码是 1-bit 111×111 PNG（约 440 字节），不能按文件大小判断有效性。
+7. **官方 Linux 客户端的登录组件**：缓存中的入口是 `xui.ptlogin2.qq.com/cgi-bin/xlogin?...appid=716027609...s_url=graph.qq.com/oauth2.0/login_jump...`。它只加载扫码窗口；扫码完成后 `login_jump` 会写入 `p_skey`，随后需要客户端自己调用 OAuth authorize 换 `code`，再调 `QQConnectLogin.LoginServer/QQLogin`。
+8. **原生 check_sig 与官方组件差异**：直接构造 check_sig 在当前网络返回 `p_skey_forbid`；官方 xlogin 组件走完整浏览器流程后能正常写入 `p_skey`，因此默认登录改用前者。
+9. **会话时长**：`QQLogin` 返回的 `keyExpiresIn` 为 259200 秒（72 小时）；`refresh_token` 可续期。官方客户端 24 小时内掉线更像是没有主动续期，而不是 key 本身只有 24 小时。
+10. **续期接口**：`QQConnectLogin.LoginServer/QQLogin` 的简单续期（`musics.fcg` + MD5 / zzc sign）实测不可用（2000 / 10006）；正确路径是 `music.login.LoginServer/Login` + `loginMode=2` + `refresh_token`，实测返回新 musickey。
 
 ## 5. 与设计文档的差异
 
@@ -95,7 +98,8 @@ PASS  qr poll  status=66（66=待扫码）
 | --- | --- | --- |
 | `login.createQrKey()` 返回 `QrSession`（二维码 data URL + 过期时间） | 渲染进程必须拿到图片才能显示二维码；原接口只返回 `null` | 已更新 ARCHITECTURE §4.1 / §4.2、CODE §3.11 |
 | 新增 `login.getStatus()`、`login.loginWithCookie()` | 启动时恢复登录态；Cookie 是 PENDING #4 的兜底入口 | 已更新 ARCHITECTURE §4.1 / §4.2 |
-| 新增 `login.openWebLogin()` | QQ 网页登录可能返回 `p_skey_forbid` 风控；独立窗口走官方页面，用户可完成安全验证后自动读取 Cookie | 已更新 ARCHITECTURE §3.2 / §4.1 |
+| 新增 `login.openWebLogin()` | QQ 网页登录可能返回 `p_skey_forbid` 风控；改为嵌入官方 xlogin 扫码组件，扫码后读取 `p_skey` 完成换证 | 已更新 ARCHITECTURE §3.2 / §4.1 |
+| 新增 `login.refreshSession()`、`AuthStatus` 到期字段 | 官方客户端 24h 内掉线；用 `refresh_token` 主动续期，并在设置页显示到期时间 | 已更新 ARCHITECTURE §2 / §4.1 / §4.2 |
 | `QrStatus` 增加 `failed` 阶段与 `message` | 扫码确认后换证失败时需要向用户展示具体原因，而不是静默过期 | 已更新 ARCHITECTURE §3.2 / §4.2 |
 | 播放链接拼接改为复用 `purl` | `vkey` 与查询串绑定，重建会 403 | 已更新 ARCHITECTURE §1 / §4.3、CODE §3.7 |
 | 托盘 `initTray(actions)` 需要回调 | 托盘菜单要控制播放器与退出 | 已更新 CODE §3.13 |
@@ -106,9 +110,10 @@ PASS  qr poll  status=66（66=待扫码）
 
 ## 6. POC 已知限制
 
-- 扫码登录已实测到 `check_sig`；当前网络环境下 QQ 侧返回 `p_skey_forbid`，拒绝下发 `p_skey`，应用会提示使用官方网页登录或 Cookie。网页登录窗口已实际完成登录并持久化，因此该风控不阻塞日常使用。
-- 手动粘贴 Cookie 的成功路径未单独验证；网页登录内部复用同一个 Cookie 校验入口并已成功。
-- 扫码在无风控环境下的完整 `p_skey → oauth code → QQLogin` 成功路径仍建议用另一网络/账号回归。
+- 原生应用内二维码在当前网络环境仍会触发 `p_skey_forbid`；默认登录使用官方 xlogin 组件，已实际完成登录并持久化，因此该风控不阻塞日常使用。
+- 手动粘贴 Cookie 的成功路径未单独验证；官方组件走 OAuth code 换证，不复用 Cookie 校验入口。
+- 官方组件扫码后的 `p_skey` → authorize → `QQLogin` 已手动实测成功；自动读取 `login_jump` Cookie 的轮询逻辑已实现，建议再走一次完整扫码确认。
+- 续期已实测一次成功，但 72 小时长周期观察、应用长时间关闭后首次启动续期仍需持续验证。
 - 数字专辑与无版权歌曲的不可播提示未专门验证；VIP 歌曲的 320k / FLAC 已验证。
 - 桌面歌词、逐字歌词、MV、下载、全局快捷键未实现。
 - 未配置 electron-builder，未生成 deb / rpm / AppImage。
@@ -117,8 +122,9 @@ PASS  qr poll  status=66（66=待扫码）
 
 ## 7. 下一步建议
 
-1. 在另一网络/账号回归扫码 `p_skey` 成功路径，并验证数字专辑的不可播提示与手动 Cookie 粘贴。
-2. 拍板 PENDING #2（许可证）、#5（默认音质与降档提示）、#6（关闭行为）、#7（应用名）。
-3. 引入 electron-builder 与 CI 双架构构建，补 BUILD.html。
-4. 为 `api/` 层加 fixture 回放测试，降低上游变更导致的回归成本。
-5. 评估把 `mpris-service`（dbus-next）替换为更活跃的维护分支，或直接使用 `dbus-next`。
+1. 观察 72 小时以上：确认自动续期能在应用常驻与重启两种情况下保持登录态；若 refresh_token 过期，验证 UI 的重新登录引导。
+2. 在另一网络/账号回归原生扫码 `p_skey` 成功路径，并验证数字专辑的不可播提示与手动 Cookie 粘贴。
+3. 拍板 PENDING #2（许可证）、#5（默认音质与降档提示）、#6（关闭行为）、#7（应用名）。
+4. 引入 electron-builder 与 CI 双架构构建，补 BUILD.html。
+5. 为 `api/` 层加 fixture 回放测试，降低上游变更导致的回归成本。
+6. 评估把 `mpris-service`（dbus-next）替换为更活跃的维护分支，或直接使用 `dbus-next`。
