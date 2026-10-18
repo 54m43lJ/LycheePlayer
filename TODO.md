@@ -9,6 +9,8 @@
 - 要播放的歌曲不存在时，回退了上一首歌但是播放条没有回退
 - 启动 flags：从外部 flags 文件读取用户自定义启动参数（覆盖默认）
 - 启动 flags：无外部配置时使用个人默认（Wayland + gnome-libsecret 密钥环后端）
+- 打包分发：electron-builder（deb / rpm / AppImage）、x64 + arm64 CI、补 BUILD.html
+- 为 api 层补 fixture 回放测试，降低上游变更导致的回归成本
 
 ## 进阶目标（自 README 路线图移入）
 

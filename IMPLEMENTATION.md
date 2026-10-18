@@ -3,7 +3,7 @@
 > 本文只记录落地时确定、但 ARCHITECTURE / CODE 没有展开的实现细节：上游端点、重试与错误映射、
 > 文件格式、并发控制、Linux 集成与已知限制。数据模型与 IPC 契约仍以 ARCHITECTURE / CODE 为唯一事实源。
 >
-> 验证过程与结果见 POC.md；待拍板事项见 PENDING.md。
+> 验证过程与结果见 POC.md；后续目标见 TODO.md。
 
 ## 1. 运行环境与构建
 
@@ -347,7 +347,7 @@ oauth authorize:
 
 - 官方 xlogin 组件的 `p_skey` → authorize → QQLogin 链路已实测成功；WebContentsView 内嵌流程的自动 cookie 轮询已完成一次端到端扫码验证。
 - 原生应用内二维码在当前网络/账号返回 `p_skey_forbid`；UI 默认已切换为官方组件。
-- 手动粘贴 Cookie 只能验证登录，不能自动续期（没有 refresh_token）。
+- 手动粘贴 Cookie 只能验证登录，不能自动续期（没有 refresh_token）；成功路径尚未回归测试。
 - 续期已成功一次，并验证新 key 与 72h 到期时间；尚未做 72h+ 长跑，refresh_token 的最终有效期由上游决定。
 - 搜索/播放依赖上游匿名额度；频繁请求可能触发限流或空结果。
 - 没有 CSP；Electron 开发模式会提示 Insecure CSP。正式发布前应补 meta/CSP。
@@ -386,5 +386,5 @@ playerctl -p lychee play
 - [ARCHITECTURE.html](ARCHITECTURE.html) — 对外契约、术语、时序与数据模型
 - [CODE.html](CODE.html) — 文件树、方法签名、调用栈
 - [POC.md](POC.md) — 验证结果、差异记录、POC 限制
-- [PENDING.md](PENDING.md) — 待拍板事项
+- [TODO.md](TODO.md) — 后续目标与待办清单
 - `BUILD.html` — 开发完成后编写

@@ -57,7 +57,7 @@
 ├── IMPLEMENTATION.md
 ├── POC.md                                    POC 验证记录
 ├── README.html
-├── PENDING.md
+├── TODO.md                                   后续目标与待办
 ├── package.json / electron.vite.config.ts / tsconfig.*   构建与类型检查配置
 └── style.css
 </code></pre>
@@ -319,6 +319,7 @@ interface PlayerStore {
 ├── index::clearInterval(refreshTimer)
 ├── integration/mpris::publishState(null)
 ├── integration/tray::destroyTray()
+├── api/web-login::disposeEmbedView()
 ├── settings::saveSettings(current)                 // 兜底，不等待完成
 └── 窗口销毁 → 进程退出
 </code></pre>

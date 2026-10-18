@@ -294,6 +294,7 @@ interface EmbedRect {
 <ul class="note">
   <li><code>mediaMid</code> 与 <code>guid</code> 仅在 <code>api/song.ts</code> 内部存在，不出现在 IPC 数据模型中。</li>
   <li><code>Credential</code> 的 <code>refreshKey</code> / <code>refreshToken</code> / <code>accessToken</code> / <code>openid</code> 等字段仅主进程使用，不跨 IPC。</li>
+  <li><code>PayInfo</code> 仅用于 UI 角标；实际可播性以 vkey 结果为准（<code>pay.pay_play === 0</code> 的曲目也可能无权限）。</li>
   <li><code>vkey</code> 与 <code>purl</code> 的完整查询串绑定；按固定模板重建查询参数会触发 403，因此只拼接域名与 <code>purl</code>。</li>
   <li><code>UrlResult.url</code> 为 <code>null</code> 表示批量请求中该单曲无此档链接；整体请求失败以 <code>IpcError</code> 表达。</li>
 </ul>

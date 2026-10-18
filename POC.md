@@ -1,6 +1,6 @@
 # POC 验证记录（poc/attempt-1）
 
-> 本文件只服务于 POC 分支，不作为设计事实源。设计契约见 ARCHITECTURE.html / CODE.html；实现细节与上游端点清单见 IMPLEMENTATION.md；待拍板事项见 PENDING.md。
+> 本文件只服务于 POC 分支，不作为设计事实源。设计契约见 ARCHITECTURE.html / CODE.html；实现细节与上游端点清单见 IMPLEMENTATION.md。
 
 ## 1. 目标与范围
 
