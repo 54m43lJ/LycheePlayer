@@ -1599,13 +1599,14 @@ a {
   border-left: 1px solid var(--border-strong);
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(26px);
-  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.4);
   transform: translateX(100%);
   transition: transform 0.24s ease;
 }
 
+/* 阴影只随展开态绘制：收起时面板已平移出屏，残留的投影会在窗口右缘渗入约 84px 的暗带 */
 .lyrics-panel.open {
   transform: none;
+  box-shadow: -24px 0 60px rgba(0, 0, 0, 0.4);
 }
 
 .lyrics-head {
