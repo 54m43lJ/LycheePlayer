@@ -136,13 +136,13 @@ comm（按接口需要）: uin / format=json / ct=24 / cv=0
 ```text
 ┌──────────────────────────────────────────────┐
 │ 官方 xlogin 登录组件                          │
-│ （webview · 占满登录页宽度 · 内容可滚动）      │
-│                                              │
+│ （webview · 占满登录页宽度 · 高 332px）        │
 └──────────────────────────────────────────────┘
   ▸ 使用 Cookie 登录（兜底，默认折叠面板）
 ```
 
 - 登录页直接内嵌官方 xlogin 组件（webview，`webviewTag: true`），不再弹独立窗口。
+- 组件按视口高 332px 设计（`.web_login` 以 `top:50%; margin-top:-166px` 垂直定位），webview 高度固定 332px；高于此值会裁掉面板底部，二维码显示不全。
 - 组件地址与官方 Linux 客户端一致，见 `src/shared/xlogin.ts`：
 
 ```text

@@ -1033,7 +1033,8 @@ a {
 
 .embed-frame {
   width: 100%;
-  height: clamp(480px, calc(100vh - var(--player-height) - 240px), 840px);
+  /* xlogin 组件按视口高 332px 设计（.web_login 用 top:50%; margin-top:-166px 垂直定位），偏高会裁掉面板底部 */
+  height: 332px;
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
