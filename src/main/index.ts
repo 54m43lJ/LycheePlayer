@@ -146,7 +146,11 @@ export async function bootstrap(): Promise<void> {
   // 登录态续期：启动后检查一次，此后每 30 分钟检查，到期前 10 分钟自动换新 musickey。
   void refreshIfNeeded()
   refreshTimer = setInterval(() => {
-    void refreshIfNeeded()
+    void (async () => {
+      // 密钥环晚解锁时，借定时检查重试解密后再续期。
+      await loadCredential()
+      await refreshIfNeeded()
+    })()
   }, 30 * 60_000)
 }
 
