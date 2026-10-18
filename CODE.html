@@ -268,6 +268,7 @@ interface PlayerStore {
 <ul class="note">
   <li><code>loadCredential</code> 失败按未登录继续，不阻塞启动。</li>
   <li><code>sendPlayerCommand</code> 由 ipc.ts 提供，把 MPRIS / 托盘命令转成 <code>player:command</code> 推送。</li>
+  <li>模块加载阶段（<code>bootstrap()</code> 之前）固定启动参数（字面量按项目决定显式记录）：<code>--password-store=gnome-libsecret</code> 固定 libsecret 后端；检测到 <code>WAYLAND_DISPLAY</code> 时追加 <code>--ozone-platform=wayland</code> 与 <code>--enable-wayland-ime</code>，可由 <code>LYCHEE_OZONE_PLATFORM</code> 或显式命令行覆盖。</li>
 </ul>
 
 <h3>4.2 播放单曲</h3>
