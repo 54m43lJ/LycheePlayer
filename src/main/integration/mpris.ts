@@ -24,9 +24,9 @@ function playbackStatus(state: PlayerState | null): 'Playing' | 'Paused' | 'Stop
 export function initMpris(onCommand: (command: MprisCommand) => void): void {
   try {
     player = mpris({
-      name: 'qqy',
-      identity: 'qqy',
-      desktopEntry: 'qqy',
+      name: 'lychee',
+      identity: 'Lychee Player',
+      desktopEntry: 'lychee-player',
       supportedUriSchemes: ['file', 'https'],
       supportedMimeTypes: ['audio/mpeg', 'audio/flac', 'audio/mp4'],
       canRaise: true,

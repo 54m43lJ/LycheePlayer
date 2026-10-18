@@ -22,7 +22,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    playlists.value = unwrap(await window.qqy.playlist.listMine())
+    playlists.value = unwrap(await window.lychee.playlist.listMine())
   } catch (err) {
     error.value = describeError(err)
   } finally {

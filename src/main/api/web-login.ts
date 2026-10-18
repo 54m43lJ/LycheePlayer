@@ -3,7 +3,7 @@ import type { Credential } from '../../shared/types'
 import { UpstreamError } from './client'
 import { exchangeQqLoginCode, requestOAuthCodeWithCookies } from './login'
 
-const PARTITION = 'qqy-xlogin'
+const PARTITION = 'lychee-xlogin'
 
 /** 与官方 Linux 客户端使用的 QQ 登录组件一致；只加载扫码窗口，不加载完整 y.qq.com。 */
 const LOGIN_URL =
@@ -64,7 +64,7 @@ async function runWindowLogin(): Promise<Credential> {
       minHeight: 540,
       show: false,
       autoHideMenuBar: true,
-      title: '登录 QQ 音乐 — qqy',
+      title: '登录 QQ 音乐 — Lychee Player',
       backgroundColor: '#ffffff',
       webPreferences: {
         partition: PARTITION,

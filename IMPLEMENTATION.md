@@ -1,4 +1,4 @@
-# IMPLEMENTATION — qqy 实现笔记
+# IMPLEMENTATION — Lychee Player 实现笔记
 
 > 本文只记录落地时确定、但 ARCHITECTURE / CODE 没有展开的实现细节：上游端点、重试与错误映射、
 > 文件格式、并发控制、Linux 集成与已知限制。数据模型与 IPC 契约仍以 ARCHITECTURE / CODE 为唯一事实源。
@@ -33,7 +33,7 @@ src/
 │   ├── integration/ mpris / tray
 │   ├── types/     mpris-service.d.ts（第三方模块类型声明）
 │   └── index.ts / ipc.ts / settings.ts / credential.ts
-├── preload/       contextBridge → window.qqy
+├── preload/       contextBridge → window.lychee
 └── renderer/      Vue SPA
     ├── api.ts / utils/ / composables/
     ├── stores/    player / auth / settings / ui
@@ -41,7 +41,7 @@ src/
 ```
 
 - 主窗口：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: false`（POC 选择；preload 由 electron-vite 打成 CJS）。
-- 登录窗口：独立内存 session `qqy-xlogin`，`sandbox: true`，只允许 QQ 域名导航/弹窗。
+- 登录窗口：独立内存 session `lychee-xlogin`，`sandbox: true`，只允许 QQ 域名导航/弹窗。
 - 主窗口的 `window.open` 一律拒绝；http(s) 链接交给系统浏览器。
 - 单实例锁：第二个实例只唤醒已有窗口。
 - 退出顺序：`before-quit` 清理续期定时器、MPRIS 状态、托盘，并触发设置落盘。
@@ -69,12 +69,12 @@ src/
 - `player`：队列、当前曲、状态、进度、时长、音量、播放模式、实际音质。
 - `settings`：默认音质（`auto` 跟随登录态：登录 `flac` / 未登录 `320k`）、关闭到托盘；启动时加载。
 - `ui`：歌词面板开关、当前主题（由 settings 驱动）。
-- `volume` 存 `localStorage['qqy.volume']`；队列、播放模式、搜索历史、歌词缓存不做持久化。
-- `theme` 由 `settings.theme` 持久化；`data-theme` 写到 `<html>`，同时在 `localStorage['qqy.theme']` 缓存一份用于首屏避免闪烁。
+- `volume` 存 `localStorage['lychee.volume']`；队列、播放模式、搜索历史、歌词缓存不做持久化。
+- `theme` 由 `settings.theme` 持久化；`data-theme` 写到 `<html>`，同时在 `localStorage['lychee.theme']` 缓存一份用于首屏避免闪烁。
 
 ## 4. 凭证与数据文件
 
-数据目录：`app.getPath('userData')`，Linux 下为 `~/.config/qqy/`。
+数据目录：`app.getPath('userData')`，Linux 下为 `~/.config/lychee-player/`。
 
 | 文件 | 格式 |
 | --- | --- |
@@ -112,7 +112,7 @@ comm（按接口需要）: uin / format=json / ct=24 / cv=0
 | 原生换证（实验） | `ssl.ptlogin2.graph.qq.com/check_sig` → `graph.qq.com/oauth2.0/authorize` → `QQConnectLogin.LoginServer/QQLogin` | 当前网络 `check_sig` 返回 `p_skey_forbid`，仅保留代码 |
 | 官方扫码组件 | `xui.ptlogin2.qq.com/cgi-bin/xlogin` | 见 §6；`s_url=graph.qq.com/oauth2.0/login_jump` |
 | 会话续期 | `music.login.LoginServer/Login` | `loginMode=2` + `refresh_token`；读新 `musickey`、`keyExpiresIn` |
-| MPRIS | D-Bus `org.mpris.MediaPlayer2.qqy` | 见 §10 |
+| MPRIS | D-Bus `org.mpris.MediaPlayer2.lychee` | 见 §10 |
 
 补充：
 
@@ -142,7 +142,7 @@ https://xui.ptlogin2.qq.com/cgi-bin/xlogin
   &pt_3rd_aid=100497308&theme=2
 ```
 
-- 使用内存 session `qqy-xlogin`；打开前清理 cookie，结束/取消后再次清理。
+- 使用内存 session `lychee-xlogin`；打开前清理 cookie，结束/取消后再次清理。
 - 窗口声明 470×610；xlogin 页面可能自行 resize 到约 865×251，以页面行为为准。
 - 窗口内允许 QQ 域名弹窗；`setWindowOpenHandler` 拒绝其他域名。
 - 扫码成功后 `graph.qq.com/oauth2.0/login_jump` 会设置 `p_skey`、`p_uin`、`pt4_token` 等 cookie，并 postMessage；主进程每秒轮询 session cookie。
@@ -273,7 +273,7 @@ oauth authorize:
 
 - 调色板 token、HEX 与推荐语义见 [ARCHITECTURE §5](ARCHITECTURE.html#s5)；`src/renderer/styles/main.css` 顶部的 `--palette-*` 与语义变量一一映射。
 - 语义变量（`--panel` / `--text` / `--accent` / `--gold` / `--danger` / `--track` 等）由 palette token 派生，组件不直接写死颜色。
-- `data-theme="dark|light"` 切换；`settings.theme` 持久化；`localStorage['qqy.theme']` 只作为首屏缓存，`settings.json` 是事实源。
+- `data-theme="dark|light"` 切换；`settings.theme` 持久化；`localStorage['lychee.theme']` 只作为首屏缓存，`settings.json` 是事实源。
 - 深色下强调文字用 `purple-light`；浅色下强调文字用 `purple`，避免粉彩填充上的低对比。
 - 进度条用 `gold`，音量条用 `purple` 系；错误/警告用 `red`。
 
@@ -281,7 +281,7 @@ oauth authorize:
 
 ### 10.1 MPRIS
 
-- `mpris-service`，D-Bus 名 `org.mpris.MediaPlayer2.qqy`，identity 固定 `qqy`。
+- `mpris-service`，D-Bus 名 `org.mpris.MediaPlayer2.lychee`，identity 固定 `Lychee Player`。
 - Metadata：`mpris:trackid`、`mpris:length`（微秒）、`mpris:artUrl`、`xesam:title`、`xesam:artist[]`、`xesam:album`；仅在切歌时更新。
 - `playbackStatus` 由 `player:state` 驱动；`getPosition()` 返回最新 `positionMs * 1000`。
 - 事件映射：`play/pause/playpause/next/previous`；`seek` 相对偏移转绝对位置；`position` 直接 seek。
@@ -305,8 +305,8 @@ oauth authorize:
 - 启动前检测 `WAYLAND_DISPLAY`；存在则追加 `--ozone-platform=wayland` 与 `--enable-wayland-ime`。
 - 无 `WAYLAND_DISPLAY` 时不追加，保持 Electron 默认（通常 X11）。
 - `npm run dev` / `npm start` 额外设置 `ELECTRON_OZONE_PLATFORM_HINT=auto`。
-- 覆盖：`QQY_OZONE_PLATFORM=x11|wayland`，或命令行 `--ozone-platform=...`（显式命令行优先，代码不再追加）。
-- 从缺少 Wayland 环境变量的 systemd 服务启动时会回退 X11；需要显式设置 `QQY_OZONE_PLATFORM=wayland` 或补齐环境。
+- 覆盖：`LYCHEE_OZONE_PLATFORM=x11|wayland`，或命令行 `--ozone-platform=...`（显式命令行优先，代码不再追加）。
+- 从缺少 Wayland 环境变量的 systemd 服务启动时会回退 X11；需要显式设置 `LYCHEE_OZONE_PLATFORM=wayland` 或补齐环境。
 - 输入法使用 `--enable-wayland-ime`；未额外指定 text-input 版本。
 
 ## 11. 请求重试与错误映射
@@ -360,13 +360,13 @@ npm run dev          # 开发模式
 - MPRIS 回归：
 
 ```bash
-playerctl -p qqy status
-playerctl -p qqy metadata
-playerctl -p qqy pause
-playerctl -p qqy play
+playerctl -p lychee status
+playerctl -p lychee metadata
+playerctl -p lychee pause
+playerctl -p lychee play
 ```
 
-- Wayland 回归：不传 `--ozone-platform` 启动，检查进程参数包含 `--ozone-platform=wayland`；必要时用 `QQY_OZONE_PLATFORM=x11` 对比。
+- Wayland 回归：不传 `--ozone-platform` 启动，检查进程参数包含 `--ozone-platform=wayland`；必要时用 `LYCHEE_OZONE_PLATFORM=x11` 对比。
 
 ## 14. 相关文档
 

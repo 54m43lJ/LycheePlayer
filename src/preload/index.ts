@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron'
-import type { QqyApi } from '../shared/ipc'
+import type { LycheeApi } from '../shared/ipc'
 import type {
   AuthStatus,
   IpcResult,
@@ -21,7 +21,7 @@ import type {
 const invoke = <T>(channel: string, ...args: unknown[]): Promise<IpcResult<T>> =>
   ipcRenderer.invoke(channel, ...args) as Promise<IpcResult<T>>
 
-const api: QqyApi = {
+const api: LycheeApi = {
   login: {
     createQrKey: () => invoke<QrSession>('login.createQrKey'),
     getStatus: () => invoke<AuthStatus>('login.getStatus'),
@@ -69,7 +69,7 @@ const api: QqyApi = {
 }
 
 export function exposeApi(): void {
-  contextBridge.exposeInMainWorld('qqy', api)
+  contextBridge.exposeInMainWorld('lychee', api)
 }
 
 exposeApi()

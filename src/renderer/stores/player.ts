@@ -31,7 +31,7 @@ export const usePlayerStore = defineStore('player', () => {
   const status = ref<'stopped' | 'playing' | 'paused'>('stopped')
   const positionMs = ref(0)
   const durationMs = ref(0)
-  const volume = ref(clampVolume(Number(localStorage.getItem('qqy.volume') ?? 0.8)))
+  const volume = ref(clampVolume(Number(localStorage.getItem('lychee.volume') ?? 0.8)))
   const mode = ref<PlayMode>('sequence')
   const quality = ref<Quality>('320k')
   const requestedQuality = ref<Quality>('320k')
@@ -66,7 +66,7 @@ export const usePlayerStore = defineStore('player', () => {
   function sendState(): void {
     lastSentAt = Date.now()
     try {
-      window.qqy.player.sendState(statePayload())
+      window.lychee.player.sendState(statePayload())
     } catch (err) {
       // 主进程不可用时播放不应中断。
       console.error('[player] state send failed', err)
@@ -127,7 +127,7 @@ export const usePlayerStore = defineStore('player', () => {
     try {
       const qualityToUse = forcedQuality ?? defaultQuality.value
       requestedQuality.value = qualityToUse
-      const results = unwrap(await window.qqy.song.getUrls([song.songMid], qualityToUse))
+      const results = unwrap(await window.lychee.song.getUrls([song.songMid], qualityToUse))
       const result = results.find((item) => item.songMid === song.songMid) ?? results[0]
       if (!result?.url) {
         throw new IpcCallError({ code: 'NO_STREAM', message: '没有可用的播放链接' })
@@ -253,7 +253,7 @@ export const usePlayerStore = defineStore('player', () => {
   function setVolume(value: number): void {
     volume.value = clampVolume(value)
     audio.volume = volume.value
-    localStorage.setItem('qqy.volume', String(volume.value))
+    localStorage.setItem('lychee.volume', String(volume.value))
   }
 
   /** 手动切换音质：重载当前曲目，实际音质以上游降档结果为准。 */

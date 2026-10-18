@@ -31,8 +31,8 @@ onMounted(() => {
     player.applySettings()
   })()
 
-  offLogin = window.qqy.login.onStatus((status) => auth.handleQrStatus(status))
-  offCommand = window.qqy.player.onCommand((command) => player.handleCommand(command))
+  offLogin = window.lychee.login.onStatus((status) => auth.handleQrStatus(status))
+  offCommand = window.lychee.player.onCommand((command) => player.handleCommand(command))
 })
 
 onBeforeUnmount(() => {
@@ -52,7 +52,7 @@ watch(
       <div class="brand">
         <div class="brand-mark"><AppIcon name="music" :size="20" /></div>
         <div>
-          <div class="brand-name">qqy</div>
+          <div class="brand-name">Lychee Player</div>
           <div class="brand-sub">QQ Music · Linux</div>
         </div>
       </div>

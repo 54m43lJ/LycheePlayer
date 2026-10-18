@@ -21,7 +21,7 @@ export function initTray(actions: TrayActions): void {
   try {
     const image = nativeImage.createFromPath(iconPath()).resize({ width: 22, height: 22 })
     tray = new Tray(image)
-    tray.setToolTip('qqy')
+    tray.setToolTip('Lychee Player')
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: '显示主窗口', click: actions.onShow },
@@ -30,7 +30,7 @@ export function initTray(actions: TrayActions): void {
         { label: '上一首', click: actions.onPrevious },
         { label: '下一首', click: actions.onNext },
         { type: 'separator' },
-        { label: '退出 qqy', click: actions.onQuit }
+        { label: '退出 Lychee Player', click: actions.onQuit }
       ])
     )
     tray.on('click', actions.onShow)

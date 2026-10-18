@@ -2,11 +2,6 @@
 
 > 约定：每项给出背景与默认方案。拍板后**直接删除对应条目**，并把结论落实到 ARCHITECTURE.html / CODE.html / README.html（单一事实源，本文件不记录决议历史）。
 
-## 7. 应用命名与 app-id
-
-- 项目目录名 `qqy` 是否就是正式应用名？还是起个正式名字（影响 desktop 文件、`org.xxx.qqy` app-id、flatpak 提交、窗口标题）
-- 默认暂用 `qqy`，正式发布前必须定
-
 ## 8. UI 原型
 
 - README §2 目前只有交互文字清单。是否先出线框图 / 可点原型再动手写界面？
@@ -27,7 +22,7 @@
 POC 实现与现有文档表述不一致，需要拍板口径：
 
 - **文档现状**：ARCHITECTURE TERMS / §2 会话续期、README §2 均写「凭证存入系统密钥环」。
-- **实现现状**：凭证落在 `~/.config/qqy/credential.bin`（`{ version, encrypted, payload }`）；`safeStorage` 可用时加密（Linux 下 safeStorage 后端就是 libsecret / kwallet 密钥环），**不可用时退化为 base64 明文**（权限 0600）。POC.md 已列为已知限制。
+- **实现现状**：凭证落在 `~/.config/lychee-player/credential.bin`（`{ version, encrypted, payload }`）；`safeStorage` 可用时加密（Linux 下 safeStorage 后端就是 libsecret / kwallet 密钥环），**不可用时退化为 base64 明文**（权限 0600）。POC.md 已列为已知限制。
 - **默认**：追认 POC 实现，文档措辞统一改为「safeStorage 加密落盘；无密钥环时明文兜底（已知限制）」
 - **备选**：正式版引入 keytar / libsecret 硬依赖，无密钥环时拒绝保存并提示（打包发布前需定）
 - 关联：`general-architecture.puml` / `seq-login.puml` 中的「系统密钥环」字样已临时改为中性表述，拍板后按结论回填

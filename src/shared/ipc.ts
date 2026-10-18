@@ -16,7 +16,7 @@ import type {
   MprisCommand
 } from './types'
 
-export interface QqyApi {
+export interface LycheeApi {
   login: {
     createQrKey(): Promise<IpcResult<QrSession>>
     getStatus(): Promise<IpcResult<AuthStatus>>

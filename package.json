@@ -1,9 +1,10 @@
 {
-  "name": "qqy",
+  "name": "lychee-player",
+  "productName": "Lychee Player",
   "version": "0.1.0-poc",
   "description": "第三方 QQ 音乐 Linux 客户端（POC 验证版本）",
   "main": "./out/main/index.js",
-  "author": "qqy contributors",
+  "author": "Lychee Player contributors",
   "license": "GPL-3.0-only",
   "private": true,
   "scripts": {

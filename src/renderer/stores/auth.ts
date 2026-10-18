@@ -33,7 +33,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function loadProfile(): Promise<void> {
     try {
-      profile.value = unwrap(await window.qqy.user.getProfile())
+      profile.value = unwrap(await window.lychee.user.getProfile())
     } catch {
       profile.value = null
     }
@@ -41,7 +41,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   async function refresh(): Promise<void> {
     try {
-      applyStatus(unwrap(await window.qqy.login.getStatus()))
+      applyStatus(unwrap(await window.lychee.login.getStatus()))
     } catch {
       applyStatus({ loggedIn: false, musicid: null, expiresAtMs: null, canRefresh: false })
     } finally {
@@ -54,7 +54,7 @@ export const useAuthStore = defineStore('auth', () => {
     qrError.value = ''
     qrStage.value = 'waiting'
     try {
-      const session = unwrap(await window.qqy.login.createQrKey())
+      const session = unwrap(await window.lychee.login.createQrKey())
       qrImage.value = session.imageDataUrl
       qrExpiresAt.value = session.expiresAtMs
       qrStage.value = 'waiting'
@@ -77,14 +77,14 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function loginWithCookie(cookie: string): Promise<void> {
-    const status = unwrap(await window.qqy.login.loginWithCookie(cookie))
+    const status = unwrap(await window.lychee.login.loginWithCookie(cookie))
     applyStatus(status)
     qrStage.value = 'ok'
     qrImage.value = ''
   }
 
   async function openWebLogin(): Promise<void> {
-    const status = unwrap(await window.qqy.login.openWebLogin())
+    const status = unwrap(await window.lychee.login.openWebLogin())
     applyStatus(status)
     qrStage.value = 'ok'
     qrImage.value = ''
@@ -92,11 +92,11 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   async function refreshSession(): Promise<void> {
-    applyStatus(unwrap(await window.qqy.login.refreshSession()))
+    applyStatus(unwrap(await window.lychee.login.refreshSession()))
   }
 
   async function logout(): Promise<void> {
-    unwrap(await window.qqy.login.logout())
+    unwrap(await window.lychee.login.logout())
     loggedIn.value = false
     musicid.value = null
     profile.value = null

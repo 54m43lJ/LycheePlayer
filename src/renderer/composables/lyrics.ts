@@ -23,7 +23,7 @@ export function useLyrics() {
     loading.value = true
     error.value = ''
     try {
-      const lyric = unwrap(await window.qqy.lyric.get(songMid))
+      const lyric = unwrap(await window.lychee.lyric.get(songMid))
       if (currentToken !== token) return
       const parsed = parseLyric(lyric.lrc, lyric.trans)
       cache.set(songMid, parsed)

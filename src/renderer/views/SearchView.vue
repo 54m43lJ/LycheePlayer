@@ -52,7 +52,7 @@ async function search(page = 1): Promise<void> {
   loading.value = true
   try {
     const data = unwrap(
-      await window.qqy.search.byType({
+      await window.lychee.search.byType({
         type: activeTab.value,
         keyword: term,
         pageNo: page,

@@ -11,18 +11,18 @@ let mainWindow: BrowserWindow | null = null
 let quitting = false
 let refreshTimer: NodeJS.Timeout | null = null
 
-app.setName('qqy')
+app.setName('Lychee Player')
 
 /**
  * Linux 默认 Wayland：检测到 WAYLAND_DISPLAY 时强制使用 Ozone Wayland，
  * 并启用 Wayland IME；无 Wayland 会话时保持 Electron 默认（通常为 X11）。
- * 可用 QQY_OZONE_PLATFORM=x11/wayland 或命令行 --ozone-platform 覆盖。
+ * 可用 LYCHEE_OZONE_PLATFORM=x11/wayland 或命令行 --ozone-platform 覆盖。
  */
 function configureLinuxDisplay(): void {
   if (process.platform !== 'linux') return
   if (process.argv.some((arg) => arg.startsWith('--ozone-platform'))) return
 
-  const override = process.env.QQY_OZONE_PLATFORM
+  const override = process.env.LYCHEE_OZONE_PLATFORM
   if (override === 'x11') {
     app.commandLine.appendSwitch('ozone-platform', 'x11')
     return
@@ -52,7 +52,7 @@ export function createMainWindow(): BrowserWindow {
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#0e0e12',
-    title: 'qqy',
+    title: 'Lychee Player',
     icon: iconPath(),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

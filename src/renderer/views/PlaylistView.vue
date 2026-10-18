@@ -27,7 +27,7 @@ async function load(): Promise<void> {
   loading.value = true
   error.value = ''
   try {
-    playlist.value = unwrap(await window.qqy.playlist.get(id))
+    playlist.value = unwrap(await window.lychee.playlist.get(id))
   } catch (err) {
     error.value = describeError(err)
     toast.error(error.value)

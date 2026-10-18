@@ -11,7 +11,7 @@ export const useSettingsStore = defineStore('settings', () => {
     const theme = settings.value.theme === 'light' ? 'light' : 'dark'
     document.documentElement.dataset.theme = theme
     try {
-      localStorage.setItem('qqy.theme', theme)
+      localStorage.setItem('lychee.theme', theme)
     } catch {
       // localStorage 不可用时只应用当前会话。
     }
@@ -19,7 +19,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function load(): Promise<void> {
     try {
-      settings.value = unwrap(await window.qqy.settings.get())
+      settings.value = unwrap(await window.lychee.settings.get())
     } finally {
       applyTheme()
       loaded.value = true
@@ -27,7 +27,7 @@ export const useSettingsStore = defineStore('settings', () => {
   }
 
   async function update(patch: Partial<Settings>): Promise<void> {
-    settings.value = unwrap(await window.qqy.settings.set(patch))
+    settings.value = unwrap(await window.lychee.settings.set(patch))
     applyTheme()
   }
 

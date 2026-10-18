@@ -1,10 +1,10 @@
 /// <reference types="vite/client" />
 
-import type { QqyApi } from '../shared/ipc'
+import type { LycheeApi } from '../shared/ipc'
 
 declare global {
   interface Window {
-    qqy: QqyApi
+    lychee: LycheeApi
   }
 }
 

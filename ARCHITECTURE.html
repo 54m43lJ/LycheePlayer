@@ -2,12 +2,12 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>ARCHITECTURE — qqy</title>
+<title>ARCHITECTURE — Lychee Player</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h1>ARCHITECTURE — qqy（第三方 QQ 音乐 Linux 客户端）</h1>
+<h1>ARCHITECTURE — Lychee Player（第三方 QQ 音乐 Linux 客户端）</h1>
 
 <h2 id="s1">1. TERMS</h2>
 <table>
@@ -70,7 +70,7 @@
 
 <h3>4.1 IPC API</h3>
 <p>
-渲染进程经 preload 暴露的单一命名空间 <code>window.qqy</code> 调用以下方法；签名即契约，
+渲染进程经 preload 暴露的单一命名空间 <code>window.lychee</code> 调用以下方法；签名即契约，
 行为细节见对应时序图（<a href="#s3">§3</a>）。
 </p>
 <pre><code>// 登录（默认：openWebLogin 嵌入官方 xlogin 扫码组件；备选：loginWithCookie 手动 Cookie；createQrKey 为实验性应用内二维码）
@@ -291,12 +291,12 @@ interface Settings {
 <h3>4.4 外部接口：MPRIS</h3>
 <table>
   <tr><th>对象</th><th>成员</th><th>说明</th></tr>
-  <tr><td>Root</td><td><code>Identity</code> / <code>CanQuit</code> / <code>CanRaise</code></td><td>应用名固定 <code>qqy</code>；退出走正常生命周期</td></tr>
+  <tr><td>Root</td><td><code>Identity</code> / <code>CanQuit</code> / <code>CanRaise</code></td><td>应用名固定 <code>Lychee Player</code>；退出走正常生命周期</td></tr>
   <tr><td>Player</td><td><code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code></td><td>由 <code>player:state</code> 发布驱动</td></tr>
   <tr><td>Player</td><td><code>Play</code> / <code>Pause</code> / <code>PlayPause</code> / <code>Next</code> / <code>Previous</code> / <code>Seek</code> / <code>SetPosition</code></td><td>转为 <code>MprisCommand</code> 推送回渲染进程</td></tr>
 </table>
 <ul class="note">
-  <li>D-Bus 总线名为 <code>org.mpris.MediaPlayer2.qqy</code>，<code>playerctl -p qqy</code> 可直接验证。</li>
+  <li>D-Bus 总线名为 <code>org.mpris.MediaPlayer2.lychee</code>，<code>playerctl -p lychee</code> 可直接验证。</li>
   <li>D-Bus / MPRIS 不可用时静默降级，不影响应用内播放。</li>
 </ul>
 

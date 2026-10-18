@@ -2,15 +2,15 @@
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8">
-<title>CODE — qqy</title>
+<title>CODE — Lychee Player</title>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-<h1>CODE — qqy</h1>
+<h1>CODE — Lychee Player</h1>
 
 <h2 id="c1">1. File tree</h2>
-<pre><code>qqy/
+<pre><code>lychee-player/
 ├── diagram/                                  PlantUML 图源与导出 SVG（见 ARCHITECTURE §3）
 ├── resources/                                应用与托盘图标
 ├── scripts/
@@ -221,7 +221,7 @@ interface TrayActions {
 <pre><code>export function exposeApi(): void;
 </code></pre>
 <ul class="note">
-  <li>经 contextBridge 暴露唯一命名空间 <code>window.qqy</code>，其类型面即 ARCHITECTURE §4.1。</li>
+  <li>经 contextBridge 暴露唯一命名空间 <code>window.lychee</code>，其类型面即 ARCHITECTURE §4.1。</li>
 </ul>
 
 <h3 id="c316">3.16 src/renderer/stores/player.ts</h3>
@@ -271,7 +271,7 @@ interface PlayerStore {
 
 <h3>4.2 播放单曲</h3>
 <pre><code>stores/player::playSong(song)
-├── window.qqy.song.getUrls([song.songMid], requestedQuality)   // settings 默认音质或播放条强制档
+├── window.lychee.song.getUrls([song.songMid], requestedQuality)   // settings 默认音质或播放条强制档
 ├── 判断 url === null → 提示 NO_STREAM 后返回
 ├── audio::play(url)                                // store 内嵌的 HTML5 Audio 元素
 ├── audio 事件 timeupdate / ended → send player:state
