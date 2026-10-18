@@ -6,6 +6,7 @@ import { describeError } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { XLOGIN_URL } from '@shared/xlogin'
+
 const auth = useAuthStore()
 const router = useRouter()
 const toast = useToast()
@@ -14,6 +15,7 @@ const cookie = ref('')
 const cookieSubmitting = ref(false)
 const embedFailed = ref(false)
 const reloadKey = ref(0)
+let embedStarted = false
 
 const avatarLetter = computed(() => auth.displayName.slice(0, 1).toUpperCase())
 
@@ -37,7 +39,13 @@ async function submitCookie(): Promise<void> {
   }
 }
 
-/** webview 挂载完成即开始换证监听；失败后可经 reloadEmbed 重新加载组件重试。 */
+/** iframe 首次加载完成即开始换证监听；后续导航（登录跳转）不重复触发。失败可重载组件重试。 */
+function onEmbedReady(): void {
+  if (embedStarted) return
+  embedStarted = true
+  void startEmbedLogin()
+}
+
 async function startEmbedLogin(): Promise<void> {
   embedFailed.value = false
   try {
@@ -50,6 +58,7 @@ async function startEmbedLogin(): Promise<void> {
 }
 
 function reloadEmbed(): void {
+  embedStarted = false
   reloadKey.value += 1
 }
 </script>
@@ -76,12 +85,12 @@ function reloadEmbed(): void {
 
     <section v-else class="login-card login-wide">
       <div class="embed-frame">
-        <webview
+        <iframe
           :key="reloadKey"
           :src="XLOGIN_URL"
-          partition="lychee-xlogin"
-          allowpopups
-          @dom-ready="startEmbedLogin()"
+          title="QQ 登录"
+          sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
+          @load="onEmbedReady()"
         />
       </div>
       <div v-if="embedFailed" class="embed-retry">

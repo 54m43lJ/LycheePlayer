@@ -6,6 +6,7 @@ import { registerIpc, sendPlayerCommand } from './ipc'
 import { initMpris, publishState } from './integration/mpris'
 import { destroyTray, initTray } from './integration/tray'
 import { getSettings, loadSettings, saveSettings } from './settings'
+import { isAllowedHost } from './api/web-login'
 
 let mainWindow: BrowserWindow | null = null
 let quitting = false
@@ -58,8 +59,7 @@ export function createMainWindow(): BrowserWindow {
       preload: join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
-      webviewTag: true
+      sandbox: false
     }
   })
 
@@ -75,6 +75,7 @@ export function createMainWindow(): BrowserWindow {
   })
 
   window.webContents.setWindowOpenHandler(({ url }) => {
+    if (isAllowedHost(url)) return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, webPreferences: { sandbox: true } } }
     if (/^https?:/i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })

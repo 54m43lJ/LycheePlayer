@@ -1,5 +1,5 @@
 /**
- * 官方 xlogin 扫码组件地址——登录页 webview 与主进程共用，与官方 Linux 客户端一致。
+ * 官方 xlogin 扫码组件地址——登录页 iframe 与主进程共用，与官方 Linux 客户端一致。
  * 只加载扫码组件本身，不加载完整 y.qq.com。
  */
 export const XLOGIN_URL =
