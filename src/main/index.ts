@@ -47,8 +47,8 @@ export function createMainWindow(): BrowserWindow {
   const window = new BrowserWindow({
     width: 1280,
     height: 820,
-    minWidth: 680,
-    minHeight: 540,
+    minWidth: 280,
+    minHeight: 440,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#0e0e12',

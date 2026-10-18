@@ -138,7 +138,7 @@ async function refreshSession(): Promise<void> {
             <p>调色板来自项目统一的 palette，可在深色 / 浅色间切换。</p>
           </div>
           <div class="panel-body">
-            <div class="quality-options" style="grid-template-columns: repeat(2, 1fr)">
+            <div class="theme-options">
               <button
                 v-for="theme in THEMES"
                 :key="theme.value"

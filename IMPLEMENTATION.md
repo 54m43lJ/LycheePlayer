@@ -267,9 +267,7 @@ oauth authorize:
 
 ### 9.1 主题与调色板
 
-- 调色板 copied from `dotfiles/palette`；token 定义在 `src/renderer/styles/main.css` 顶部：
-  - dark：`bg #231F1F`、`surface #3E3542`、`fg #D6CAB6`、`muted #B0B4BC`、`purple #89338E`、`purple-light #E593E7`、`gold #9D7E4D`、`cream #FFF7E4`、`red #CC2A47`
-  - light：`bg #F7F7F7`、`surface #F2F0EF`、`fg #000000`、`muted #55585C`、`purple #8A2E8F`、`purple-light #D998D9`、`gold #5C4824`、`highlight #E9DBF2`、`red #AB3248`
+- 调色板 token、HEX 与推荐语义见 [ARCHITECTURE §5](ARCHITECTURE.html#s5)；`src/renderer/styles/main.css` 顶部的 `--palette-*` 与语义变量一一映射。
 - 语义变量（`--panel` / `--text` / `--accent` / `--gold` / `--danger` / `--track` 等）由 palette token 派生，组件不直接写死颜色。
 - `data-theme="dark|light"` 切换；`settings.theme` 持久化；`localStorage['qqy.theme']` 只作为首屏缓存，`settings.json` 是事实源。
 - 深色下强调文字用 `purple-light`；浅色下强调文字用 `purple`，避免粉彩填充上的低对比。
@@ -291,7 +289,10 @@ oauth authorize:
 - 托盘图标 `resources/tray.png`；菜单：显示主窗口、播放/暂停、上一首、下一首、退出。
 - 托盘动作走 `player:command` 推送，不直接操作渲染进程状态。
 - `closeToTray` 默认 false；开启后窗口关闭只隐藏，退出只能从托盘或 `app.quit()`。
-- 主窗口 1280×820，最小 680×540；`autoHideMenuBar: true`。
+- 主窗口 1280×820，最小 280×440；`autoHideMenuBar: true`。
+- 响应式断点：`≤900px` 为统一窄屏模式（侧栏图标化、单列面板、音量改为点击弹层）；`≤560px` 为超窄模式（播放器双行、侧栏 56px、单列选项）。
+- 宽屏播放条音量条 `clamp(56px, 6vw, 84px)`；窄屏不再渲染水平音量条，点击音量图标弹出竖直 slider。
+- 所有播放器网格列使用 `minmax(0, …)`，不设置把窗口撑开的固定最小列宽。
 - 开发/打包图标路径分别取 `app.getAppPath()/resources` 与 `process.resourcesPath`；打包尚未配置复制规则。
 
 ### 10.3 Wayland

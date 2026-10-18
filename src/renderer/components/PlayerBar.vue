@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { storeToRefs } from 'pinia'
 import type { Quality } from '@shared/types'
 import AppIcon from './AppIcon.vue'
@@ -12,8 +12,12 @@ const player = usePlayerStore()
 const ui = useUiStore()
 const { current, status, volume, mode, quality, positionMs, durationMs, progress } = storeToRefs(player)
 
+const compactQuery = window.matchMedia('(max-width: 900px)')
+const compact = ref(compactQuery.matches)
 const qualityMenu = ref(false)
+const volumeOpen = ref(false)
 const lastVolume = ref(0.8)
+let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 
 const cover = computed(() => songCover(current.value, 300))
 const totalMs = computed(() => durationMs.value || current.value?.durationMs || 0)
@@ -36,9 +40,28 @@ const qualityOptions: Array<{ value: Quality; label: string }> = [
   { value: 'flac', label: '无损 FLAC' }
 ]
 
-function chooseQuality(next: Quality): void {
+function toggleQualityMenu(): void {
+  qualityMenu.value = !qualityMenu.value
+  if (qualityMenu.value) volumeOpen.value = false
+}
+
+function closeMenus(): void {
   qualityMenu.value = false
+  volumeOpen.value = false
+}
+
+function chooseQuality(next: Quality): void {
+  closeMenus()
   player.setQuality(next)
+}
+
+function toggleVolume(): void {
+  if (compact.value) {
+    volumeOpen.value = !volumeOpen.value
+    if (volumeOpen.value) qualityMenu.value = false
+    return
+  }
+  toggleMute()
 }
 
 function toggleMute(): void {
@@ -49,6 +72,18 @@ function toggleMute(): void {
     player.setVolume(lastVolume.value || 0.8)
   }
 }
+
+onMounted(() => {
+  mediaListener = (event) => {
+    compact.value = event.matches
+    if (!event.matches) volumeOpen.value = false
+  }
+  compactQuery.addEventListener('change', mediaListener)
+})
+
+onBeforeUnmount(() => {
+  if (mediaListener) compactQuery.removeEventListener('change', mediaListener)
+})
 </script>
 
 <template>
@@ -119,7 +154,7 @@ function toggleMute(): void {
 
       <div class="player-right">
         <div class="quality-wrap">
-          <button class="quality-chip" title="切换音质" @click.stop="qualityMenu = !qualityMenu">
+          <button class="quality-chip" title="切换音质" @click.stop="toggleQualityMenu()">
             {{ quality === 'flac' ? 'FLAC' : quality.toUpperCase() }}
           </button>
           <div v-if="qualityMenu" class="quality-menu">
@@ -133,10 +168,36 @@ function toggleMute(): void {
             </button>
           </div>
         </div>
-        <button class="icon-btn" :title="volume > 0 ? '静音' : '恢复音量'" @click="toggleMute">
-          <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="17" />
-        </button>
+        <div class="volume-wrap">
+          <button
+            class="icon-btn"
+            :title="compact ? '音量' : volume > 0 ? '静音' : '恢复音量'"
+            @click.stop="toggleVolume()"
+          >
+            <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="17" />
+          </button>
+          <div v-if="compact && volumeOpen" class="volume-popover" @click.stop>
+            <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
+            <div class="vertical-range">
+              <input
+                class="range"
+                type="range"
+                min="0"
+                max="1"
+                step="0.01"
+                :value="volume"
+                :style="volumeStyle"
+                aria-label="音量"
+                @input="player.setVolume(Number(($event.target as HTMLInputElement).value))"
+              />
+            </div>
+            <button class="icon-btn" title="静音" @click="toggleMute()">
+              <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="15" />
+            </button>
+          </div>
+        </div>
         <input
+          v-if="!compact"
           class="range volume-range"
           type="range"
           min="0"
@@ -151,5 +212,5 @@ function toggleMute(): void {
     </template>
   </footer>
 
-  <div v-if="qualityMenu" class="menu-backdrop" @click="qualityMenu = false" />
+  <div v-if="qualityMenu || volumeOpen" class="menu-backdrop" @click="closeMenus()" />
 </template>

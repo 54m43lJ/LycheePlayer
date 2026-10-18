@@ -1242,6 +1242,13 @@ a {
   width: 100%;
 }
 
+.theme-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+
 .quality-option {
   padding: 12px;
   border: 1px solid var(--border);
@@ -1498,6 +1505,56 @@ a {
   position: fixed;
   inset: 0;
   z-index: 25;
+}
+
+.volume-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.volume-popover {
+  position: absolute;
+  right: -6px;
+  bottom: calc(100% + 10px);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 58px;
+  padding: 10px 6px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 12px;
+  background: var(--panel-strong);
+  box-shadow: var(--shadow);
+}
+
+.volume-value {
+  color: var(--muted);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+.vertical-range {
+  position: relative;
+  width: 28px;
+  height: 104px;
+}
+
+.vertical-range .range {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 104px;
+  height: 4px;
+  flex: none;
+  transform: translate(-50%, -50%) rotate(-90deg);
+  transform-origin: center;
+}
+
+.volume-popover .range::-webkit-slider-thumb {
+  opacity: 1;
 }
 
 .quality-menu button {
@@ -1768,26 +1825,12 @@ a {
   line-height: 1.6;
 }
 
-@media (max-width: 1080px) {
-  .app-shell {
-    grid-template-columns: 190px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    padding: 18px 10px;
-  }
-
-  .page {
-    padding: 24px 22px 32px;
-  }
-
-  .player {
-    grid-template-columns: minmax(150px, 1fr) minmax(300px, 1.4fr) minmax(140px, 0.8fr);
-  }
-}
-
-/* Narrow desktop / small window: icon-only sidebar and single-column panels. */
+/* Unified narrow mode: <=900px. This is the single wide/narrow breakpoint. */
 @media (max-width: 900px) {
+  :root {
+    --player-height: 84px;
+  }
+
   .app-shell {
     grid-template-columns: 64px minmax(0, 1fr);
   }
@@ -1847,7 +1890,7 @@ a {
   .login-qr {
     border-right: 0;
     border-bottom: 1px solid var(--border);
-    padding: 28px 22px;
+    padding: 26px 22px;
   }
 
   .login-body {
@@ -1864,62 +1907,9 @@ a {
     flex-basis: 140px;
   }
 
-  .player {
-    grid-template-columns: minmax(140px, 1fr) minmax(280px, 1.6fr) auto;
-    gap: 10px;
-    padding: 10px 14px;
-  }
-}
-
-/* Minimum supported width (680px): compact table, stacked hero, slim player. */
-@media (max-width: 760px) {
-  :root {
-    --player-height: 80px;
-  }
-
-  .page {
-    padding: 18px 14px 28px;
-  }
-
-  .search-hero {
-    padding: 20px;
-  }
-
-  .search-hero h1 {
-    font-size: 24px;
-  }
-
-  .search-box {
-    height: 44px;
-  }
-
   .tabs {
     max-width: 100%;
     overflow-x: auto;
-  }
-
-  .qr-frame {
-    width: 190px;
-    height: 190px;
-    padding: 10px;
-  }
-
-  .qr-placeholder {
-    width: 190px;
-    height: 190px;
-  }
-
-  .login-qr {
-    padding: 22px 18px;
-  }
-
-  .login-body {
-    padding: 22px 20px 24px;
-  }
-
-  .card-grid {
-    grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
-    gap: 12px;
   }
 
   .song-table th:nth-child(3),
@@ -1932,11 +1922,126 @@ a {
     width: 56px !important;
   }
 
+  .player {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr) auto;
+    gap: 10px;
+    padding: 10px 14px;
+  }
+
+  .player-right {
+    gap: 4px;
+  }
+}
+
+/* Extra-narrow screens:<=560px. Two-row player, tighter spacing, single-column options. */
+@media (max-width: 560px) {
+  :root {
+    --player-height: 116px;
+  }
+
+  .app-shell {
+    grid-template-columns: 56px minmax(0, 1fr);
+  }
+
+  .sidebar {
+    gap: 12px;
+    padding: 12px 6px;
+  }
+
+  .brand-mark {
+    width: 34px;
+    height: 34px;
+  }
+
+  .nav-item {
+    padding: 10px 0;
+  }
+
+  .sidebar-foot {
+    padding-top: 8px;
+  }
+
+  .page {
+    padding: 18px 12px 26px;
+  }
+
+  .page-title {
+    font-size: 24px;
+  }
+
+  .page-sub {
+    font-size: 12px;
+  }
+
+  .search-hero {
+    padding: 18px 14px;
+  }
+
+  .search-hero h1 {
+    font-size: 22px;
+  }
+
+  .search-hero p {
+    font-size: 12px;
+  }
+
+  .search-box {
+    height: 42px;
+    padding-left: 12px;
+  }
+
+  .search-box .btn {
+    height: 30px;
+  }
+
+  .tabs {
+    gap: 2px;
+    padding: 3px;
+  }
+
+  .tab {
+    padding: 6px 11px;
+    font-size: 11px;
+  }
+
+  .section-title {
+    font-size: 14px;
+  }
+
+  .card-grid {
+    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 10px;
+  }
+
+  .song-table th:nth-child(4),
+  .song-table td:nth-child(4) {
+    width: 48px !important;
+  }
+
+  .song-index {
+    width: 28px;
+  }
+
+  .cover-thumb {
+    width: 32px;
+    height: 32px;
+    flex-basis: 32px;
+  }
+
+  .song-title {
+    font-size: 12px;
+  }
+
+  .song-artist,
+  .song-duration {
+    font-size: 10px;
+  }
+
   .playlist-hero {
     flex-direction: column;
     align-items: flex-start;
     gap: 16px;
-    padding: 20px;
+    padding: 18px;
   }
 
   .playlist-cover {
@@ -1946,23 +2051,69 @@ a {
   }
 
   .playlist-info h1 {
-    font-size: 24px;
+    font-size: 22px;
   }
 
   .playlist-actions {
     flex-wrap: wrap;
   }
 
+  .login-qr {
+    padding: 20px 14px;
+  }
+
+  .login-body {
+    padding: 20px 18px 24px;
+  }
+
+  .qr-frame,
+  .qr-placeholder {
+    width: min(190px, 100%);
+    height: auto;
+    aspect-ratio: 1;
+  }
+
+  .quality-options,
+  .theme-options {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .player {
-    grid-template-columns: minmax(120px, 1fr) minmax(250px, 1.7fr) auto;
-    gap: 8px;
-    padding: 8px 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    gap: 4px 8px;
+    padding: 8px 10px;
+    align-items: center;
+  }
+
+  .player-now {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .player-right {
+    grid-column: 2;
+    grid-row: 1;
+    gap: 2px;
+  }
+
+  .player-center {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 
   .player-cover {
-    width: 46px;
-    height: 46px;
-    flex-basis: 46px;
+    width: 36px;
+    height: 36px;
+    flex-basis: 36px;
+  }
+
+  .player-title {
+    font-size: 12px;
+  }
+
+  .player-artist {
+    font-size: 10px;
   }
 
   .player-controls {
@@ -1970,25 +2121,35 @@ a {
   }
 
   .player-controls .icon-btn {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
   }
 
   .play-button {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
   }
 
-  .player-right {
-    gap: 2px;
+  .progress-row .time {
+    flex-basis: 30px;
+    font-size: 9px;
   }
 
   .quality-chip {
-    padding: 0 7px;
+    padding: 0 6px;
+    font-size: 9px;
+  }
+
+  .volume-popover {
+    right: 0;
   }
 
   .lyrics-panel {
-    width: min(390px, 100%);
+    width: 100%;
+  }
+
+  .lyrics-list {
+    padding: 20px 18px 100px;
   }
 
   .profile-band {
@@ -1997,5 +2158,15 @@ a {
 
   .profile-actions {
     margin-left: 0;
+  }
+
+  .toast-stack {
+    right: 12px;
+    left: 12px;
+    bottom: calc(var(--player-height) + 12px);
+  }
+
+  .toast {
+    max-width: 100%;
   }
 }

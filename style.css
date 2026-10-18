@@ -51,3 +51,13 @@ ul.note { color: var(--note); font-size: 0.92em; margin-top: 0.4em; }
 /* PlantUML 导出图容器：自然尺寸，超宽横向滚动 */
 div.diagram { overflow-x: auto; margin: 1em 0; }
 div.diagram img { display: block; }
+
+/* 调色板预览色块 */
+.palette-swatch {
+  display: inline-block;
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  border: 1px solid #9ca3af;
+  vertical-align: middle;
+}

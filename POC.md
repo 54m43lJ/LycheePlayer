@@ -25,9 +25,9 @@ POC 实现了 README 路线图中的 MVP 主链路，并提前验证了 MPRIS / 
 不在 POC 范围：数字专辑购买、MV、下载、全局快捷键、逐字歌词、歌单增删改、打包分发、自动更新。
 
 ## 2. 如何运行
+要求：Node.js ≥ 22.12，Linux 桌面会话（X11 / Wayland 均可）。
 
-要求：Node.js ≥ 22.12，Linux 桌面会话（X11 / Wayland 均可）。窗口最小尺寸为 680×540；更窄时侧栏自动收为图标栏、登录与设置改为单列。
-
+- 主窗口最小尺寸为 280×440；主断点 900px（宽/窄模式），额外 560px 超窄断点。
 - Wayland 会话下默认使用 Wayland（`--ozone-platform=wayland` + Wayland IME）；无 `WAYLAND_DISPLAY` 时回退 X11。
 - 可用 `QQY_OZONE_PLATFORM=x11` 或命令行 `--ozone-platform=x11` 强制 X11；`npm run dev` / `npm start` 同时设置 `ELECTRON_OZONE_PLATFORM_HINT=auto` 作为兜底。
 
@@ -72,8 +72,8 @@ PASS  qr poll  status=66（66=待扫码）
 - 非法 Cookie：返回 `AUTH_EXPIRED`，不写入凭证。
 - 登录账号下的“我的歌单”：成功载入 24 个歌单。
 - VIP 歌曲《晴天》：320k 与 FLAC 均播放成功，音质切换后进度继续推进。
-- 窄屏 680×540：侧栏收为 64px 图标栏，搜索/设置/登录单列显示，无横向溢出；登录页内容可纵向滚动。
-- 音量条：宽度 `clamp(56px, 6vw, 84px)`，在 680–1280 宽度下均可见，不再出现“音量条隐藏但侧栏未收窄”的不同步。
+- 窄屏：在 900px 统一断点收为 64px 图标栏；560px 以下播放器改为双行、侧栏 56px。
+- 音量条：宽屏 56–84px 自适应；≤900px 点击音量图标弹出竖直滑块；实测 280×440 / 320×480 / 680×540 / 900×650 / 1280×820 均无横向溢出。
 - 主题：深色 / 浅色调色板切换并持久化；`data-theme` 驱动 CSS token，`settings.theme` 为事实源。
 - 歌词：`-1901` 视为无歌词，纯音乐仍显示“这首歌还没有歌词”而非加载失败；活动行保持原字号与固定行高，不再文字重叠。
 - Wayland 启动：不额外传 `--ozone-platform` 启动，进程参数自动包含 `--ozone-platform=wayland`，并启用 Wayland IME；`QQY_OZONE_PLATFORM=x11` 可强制回退 X11。
