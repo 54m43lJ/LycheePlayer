@@ -1,8 +1,11 @@
-import { app, session, webContents } from 'electron'
+import { BrowserWindow, session, WebContentsView } from 'electron'
 import type { Event as ElectronEvent, WebContents } from 'electron'
-import type { Credential } from '../../shared/types'
+import type { Credential, EmbedRect } from '../../shared/types'
+import { XLOGIN_URL } from '../../shared/xlogin'
 import { UpstreamError } from './client'
 import { exchangeQqLoginCode, requestOAuthCodeWithCookies } from './login'
+
+const PARTITION = 'lychee-xlogin'
 
 function isAllowedHost(url: string): boolean {
   try {
@@ -33,31 +36,111 @@ function extractOauthCode(url: string): string | null {
   }
 }
 
-/** 登录 iframe 与应用共用默认 session；结束后清掉本次登录写入的 QQ cookie。 */
-async function clearQqCookies(): Promise<void> {
+async function clearLoginSession(target: Electron.Session): Promise<void> {
   try {
-    const cookies = await session.defaultSession.cookies.get({})
-    for (const cookie of cookies) {
-      if (!cookie.domain || !(cookie.domain === 'qq.com' || cookie.domain.endsWith('.qq.com'))) continue
-      const url = `https://${cookie.domain.replace(/^\./, '')}${cookie.path}`
-      await session.defaultSession.cookies.remove(url, cookie.name)
-    }
+    await target.clearStorageData({ storages: ['cookies'] })
   } catch {
     // 清理失败不阻塞登录结果。
   }
 }
 
-interface AttachedHandlers {
-  onWillNavigate: (event: ElectronEvent, url: string) => void
-  onWillRedirect: (event: ElectronEvent, url: string) => void
-  onDidNavigate: (event: ElectronEvent, url: string) => void
-}
-
 let active: Promise<Credential> | null = null
+let embedView: WebContentsView | null = null
 
 /**
- * 登录页内嵌 iframe 加载官方 xlogin 组件；主进程轮询默认 session 的 Cookie 完成 OAuth 换证，
- * 并捕获 iframe frame 导航与子窗口中的 OAuth code。重复调用复用进行中的流程。
+ * 渲染进程上报登录组件占位区域（页面 CSS 坐标）；null 表示离开登录页，摘除视图。
+ * 视图为 WebContentsView（独立分区、顶级 guest）：cookie 属第一方，尺寸由主进程 setBounds 决定。
+ */
+export function setEmbedBounds(rect: EmbedRect | null): void {
+  if (!rect) {
+    disposeEmbedView()
+    return
+  }
+  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+  if (!win) return
+  if (!embedView) {
+    embedView = createEmbedView()
+    win.contentView.addChildView(embedView)
+    void embedView.webContents.loadURL(XLOGIN_URL)
+  }
+  embedView.setBounds({
+    x: Math.round(rect.x),
+    y: Math.round(rect.y),
+    width: Math.max(1, Math.round(rect.width)),
+    height: Math.max(1, Math.round(rect.height))
+  })
+}
+
+/** 摘除并关闭登录视图（登录结束、离开页面或退出应用时）。 */
+export function disposeEmbedView(): void {
+  if (!embedView) return
+  const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed())
+  win?.contentView.removeChildView(embedView)
+  if (!embedView.webContents.isDestroyed()) embedView.webContents.close()
+  embedView = null
+}
+
+function createEmbedView(): WebContentsView {
+  const view = new WebContentsView({
+    webPreferences: {
+      partition: PARTITION,
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  })
+  attachCapture(view.webContents)
+  return view
+}
+
+/** 当前登录流程的 code 回调；无进行中的登录时为 null（导航捕获静默忽略）。 */
+let emitCode: ((code: string) => void) | null = null
+
+const onWillNavigate = (event: ElectronEvent, url: string): void => {
+  const code = extractOauthCode(url)
+  if (code) {
+    event.preventDefault()
+    emitCode?.(code)
+    return
+  }
+  if (!isAllowedHost(url)) event.preventDefault()
+}
+
+const onWillRedirect = (event: ElectronEvent, url: string): void => {
+  const code = extractOauthCode(url)
+  if (code) {
+    event.preventDefault()
+    emitCode?.(code)
+    return
+  }
+  if (!isAllowedHost(url)) event.preventDefault()
+}
+
+const onDidNavigate = (_event: ElectronEvent, url: string): void => {
+  const code = extractOauthCode(url)
+  if (code) emitCode?.(code)
+}
+
+function attachCapture(wc: WebContents): void {
+  wc.on('will-navigate', onWillNavigate)
+  wc.on('will-redirect', onWillRedirect)
+  wc.on('did-navigate', onDidNavigate)
+  // 子窗口（设备锁/滑块验证）放行 QQ 域名，并落在同一分区 session。
+  wc.setWindowOpenHandler(({ url }) => {
+    if (!isAllowedHost(url)) return { action: 'deny' }
+    return {
+      action: 'allow',
+      overrideBrowserWindowOptions: {
+        autoHideMenuBar: true,
+        webPreferences: { partition: PARTITION, sandbox: true }
+      }
+    }
+  })
+}
+
+/**
+ * 官方 xlogin 组件内嵌于登录页（WebContentsView）；主进程轮询该分区 session 的 Cookie
+ * 完成 OAuth 换证。渲染进程挂载组件并上报 bounds 后调用；重复调用复用进行中的流程。
  */
 export function openWebLogin(): Promise<Credential> {
   if (active) return active
@@ -68,15 +151,16 @@ export function openWebLogin(): Promise<Credential> {
 }
 
 function runEmbedLogin(): Promise<Credential> {
-  const defaultSession = session.defaultSession
-  void clearQqCookies()
+  const partitionSession = session.fromPartition(PARTITION)
+  void clearLoginSession(partitionSession)
 
   return new Promise<Credential>((resolve, reject) => {
-    const detachFns = new Map<WebContents, () => void>()
     let settled = false
     let finishing = false
     let cookieTimer: NodeJS.Timeout | null = null
     let timeoutTimer: NodeJS.Timeout | null = null
+
+    emitCode = (code) => void succeed(code)
 
     const succeed = async (code: string): Promise<void> => {
       if (settled) return
@@ -101,7 +185,7 @@ function runEmbedLogin(): Promise<Credential> {
       if (settled || finishing) return
       finishing = true
       try {
-        const cookies = await defaultSession.cookies.get({})
+        const cookies = await partitionSession.cookies.get({})
         const jar: Record<string, string> = {}
         for (const cookie of cookies) {
           if (cookie.domain?.endsWith('qq.com')) jar[cookie.name] = cookie.value
@@ -128,88 +212,9 @@ function runEmbedLogin(): Promise<Credential> {
     const cleanup = async (): Promise<void> => {
       if (timeoutTimer) clearTimeout(timeoutTimer)
       if (cookieTimer) clearInterval(cookieTimer)
-      app.removeListener('web-contents-created', onWebContentsCreated)
-      for (const [wc, detach] of detachFns) {
-        if (!wc.isDestroyed()) detach()
-      }
-      detachFns.clear()
-      await clearQqCookies()
-    }
-
-    const makeHandlers = (): AttachedHandlers => ({
-      onWillNavigate: (event, url) => {
-        const code = extractOauthCode(url)
-        if (code) {
-          event.preventDefault()
-          void succeed(code)
-          return
-        }
-        if (!isAllowedHost(url)) event.preventDefault()
-      },
-      onWillRedirect: (event, url) => {
-        const code = extractOauthCode(url)
-        if (code) {
-          event.preventDefault()
-          void succeed(code)
-          return
-        }
-        if (!isAllowedHost(url)) event.preventDefault()
-      },
-      onDidNavigate: (_event, url) => {
-        const code = extractOauthCode(url)
-        if (code) void succeed(code)
-      }
-    })
-
-    const attachChildWindow = (wc: WebContents): void => {
-      if (detachFns.has(wc) || wc.isDestroyed()) return
-      const handlers = makeHandlers()
-      wc.on('will-navigate', handlers.onWillNavigate)
-      wc.on('will-redirect', handlers.onWillRedirect)
-      wc.on('did-navigate', handlers.onDidNavigate)
-      wc.setWindowOpenHandler(({ url }) => {
-        if (!isAllowedHost(url)) return { action: 'deny' }
-        return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, webPreferences: { sandbox: true } } }
-      })
-      detachFns.set(wc, () => {
-        wc.removeListener('will-navigate', handlers.onWillNavigate)
-        wc.removeListener('will-redirect', handlers.onWillRedirect)
-        wc.removeListener('did-navigate', handlers.onDidNavigate)
-      })
-    }
-
-    /** iframe 内的 OAuth code 跳转经主窗口的 frame 导航事件捕获。 */
-    const attachFrameCapture = (wc: WebContents): void => {
-      if (detachFns.has(wc) || wc.isDestroyed()) return
-      const onFrameNavigate = (
-        _event: ElectronEvent,
-        url: string,
-        _httpResponseCode: number,
-        _method: string,
-        isMainFrame: boolean
-      ): void => {
-        if (isMainFrame) return
-        const code = extractOauthCode(url)
-        if (code) void succeed(code)
-      }
-      wc.on('did-frame-navigate', onFrameNavigate)
-      detachFns.set(wc, () => wc.removeListener('did-frame-navigate', onFrameNavigate))
-    }
-
-    const isChildWindow = (wc: WebContents): boolean =>
-      wc.getType() === 'window' && wc.session === defaultSession && !wc.getURL().startsWith('file:')
-
-    function onWebContentsCreated(_event: ElectronEvent, wc: WebContents): void {
-      if (settled) return
-      if (isChildWindow(wc)) attachChildWindow(wc)
-    }
-    app.on('web-contents-created', onWebContentsCreated)
-
-    // 主窗口（frame 捕获）与既有子窗口可能在本次调用前就已存在，逐个补挂。
-    for (const wc of webContents.getAllWebContents()) {
-      if (wc.isDestroyed() || wc.getType() !== 'window' || wc.session !== defaultSession) continue
-      attachFrameCapture(wc)
-      if (!wc.getURL().startsWith('file:')) attachChildWindow(wc)
+      emitCode = null
+      disposeEmbedView()
+      await clearLoginSession(partitionSession)
     }
 
     timeoutTimer = setTimeout(() => {

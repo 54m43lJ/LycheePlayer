@@ -6,7 +6,7 @@ import { registerIpc, sendPlayerCommand } from './ipc'
 import { initMpris, publishState } from './integration/mpris'
 import { destroyTray, initTray } from './integration/tray'
 import { getSettings, loadSettings, saveSettings } from './settings'
-import { isAllowedHost } from './api/web-login'
+import { disposeEmbedView, isAllowedHost } from './api/web-login'
 
 let mainWindow: BrowserWindow | null = null
 let quitting = false
@@ -75,7 +75,15 @@ export function createMainWindow(): BrowserWindow {
   })
 
   window.webContents.setWindowOpenHandler(({ url }) => {
-    if (isAllowedHost(url)) return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true, webPreferences: { sandbox: true } } }
+    if (isAllowedHost(url)) {
+      return {
+        action: 'allow',
+        overrideBrowserWindowOptions: {
+          autoHideMenuBar: true,
+          webPreferences: { partition: 'lychee-xlogin', sandbox: true }
+        }
+      }
+    }
     if (/^https?:/i.test(url)) void shell.openExternal(url)
     return { action: 'deny' }
   })
@@ -147,6 +155,7 @@ if (!hasLock) {
     if (refreshTimer) clearInterval(refreshTimer)
     publishState(null)
     destroyTray()
+    disposeEmbedView()
     void saveSettings(getSettings())
   })
 }

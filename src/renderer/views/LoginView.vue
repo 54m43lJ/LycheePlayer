@@ -1,11 +1,10 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { describeError } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
-import { XLOGIN_URL } from '@shared/xlogin'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -14,8 +13,9 @@ const toast = useToast()
 const cookie = ref('')
 const cookieSubmitting = ref(false)
 const embedFailed = ref(false)
-const reloadKey = ref(0)
-let embedStarted = false
+const frameRef = ref<HTMLElement | null>(null)
+
+let frameObserver: ResizeObserver | null = null
 
 const avatarLetter = computed(() => auth.displayName.slice(0, 1).toUpperCase())
 
@@ -26,24 +26,21 @@ watch(
   }
 )
 
-async function submitCookie(): Promise<void> {
-  if (!cookie.value.trim()) return
-  cookieSubmitting.value = true
-  try {
-    await auth.loginWithCookie(cookie.value.trim())
-    toast.show('Cookie 登录成功')
-  } catch (err) {
-    toast.error(describeError(err))
-  } finally {
-    cookieSubmitting.value = false
-  }
+/** 登录组件由主进程 WebContentsView 绘制；渲染端只上报占位区域（页面坐标），null 摘除。 */
+function sendBounds(): void {
+  const frame = frameRef.value
+  if (!frame) return
+  const rect = frame.getBoundingClientRect()
+  window.lychee.login.setEmbedBounds({
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height
+  })
 }
 
-/** iframe 首次加载完成即开始换证监听；后续导航（登录跳转）不重复触发。失败可重载组件重试。 */
-function onEmbedReady(): void {
-  if (embedStarted) return
-  embedStarted = true
-  void startEmbedLogin()
+function clearBounds(): void {
+  window.lychee.login.setEmbedBounds(null)
 }
 
 async function startEmbedLogin(): Promise<void> {
@@ -58,9 +55,37 @@ async function startEmbedLogin(): Promise<void> {
 }
 
 function reloadEmbed(): void {
-  embedStarted = false
-  reloadKey.value += 1
+  sendBounds()
+  void startEmbedLogin()
 }
+
+async function submitCookie(): Promise<void> {
+  if (!cookie.value.trim()) return
+  cookieSubmitting.value = true
+  try {
+    await auth.loginWithCookie(cookie.value.trim())
+    toast.show('Cookie 登录成功')
+  } catch (err) {
+    toast.error(describeError(err))
+  } finally {
+    cookieSubmitting.value = false
+  }
+}
+
+onMounted(async () => {
+  await nextTick()
+  sendBounds()
+  void startEmbedLogin()
+  frameObserver = new ResizeObserver(sendBounds)
+  if (frameRef.value) frameObserver.observe(frameRef.value)
+  window.addEventListener('scroll', sendBounds, true)
+})
+
+onBeforeUnmount(() => {
+  frameObserver?.disconnect()
+  window.removeEventListener('scroll', sendBounds, true)
+  clearBounds()
+})
 </script>
 
 <template>
@@ -84,15 +109,7 @@ function reloadEmbed(): void {
     </section>
 
     <section v-else class="login-card login-wide">
-      <div class="embed-frame">
-        <iframe
-          :key="reloadKey"
-          :src="XLOGIN_URL"
-          title="QQ 登录"
-          sandbox="allow-scripts allow-forms allow-same-origin allow-popups"
-          @load="onEmbedReady()"
-        />
-      </div>
+      <div ref="frameRef" class="embed-frame"></div>
       <div v-if="embedFailed" class="embed-retry">
         <button class="btn ghost small" @click="reloadEmbed()">重新加载登录组件</button>
       </div>

@@ -139,3 +139,11 @@ export interface UserProfile {
   nickname: string
   avatarUrl: string
 }
+
+/** 登录组件占位区域（页面 CSS 坐标），驱动主进程 WebContentsView 定位。 */
+export interface EmbedRect {
+  x: number
+  y: number
+  width: number
+  height: number
+}

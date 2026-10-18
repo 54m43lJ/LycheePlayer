@@ -52,10 +52,10 @@
 <div class="diagram"><img src="diagram/seq-login.svg" alt="扫码登录时序图"></div>
 <ul class="note">
   <li>轮询由主进程定时器驱动；渲染进程只消费 <code>login:status</code> 推送，不参与轮询。</li>
-  <li>登录页内嵌官方 xlogin 组件（iframe，sandbox 限制导航），<code>login.openWebLogin()</code> 负责监听换证；<code>createQrKey</code> 的应用内二维码保留为实验路径。</li>
+  <li>登录页内嵌官方 xlogin 组件（主进程 WebContentsView，由 <code>login.setEmbedBounds()</code> 定位），<code>login.openWebLogin()</code> 负责监听换证；<code>createQrKey</code> 的应用内二维码保留为实验路径。</li>
   <li>二维码图片由 <code>login.createQrKey()</code> 随创建结果返回（data URL），<code>login:status</code> 只承载状态推进。</li>
   <li>登录失败时 <code>login:status</code> 的 <code>stage</code> 为 <code>failed</code>，<code>message</code> 携带可展示的错误摘要（不含凭证）。</li>
-  <li>登录组件与应用共用默认 session（iframe 无独立分区），登录结束即清理本次写入的 QQ cookie；只放行 QQ 域名导航与子窗口，5 分钟超时按失败处理。</li>
+  <li>登录组件使用独立分区 session（<code>lychee-xlogin</code>），登录发起前与结束/超时后各清理一次；只放行 QQ 域名导航与子窗口，5 分钟超时按失败处理。</li>
   <li>主进程每秒轮询 session Cookie，同时看到 <code>p_skey</code> 与 <code>p_uin</code>/<code>pt4_token</code>/<code>uin</code> 才进入换证，避免把未完成登录误判为成功。</li>
   <li>凭证在主进程内直接入库，任何状态下都不跨 IPC 下发；存储介质见 PENDING #10。</li>
 </ul>
@@ -74,13 +74,14 @@
 渲染进程经 preload 暴露的单一命名空间 <code>window.lychee</code> 调用以下方法；签名即契约，
 行为细节见对应时序图（<a href="#s3">§3</a>）。
 </p>
-<pre><code>// 登录（默认：openWebLogin 嵌入官方 xlogin 扫码组件；备选：loginWithCookie 手动 Cookie；createQrKey 为实验性应用内二维码）
+<pre><code>// 登录（默认：WebContentsView 内嵌官方 xlogin 组件；备选：loginWithCookie 手动 Cookie；createQrKey 为实验性应用内二维码）
 login.createQrKey(): Promise&lt;IpcResult&lt;QrSession&gt;&gt;;
 login.getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.openWebLogin(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.refreshSession(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.logout(): Promise&lt;IpcResult&lt;null&gt;&gt;;
+login.setEmbedBounds(rect: EmbedRect | null): void;
 
 // 搜索
 search.byType(req: SearchRequest): Promise&lt;IpcResult&lt;SearchResult&gt;&gt;;
@@ -262,6 +263,14 @@ interface Settings {
   defaultQuality: 'auto' | Quality;
   closeToTray: boolean;
   theme: 'dark' | 'light';
+}
+
+/** 登录组件占位区域（页面 CSS 坐标），驱动主进程 WebContentsView 定位。 */
+interface EmbedRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
 }
 </code></pre>
 

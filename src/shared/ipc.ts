@@ -1,5 +1,6 @@
 import type {
   AuthStatus,
+  EmbedRect,
   IpcResult,
   Lyric,
   PlayerState,
@@ -24,6 +25,8 @@ export interface LycheeApi {
     openWebLogin(): Promise<IpcResult<AuthStatus>>
     refreshSession(): Promise<IpcResult<AuthStatus>>
     logout(): Promise<IpcResult<null>>
+    /** 上报登录组件占位区域（页面坐标）；null 摘除。主进程据此定位 WebContentsView。 */
+    setEmbedBounds(rect: EmbedRect | null): void
     onStatus(callback: (status: QrStatus) => void): () => void
   }
   search: {

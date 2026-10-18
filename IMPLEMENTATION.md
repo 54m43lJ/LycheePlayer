@@ -41,7 +41,7 @@ src/
 ```
 
 - 主窗口：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: false`（POC 选择；preload 由 electron-vite 打成 CJS）。
-- 登录组件：登录页内嵌 iframe 加载官方 xlogin（URL 见 `src/shared/xlogin.ts`），sandbox 限制导航；与应用共用默认 session，登录结束即清理本次 QQ cookie。
+- 登录组件：登录页内嵌主进程 `WebContentsView` 加载官方 xlogin（URL 见 `src/shared/xlogin.ts`，独立分区 session `lychee-xlogin`），渲染端经 `login.setEmbedBounds` 上报占位矩形。
 - 主窗口的 `window.open` 一律拒绝；http(s) 链接交给系统浏览器。
 - 单实例锁：第二个实例只唤醒已有窗口。
 - 退出顺序：`before-quit` 清理续期定时器、MPRIS 状态、托盘，并触发设置落盘。
@@ -56,6 +56,7 @@ src/
 | renderer → main | `search.byType` / `song.getUrls` / `playlist.get` / `playlist.listMine` / `lyric.get` / `user.getProfile` / `settings.get` / `settings.set` | 请求型 |
 | main → renderer | `login:status` | `QrStatus`，含 `failed` + `message` |
 | main → renderer | `player:command` | MPRIS / 托盘控制 |
+| renderer → main | `login.setEmbedBounds` | 登录组件占位矩形（`EmbedRect` \| null），send 不等待返回 |
 | renderer → main | `player:state` | `send`，不等待返回 |
 
 - 所有 `ipcMain.handle` 由 `envelope()` 包裹；异常只以 `IpcResult.error` 返回，不向渲染进程抛。
@@ -131,18 +132,19 @@ comm（按接口需要）: uin / format=json / ct=24 / cv=0
 
 ### 6.1 默认：官方 xlogin 内嵌组件
 
-- 页面布局（iframe 占满登录页宽度，页面内无其他元素）：
+- 页面布局（WebContentsView 占满登录页宽度，页面内无其他元素）：
 
 ```text
 ┌──────────────────────────────────────────────┐
 │ 官方 xlogin 登录组件                          │
-│ （iframe · 占满登录页宽度 · 高 332px）         │
+│ （WebContentsView · 占满登录页宽度 · 高 332px）│
 └──────────────────────────────────────────────┘
   ▸ 使用 Cookie 登录（兜底，默认折叠面板）
 ```
 
-- 登录页直接内嵌官方 xlogin 组件（iframe），不再弹独立窗口。
-- 组件按视口高 332px 设计（`.web_login` 以 `top:50%; margin-top:-166px` 垂直定位），iframe 高度固定 332px；高于此值会裁掉面板底部，二维码显示不全。
+- 登录组件为主进程 `WebContentsView`（独立分区 session，cookie 属第一方），不使用 `<webview>` 标签，也不弹独立窗口。
+- 渲染端仅上报占位矩形：`login.setEmbedBounds(rect)`（ResizeObserver + scroll 时重报，离开页面传 `null` 摘除），主进程 `setBounds` 定位。
+- 组件按视口高 332px 设计（`.web_login` 以 `top:50%; margin-top:-166px` 垂直定位），占位高度固定 332px；高于此值会裁掉面板底部，二维码显示不全。
 - 组件地址与官方 Linux 客户端一致，见 `src/shared/xlogin.ts`：
 
 ```text
@@ -153,9 +155,8 @@ https://xui.ptlogin2.qq.com/cgi-bin/xlogin
   &pt_3rd_aid=100497308&theme=2
 ```
 
-- iframe 与应用共用默认 session（sandbox 为 `allow-scripts allow-forms allow-same-origin allow-popups`，不含 top 导航）；登录发起前清理 QQ cookie，结束/超时后再次清理。
-- 主进程捕获 OAuth code 的两条路径：主窗口 `did-frame-navigate`（iframe 内跳转 `login_jump?code=...`）+ 每秒轮询默认 session cookie（需同时看到 `p_skey` 与 `p_uin`/`pt4_token`/`uin`，避免把未完成登录误判为成功）。
-- QQ 域名弹窗（设备锁/滑块验证）由主窗口 `setWindowOpenHandler` 在应用内放行并挂捕获，其余 http(s) 域名走系统浏览器，非 http(s) 拒绝。
+- 主进程捕获 OAuth code：guest 的 `will-navigate` / `will-redirect` / `did-navigate`（URL 直带 `code` 时即时换证）+ 每秒轮询分区 session cookie（需同时看到 `p_skey` 与 `p_uin`/`pt4_token`/`uin`，避免把未完成登录误判为成功）。
+- QQ 域名弹窗（设备锁/滑块验证）在应用内放行并落同一分区 session，其余域名拒绝。
 - 扫码成功后 `graph.qq.com/oauth2.0/login_jump` 写入 `p_skey`、`p_uin`、`pt4_token` 等 cookie。
 - 换证：用 cookie 调 `graph.qq.com/oauth2.0/authorize`（`g_tk=hash33(p_skey,5381)`）取 `code`，再 POST `QQLogin`。
 - 登录 5 分钟超时；失败可在登录页重新加载组件重试；已有进行中的登录时再次调用复用同一流程。
@@ -340,13 +341,13 @@ oauth authorize:
 
 ## 12. 已知限制与未验证项
 
-- 官方 xlogin 组件的 `p_skey` → authorize → QQLogin 链路已手动实测成功；自动 cookie 轮询尚未在完整扫码流程中复测。
+- 官方 xlogin 组件的 `p_skey` → authorize → QQLogin 链路已实测成功；WebContentsView 内嵌流程的自动 cookie 轮询已完成一次端到端扫码验证。
 - 原生应用内二维码在当前网络/账号返回 `p_skey_forbid`；UI 默认已切换为官方组件。
 - 手动粘贴 Cookie 只能验证登录，不能自动续期（没有 refresh_token）。
 - 续期已成功一次，并验证新 key 与 72h 到期时间；尚未做 72h+ 长跑，refresh_token 的最终有效期由上游决定。
 - 搜索/播放依赖上游匿名额度；频繁请求可能触发限流或空结果。
 - 没有 CSP；Electron 开发模式会提示 Insecure CSP。正式发布前应补 meta/CSP。
-- 主窗口 `sandbox: false`；登录组件为登录页内嵌 iframe（sandbox 属性限制导航），与应用共用默认 session，登录结束即清理本次 QQ cookie。
+- 主窗口 `sandbox: false`；登录组件为主进程 WebContentsView（独立分区 `lychee-xlogin`，guest `sandbox: true`），cookie 属第一方，登录前后各清理一次。
 - `mpris-service` 旧、依赖 dbus-next；若维护中断可替换。
 - 托盘在无 StatusNotifier 的极简 Wayland 环境可能不可见。
 - 数字专辑/无版权歌曲的不可播 UI 未专门回归；VIP 320k/FLAC 已验证。

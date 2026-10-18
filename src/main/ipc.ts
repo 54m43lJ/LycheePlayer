@@ -8,7 +8,7 @@ import type {
   Settings
 } from '../shared/types'
 import { createQrKey, initLoginEvents, loginWithCookie, refreshSession, stopPolling } from './api/login'
-import { openWebLogin } from './api/web-login'
+import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
 import { getPlaylist, listMine } from './api/playlist'
 import { searchByType } from './api/search'
@@ -88,6 +88,18 @@ export function registerIpc(): void {
     stopPolling()
     await clearCredential()
     return null
+  })
+
+  ipcMain.on('login.setEmbedBounds', (_event, rect: unknown) => {
+    if (rect === null) {
+      setEmbedBounds(null)
+      return
+    }
+    const r = rect as Record<string, unknown>
+    const nums = [r.x, r.y, r.width, r.height]
+    if (nums.every((n) => typeof n === 'number' && Number.isFinite(n))) {
+      setEmbedBounds({ x: r.x as number, y: r.y as number, width: r.width as number, height: r.height as number })
+    }
   })
 
   handle('search.byType', async (req: SearchRequest) => searchByType(req))
