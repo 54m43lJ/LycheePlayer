@@ -155,7 +155,13 @@ async function runWindowLogin(): Promise<Credential> {
     })
 
     window.webContents.on('will-redirect', capture)
+    window.webContents.on('will-redirect', (event, url) => {
+      if (!isAllowedHost(url)) event.preventDefault()
+    })
     window.webContents.on('will-navigate', capture)
+    window.webContents.on('will-navigate', (event, url) => {
+      if (!isAllowedHost(url)) event.preventDefault()
+    })
     window.webContents.on('did-navigate', (_event, url) => {
       const code = extractOauthCode(url)
       if (code) void succeed(code)
@@ -181,7 +187,13 @@ async function runWindowLogin(): Promise<Credential> {
     window.webContents.on('did-create-window', (child) => {
       children.push(child)
       child.webContents.on('will-redirect', capture)
+      child.webContents.on('will-redirect', (event, url) => {
+        if (!isAllowedHost(url)) event.preventDefault()
+      })
       child.webContents.on('will-navigate', capture)
+      child.webContents.on('will-navigate', (event, url) => {
+        if (!isAllowedHost(url)) event.preventDefault()
+      })
     })
 
     void window.loadURL(LOGIN_URL).catch(() => {
