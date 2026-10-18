@@ -35,7 +35,6 @@ export function getCredential(): Credential | null {
 
 export async function loadCredential(): Promise<Credential | null> {
   if (loaded) return cached
-  loaded = true
   try {
     const raw = await readFile(credentialFile(), 'utf8')
     const stored = JSON.parse(raw) as StoredCredential
@@ -47,8 +46,14 @@ export async function loadCredential(): Promise<Credential | null> {
     const parsed: unknown = JSON.parse(json)
     if (!isValidCredential(parsed)) return null
     cached = parsed
+    // 迁移：旧的明文凭证在密钥环可用时重加密落盘；失败则不缓存加载成功，稍后重试。
+    if (!stored.encrypted && safeStorage.isEncryptionAvailable()) {
+      await saveCredential(parsed)
+    }
+    loaded = true
     return cached
   } catch {
+    // 解密失败（常见于密钥环尚未解锁）：不缓存失败结果、保留文件，下次调用重试。
     return null
   }
 }
@@ -57,15 +62,15 @@ export async function saveCredential(credential: Credential): Promise<void> {
   if (!isValidCredential(credential)) {
     throw new Error('拒绝保存无效凭证')
   }
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error('系统密钥环不可用，拒绝以明文保存凭证')
+  }
   cached = credential
   const json = JSON.stringify(credential)
-  const canEncrypt = safeStorage.isEncryptionAvailable()
   const stored: StoredCredential = {
     version: 1,
-    encrypted: canEncrypt,
-    payload: canEncrypt
-      ? safeStorage.encryptString(json).toString('base64')
-      : Buffer.from(json, 'utf8').toString('base64')
+    encrypted: true,
+    payload: safeStorage.encryptString(json).toString('base64')
   }
   await mkdir(dirname(credentialFile()), { recursive: true })
   await writeFile(credentialFile(), JSON.stringify(stored), { mode: 0o600 })

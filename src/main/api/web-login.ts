@@ -1,4 +1,4 @@
-import { BrowserWindow, session, WebContentsView } from 'electron'
+import { BrowserWindow, safeStorage, session, WebContentsView } from 'electron'
 import type { Event as ElectronEvent, WebContents } from 'electron'
 import type { Credential, EmbedRect } from '../../shared/types'
 import { XLOGIN_URL } from '../../shared/xlogin'
@@ -143,6 +143,11 @@ function attachCapture(wc: WebContents): void {
  * 完成 OAuth 换证。渲染进程挂载组件并上报 bounds 后调用；重复调用复用进行中的流程。
  */
 export function openWebLogin(): Promise<Credential> {
+  if (!safeStorage.isEncryptionAvailable()) {
+    return Promise.reject(
+      new UpstreamError('INTERNAL', '系统密钥环不可用，无法保存登录凭证；请解锁密钥环后重试')
+    )
+  }
   if (active) return active
   active = runEmbedLogin().finally(() => {
     active = null

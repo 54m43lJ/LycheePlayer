@@ -30,7 +30,7 @@
   <tr><td>IPC 通道命名</td><td>请求型为 <code>域.动作</code>（如 <code>song.getUrls</code>）；推送型为 <code>域:事件</code>（如 <code>player:state</code>、<code>login:status</code>）。</td></tr>
   <tr><td>信封</td><td>所有请求型 IPC 返回 <code>IpcResult&lt;T&gt;</code>；主进程捕获一切异常并转为 <code>IpcError</code>，渲染进程永远收不到被抛出的异常。</td></tr>
   <tr><td>单位与 ID 类型</td><td>时长一律毫秒（<code>number</code>）；上游数字 ID 一律转为 <code>string</code> 后跨 IPC 传输。</td></tr>
-  <tr><td>凭证边界</td><td>凭证只存在于主进程 <code>credential.ts</code>；不跨 IPC 下发、不写入日志、不进入渲染进程。</td></tr>
+  <tr><td>凭证边界</td><td>凭证只存在于主进程 <code>credential.ts</code>；不跨 IPC 下发、不写入日志、不进入渲染进程。仅当系统密钥环可用时保存，否则禁用登录。</td></tr>
   <tr><td>上游隔离</td><td>上游响应在 <code>api/</code> 层完成规范化，跨入 IPC 的数据只有 <a href="#s43">§4.3</a> 定义的形态；上游原始结构不透传。</td></tr>
   <tr><td>音质降级</td><td>请求音质无权限时按 <code>flac → 320k → 128k</code> 单向降一档重试；降至 <code>128k</code> 仍无链接则报 <code>NO_STREAM</code>。降档静默，不做提示；实际音质经 <code>UrlResult.quality</code> / <code>PlayerState.quality</code> 呈现。</td></tr>
   <tr><td>默认音质</td><td><code>defaultQuality</code> 为 <code>auto</code> 时按登录态取档：已登录 <code>flac</code>，未登录 <code>320k</code>；设置页可固定具体档位。</td></tr>

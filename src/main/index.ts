@@ -1,4 +1,4 @@
-import { app, BrowserWindow, shell } from 'electron'
+import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
 import { join } from 'node:path'
 import { loadCredential } from './credential'
 import { refreshIfNeeded } from './api/login'
@@ -13,6 +13,11 @@ let quitting = false
 let refreshTimer: NodeJS.Timeout | null = null
 
 app.setName('Lychee Player')
+
+// Hyprland 等非 GNOME/KDE 桌面下 Chromium 的后端自动探测会落到 basic_text，显式固定 libsecret 后端。
+// 后续由外部 flags 文件覆盖（TODO）。
+app.commandLine.appendSwitch('password-store', 'gnome-libsecret')
+
 
 /**
  * Linux 默认 Wayland：检测到 WAYLAND_DISPLAY 时强制使用 Ozone Wayland，
@@ -108,7 +113,21 @@ function showMainWindow(): void {
   mainWindow.focus()
 }
 
+/** 凭证依赖系统密钥环；不可用时明确报错并禁用登录，绝不退化为明文保存。 */
+async function checkCredentialStore(): Promise<void> {
+  if (safeStorage.isEncryptionAvailable()) return
+  await dialog.showMessageBox({
+    type: 'warning',
+    title: '系统密钥环不可用',
+    message: '无法加密保存登录凭证，登录功能已禁用。',
+    detail:
+      '请确认 gnome-keyring 或 ksecretsservice 已安装并解锁后重启应用。免费内容的搜索与播放不受影响。',
+    buttons: ['知道了']
+  })
+}
+
 export async function bootstrap(): Promise<void> {
+  await checkCredentialStore()
   loadSettings()
   await loadCredential()
   registerIpc()

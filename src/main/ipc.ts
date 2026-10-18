@@ -15,7 +15,7 @@ import { searchByType } from './api/search'
 import { getStreamUrls } from './api/song'
 import { getProfile } from './api/user'
 import { toIpcError } from './api/client'
-import { clearCredential, getCredential, saveCredential } from './credential'
+import { clearCredential, getCredential, loadCredential, saveCredential } from './credential'
 import { getSettings, saveSettings } from './settings'
 import { publishState } from './integration/mpris'
 
@@ -64,7 +64,11 @@ export function registerIpc(): void {
   })
 
   handle('login.createQrKey', async () => createQrKey())
-  handle('login.getStatus', async () => currentAuthStatus())
+  handle('login.getStatus', async () => {
+    // 密钥环解锁较晚时，状态查询会重试解密已保存的凭证。
+    await loadCredential()
+    return currentAuthStatus()
+  })
   handle('login.loginWithCookie', async (cookie: unknown) => {
     if (typeof cookie !== 'string' || cookie.trim().length === 0) {
       throw new Error('Cookie 不能为空')

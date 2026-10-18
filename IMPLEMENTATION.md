@@ -82,7 +82,10 @@ src/
 | `settings.json` | `{ defaultQuality: 'auto' \| '128k' \| '320k' \| 'flac', closeToTray: boolean, theme: 'dark' \| 'light' }`，默认 `auto`（已登录 `flac`、未登录 `320k`）/ `true` / `dark` |
 | `credential.bin` | `{ version: 1, encrypted: boolean, payload: base64 }` |
 
-- 能用 `safeStorage` 时 `payload` 是加密后的 JSON；Linux 无可用密钥环时 `encrypted: false`，保存为本机可读的 base64。这是 POC 限制，正式版应改用 keytar/libsecret 或明确提示。
+- 启动参数固定 `--password-store=gnome-libsecret`：Hyprland 等非 GNOME/KDE 桌面下 Chromium 后端自动探测会落到 `basic_text`，显式指定后使用 gnome-keyring / ksecretsservice（D-Bus Secret Service）。
+- 密钥环不可用时：启动弹窗提示并禁用登录（`login.openWebLogin` 直接报错），`saveCredential` 拒绝明文落盘，`encrypted` 恒为 `true`。
+- `loadCredential` 解密失败（如密钥环尚未解锁）不缓存失败结果、保留文件；`login.getStatus` 会重试解密，解锁后自动恢复登录态。
+- 旧的 `encrypted: false` 明文凭证在密钥环可用时于启动加载后自动重加密。
 - `credential.bin` 与 `settings.json` 均以 `0600` 落盘；凭证只存在于主进程，不进入任何 IPC 返回。
 - 凭证字段：必填 `musicid` / `musickey` / `expiredAtMs`；可选 `refreshKey` / `refreshToken` / `accessToken` / `openid` / `unionid` / `loginType`。
 - `loadCredential()` 有进程内缓存；`saveCredential()` / `clearCredential()` 同步更新缓存与文件。
@@ -348,6 +351,7 @@ oauth authorize:
 - 搜索/播放依赖上游匿名额度；频繁请求可能触发限流或空结果。
 - 没有 CSP；Electron 开发模式会提示 Insecure CSP。正式发布前应补 meta/CSP。
 - 主窗口 `sandbox: false`；登录组件为主进程 WebContentsView（独立分区 `lychee-xlogin`，guest `sandbox: true`），cookie 属第一方，登录前后各清理一次。
+- 无 Secret Service 或密钥环未解锁的会话无法登录（按设计拒绝明文保存）；解锁后状态查询会自动重试解密，无需重新登录。
 - `mpris-service` 旧、依赖 dbus-next；若维护中断可替换。
 - 托盘在无 StatusNotifier 的极简 Wayland 环境可能不可见。
 - 数字专辑/无版权歌曲的不可播 UI 未专门回归；VIP 320k/FLAC 已验证。

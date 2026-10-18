@@ -49,6 +49,7 @@ async function startEmbedLogin(): Promise<void> {
     await auth.openWebLogin()
     toast.show('扫码登录成功')
   } catch (err) {
+    clearBounds()
     embedFailed.value = true
     toast.error(describeError(err))
   }
