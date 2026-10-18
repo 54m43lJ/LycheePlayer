@@ -5,8 +5,8 @@ skinparam shadowing false
 
 package "renderer（Vue 3 SPA）" {
   [views\n页面与播放条] as V
-  [stores（Pinia）\nplayer / library / settings] as ST
-  [AudioEngine\nHTML5 Audio] as AU
+  [stores（Pinia）\nplayer / auth / settings / ui] as ST
+  [HTML5 Audio\n（player store 内置）] as AU
 }
 
 package "preload" {
@@ -21,7 +21,7 @@ package "main（Electron 主进程）" {
     [search / song / playlist\nuser / lyric / login] as EP
   }
 
-  [credential.ts\nsafeStorage + 系统密钥环] as CR
+  [credential.ts\n凭证存取] as CR
   [settings.ts\n设置持久化] as SE
 
   package "integration/" {

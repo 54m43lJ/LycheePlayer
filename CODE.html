@@ -32,26 +32,30 @@
 │   │   │   ├── <a href="#c39">user.ts</a>
 │   │   │   ├── <a href="#c310">lyric.ts</a>
 │   │   │   ├── <a href="#c311">login.ts</a>
-│   │   │   ├── web-login.ts                  官方网页登录兜底
+│   │   │   ├── <a href="#c312">web-login.ts</a>                  官方 xlogin 扫码登录（默认路径）
 │   │   │   └── hash.ts                        hash33 / g_tk
-│   │   └── integration/                      桌面集成
-│   │       ├── <a href="#c312">mpris.ts</a>
-│   │       └── <a href="#c313">tray.ts</a>
+│   │   ├── integration/                      桌面集成
+│   │   │   ├── <a href="#c313">mpris.ts</a>
+│   │   │   └── <a href="#c314">tray.ts</a>
+│   │   └── types/
+│   │       └── mpris-service.d.ts             mpris-service 类型声明
 │   ├── preload/
-│   │   └── <a href="#c314">index.ts</a>                        contextBridge 桥接
+│   │   └── <a href="#c315">index.ts</a>                        contextBridge 桥接
 │   └── renderer/                             Vue 3 SPA
-│       ├── main.ts / App.vue / router/ / views/ / components/
+│       ├── main.ts / App.vue / router/ / views/ / components/ / styles/
 │       ├── api.ts                             IpcResult 解包与错误文案
 │       ├── utils/                             LRC 解析、格式化
 │       ├── composables/                       歌词、Toast
 │       └── stores/
-│           ├── <a href="#c315">player.ts</a>                     播放器状态
+│           ├── <a href="#c316">player.ts</a>                     播放器状态
 │           └── auth.ts / settings.ts / ui.ts
 ├── ARCHITECTURE.html
 ├── CODE.html
 ├── IMPLEMENTATION.md
+├── POC.md                                    POC 验证记录
 ├── README.html
 ├── PENDING.md
+├── package.json / electron.vite.config.ts / tsconfig.*   构建与类型检查配置
 └── style.css
 </code></pre>
 <ul class="note">
@@ -70,8 +74,7 @@
 
 <h2 id="c3">3. Internal types &amp; method signatures</h2>
 <p>
-以下签名是代码结构的基准；ARCHITECTURE 已定义的符号在此仅以引用形式出现，不再重复定义。
-标注「待实现，可以根据实际情况调整」的条目允许在实现时按上游实际形态调整。
+以下签名与当前实现一致；ARCHITECTURE 已定义的符号在此仅以引用形式出现，不再重复定义。
 </p>
 <pre><code>type IpcResult&lt;T&gt;;          // 见 ARCHITECTURE §4.2
 interface IpcError;         // 见 ARCHITECTURE §4.2
@@ -94,75 +97,89 @@ interface Settings;         // 见 ARCHITECTURE §4.3
 </code></pre>
 
 <h3 id="c31">3.1 src/main/index.ts</h3>
-<pre><code>export function bootstrap(): void;                  // 待实现，可以根据实际情况调整
-export function createMainWindow(): BrowserWindow;  // 待实现，可以根据实际情况调整
+<pre><code>export function bootstrap(): Promise&lt;void&gt;;
+export function createMainWindow(): BrowserWindow;
 </code></pre>
 
 <h3 id="c32">3.2 src/main/ipc.ts</h3>
-<pre><code>export function registerIpc(): void;  // 待实现，可以根据实际情况调整
+<pre><code>export function registerIpc(): void;
+export function sendPlayerCommand(command: MprisCommand): void;
 
-function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;): Promise&lt;IpcResult&lt;T&gt;&gt;;  // 待实现，可以根据实际情况调整
+function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;): Promise&lt;IpcResult&lt;T&gt;&gt;;
 </code></pre>
 
 <h3 id="c33">3.3 src/main/settings.ts</h3>
-<pre><code>export function loadSettings(): Settings;  // 待实现，可以根据实际情况调整
-export function saveSettings(next: Settings): Promise&lt;void&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function loadSettings(): Settings;
+export function getSettings(): Settings;
+export function saveSettings(next: Settings): Promise&lt;void&gt;;
 </code></pre>
 
 <h3 id="c34">3.4 src/main/credential.ts</h3>
-<pre><code>export function loadCredential(): Promise&lt;Credential | null&gt;;  // 待实现，可以根据实际情况调整
-export function saveCredential(credential: Credential): Promise&lt;void&gt;;  // 待实现，可以根据实际情况调整
-export function clearCredential(): Promise&lt;void&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function loadCredential(): Promise&lt;Credential | null&gt;;
+export function getCredential(): Credential | null;
+export function saveCredential(credential: Credential): Promise&lt;void&gt;;
+export function clearCredential(): Promise&lt;void&gt;;
 </code></pre>
 
 <h3 id="c35">3.5 src/main/api/client.ts</h3>
-<pre><code>export function upstreamRequest&lt;T&gt;(req: UpstreamRequest): Promise&lt;T&gt;;  // 待实现，可以根据实际情况调整
-export function toIpcError(err: unknown): IpcError;  // 待实现，可以根据实际情况调整
+<pre><code>export class UpstreamError extends Error {
+  readonly code: ErrorCode;
+}
+export function upstreamRequest&lt;T&gt;(req: UpstreamRequest): Promise&lt;T&gt;;
+export function musicu&lt;T&gt;(module: string, method: string, param: Record&lt;string, unknown&gt;, options?: MusicuOptions): Promise&lt;T&gt;;
+export function mapUpstreamCode(code: number, context: string): UpstreamError;
+export function toIpcError(err: unknown): IpcError;
 
 interface UpstreamRequest {
   host: string;
   path: string;
   params: Record&lt;string, string&gt;;
+  method?: 'GET' | 'POST';
+  headers?: Record&lt;string, string&gt;;
+  body?: string;
+  credential?: Credential | null;
+  timeoutMs?: number;
 }
 </code></pre>
 <ul class="note">
-  <li><code>upstreamRequest</code> 内部承载签名、Cookie 注入、限流退避与 <code>UPSTREAM_CHANGED</code> 判定。</li>
+  <li><code>upstreamRequest</code> 承载 UA / Cookie 注入、超时与网络退避；QQ 音乐公开 CGI 目前不需要额外签名。</li>
+  <li><code>musicu</code> 是 <code>musicu.fcg</code> 的单一入口：组装 <code>comm</code> / <code>req_0</code>，并对瞬时繁忙码做短退避；上游 code → <code>ErrorCode</code> 的映射在 <code>mapUpstreamCode</code>。</li>
 </ul>
 
 <h3 id="c36">3.6 src/main/api/search.ts</h3>
-<pre><code>export function searchByType(req: SearchRequest): Promise&lt;SearchResult&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function searchByType(req: SearchRequest): Promise&lt;SearchResult&gt;;
 </code></pre>
 
 <h3 id="c37">3.7 src/main/api/song.ts</h3>
-<pre><code>export function getDetail(mids: string[]): Promise&lt;Song[]&gt;;  // 待实现，可以根据实际情况调整
-export function getStreamUrls(mids: string[], quality: Quality): Promise&lt;UrlResult[]&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function getDetail(mids: string[]): Promise&lt;Song[]&gt;;
+export function getStreamUrls(mids: string[], quality: Quality): Promise&lt;UrlResult[]&gt;;
 </code></pre>
 <ul class="note">
   <li><code>getStreamUrls</code> 含 ARCHITECTURE §2 的音质降级逻辑，是全应用唯一拼装播放链接的位置；链接使用上游返回的 <code>purl</code> 原样拼装（ARCHITECTURE §4.3）。</li>
 </ul>
 
 <h3 id="c38">3.8 src/main/api/playlist.ts</h3>
-<pre><code>export function getPlaylist(id: string): Promise&lt;PlaylistDetail&gt;;  // 待实现，可以根据实际情况调整
-export function listMine(): Promise&lt;PlaylistMeta[]&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function getPlaylist(id: string): Promise&lt;PlaylistDetail&gt;;
+export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 </code></pre>
 
 <h3 id="c39">3.9 src/main/api/user.ts</h3>
-<pre><code>export function getProfile(): Promise&lt;UserProfile&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function getProfile(): Promise&lt;UserProfile&gt;;
 </code></pre>
 
 <h3 id="c310">3.10 src/main/api/lyric.ts</h3>
-<pre><code>export function getLyric(songMid: string): Promise&lt;Lyric&gt;;  // 待实现，可以根据实际情况调整
+<pre><code>export function getLyric(songMid: string): Promise&lt;Lyric&gt;;
 </code></pre>
 
 <h3 id="c311">3.11 src/main/api/login.ts</h3>
-<pre><code>export function initLoginEvents(events: LoginEvents): void;  // 待实现，可以根据实际情况调整
-export function createQrKey(): Promise&lt;QrSession&gt;;  // 待实现，可以根据实际情况调整
-export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;  // 待实现，可以根据实际情况调整
-export function exchangeQqLoginCode(code: string): Promise&lt;Credential&gt;;  // 待实现，可以根据实际情况调整
-export function requestOAuthCodeWithCookies(jar: Record&lt;string, string&gt;): Promise&lt;string&gt;;  // 待实现，可以根据实际情况调整
-export function refreshSession(): Promise&lt;Credential&gt;;  // 待实现，可以根据实际情况调整
-export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;  // 待实现，可以根据实际情况调整
-export function stopPolling(): void;  // 待实现，可以根据实际情况调整
+<pre><code>export function initLoginEvents(events: LoginEvents): void;
+export function createQrKey(): Promise&lt;QrSession&gt;;
+export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
+export function exchangeQqLoginCode(code: string): Promise&lt;Credential&gt;;
+export function requestOAuthCodeWithCookies(jar: Record&lt;string, string&gt;): Promise&lt;string&gt;;
+export function refreshSession(): Promise&lt;Credential&gt;;
+export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;
+export function stopPolling(): void;
 
 interface LoginEvents {
   onStatus(status: QrStatus): void;
@@ -170,19 +187,26 @@ interface LoginEvents {
 }
 </code></pre>
 <ul class="note">
-  <li><code>createQrKey</code> 返回二维码图片（data URL）并在主进程内启动轮询，状态经 <code>login:status</code> 推送（ARCHITECTURE §3.2）。</li>
+  <li><code>createQrKey</code> 返回二维码图片（data URL）并在主进程内启动轮询，状态经 <code>login:status</code> 推送（ARCHITECTURE §3.2）；应用内二维码为实验路径。</li>
   <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
   <li><code>refreshSession</code> 用 <code>refresh_token</code> 调用 <code>music.login.LoginServer/Login</code> 换新 <code>musickey</code>，有效期约 72 小时；启动后与每 30 分钟检查。</li>
 </ul>
 
-<h3 id="c312">3.12 src/main/integration/mpris.ts</h3>
-<pre><code>export function initMpris(onCommand: (command: MprisCommand) =&gt; void): void;  // 待实现，可以根据实际情况调整
-export function publishState(state: PlayerState | null): void;  // 待实现，可以根据实际情况调整
+<h3 id="c312">3.12 src/main/api/web-login.ts</h3>
+<pre><code>export function openWebLogin(): Promise&lt;Credential&gt;;
+</code></pre>
+<ul class="note">
+  <li>默认登录路径：独立窗口加载官方 xlogin 组件（内存 session，仅放行 QQ 域名），主进程轮询 session Cookie 换 OAuth code，再经 <code>api/login.ts</code> 的 <code>exchangeQqLoginCode</code> 换凭证（ARCHITECTURE §3.2）。</li>
+</ul>
+
+<h3 id="c313">3.13 src/main/integration/mpris.ts</h3>
+<pre><code>export function initMpris(onCommand: (command: MprisCommand) =&gt; void): void;
+export function publishState(state: PlayerState | null): void;
 </code></pre>
 
-<h3 id="c313">3.13 src/main/integration/tray.ts</h3>
-<pre><code>export function initTray(actions: TrayActions): void;  // 待实现，可以根据实际情况调整
-export function destroyTray(): void;   // 待实现，可以根据实际情况调整
+<h3 id="c314">3.14 src/main/integration/tray.ts</h3>
+<pre><code>export function initTray(actions: TrayActions): void;
+export function destroyTray(): void;
 
 interface TrayActions {
   onShow(): void;
@@ -193,29 +217,38 @@ interface TrayActions {
 }
 </code></pre>
 
-<h3 id="c314">3.14 src/preload/index.ts</h3>
-<pre><code>export function exposeApi(): void;  // 待实现，可以根据实际情况调整
+<h3 id="c315">3.15 src/preload/index.ts</h3>
+<pre><code>export function exposeApi(): void;
 </code></pre>
 <ul class="note">
   <li>经 contextBridge 暴露唯一命名空间 <code>window.qqy</code>，其类型面即 ARCHITECTURE §4.1。</li>
 </ul>
 
-<h3 id="c315">3.15 src/renderer/stores/player.ts</h3>
-<pre><code>export function usePlayerStore(): PlayerStore;  // 待实现，可以根据实际情况调整
+<h3 id="c316">3.16 src/renderer/stores/player.ts</h3>
+<pre><code>export function usePlayerStore(): PlayerStore;
 
 interface PlayerStore {
   readonly current: Song | null;
   readonly queue: Song[];
   readonly status: 'stopped' | 'playing' | 'paused';
+  readonly quality: Quality;
   playSong(song: Song): Promise&lt;void&gt;;
   playList(songs: Song[], startIndex?: number): void;
   toggle(): void;
+  pause(): void;
   next(): void;
   previous(): void;
   seek(positionMs: number): void;
+  setVolume(volume: number): void;
   setQuality(quality: Quality): void;
+  cycleMode(): void;
+  handleCommand(command: MprisCommand): void;
 }
 </code></pre>
+<ul class="note">
+  <li><code>quality</code> 为实际生效音质；<code>setQuality</code> 强制下一次加载使用指定档位。</li>
+  <li>HTML5 Audio 元素内嵌在本 store（未挂载 DOM 的 <code>new Audio()</code>）；<code>handleCommand</code> 消费 <code>player:command</code> 推送。</li>
+</ul>
 
 <h2 id="c4">4. Call stack tree</h2>
 
@@ -223,21 +256,23 @@ interface PlayerStore {
 <pre><code>index::bootstrap()
 ├── settings::loadSettings()
 ├── credential::loadCredential()
-├── integration/tray::initTray()
-├── integration/mpris::initMpris(onMprisCommand)
 ├── ipc::registerIpc()
-└── index::createMainWindow()
+│   └── api/login::initLoginEvents(events)          // login:status 推送与凭证入库回调
+├── integration/mpris::initMpris(sendPlayerCommand)
+├── integration/tray::initTray(actions)
+├── index::createMainWindow()
+└── api/login::refreshIfNeeded()                    // 启动检查一次，此后定时器每 30 分钟触发
 </code></pre>
 <ul class="note">
   <li><code>loadCredential</code> 失败按未登录继续，不阻塞启动。</li>
-  <li><code>onMprisCommand</code> 由 ipc.ts 提供，把 MPRIS 命令转成 <code>player:command</code> 推送。</li>
+  <li><code>sendPlayerCommand</code> 由 ipc.ts 提供，把 MPRIS / 托盘命令转成 <code>player:command</code> 推送。</li>
 </ul>
 
 <h3>4.2 播放单曲</h3>
 <pre><code>stores/player::playSong(song)
-├── window.qqy.song.getUrls([song.songMid], settings.defaultQuality)
+├── window.qqy.song.getUrls([song.songMid], requestedQuality)   // settings 默认音质或播放条强制档
 ├── 判断 url === null → 提示 NO_STREAM 后返回
-├── AudioEngine.play(url)
+├── audio::play(url)                                // store 内嵌的 HTML5 Audio 元素
 ├── audio 事件 timeupdate / ended → send player:state
 │   └── integration/mpris::publishState(state)
 └── ended → queue 取下一曲 → stores/player::playSong(next)
@@ -249,9 +284,10 @@ interface PlayerStore {
 
 <h3>4.3 退出</h3>
 <pre><code>app::before-quit
-├── settings::saveSettings(current)
+├── index::clearInterval(refreshTimer)
 ├── integration/mpris::publishState(null)
 ├── integration/tray::destroyTray()
+├── settings::saveSettings(current)                 // 兜底，不等待完成
 └── 窗口销毁 → 进程退出
 </code></pre>
 <ul class="note">

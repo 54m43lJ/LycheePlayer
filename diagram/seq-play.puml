@@ -4,7 +4,7 @@ skinparam defaultTextAlignment center
 
 actor 用户 as U
 participant "playerStore\n(renderer)" as S
-participant "AudioEngine\n(renderer)" as A
+participant "HTML5 Audio\nplayer store 内置" as A
 participant "ipc.ts\n(main)" as IPC
 participant "api/song.ts\n(main)" as SG
 participant "上游 CGI" as UP

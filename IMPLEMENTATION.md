@@ -31,6 +31,7 @@ src/
 ├── main/          Electron 主进程
 │   ├── api/       client / search / song / playlist / user / lyric / login / web-login / hash
 │   ├── integration/ mpris / tray
+│   ├── types/     mpris-service.d.ts（第三方模块类型声明）
 │   └── index.ts / ipc.ts / settings.ts / credential.ts
 ├── preload/       contextBridge → window.qqy
 └── renderer/      Vue SPA
@@ -60,7 +61,7 @@ src/
 - 所有 `ipcMain.handle` 由 `envelope()` 包裹；异常只以 `IpcResult.error` 返回，不向渲染进程抛。
 - `song.getUrls` 校验 `mids` 非空且 ≤ 100，音质只能是三档枚举；其余参数只做最小字符串化。
 - `player:state` 不做运行时校验（POC 信任渲染进程）。
-- `login.openWebLogin` 成功后主进程广播 `login:status { stage: 'ok' }`；`login.refreshSession` 只返回 `AuthStatus`，不广播。
+- `login.loginWithCookie` / `login.openWebLogin` 成功后主进程广播 `login:status { stage: 'ok' }`；`login.refreshSession` 只返回 `AuthStatus`，不广播。
 
 ### 3.2 渲染进程状态
 
@@ -81,7 +82,7 @@ src/
 | `credential.bin` | `{ version: 1, encrypted: boolean, payload: base64 }` |
 
 - 能用 `safeStorage` 时 `payload` 是加密后的 JSON；Linux 无可用密钥环时 `encrypted: false`，保存为本机可读的 base64。这是 POC 限制，正式版应改用 keytar/libsecret 或明确提示。
-- 文件权限 `0600`；凭证只存在于主进程，不进入任何 IPC 返回。
+- `credential.bin` 与 `settings.json` 均以 `0600` 落盘；凭证只存在于主进程，不进入任何 IPC 返回。
 - 凭证字段：必填 `musicid` / `musickey` / `expiredAtMs`；可选 `refreshKey` / `refreshToken` / `accessToken` / `openid` / `unionid` / `loginType`。
 - `loadCredential()` 有进程内缓存；`saveCredential()` / `clearCredential()` 同步更新缓存与文件。
 - `settings.set` 以浅合并方式更新，`loadSettings` 会纠正非法音质/布尔值。

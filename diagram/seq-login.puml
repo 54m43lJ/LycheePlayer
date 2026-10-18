@@ -3,30 +3,35 @@ skinparam shadowing false
 skinparam defaultTextAlignment center
 
 actor 用户 as U
-participant "设置页\n(renderer)" as UI
+participant "登录页\n(renderer)" as UI
 participant "ipc.ts\n(main)" as IPC
-participant "api/login.ts\n(main)" as LG
-participant "credential.ts\n(main)" as CR
+participant "api/web-login.ts\n(main)" as WL
+participant "登录窗口\n官方 xlogin 组件" as XW
 participant "上游 CGI" as UP
+participant "credential.ts\n(main)" as CR
 
-U -> UI : 点击“扫码登录”
-UI -> IPC : invoke login.createQrKey()
-IPC -> LG : createQrKey()
-LG -> UP : 申请二维码 CGI
-UP --> LG : qrcodeKey
-IPC -->> UI : push login:status { scanning }
-UI -> UI : 渲染二维码
+U -> UI : 点击“打开官方扫码窗口”
+UI -> IPC : invoke login.openWebLogin()
+IPC -> WL : openWebLogin()
+WL -> XW : 打开 xlogin 组件\n（独立内存 session，仅 QQ 域名）
+U -> XW : 扫码并确认
+XW -> XW : login_jump 写入 p_skey 等 Cookie
 
-loop 主进程定时器每 2 秒，直至确认或过期
-  IPC -> LG : poll(qrcodeKey)
-  LG -> UP : 轮询 CGI
-  UP --> LG : 待扫码 / 已扫码 / 已确认
-  LG --> IPC : 状态或 credential
-  IPC -->> UI : push login:status（状态轻量字段，凭证不下发）
+loop 主进程每秒轮询 session Cookie
+  WL -> WL : 读取 Cookie\n（需 p_skey + p_uin/pt4_token/uin）
 end
 
-LG -> CR : save(credential)
-CR -> CR : safeStorage 加密后写入系统密钥环
+WL -> UP : OAuth authorize（g_tk）→ code
+WL -> UP : QQConnectLogin.LoginServer / QQLogin
+UP --> WL : Credential
+WL --> IPC : Credential
+IPC -> CR : saveCredential(credential)
 IPC -->> UI : push login:status { ok }
+IPC -->> UI : { ok:true, data: AuthStatus }
 UI -> UI : 跳转首页
+
+break 超时（5 分钟）或窗口被关闭
+  WL --> IPC : AUTH_EXPIRED
+  IPC -->> UI : { ok:false }
+end
 @enduml

@@ -57,3 +57,33 @@
 - Last.fm scrobble
 - 全局快捷键
 - 下载管理（注意：下载涉及 VIP 内容的边界，建议只允许下载当前账号可播内容）
+
+## 10. 凭证存储的最终方案与文档表述
+
+POC 实现与现有文档表述不一致，需要拍板口径：
+
+- **文档现状**：ARCHITECTURE TERMS / §2 会话续期、README §2 均写「凭证存入系统密钥环」。
+- **实现现状**：凭证落在 `~/.config/qqy/credential.bin`（`{ version, encrypted, payload }`）；`safeStorage` 可用时加密（Linux 下 safeStorage 后端就是 libsecret / kwallet 密钥环），**不可用时退化为 base64 明文**（权限 0600）。POC.md 已列为已知限制。
+- **默认**：追认 POC 实现，文档措辞统一改为「safeStorage 加密落盘；无密钥环时明文兜底（已知限制）」
+- **备选**：正式版引入 keytar / libsecret 硬依赖，无密钥环时拒绝保存并提示（打包发布前需定）
+- 关联：`general-architecture.puml` / `seq-login.puml` 中的「系统密钥环」字样已临时改为中性表述，拍板后按结论回填
+
+## 11. POC 已成事实的决策追认（确认后删除对应原条目）
+
+以下事项 POC 已按各条目的**默认方案**落地，属于事后追认；确认后删除原条目并落实文档：
+
+| 原条目 | 事实现状 | 待落实 |
+| --- | --- | --- |
+| #1 API 层来源 | 自研 TS 模块（`src/main/api/`），无 GPL 依赖 | 删除 #1 |
+| #2 许可证 | `package.json` 已标 Apache-2.0，但**仓库尚无 LICENSE 文件** | 补 LICENSE 并在 README 声明，删除 #2 |
+| #3 播放引擎 | HTML5 Audio 已实现并验证 | libmpv 保留在 README 进阶路线，删除 #3 |
+| #4 登录方式 | 官方 xlogin 扫码（默认）+ Cookie 兜底 + 实验性应用内二维码；Cookie 成功路径尚未回归测试 | 删除 #4，回归项留在 IMPLEMENTATION §12 |
+| #5 默认音质 | 320k 已是默认值并实现；**仅剩「降档是否 toast」子项未定**（当前实现：静默降档，实际音质看 `UrlResult.quality`） | 拍板 toast 子项后删除 #5 |
+| #6 关闭行为 | `closeToTray` 默认 false 已实现；托盘与 MPRIS 已提前落地，**README 路线图仍把托盘/MPRIS/音质切换放在「进阶」** | 按现状改写 README 路线图 MVP 范围，删除 #6 |
+| #8 UI 原型 | MVP 页面已直接实现（默认方案「原型后补」） | 删除 #8 |
+
+## 12. AudioEngine 抽象的去留
+
+- 设计侧（原 CODE 调用栈、原架构图、PENDING #3）假设存在独立 `AudioEngine` 模块；POC 实际把 HTML5 Audio 元素**内嵌在 `stores/player.ts`**，没有独立模块。文档已按现状改写。
+- **默认**：维持现状（store 内嵌），引入 libmpv 时再抽出 AudioEngine 模块
+- **备选**：现在就抽独立模块，为替换播放引擎预留干净边界
