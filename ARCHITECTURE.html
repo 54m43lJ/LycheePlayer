@@ -72,7 +72,7 @@
 渲染进程经 preload 暴露的单一命名空间 <code>window.qqy</code> 调用以下方法；签名即契约，
 行为细节见对应时序图（<a href="#s3">§3</a>）。
 </p>
-<pre><code>// 登录（默认：openWebLogin 嵌入官方 xlogin 扫码组件；createQrKey 为实验性应用内二维码）
+<pre><code>// 登录（默认：openWebLogin 嵌入官方 xlogin 扫码组件；备选：loginWithCookie 手动 Cookie；createQrKey 为实验性应用内二维码）
 login.createQrKey(): Promise&lt;IpcResult&lt;QrSession&gt;&gt;;
 login.getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
 login.loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
