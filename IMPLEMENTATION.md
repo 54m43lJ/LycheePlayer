@@ -246,6 +246,7 @@ oauth authorize:
 - `player:state` 发送前用 `toRaw` 去 Vue Proxy，否则 Electron structured clone 会失败并让播放卡住。
 - 默认音质来自 settings：`auto` 时按登录态取档（已登录 `flac`，未登录 `320k`），登录态变化后下一次播放即按新档生效；设置页可固定具体档位。降档静默，不弹提示。
 - 播放条的音质菜单调用 `setQuality(q)` 强制本次加载使用 q，菜单显示本次请求档位；左侧标题尾部标注实际音质（`PlayerState.quality`），降档时左实际/右请求形成对照。实际音质一律看 `UrlResult.quality`。
+- 标题与歌手/专辑行超宽时以无缝跑马灯滚动显示（悬停暂停，`MarqueeText.vue` 按溢出宽度自适应时长），音质标记固定在标题行最右。
 - 请求音质无权限时 API 内部降档；当前所有档位都无链接才报 `NO_STREAM`，批量中单曲无链接返回 `url: null`。
 - 音频加载/播放异常会 toast，状态置为 stopped/paused；不会自动跳下一首。
 - 音量存 `localStorage`；静音按钮恢复上一次音量。

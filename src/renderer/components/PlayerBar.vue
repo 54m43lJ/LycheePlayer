@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import type { Quality } from '@shared/types'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
+import MarqueeText from './MarqueeText.vue'
 import { usePlayerStore, PLAY_MODE_LABEL } from '../stores/player'
 import { useUiStore } from '../stores/ui'
 import { formatDuration, singerNames, songCover } from '../utils/format'
@@ -20,6 +21,9 @@ const lastVolume = ref(0.8)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 
 const cover = computed(() => songCover(current.value, 300))
+const artistLine = computed(() =>
+  current.value ? `${singerNames(current.value)} · ${current.value.album.name}` : ''
+)
 const totalMs = computed(() => durationMs.value || current.value?.durationMs || 0)
 const modeIcon = computed(() => {
   if (mode.value === 'repeat-one') return 'repeat-one'
@@ -103,10 +107,10 @@ onBeforeUnmount(() => {
         <CoverArt :src="cover" image-class="player-cover" :icon-size="20" />
         <div class="player-text">
           <div class="player-title-row">
-            <div class="player-title" :title="current.name">{{ current.name }}</div>
+            <MarqueeText class="player-title" :text="current.name" />
             <span class="quality-mark" title="实际音质（降档后）">{{ qualityLabel }}</span>
           </div>
-          <div class="player-artist">{{ singerNames(current) }} · {{ current.album.name }}</div>
+          <MarqueeText class="player-artist" :text="artistLine" />
         </div>
       </div>
 

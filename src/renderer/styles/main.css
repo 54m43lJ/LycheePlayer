@@ -1355,10 +1355,8 @@ a {
 }
 
 .player-title {
+  flex: 1 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
 }
@@ -1383,12 +1381,45 @@ a {
 }
 
 .player-artist {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   margin-top: 4px;
   color: var(--muted);
   font-size: 11px;
+}
+
+/* ---------- Marquee：超宽文本无缝滚动（播放条标题 / 歌手行） ---------- */
+
+.marquee {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.marquee-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 2.5em;
+}
+
+.marquee-track.scrolling {
+  animation: marquee-scroll linear infinite;
+}
+
+.marquee-track.scrolling:hover {
+  animation-play-state: paused;
+}
+
+.marquee-text {
+  flex: none;
+}
+
+/* 位移 = 单份文本 + 份间距（gap 2.5em 的一半），两份拷贝首尾相接形成无缝循环 */
+@keyframes marquee-scroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-50% - 1.25em));
+  }
 }
 
 .player-center {
