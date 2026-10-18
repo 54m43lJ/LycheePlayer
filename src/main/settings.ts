@@ -8,7 +8,8 @@ const QUALITIES: Quality[] = ['128k', '320k', 'flac']
 
 const DEFAULTS: Settings = {
   defaultQuality: '320k',
-  closeToTray: false
+  closeToTray: false,
+  theme: 'dark'
 }
 
 let current: Settings = { ...DEFAULTS }
@@ -25,7 +26,8 @@ function sanitize(value: unknown): Settings {
       ? (raw.defaultQuality as Quality)
       : DEFAULTS.defaultQuality,
     closeToTray:
-      typeof raw.closeToTray === 'boolean' ? raw.closeToTray : DEFAULTS.closeToTray
+      typeof raw.closeToTray === 'boolean' ? raw.closeToTray : DEFAULTS.closeToTray,
+    theme: raw.theme === 'light' ? 'light' : 'dark'
   }
 }
 

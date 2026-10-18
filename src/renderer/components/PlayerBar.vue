@@ -24,10 +24,10 @@ const modeIcon = computed(() => {
   return 'repeat'
 })
 const progressStyle = computed(() => ({
-  background: `linear-gradient(to right, var(--accent) ${progress.value}%, rgba(255,255,255,.14) ${progress.value}%)`
+  background: `linear-gradient(to right, var(--gold) ${progress.value}%, var(--track) ${progress.value}%)`
 }))
 const volumeStyle = computed(() => ({
-  background: `linear-gradient(to right, var(--accent) ${volume.value * 100}%, rgba(255,255,255,.14) ${volume.value * 100}%)`
+  background: `linear-gradient(to right, var(--accent-strong) ${volume.value * 100}%, var(--track) ${volume.value * 100}%)`
 }))
 
 const qualityOptions: Array<{ value: Quality; label: string }> = [

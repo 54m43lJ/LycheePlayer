@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { Quality } from '@shared/types'
+import type { Quality, Settings } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import { describeError } from '../api'
 import { useToast } from '../composables/toast'
@@ -34,6 +34,11 @@ const QUALITIES: Array<{ value: Quality; label: string; hint: string }> = [
   { value: 'flac', label: '无损', hint: 'FLAC · 需账号权限' }
 ]
 
+const THEMES: Array<{ value: Settings['theme']; label: string; hint: string }> = [
+  { value: 'dark', label: '深色', hint: 'Dark · 奶油紫' },
+  { value: 'light', label: '浅色', hint: 'Light · Alabaster' }
+]
+
 async function chooseQuality(quality: Quality): Promise<void> {
   if (quality === settings.settings.defaultQuality) return
   try {
@@ -53,6 +58,16 @@ async function toggleCloseToTray(): Promise<void> {
   try {
     await settings.update({ closeToTray: !settings.settings.closeToTray })
     toast.show(settings.settings.closeToTray ? '关闭窗口时最小化到托盘' : '关闭窗口时退出应用')
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
+
+async function chooseTheme(theme: Settings['theme']): Promise<void> {
+  if (theme === settings.settings.theme) return
+  try {
+    await settings.update({ theme })
+    toast.show(theme === 'light' ? '已切换到浅色模式' : '已切换到深色模式')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -114,6 +129,27 @@ async function refreshSession(): Promise<void> {
             <p class="note" style="margin: 14px 0 0">
               播放中切换会立即重新获取链接；实际音质以账号权限和上游返回为准，降档结果会显示在播放条。
             </p>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>外观</h2>
+            <p>调色板来自项目统一的 palette，可在深色 / 浅色间切换。</p>
+          </div>
+          <div class="panel-body">
+            <div class="quality-options" style="grid-template-columns: repeat(2, 1fr)">
+              <button
+                v-for="theme in THEMES"
+                :key="theme.value"
+                class="quality-option"
+                :class="{ active: settings.settings.theme === theme.value }"
+                @click="chooseTheme(theme.value)"
+              >
+                <strong>{{ theme.label }}</strong>
+                <span>{{ theme.hint }}</span>
+              </button>
+            </div>
           </div>
         </section>
 

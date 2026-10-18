@@ -29,8 +29,13 @@ export async function getLyric(songMid: string): Promise<Lyric> {
     }
   })
 
+  if (data.code === -1901 || data.retcode === -1901) {
+    // -1901：上游没有匹配到歌词（含纯音乐/无歌词）。属于“无歌词”，不是请求失败。
+    return { lrc: '', trans: null }
+  }
   if ((data.code ?? 0) !== 0 || (data.retcode ?? 0) !== 0) {
-    throw new UpstreamError('UPSTREAM_CHANGED', `歌词接口返回错误码 ${data.code ?? data.retcode}`)
+    const code = (data.code ?? 0) !== 0 ? data.code : data.retcode
+    throw new UpstreamError('UPSTREAM_CHANGED', `歌词接口返回错误码 ${code}`)
   }
   return {
     lrc: data.lyric ?? '',

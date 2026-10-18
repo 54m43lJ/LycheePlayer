@@ -27,6 +27,7 @@ let offCommand: (() => void) | null = null
 onMounted(() => {
   void (async () => {
     await Promise.allSettled([auth.refresh(), settings.load()])
+    settings.applyTheme()
     player.applySettings()
   })()
 

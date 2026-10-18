@@ -67,8 +67,9 @@ src/
 - `auth`：登录态、musicid、资料、`qr*`（仅实验性应用内二维码）、`expiresAtMs`、`canRefresh`。
 - `player`：队列、当前曲、状态、进度、时长、音量、播放模式、实际音质。
 - `settings`：默认音质、关闭到托盘；启动时加载。
-- `ui`：歌词面板开关。
+- `ui`：歌词面板开关、当前主题（由 settings 驱动）。
 - `volume` 存 `localStorage['qqy.volume']`；队列、播放模式、搜索历史、歌词缓存不做持久化。
+- `theme` 由 `settings.theme` 持久化；`data-theme` 写到 `<html>`，同时在 `localStorage['qqy.theme']` 缓存一份用于首屏避免闪烁。
 
 ## 4. 凭证与数据文件
 
@@ -76,7 +77,7 @@ src/
 
 | 文件 | 格式 |
 | --- | --- |
-| `settings.json` | `{ defaultQuality: '128k' \| '320k' \| 'flac', closeToTray: boolean }`，默认 `320k` / `false` |
+| `settings.json` | `{ defaultQuality: '128k' \| '320k' \| 'flac', closeToTray: boolean, theme: 'dark' \| 'light' }`，默认 `320k` / `false` / `dark` |
 | `credential.bin` | `{ version: 1, encrypted: boolean, payload: base64 }` |
 
 - 能用 `safeStorage` 时 `payload` 是加密后的 JSON；Linux 无可用密钥环时 `encrypted: false`，保存为本机可读的 base64。这是 POC 限制，正式版应改用 keytar/libsecret 或明确提示。
@@ -246,6 +247,8 @@ oauth authorize:
 - 请求音质无权限时 API 内部降档；当前所有档位都无链接才报 `NO_STREAM`，批量中单曲无链接返回 `url: null`。
 - 音频加载/播放异常会 toast，状态置为 stopped/paused；不会自动跳下一首。
 - 音量存 `localStorage`；静音按钮恢复上一次音量。
+- 音量条宽度 `clamp(56px, 6vw, 84px)`，明确最小 56 / 最大 84；在任何窗口宽度下都保留，不再随播放器断点隐藏。
+- 进度条填充用 `--gold`，音量填充用 `--accent-strong`；未填充轨道统一 `--track`。
 - 进度条 `formatDuration(0)` 显示 `0:00`，未知时长显示 `--:--`。
 
 ## 9. 搜索、歌单与歌词
@@ -255,10 +258,22 @@ oauth authorize:
 - 搜索页 hot keywords 是写死的静态列表；没有历史记录。
 - 歌单详情按页抓取，页面显示实际载入数；公开歌单匿名可读，我的歌单需要登录。
 - 歌词使用旧版明文 LRC 接口；不实现 QRC 逐字/解密。
+- `code/retcode == -1901` 视为“该曲无歌词”（纯音乐/未匹配），返回空 `lrc`，UI 显示“这首歌还没有歌词”；其他错误码（如 1101）仍抛 `UPSTREAM_CHANGED`。
+- 纯音乐标记行 `[00:00:00]此歌曲为没有填词的纯音乐…` 不是合法 LRC 时间戳，解析结果为空，行为与无歌词一致。
 - LRC 解析：同一行多个时间戳展开；时间小数按毫秒补零（`5` → 500ms）；相同时间戳去重；翻译按完全相同的时间戳合并。
 - 当前行用二分查找，允许 80ms 提前量；面板打开时自动滚到活动行。
 - 歌词缓存是渲染进程内存 Map，切歌不重复请求；无上限。
 - 歌词面板在路由切换时自动关闭。
+
+### 9.1 主题与调色板
+
+- 调色板 copied from `dotfiles/palette`；token 定义在 `src/renderer/styles/main.css` 顶部：
+  - dark：`bg #231F1F`、`surface #3E3542`、`fg #D6CAB6`、`muted #B0B4BC`、`purple #89338E`、`purple-light #E593E7`、`gold #9D7E4D`、`cream #FFF7E4`、`red #CC2A47`
+  - light：`bg #F7F7F7`、`surface #F2F0EF`、`fg #000000`、`muted #55585C`、`purple #8A2E8F`、`purple-light #D998D9`、`gold #5C4824`、`highlight #E9DBF2`、`red #AB3248`
+- 语义变量（`--panel` / `--text` / `--accent` / `--gold` / `--danger` / `--track` 等）由 palette token 派生，组件不直接写死颜色。
+- `data-theme="dark|light"` 切换；`settings.theme` 持久化；`localStorage['qqy.theme']` 只作为首屏缓存，`settings.json` 是事实源。
+- 深色下强调文字用 `purple-light`；浅色下强调文字用 `purple`，避免粉彩填充上的低对比。
+- 进度条用 `gold`，音量条用 `purple` 系；错误/警告用 `red`。
 
 ## 10. Linux 集成
 

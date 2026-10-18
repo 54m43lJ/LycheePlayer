@@ -100,6 +100,7 @@ export interface UrlResult {
 export interface Settings {
   defaultQuality: Quality
   closeToTray: boolean
+  theme: 'dark' | 'light'
 }
 
 export type QrStatus = {

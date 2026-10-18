@@ -73,6 +73,9 @@ PASS  qr poll  status=66（66=待扫码）
 - 登录账号下的“我的歌单”：成功载入 24 个歌单。
 - VIP 歌曲《晴天》：320k 与 FLAC 均播放成功，音质切换后进度继续推进。
 - 窄屏 680×540：侧栏收为 64px 图标栏，搜索/设置/登录单列显示，无横向溢出；登录页内容可纵向滚动。
+- 音量条：宽度 `clamp(56px, 6vw, 84px)`，在 680–1280 宽度下均可见，不再出现“音量条隐藏但侧栏未收窄”的不同步。
+- 主题：深色 / 浅色调色板切换并持久化；`data-theme` 驱动 CSS token，`settings.theme` 为事实源。
+- 歌词：`-1901` 视为无歌词，纯音乐仍显示“这首歌还没有歌词”而非加载失败；活动行保持原字号与固定行高，不再文字重叠。
 - Wayland 启动：不额外传 `--ozone-platform` 启动，进程参数自动包含 `--ozone-platform=wayland`，并启用 Wayland IME；`QQY_OZONE_PLATFORM=x11` 可强制回退 X11。
 - MPRIS：`playerctl -p qqy status` 返回 `Playing`，元数据包含标题 / 专辑 / 封面；
   `playerctl -p qqy pause/play` 能反向控制播放器。
@@ -104,6 +107,7 @@ PASS  qr poll  status=66（66=待扫码）
 | 新增 `login.getStatus()`、`login.loginWithCookie()` | 启动时恢复登录态；Cookie 是 PENDING #4 的兜底入口 | 已更新 ARCHITECTURE §4.1 / §4.2 |
 | 新增 `login.openWebLogin()` | QQ 网页登录可能返回 `p_skey_forbid` 风控；改为嵌入官方 xlogin 扫码组件，扫码后读取 `p_skey` 完成换证 | 已更新 ARCHITECTURE §3.2 / §4.1 |
 | 新增 `login.refreshSession()`、`AuthStatus` 到期字段 | 官方客户端 24h 内掉线；用 `refresh_token` 主动续期，并在设置页显示到期时间 | 已更新 ARCHITECTURE §2 / §4.1 / §4.2 |
+| `Settings.theme` + palette token 切换 | 统一深/浅色调色板，持久化到设置文件 | 已更新 ARCHITECTURE §4.3 |
 | `QrStatus` 增加 `failed` 阶段与 `message` | 扫码确认后换证失败时需要向用户展示具体原因，而不是静默过期 | 已更新 ARCHITECTURE §3.2 / §4.2 |
 | 播放链接拼接改为复用 `purl` | `vkey` 与查询串绑定，重建会 403 | 已更新 ARCHITECTURE §1 / §4.3、CODE §3.7 |
 | 托盘 `initTray(actions)` 需要回调 | 托盘菜单要控制播放器与退出 | 已更新 CODE §3.13 |
