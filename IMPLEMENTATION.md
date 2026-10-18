@@ -27,7 +27,7 @@
 
 ```text
 src/
-├── shared/        types.ts / ipc.ts：IPC 类型唯一来源
+├── shared/        types.ts / ipc.ts（IPC 契约）/ xlogin.ts（登录组件地址）
 ├── main/          Electron 主进程
 │   ├── api/       client / search / song / playlist / user / lyric / login / web-login / hash
 │   ├── integration/ mpris / tray
@@ -41,7 +41,7 @@ src/
 ```
 
 - 主窗口：`contextIsolation: true`、`nodeIntegration: false`、`sandbox: false`（POC 选择；preload 由 electron-vite 打成 CJS）。
-- 登录窗口：独立内存 session `lychee-xlogin`，`sandbox: true`，只允许 QQ 域名导航/弹窗。
+- 登录组件：登录页内嵌 webview 加载官方 xlogin（URL 见 `src/shared/xlogin.ts`），独立内存 session `lychee-xlogin`，只允许 QQ 域名导航/弹窗。
 - 主窗口的 `window.open` 一律拒绝；http(s) 链接交给系统浏览器。
 - 单实例锁：第二个实例只唤醒已有窗口。
 - 退出顺序：`before-quit` 清理续期定时器、MPRIS 状态、托盘，并触发设置落盘。
@@ -129,10 +129,10 @@ comm（按接口需要）: uin / format=json / ct=24 / cv=0
 
 ## 6. 登录与官方扫码组件
 
-### 6.1 默认：官方 xlogin 窗口
+### 6.1 默认：官方 xlogin 内嵌组件
 
-- 登录页默认只提供「打开官方扫码窗口」，不再自动生成应用内二维码。
-- 窗口加载：
+- 登录页直接内嵌官方 xlogin 组件（webview，`webviewTag: true`），不再弹独立窗口。
+- 组件地址与官方 Linux 客户端一致，见 `src/shared/xlogin.ts`：
 
 ```text
 https://xui.ptlogin2.qq.com/cgi-bin/xlogin
@@ -142,15 +142,13 @@ https://xui.ptlogin2.qq.com/cgi-bin/xlogin
   &pt_3rd_aid=100497308&theme=2
 ```
 
-- 使用内存 session `lychee-xlogin`；打开前清理 cookie，结束/取消后再次清理。
-- 窗口声明 470×610；xlogin 页面可能自行 resize 到约 865×251，以页面行为为准。
-- 窗口内允许 QQ 域名弹窗；`setWindowOpenHandler` 拒绝其他域名。
+- webview 使用内存 session `lychee-xlogin`；登录发起前清理 cookie，结束/超时后再次清理。
+- 主进程经 `web-contents-created` 按 session 匹配拦截导航并捕获 OAuth code；放行 QQ 域名弹窗，子窗口同样拦截，其余域名拒绝。
 - 扫码成功后 `graph.qq.com/oauth2.0/login_jump` 会设置 `p_skey`、`p_uin`、`pt4_token` 等 cookie，并 postMessage；主进程每秒轮询 session cookie。
 - 只有同时看到 `p_skey` 与 `p_uin`/`pt4_token`/`uin` 才进入换证，避免把未完成登录误判为成功。
 - 换证：用 cookie 调 `graph.qq.com/oauth2.0/authorize`（`g_tk=hash33(p_skey,5381)`）取 `code`，再 POST `QQLogin`。
 - 也监听 `will-redirect` / `will-navigate` / `did-navigate`，如果 URL 直接带 `code`（`y.qq.com` 或 `graph.qq.com`）则跳过 cookie 轮询。
-- 登录窗口 5 分钟超时；关闭窗口按失败处理（`AUTH_EXPIRED`）。
-- 已有活动登录窗口时再次调用只聚焦，不重复开窗。
+- 登录 5 分钟超时；失败可在登录页重新加载组件重试；已有进行中的登录时再次调用复用同一流程。
 
 ### 6.2 QQLogin 换凭证
 
@@ -338,8 +336,7 @@ oauth authorize:
 - 续期已成功一次，并验证新 key 与 72h 到期时间；尚未做 72h+ 长跑，refresh_token 的最终有效期由上游决定。
 - 搜索/播放依赖上游匿名额度；频繁请求可能触发限流或空结果。
 - 没有 CSP；Electron 开发模式会提示 Insecure CSP。正式发布前应补 meta/CSP。
-- 主窗口 `sandbox: false`；登录窗口是 `sandbox: true` 的远程页面。
-- 登录窗口可能被 xlogin 页面自行 resize（约 865×251），不是固定的 470×610。
+- 主窗口 `sandbox: false` 并开启 `webviewTag`（登录页内嵌远程组件所需）；登录组件是登录页内的远程 webview，使用独立 session。
 - `mpris-service` 旧、依赖 dbus-next；若维护中断可替换。
 - 托盘在无 StatusNotifier 的极简 Wayland 环境可能不可见。
 - 数字专辑/无版权歌曲的不可播 UI 未专门回归；VIP 320k/FLAC 已验证。

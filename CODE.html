@@ -16,9 +16,10 @@
 ├── scripts/
 │   └── probe.mjs                             上游接口可达性探针
 ├── src/
-│   ├── shared/                               IPC 类型（唯一契约来源）
+│   ├── shared/                               IPC 契约与共享常量
 │   │   ├── types.ts
-│   │   └── ipc.ts
+│   │   ├── ipc.ts
+│   │   └── xlogin.ts                          官方 xlogin 组件地址（主/渲染共用）
 │   ├── main/                                 Electron 主进程
 │   │   ├── <a href="#c31">index.ts</a>                        应用入口与生命周期
 │   │   ├── <a href="#c32">ipc.ts</a>                           IPC 路由注册
@@ -196,7 +197,7 @@ interface LoginEvents {
 <pre><code>export function openWebLogin(): Promise&lt;Credential&gt;;
 </code></pre>
 <ul class="note">
-  <li>默认登录路径：独立窗口加载官方 xlogin 组件（内存 session，仅放行 QQ 域名），主进程轮询 session Cookie 换 OAuth code，再经 <code>api/login.ts</code> 的 <code>exchangeQqLoginCode</code> 换凭证（ARCHITECTURE §3.2）。</li>
+  <li>默认登录路径：登录页内嵌 webview 加载官方 xlogin 组件（内存 session，仅放行 QQ 域名），主进程轮询该 session 的 Cookie 换 OAuth code，再经 <code>api/login.ts</code> 的 <code>exchangeQqLoginCode</code> 换凭证（ARCHITECTURE §3.2）。</li>
 </ul>
 
 <h3 id="c313">3.13 src/main/integration/mpris.ts</h3>

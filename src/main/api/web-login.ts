@@ -1,16 +1,10 @@
-import { BrowserWindow, session } from 'electron'
+import { app, session, webContents } from 'electron'
+import type { Event as ElectronEvent, WebContents } from 'electron'
 import type { Credential } from '../../shared/types'
 import { UpstreamError } from './client'
 import { exchangeQqLoginCode, requestOAuthCodeWithCookies } from './login'
 
 const PARTITION = 'lychee-xlogin'
-
-/** 与官方 Linux 客户端使用的 QQ 登录组件一致；只加载扫码窗口，不加载完整 y.qq.com。 */
-const LOGIN_URL =
-  'https://xui.ptlogin2.qq.com/cgi-bin/xlogin?appid=716027609&daid=383&style=33&login_text=%E7%99%BB%E5%BD%95&hide_title_bar=1&hide_border=1&target=self&s_url=https%3A%2F%2Fgraph.qq.com%2Foauth2.0%2Flogin_jump&pt_3rd_aid=100497308&pt_feedback_link=https%3A%2F%2Fsupport.qq.com%2Fproducts%2F77942%3FcustomInfo%3D.appid100497308&theme=2&verify_theme='
-
-let active: Promise<Credential> | null = null
-let activeWindow: BrowserWindow | null = null
 
 function isAllowedHost(url: string): boolean {
   try {
@@ -47,41 +41,51 @@ async function clearLoginSession(target: Electron.Session): Promise<void> {
   }
 }
 
-async function runWindowLogin(): Promise<Credential> {
+interface AttachedHandlers {
+  onWillNavigate: (event: ElectronEvent, url: string) => void
+  onWillRedirect: (event: ElectronEvent, url: string) => void
+  onDidNavigate: (event: ElectronEvent, url: string) => void
+}
+
+let active: Promise<Credential> | null = null
+
+/**
+ * 登录页内嵌 webview 加载官方 xlogin 组件；主进程轮询该 session 的 Cookie 完成 OAuth 换证。
+ * 渲染进程挂载 webview 后调用本接口；重复调用复用进行中的流程。
+ */
+export function openWebLogin(): Promise<Credential> {
+  if (active) return active
+  active = runEmbedLogin().finally(() => {
+    active = null
+  })
+  return active
+}
+
+function runEmbedLogin(): Promise<Credential> {
   const partitionSession = session.fromPartition(PARTITION)
-  await clearLoginSession(partitionSession)
+  void clearLoginSession(partitionSession)
 
   return new Promise<Credential>((resolve, reject) => {
-    const children: BrowserWindow[] = []
+    const attached = new Map<WebContents, AttachedHandlers>()
     let settled = false
     let finishing = false
     let cookieTimer: NodeJS.Timeout | null = null
+    let timeoutTimer: NodeJS.Timeout | null = null
 
-    const window = new BrowserWindow({
-      width: 470,
-      height: 610,
-      minWidth: 420,
-      minHeight: 540,
-      show: false,
-      autoHideMenuBar: true,
-      title: '登录 QQ 音乐 — Lychee Player',
-      backgroundColor: '#ffffff',
-      webPreferences: {
-        partition: PARTITION,
-        contextIsolation: true,
-        nodeIntegration: false,
-        sandbox: true
-      }
-    })
-    activeWindow = window
+    const detach = (wc: WebContents, handlers: AttachedHandlers): void => {
+      wc.removeListener('will-navigate', handlers.onWillNavigate)
+      wc.removeListener('will-redirect', handlers.onWillRedirect)
+      wc.removeListener('did-navigate', handlers.onDidNavigate)
+      attached.delete(wc)
+    }
 
     const cleanup = async (): Promise<void> => {
-      clearTimeout(timeoutTimer)
+      if (timeoutTimer) clearTimeout(timeoutTimer)
       if (cookieTimer) clearInterval(cookieTimer)
-      for (const child of children) {
-        if (!child.isDestroyed()) child.destroy()
+      app.removeListener('web-contents-created', onWebContentsCreated)
+      for (const [wc, handlers] of attached) {
+        if (!wc.isDestroyed()) detach(wc, handlers)
       }
-      if (!window.isDestroyed()) window.destroy()
       await clearLoginSession(partitionSession)
     }
 
@@ -89,13 +93,19 @@ async function runWindowLogin(): Promise<Credential> {
       if (settled) return
       settled = true
       try {
-        window.webContents.stop()
         await cleanup()
         const credential = await exchangeQqLoginCode(code)
         resolve(credential)
       } catch (error) {
         reject(error)
       }
+    }
+
+    const fail = async (message: string): Promise<void> => {
+      if (settled) return
+      settled = true
+      await cleanup()
+      reject(new UpstreamError('AUTH_EXPIRED', message))
     }
 
     const finishFromCookies = async (): Promise<void> => {
@@ -117,7 +127,6 @@ async function runWindowLogin(): Promise<Credential> {
         }
         if (settled) return
         settled = true
-        window.webContents.stop()
         await cleanup()
         const code = await requestOAuthCodeWithCookies(jar)
         const credential = await exchangeQqLoginCode(code)
@@ -127,90 +136,65 @@ async function runWindowLogin(): Promise<Credential> {
       }
     }
 
-    const fail = async (message: string): Promise<void> => {
+    const makeHandlers = (): AttachedHandlers => ({
+      onWillNavigate: (event, url) => {
+        const code = extractOauthCode(url)
+        if (code) {
+          event.preventDefault()
+          void succeed(code)
+          return
+        }
+        if (!isAllowedHost(url)) event.preventDefault()
+      },
+      onWillRedirect: (event, url) => {
+        const code = extractOauthCode(url)
+        if (code) {
+          event.preventDefault()
+          void succeed(code)
+          return
+        }
+        if (!isAllowedHost(url)) event.preventDefault()
+      },
+      onDidNavigate: (_event, url) => {
+        const code = extractOauthCode(url)
+        if (code) void succeed(code)
+      }
+    })
+
+    const attach = (wc: WebContents): void => {
+      if (attached.has(wc) || wc.isDestroyed()) return
+      const handlers = makeHandlers()
+      wc.on('will-navigate', handlers.onWillNavigate)
+      wc.on('will-redirect', handlers.onWillRedirect)
+      wc.on('did-navigate', handlers.onDidNavigate)
+      wc.setWindowOpenHandler(({ url }) => {
+        if (!isAllowedHost(url)) return { action: 'deny' }
+        return { action: 'allow', overrideBrowserWindowOptions: { autoHideMenuBar: true } }
+      })
+      attached.set(wc, handlers)
+    }
+
+    const isLoginTarget = (wc: WebContents): boolean =>
+      (wc.getType() === 'webview' || wc.getType() === 'window') && wc.session === partitionSession
+
+    function onWebContentsCreated(_event: ElectronEvent, wc: WebContents): void {
       if (settled) return
-      settled = true
-      await cleanup()
-      reject(new UpstreamError('AUTH_EXPIRED', message))
+      if (isLoginTarget(wc)) attach(wc)
     }
 
-    const capture = (event: Electron.Event, url: string): void => {
-      const code = extractOauthCode(url)
-      if (!code) return
-      event.preventDefault()
-      void succeed(code)
+    app.on('web-contents-created', onWebContentsCreated)
+
+    // 登录页可能先于本次调用挂载 webview，补挂既有目标。
+    for (const wc of webContents.getAllWebContents()) {
+      if (isLoginTarget(wc)) attach(wc)
     }
 
-    const timeoutTimer = setTimeout(() => {
+    timeoutTimer = setTimeout(() => {
       void fail('扫码登录超时，请重试')
     }, 5 * 60_000)
 
     cookieTimer = setInterval(() => {
       void finishFromCookies()
     }, 1000)
-
-    window.once('ready-to-show', () => window.show())
-    window.on('closed', () => {
-      if (!settled) void fail('登录窗口已关闭')
-    })
-
-    window.webContents.on('will-redirect', capture)
-    window.webContents.on('will-redirect', (event, url) => {
-      if (!isAllowedHost(url)) event.preventDefault()
-    })
-    window.webContents.on('will-navigate', capture)
-    window.webContents.on('will-navigate', (event, url) => {
-      if (!isAllowedHost(url)) event.preventDefault()
-    })
-    window.webContents.on('did-navigate', (_event, url) => {
-      const code = extractOauthCode(url)
-      if (code) void succeed(code)
-    })
-
-    window.webContents.setWindowOpenHandler(({ url }) => {
-      if (!isAllowedHost(url)) return { action: 'deny' }
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          show: true,
-          autoHideMenuBar: true,
-          webPreferences: {
-            partition: PARTITION,
-            contextIsolation: true,
-            nodeIntegration: false,
-            sandbox: true
-          }
-        }
-      }
-    })
-
-    window.webContents.on('did-create-window', (child) => {
-      children.push(child)
-      child.webContents.on('will-redirect', capture)
-      child.webContents.on('will-redirect', (event, url) => {
-        if (!isAllowedHost(url)) event.preventDefault()
-      })
-      child.webContents.on('will-navigate', capture)
-      child.webContents.on('will-navigate', (event, url) => {
-        if (!isAllowedHost(url)) event.preventDefault()
-      })
-    })
-
-    void window.loadURL(LOGIN_URL).catch(() => {
-      void fail('无法打开 QQ 登录组件')
-    })
   })
-}
-
-/** 官方 QQ 扫码窗口：用户完成扫码后拦截 OAuth code，换取 QQ 音乐凭证。 */
-export function openWebLogin(): Promise<Credential> {
-  if (active) {
-    activeWindow?.focus()
-    return active
-  }
-  active = runWindowLogin().finally(() => {
-    active = null
-    activeWindow = null
-  })
-  return active
 }

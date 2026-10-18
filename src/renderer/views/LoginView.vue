@@ -5,6 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import { describeError } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
+import { XLOGIN_URL } from '@shared/xlogin'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -12,7 +13,8 @@ const toast = useToast()
 
 const cookie = ref('')
 const cookieSubmitting = ref(false)
-const webLoginLoading = ref(false)
+const embedFailed = ref(false)
+const reloadKey = ref(0)
 
 const avatarLetter = computed(() => auth.displayName.slice(0, 1).toUpperCase())
 
@@ -36,16 +38,20 @@ async function submitCookie(): Promise<void> {
   }
 }
 
-async function submitWebLogin(): Promise<void> {
-  webLoginLoading.value = true
+/** webview 挂载完成即开始换证监听；失败后可经 reloadEmbed 重新加载组件重试。 */
+async function startEmbedLogin(): Promise<void> {
+  embedFailed.value = false
   try {
     await auth.openWebLogin()
     toast.show('扫码登录成功')
   } catch (err) {
+    embedFailed.value = true
     toast.error(describeError(err))
-  } finally {
-    webLoginLoading.value = false
   }
+}
+
+function reloadEmbed(): void {
+  reloadKey.value += 1
 }
 </script>
 
@@ -70,25 +76,30 @@ async function submitWebLogin(): Promise<void> {
     </section>
 
     <section v-else class="login-card">
-      <div class="login-qr">
-        <div class="qr-placeholder">
-          <AppIcon name="qrcode" :size="86" />
+      <div class="login-qr login-embed">
+        <div class="embed-head">
+          <div class="eyebrow">QQ 扫码登录</div>
+          <p class="note">使用手机 QQ 扫码，或在组件内直接登录 QQ 账号；组件只加载 QQ 官方登录页。</p>
         </div>
-        <div class="qr-status">使用手机 QQ 扫描官方窗口中的二维码</div>
-        <button class="btn primary" :disabled="webLoginLoading" @click="submitWebLogin()">
-          <AppIcon name="login" :size="15" />
-          {{ webLoginLoading ? '请在官方窗口中完成扫码…' : '打开官方扫码窗口' }}
-        </button>
-        <p class="note" style="text-align: center; max-width: 270px">
-          只加载 QQ 官方登录组件，不加载完整网页。扫码确认后应用自动读取登录态并加密保存。
-        </p>
+        <div class="embed-frame">
+          <webview
+            :key="reloadKey"
+            :src="XLOGIN_URL"
+            partition="lychee-xlogin"
+            allowpopups
+            @dom-ready="startEmbedLogin()"
+          />
+        </div>
+        <div v-if="embedFailed" class="embed-retry">
+          <button class="btn ghost small" @click="reloadEmbed()">重新加载登录组件</button>
+        </div>
       </div>
 
       <div class="login-body">
         <div class="eyebrow">Sign in</div>
         <h1>登录 QQ 音乐</h1>
         <p>
-          登录由 QQ 官方扫码窗口完成，可处理设备锁与安全验证。若窗口无法使用，可展开下方的
+          登录组件内嵌在左侧，可处理设备锁与安全验证。若组件无法使用，可展开下方的
           Cookie 兜底入口；凭证会经 <span class="mono">safeStorage</span> 加密后写入本机用户目录。
         </p>
 

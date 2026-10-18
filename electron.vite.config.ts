@@ -16,6 +16,6 @@ export default defineConfig({
         '@shared': resolve('src/shared')
       }
     },
-    plugins: [vue()]
+    plugins: [vue({ template: { compilerOptions: { isCustomElement: (tag) => tag === 'webview' } } })]
   }
 })

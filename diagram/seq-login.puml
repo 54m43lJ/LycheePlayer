@@ -6,14 +6,14 @@ actor 用户 as U
 participant "登录页\n(renderer)" as UI
 participant "ipc.ts\n(main)" as IPC
 participant "api/web-login.ts\n(main)" as WL
-participant "登录窗口\n官方 xlogin 组件" as XW
+participant "登录页内嵌 webview\n官方 xlogin 组件" as XW
 participant "上游 CGI" as UP
 participant "credential.ts\n(main)" as CR
 
-U -> UI : 点击“打开官方扫码窗口”
+U -> UI : 打开登录页\n（内嵌官方 xlogin 组件）
 UI -> IPC : invoke login.openWebLogin()
 IPC -> WL : openWebLogin()
-WL -> XW : 打开 xlogin 组件\n（独立内存 session，仅 QQ 域名）
+WL -> XW : 监听 webview 导航\n（独立内存 session，仅 QQ 域名）
 U -> XW : 扫码并确认
 XW -> XW : login_jump 写入 p_skey 等 Cookie
 
@@ -30,7 +30,7 @@ IPC -->> UI : push login:status { ok }
 IPC -->> UI : { ok:true, data: AuthStatus }
 UI -> UI : 跳转首页
 
-break 超时（5 分钟）或窗口被关闭
+break 超时（5 分钟）
   WL --> IPC : AUTH_EXPIRED
   IPC -->> UI : { ok:false }
 end
