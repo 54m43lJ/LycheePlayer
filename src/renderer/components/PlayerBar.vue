@@ -10,7 +10,7 @@ import { formatDuration, singerNames, songCover } from '../utils/format'
 
 const player = usePlayerStore()
 const ui = useUiStore()
-const { current, status, volume, mode, quality, positionMs, durationMs, progress } = storeToRefs(player)
+const { current, status, volume, mode, quality, requestedQuality, positionMs, durationMs, progress } = storeToRefs(player)
 
 const compactQuery = window.matchMedia('(max-width: 900px)')
 const compact = ref(compactQuery.matches)
@@ -39,6 +39,11 @@ const qualityOptions: Array<{ value: Quality; label: string }> = [
   { value: '320k', label: '高品质 320k' },
   { value: 'flac', label: '无损 FLAC' }
 ]
+
+const qualityLabel = computed(() => (quality.value === 'flac' ? 'FLAC' : quality.value.toUpperCase()))
+const requestedQualityLabel = computed(() =>
+  requestedQuality.value === 'flac' ? 'FLAC' : requestedQuality.value.toUpperCase()
+)
 
 function toggleQualityMenu(): void {
   qualityMenu.value = !qualityMenu.value
@@ -97,7 +102,10 @@ onBeforeUnmount(() => {
       <div class="player-now">
         <CoverArt :src="cover" image-class="player-cover" :icon-size="20" />
         <div class="player-text">
-          <div class="player-title" :title="current.name">{{ current.name }}</div>
+          <div class="player-title-row">
+            <div class="player-title" :title="current.name">{{ current.name }}</div>
+            <span class="quality-mark" title="实际音质（降档后）">{{ qualityLabel }}</span>
+          </div>
           <div class="player-artist">{{ singerNames(current) }} · {{ current.album.name }}</div>
         </div>
       </div>
@@ -154,14 +162,14 @@ onBeforeUnmount(() => {
 
       <div class="player-right">
         <div class="quality-wrap">
-          <button class="quality-chip" title="切换音质" @click.stop="toggleQualityMenu()">
-            {{ quality === 'flac' ? 'FLAC' : quality.toUpperCase() }}
+          <button class="quality-chip" title="音质（本次请求档位）" @click.stop="toggleQualityMenu()">
+            {{ requestedQualityLabel }}
           </button>
           <div v-if="qualityMenu" class="quality-menu">
             <button
               v-for="option in qualityOptions"
               :key="option.value"
-              :class="{ active: option.value === quality }"
+              :class="{ active: option.value === requestedQuality }"
               @click="chooseQuality(option.value)"
             >
               {{ option.label }}

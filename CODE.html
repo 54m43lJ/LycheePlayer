@@ -232,6 +232,7 @@ interface PlayerStore {
   readonly queue: Song[];
   readonly status: 'stopped' | 'playing' | 'paused';
   readonly quality: Quality;
+  readonly defaultQuality: Quality;
   playSong(song: Song): Promise&lt;void&gt;;
   playList(songs: Song[], startIndex?: number): void;
   toggle(): void;
@@ -246,7 +247,7 @@ interface PlayerStore {
 }
 </code></pre>
 <ul class="note">
-  <li><code>quality</code> 为实际生效音质；<code>setQuality</code> 强制下一次加载使用指定档位。</li>
+  <li><code>quality</code> 为实际生效音质；<code>defaultQuality</code> 为按登录态解析后的本次默认档（ARCHITECTURE §2 默认音质）；<code>setQuality</code> 强制下一次加载使用指定档位。</li>
   <li>HTML5 Audio 元素内嵌在本 store（未挂载 DOM 的 <code>new Audio()</code>）；<code>handleCommand</code> 消费 <code>player:command</code> 推送。</li>
 </ul>
 

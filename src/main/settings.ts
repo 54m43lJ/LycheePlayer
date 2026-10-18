@@ -7,8 +7,8 @@ import type { Quality, Settings } from '../shared/types'
 const QUALITIES: Quality[] = ['128k', '320k', 'flac']
 
 const DEFAULTS: Settings = {
-  defaultQuality: '320k',
-  closeToTray: false,
+  defaultQuality: 'auto',
+  closeToTray: true,
   theme: 'dark'
 }
 
@@ -22,9 +22,10 @@ function sanitize(value: unknown): Settings {
   if (!value || typeof value !== 'object') return { ...DEFAULTS }
   const raw = value as Record<string, unknown>
   return {
-    defaultQuality: QUALITIES.includes(raw.defaultQuality as Quality)
-      ? (raw.defaultQuality as Quality)
-      : DEFAULTS.defaultQuality,
+    defaultQuality:
+      raw.defaultQuality === 'auto' || QUALITIES.includes(raw.defaultQuality as Quality)
+        ? (raw.defaultQuality as Settings['defaultQuality'])
+        : DEFAULTS.defaultQuality,
     closeToTray:
       typeof raw.closeToTray === 'boolean' ? raw.closeToTray : DEFAULTS.closeToTray,
     theme: raw.theme === 'light' ? 'light' : 'dark'

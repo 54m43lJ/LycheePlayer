@@ -3,6 +3,7 @@ import { computed, ref, toRaw } from 'vue'
 import type { MprisCommand, PlayerState, Quality, Song } from '@shared/types'
 import { IpcCallError, describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
+import { useAuthStore } from './auth'
 import { useSettingsStore } from './settings'
 
 export type PlayMode = 'sequence' | 'repeat-all' | 'repeat-one' | 'shuffle'
@@ -18,6 +19,7 @@ const MODES: PlayMode[] = ['sequence', 'repeat-all', 'repeat-one', 'shuffle']
 
 export const usePlayerStore = defineStore('player', () => {
   const settings = useSettingsStore()
+  const auth = useAuthStore()
   const toast = useToast()
 
   const audio = new Audio()
@@ -44,6 +46,13 @@ export const usePlayerStore = defineStore('player', () => {
     if (!Number.isFinite(value)) return 0.8
     return Math.min(1, Math.max(0, value))
   }
+
+  /** 默认音质：auto 时按登录态取档——已登录默认无损（降档链兜底），未登录 320k。 */
+  const defaultQuality = computed<Quality>(() => {
+    const pref = settings.settings.defaultQuality
+    if (pref !== 'auto') return pref
+    return auth.loggedIn ? 'flac' : '320k'
+  })
 
   function statePayload(): PlayerState {
     return {
@@ -116,7 +125,7 @@ export const usePlayerStore = defineStore('player', () => {
     sendState()
 
     try {
-      const qualityToUse = forcedQuality ?? settings.settings.defaultQuality
+      const qualityToUse = forcedQuality ?? defaultQuality.value
       requestedQuality.value = qualityToUse
       const results = unwrap(await window.qqy.song.getUrls([song.songMid], qualityToUse))
       const result = results.find((item) => item.songMid === song.songMid) ?? results[0]
@@ -265,7 +274,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function applySettings(): void {
-    requestedQuality.value = settings.settings.defaultQuality
+    requestedQuality.value = defaultQuality.value
     if (!current.value) quality.value = requestedQuality.value
   }
 
@@ -302,6 +311,7 @@ export const usePlayerStore = defineStore('player', () => {
     mode,
     quality,
     requestedQuality,
+    defaultQuality,
     loading,
     canPlay,
     progress,

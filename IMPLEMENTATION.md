@@ -67,7 +67,7 @@ src/
 
 - `auth`：登录态、musicid、资料、`qr*`（仅实验性应用内二维码）、`expiresAtMs`、`canRefresh`。
 - `player`：队列、当前曲、状态、进度、时长、音量、播放模式、实际音质。
-- `settings`：默认音质、关闭到托盘；启动时加载。
+- `settings`：默认音质（`auto` 跟随登录态：登录 `flac` / 未登录 `320k`）、关闭到托盘；启动时加载。
 - `ui`：歌词面板开关、当前主题（由 settings 驱动）。
 - `volume` 存 `localStorage['qqy.volume']`；队列、播放模式、搜索历史、歌词缓存不做持久化。
 - `theme` 由 `settings.theme` 持久化；`data-theme` 写到 `<html>`，同时在 `localStorage['qqy.theme']` 缓存一份用于首屏避免闪烁。
@@ -78,7 +78,7 @@ src/
 
 | 文件 | 格式 |
 | --- | --- |
-| `settings.json` | `{ defaultQuality: '128k' \| '320k' \| 'flac', closeToTray: boolean, theme: 'dark' \| 'light' }`，默认 `320k` / `false` / `dark` |
+| `settings.json` | `{ defaultQuality: 'auto' \| '128k' \| '320k' \| 'flac', closeToTray: boolean, theme: 'dark' \| 'light' }`，默认 `auto`（已登录 `flac`、未登录 `320k`）/ `true` / `dark` |
 | `credential.bin` | `{ version: 1, encrypted: boolean, payload: base64 }` |
 
 - 能用 `safeStorage` 时 `payload` 是加密后的 JSON；Linux 无可用密钥环时 `encrypted: false`，保存为本机可读的 base64。这是 POC 限制，正式版应改用 keytar/libsecret 或明确提示。
@@ -244,7 +244,8 @@ oauth authorize:
 - 切歌时先 `status='stopped'`，避免 `audio.pause` 事件污染状态。
 - `timeupdate` 更新进度，MPRIS/`player:state` 节流约 900ms。
 - `player:state` 发送前用 `toRaw` 去 Vue Proxy，否则 Electron structured clone 会失败并让播放卡住。
-- 默认音质来自 settings；播放条的音质菜单调用 `setQuality(q)` 强制本次加载使用 q，实际音质看 `UrlResult.quality`。
+- 默认音质来自 settings：`auto` 时按登录态取档（已登录 `flac`，未登录 `320k`），登录态变化后下一次播放即按新档生效；设置页可固定具体档位。降档静默，不弹提示。
+- 播放条的音质菜单调用 `setQuality(q)` 强制本次加载使用 q，菜单显示本次请求档位；左侧标题尾部标注实际音质（`PlayerState.quality`），降档时左实际/右请求形成对照。实际音质一律看 `UrlResult.quality`。
 - 请求音质无权限时 API 内部降档；当前所有档位都无链接才报 `NO_STREAM`，批量中单曲无链接返回 `url: null`。
 - 音频加载/播放异常会 toast，状态置为 stopped/paused；不会自动跳下一首。
 - 音量存 `localStorage`；静音按钮恢复上一次音量。
@@ -290,7 +291,7 @@ oauth authorize:
 
 - 托盘图标 `resources/tray.png`；菜单：显示主窗口、播放/暂停、上一首、下一首、退出。
 - 托盘动作走 `player:command` 推送，不直接操作渲染进程状态。
-- `closeToTray` 默认 false；开启后窗口关闭只隐藏，退出只能从托盘或 `app.quit()`。
+- `closeToTray` 默认 true；开启后窗口关闭只隐藏，退出只能从托盘或 `app.quit()`。
 - 主窗口 1280×820，最小 280×440；`autoHideMenuBar: true`。
 - 响应式断点：`≤900px` 为统一窄屏模式（侧栏 64px 图标化、单列面板、音量改为点击弹层）；`≤560px` 为超窄模式（侧栏 56px、播放器双行、音质/主题选项单列）。
 - 播放器在 `≤560px` 使用两行 grid：第一行歌曲信息 + 音质/音量，第二行控制 + 进度；所有列使用 `minmax(0, …)`，不设置把窗口撑开的固定最小列宽。

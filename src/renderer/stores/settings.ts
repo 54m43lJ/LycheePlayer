@@ -4,7 +4,7 @@ import type { Settings } from '@shared/types'
 import { unwrap } from '../api'
 
 export const useSettingsStore = defineStore('settings', () => {
-  const settings = ref<Settings>({ defaultQuality: '320k', closeToTray: false, theme: 'dark' })
+  const settings = ref<Settings>({ defaultQuality: 'auto', closeToTray: true, theme: 'dark' })
   const loaded = ref(false)
 
   function applyTheme(): void {

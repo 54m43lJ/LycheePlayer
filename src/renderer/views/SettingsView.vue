@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { Quality, Settings } from '@shared/types'
+import type { Settings } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import { describeError } from '../api'
 import { useToast } from '../composables/toast'
@@ -28,7 +28,8 @@ const expiryText = computed(() => {
   })
 })
 
-const QUALITIES: Array<{ value: Quality; label: string; hint: string }> = [
+const QUALITIES: Array<{ value: Settings['defaultQuality']; label: string; hint: string }> = [
+  { value: 'auto', label: '自动', hint: '登录默认无损 · 未登录 320k' },
   { value: '128k', label: '标准', hint: '128 kbps MP3' },
   { value: '320k', label: '高品质', hint: '320 kbps MP3' },
   { value: 'flac', label: '无损', hint: 'FLAC · 需账号权限' }
@@ -39,12 +40,12 @@ const THEMES: Array<{ value: Settings['theme']; label: string; hint: string }> =
   { value: 'light', label: '浅色', hint: 'Light · Alabaster' }
 ]
 
-async function chooseQuality(quality: Quality): Promise<void> {
+async function chooseQuality(quality: Settings['defaultQuality']): Promise<void> {
   if (quality === settings.settings.defaultQuality) return
   try {
     await settings.update({ defaultQuality: quality })
     if (player.current) {
-      player.setQuality(quality)
+      player.setQuality(quality === 'auto' ? player.defaultQuality : quality)
     } else {
       player.applySettings()
     }
@@ -111,7 +112,7 @@ async function refreshSession(): Promise<void> {
         <section class="panel">
           <div class="panel-head">
             <h2>播放</h2>
-            <p>默认音质；无权限时上游会自动降一档重试。</p>
+            <p>默认音质；自动=已登录默认无损、未登录 320k，无权限时上游自动降档且不提示。</p>
           </div>
           <div class="panel-body">
             <div class="quality-options">

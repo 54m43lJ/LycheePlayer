@@ -98,7 +98,8 @@ export interface UrlResult {
 }
 
 export interface Settings {
-  defaultQuality: Quality
+  /** auto = 按登录态取默认：已登录 flac、未登录 320k。 */
+  defaultQuality: 'auto' | Quality
   closeToTray: boolean
   theme: 'dark' | 'light'
 }

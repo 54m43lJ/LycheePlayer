@@ -32,7 +32,8 @@
   <tr><td>单位与 ID 类型</td><td>时长一律毫秒（<code>number</code>）；上游数字 ID 一律转为 <code>string</code> 后跨 IPC 传输。</td></tr>
   <tr><td>凭证边界</td><td>凭证只存在于主进程 <code>credential.ts</code>；不跨 IPC 下发、不写入日志、不进入渲染进程。</td></tr>
   <tr><td>上游隔离</td><td>上游响应在 <code>api/</code> 层完成规范化，跨入 IPC 的数据只有 <a href="#s43">§4.3</a> 定义的形态；上游原始结构不透传。</td></tr>
-  <tr><td>音质降级</td><td>请求音质无权限时按 <code>flac → 320k → 128k</code> 单向降一档重试；降至 <code>128k</code> 仍无链接则报 <code>NO_STREAM</code>。</td></tr>
+  <tr><td>音质降级</td><td>请求音质无权限时按 <code>flac → 320k → 128k</code> 单向降一档重试；降至 <code>128k</code> 仍无链接则报 <code>NO_STREAM</code>。降档静默，不做提示；实际音质经 <code>UrlResult.quality</code> / <code>PlayerState.quality</code> 呈现。</td></tr>
+  <tr><td>默认音质</td><td><code>defaultQuality</code> 为 <code>auto</code> 时按登录态取档：已登录 <code>flac</code>，未登录 <code>320k</code>；设置页可固定具体档位。</td></tr>
   <tr><td>会话续期</td><td>登录凭证含 <code>refresh_token</code> 时，到期前 10 分钟或每 6 小时经 <code>music.login.LoginServer/Login</code> 换新 <code>musickey</code> 并写回密钥环；失败保留旧凭证等待重试。</td></tr>
   <tr><td>UI 调色板</td><td>深色 / 浅色两套 token 定义见 <a href="#s5">§5</a>；组件只使用语义变量，不直接写死颜色。</td></tr>
 </table>
@@ -257,7 +258,7 @@ interface UrlResult {
 }
 
 interface Settings {
-  defaultQuality: Quality;
+  defaultQuality: 'auto' | Quality;
   closeToTray: boolean;
   theme: 'dark' | 'light';
 }
