@@ -249,7 +249,7 @@ oauth authorize:
 
 ## 8. 播放、队列与音质
 
-- 使用一个未挂载到 DOM 的 `new Audio()`，`preload='auto'`，`autoplay-policy=no-user-gesture-required`。
+- `AudioEngine`（`src/renderer/audio/engine.ts`）封装未挂载到 DOM 的 `new Audio()`，`preload='auto'`；播放器 store 只依赖接口，替换引擎时队列与状态机不动。主进程设置 `autoplay-policy=no-user-gesture-required`。
 - 每次加载用自增 token 防竞态；过期的 `getUrls` 结果直接丢弃。
 - 队列不持久化；播放模式默认 `sequence`，可切换 `repeat-all`/`repeat-one`/`shuffle`。
 - `ended`：单曲循环 seek(0)+resume；否则 `next(auto)`；顺序播放在队尾停止，手动下一首回到队首。

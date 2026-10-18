@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, toRaw } from 'vue'
 import type { MprisCommand, PlayerState, Quality, Song } from '@shared/types'
 import { IpcCallError, describeError, unwrap } from '../api'
+import { createAudioEngine } from '../audio/engine'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from './auth'
 import { useSettingsStore } from './settings'
@@ -22,9 +23,6 @@ export const usePlayerStore = defineStore('player', () => {
   const auth = useAuthStore()
   const toast = useToast()
 
-  const audio = new Audio()
-  audio.preload = 'auto'
-
   const current = ref<Song | null>(null)
   const queue = ref<Song[]>([])
   const index = ref(-1)
@@ -39,8 +37,6 @@ export const usePlayerStore = defineStore('player', () => {
 
   let loadToken = 0
   let lastSentAt = 0
-
-  audio.volume = volume.value
 
   function clampVolume(value: number): number {
     if (!Number.isFinite(value)) return 0.8
@@ -77,43 +73,42 @@ export const usePlayerStore = defineStore('player', () => {
     if (Date.now() - lastSentAt >= 900) sendState()
   }
 
-  function updatePosition(): void {
-    positionMs.value = Number.isFinite(audio.currentTime) ? audio.currentTime * 1000 : 0
-    sendStateThrottled()
-  }
-
-  audio.addEventListener('timeupdate', updatePosition)
-  audio.addEventListener('durationchange', () => {
-    if (Number.isFinite(audio.duration) && audio.duration > 0) {
-      durationMs.value = audio.duration * 1000
-    }
-  })
-  audio.addEventListener('play', () => {
-    if (status.value !== 'playing') {
-      status.value = 'playing'
-      sendState()
-    }
-  })
-  audio.addEventListener('pause', () => {
-    if (status.value === 'playing') {
+  const engine = createAudioEngine({
+    onTimeUpdate(position) {
+      positionMs.value = position
+      sendStateThrottled()
+    },
+    onDurationChange(duration) {
+      durationMs.value = duration
+    },
+    onPlay() {
+      if (status.value !== 'playing') {
+        status.value = 'playing'
+        sendState()
+      }
+    },
+    onPause() {
+      if (status.value === 'playing') {
+        status.value = 'paused'
+        sendState()
+      }
+    },
+    onEnded() {
+      if (mode.value === 'repeat-one') {
+        seek(0)
+        void resume()
+        return
+      }
+      void next(true)
+    },
+    onError() {
+      if (!current.value || !engine.sourceUrl) return
+      toast.error('音频加载失败，可能链接已过期')
       status.value = 'paused'
       sendState()
     }
   })
-  audio.addEventListener('ended', () => {
-    if (mode.value === 'repeat-one') {
-      seek(0)
-      void resume()
-      return
-    }
-    void next(true)
-  })
-  audio.addEventListener('error', () => {
-    if (!current.value || !audio.src) return
-    toast.error('音频加载失败，可能链接已过期')
-    status.value = 'paused'
-    sendState()
-  })
+  engine.setVolume(volume.value)
 
   async function loadAndPlay(song: Song, forcedQuality?: Quality): Promise<void> {
     const token = ++loadToken
@@ -135,9 +130,7 @@ export const usePlayerStore = defineStore('player', () => {
       if (token !== loadToken) return
 
       quality.value = result.quality
-      audio.src = result.url
-      audio.load()
-      await audio.play()
+      await engine.loadAndPlay(result.url)
       status.value = 'playing'
       sendState()
     } catch (err) {
@@ -179,7 +172,7 @@ export const usePlayerStore = defineStore('player', () => {
       return
     }
     try {
-      await audio.play()
+      await engine.play()
       status.value = 'playing'
       sendState()
     } catch {
@@ -188,7 +181,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function pause(): void {
-    audio.pause()
+    engine.pause()
     status.value = 'paused'
     sendState()
   }
@@ -219,7 +212,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
     status.value = 'stopped'
     positionMs.value = durationMs.value
-    audio.pause()
+    engine.pause()
     sendState()
   }
 
@@ -243,16 +236,14 @@ export const usePlayerStore = defineStore('player', () => {
     if (!current.value) return
     const max = Math.max(0, durationMs.value || current.value.durationMs)
     const nextPosition = Math.min(max, Math.max(0, targetMs))
-    if (Number.isFinite(audio.duration) && audio.duration > 0) {
-      audio.currentTime = nextPosition / 1000
-    }
+    engine.seek(nextPosition)
     positionMs.value = nextPosition
     sendState()
   }
 
   function setVolume(value: number): void {
     volume.value = clampVolume(value)
-    audio.volume = volume.value
+    engine.setVolume(volume.value)
     localStorage.setItem('lychee.volume', String(volume.value))
   }
 

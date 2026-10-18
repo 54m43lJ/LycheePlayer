@@ -6,7 +6,7 @@ skinparam shadowing false
 package "renderer（Vue 3 SPA）" {
   [views\n页面与播放条] as V
   [stores（Pinia）\nplayer / auth / settings / ui] as ST
-  [HTML5 Audio\n（player store 内置）] as AU
+  [AudioEngine\n（audio/engine.ts）] as AU
 }
 
 package "preload" {

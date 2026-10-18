@@ -47,8 +47,10 @@
 │       ├── api.ts                             IpcResult 解包与错误文案
 │       ├── utils/                             LRC 解析、格式化
 │       ├── composables/                       歌词、Toast
+│       ├── audio/
+│       │   └── <a href="#c316">engine.ts</a>                 AudioEngine 接口 + HTML5 Audio 实现
 │       └── stores/
-│           ├── <a href="#c316">player.ts</a>                     播放器状态
+│           ├── <a href="#c317">player.ts</a>                     播放器状态
 │           └── auth.ts / settings.ts / ui.ts
 ├── ARCHITECTURE.html
 ├── CODE.html
@@ -225,7 +227,34 @@ interface TrayActions {
   <li>经 contextBridge 暴露唯一命名空间 <code>window.lychee</code>，其类型面即 ARCHITECTURE §4.1。</li>
 </ul>
 
-<h3 id="c316">3.16 src/renderer/stores/player.ts</h3>
+<h3 id="c316">3.16 src/renderer/audio/engine.ts</h3>
+<pre><code>export interface AudioEngineHandlers {
+  onTimeUpdate(positionMs: number): void;
+  onDurationChange(durationMs: number): void;
+  onPlay(): void;
+  onPause(): void;
+  onEnded(): void;
+  onError(): void;
+}
+
+export interface AudioEngine {
+  loadAndPlay(url: string): Promise&lt;void&gt;;
+  play(): Promise&lt;void&gt;;
+  pause(): void;
+  seek(positionMs: number): void;
+  setVolume(volume: number): void;
+  readonly positionMs: number;
+  readonly sourceUrl: string | null;
+}
+
+export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine;
+</code></pre>
+<ul class="note">
+  <li>渲染进程唯一直接持有 HTML5 Audio 的模块（未挂载 DOM，`preload=auto`）；player store 只通过接口操作。</li>
+  <li>替换为 mpv 等引擎时实现同一接口，事件回调与命令面不变。</li>
+</ul>
+
+<h3 id="c317">3.17 src/renderer/stores/player.ts</h3>
 <pre><code>export function usePlayerStore(): PlayerStore;
 
 interface PlayerStore {
@@ -249,7 +278,7 @@ interface PlayerStore {
 </code></pre>
 <ul class="note">
   <li><code>quality</code> 为实际生效音质；<code>defaultQuality</code> 为按登录态解析后的本次默认档（ARCHITECTURE §2 默认音质）；<code>setQuality</code> 强制下一次加载使用指定档位。</li>
-  <li>HTML5 Audio 元素内嵌在本 store（未挂载 DOM 的 <code>new Audio()</code>）；<code>handleCommand</code> 消费 <code>player:command</code> 推送。</li>
+  <li>音频操作经 <code>AudioEngine</code>（§3.16）；<code>handleCommand</code> 消费 <code>player:command</code> 推送。</li>
 </ul>
 
 <h2 id="c4">4. Call stack tree</h2>
@@ -275,10 +304,10 @@ interface PlayerStore {
 <pre><code>stores/player::playSong(song)
 ├── window.lychee.song.getUrls([song.songMid], requestedQuality)   // settings 默认音质或播放条强制档
 ├── 判断 url === null → 提示 NO_STREAM 后返回
-├── audio::play(url)                                // store 内嵌的 HTML5 Audio 元素
-├── audio 事件 timeupdate / ended → send player:state
+├── audio/engine::loadAndPlay(url)                  // AudioEngine 接口，当前为 HTML5 Audio 实现
+├── AudioEngine 事件 onTimeUpdate / onEnded → send player:state
 │   └── integration/mpris::publishState(state)
-└── ended → queue 取下一曲 → stores/player::playSong(next)
+└── 事件 onEnded → queue 取下一曲 → stores/player::playSong(next)
 </code></pre>
 <ul class="note">
   <li>音频流由渲染进程直接加载，主进程只经手链接字符串。</li>

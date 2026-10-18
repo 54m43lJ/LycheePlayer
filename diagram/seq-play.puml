@@ -4,7 +4,7 @@ skinparam defaultTextAlignment center
 
 actor 用户 as U
 participant "playerStore\n(renderer)" as S
-participant "HTML5 Audio\nplayer store 内置" as A
+participant "AudioEngine\n(audio/engine.ts)" as A
 participant "ipc.ts\n(main)" as IPC
 participant "api/song.ts\n(main)" as SG
 participant "上游 CGI" as UP
@@ -24,7 +24,7 @@ end
 
 SG --> IPC : UrlResult[]
 IPC --> S : { ok:true }
-S -> A : play(url)
+S -> A : loadAndPlay(url)
 A --> S : timeupdate / ended
 S -> IPC : send player:state
 IPC -> IPC : integration/mpris.publishState(state)
