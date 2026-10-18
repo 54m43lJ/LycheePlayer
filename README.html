@@ -41,7 +41,7 @@
   <tr><th>层次</th><th>选型</th></tr>
   <tr><td>桌面壳</td><td>Electron</td></tr>
   <tr><td>前端</td><td>Vue 3 + TypeScript + Vite + Pinia + Vue Router</td></tr>
-  <tr><td>API 层</td><td>Electron 主进程内嵌 Node 版 QQ 音乐接口服务（参考 jsososo/QQMusicApi 的请求实现），独立模块隔离接口细节</td></tr>
+  <tr><td>API 层</td><td>自研 Node 版 QQ 音乐接口模块（仅参考 jsososo/QQMusicApi 的请求行为，不引入其代码与依赖），独立模块隔离接口细节</td></tr>
   <tr><td>播放引擎</td><td>HTML5 Audio 起步，必要时引入 libmpv（参考 EchoMusic 的 napi 内嵌方案）</td></tr>
   <tr><td>歌词</td><td>LRC 解析渲染起步；逐字歌词参考 jixunmoe-go/qrc 做 QRC 解密</td></tr>
   <tr><td>系统集成</td><td>MPRIS（mpris-service / dbus）、系统托盘、密钥环存凭证（keytar 或 safeStorage）</td></tr>
