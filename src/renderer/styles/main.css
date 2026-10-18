@@ -1022,48 +1022,18 @@ a {
   box-shadow: var(--shadow);
 }
 
-.login-qr {
+/* 登录页宽版：webview 占满整页宽度，仅下方保留 Cookie 折叠面板 */
+.login-wide {
+  width: min(1080px, 100%);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
-  padding: 34px 26px;
-  border-right: 1px solid var(--border);
-  background:
-    radial-gradient(420px 240px at 50% 0%, var(--hero-glow), transparent 70%),
-    var(--bg-elev);
-}
-
-.qr-frame {
-  position: relative;
-  display: grid;
-  place-items: center;
-  width: 218px;
-  height: 218px;
+  gap: 12px;
   padding: 12px;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.35);
-}
-
-/* 登录组件内嵌：官方 xlogin 页面直接嵌入登录卡片 */
-.embed-head {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  text-align: center;
-}
-
-.embed-head .note {
-  margin: 0;
-  max-width: 300px;
 }
 
 .embed-frame {
   width: 100%;
-  height: 560px;
+  height: clamp(480px, calc(100vh - var(--player-height) - 240px), 840px);
   border: 1px solid var(--border);
   border-radius: 14px;
   overflow: hidden;
@@ -1079,41 +1049,6 @@ a {
 .embed-retry {
   display: flex;
   justify-content: center;
-}
-
-.login-body {
-  padding: 32px 32px 30px;
-}
-
-.login-body h1 {
-  margin: 0 0 8px;
-  font-size: 26px;
-  letter-spacing: -0.02em;
-}
-
-.login-body > p {
-  margin: 0 0 22px;
-  color: var(--muted);
-  font-size: 13px;
-  line-height: 1.7;
-}
-
-.login-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin: 22px 0 16px;
-  color: var(--faint);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-}
-
-.login-divider::before,
-.login-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--border);
 }
 
 .cookie-box summary {
@@ -1914,16 +1849,6 @@ a {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .login-qr {
-    border-right: 0;
-    border-bottom: 1px solid var(--border);
-    padding: 26px 22px;
-  }
-
-  .login-body {
-    padding: 26px 26px 28px;
-  }
-
   .settings-grid {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -2083,21 +2008,6 @@ a {
 
   .playlist-actions {
     flex-wrap: wrap;
-  }
-
-  .login-qr {
-    padding: 20px 14px;
-  }
-
-  .login-body {
-    padding: 20px 18px 24px;
-  }
-
-  .qr-frame,
-  .qr-placeholder {
-    width: min(190px, 100%);
-    height: auto;
-    aspect-ratio: 1;
   }
 
   .quality-options,

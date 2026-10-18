@@ -6,7 +6,6 @@ import { describeError } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { XLOGIN_URL } from '@shared/xlogin'
-
 const auth = useAuthStore()
 const router = useRouter()
 const toast = useToast()
@@ -75,65 +74,44 @@ function reloadEmbed(): void {
       </div>
     </section>
 
-    <section v-else class="login-card">
-      <div class="login-qr login-embed">
-        <div class="embed-head">
-          <div class="eyebrow">QQ 扫码登录</div>
-          <p class="note">使用手机 QQ 扫码，或在组件内直接登录 QQ 账号；组件只加载 QQ 官方登录页。</p>
-        </div>
-        <div class="embed-frame">
-          <webview
-            :key="reloadKey"
-            :src="XLOGIN_URL"
-            partition="lychee-xlogin"
-            allowpopups
-            @dom-ready="startEmbedLogin()"
+    <section v-else class="login-card login-wide">
+      <div class="embed-frame">
+        <webview
+          :key="reloadKey"
+          :src="XLOGIN_URL"
+          partition="lychee-xlogin"
+          allowpopups
+          @dom-ready="startEmbedLogin()"
+        />
+      </div>
+      <div v-if="embedFailed" class="embed-retry">
+        <button class="btn ghost small" @click="reloadEmbed()">重新加载登录组件</button>
+      </div>
+
+      <details class="cookie-box">
+        <summary>使用 Cookie 登录（兜底）</summary>
+        <p class="cookie-hint">
+          在浏览器打开 <span class="mono">y.qq.com</span> 并登录，开发者工具 → Network →
+          任选一个请求 → 复制 Request Headers 里的完整 Cookie，粘贴到下框。
+        </p>
+        <div class="field">
+          <textarea
+            v-model="cookie"
+            class="textarea"
+            spellcheck="false"
+            placeholder="uin=o0123456789; qm_keyst=...; qqmusic_key=..."
           />
         </div>
-        <div v-if="embedFailed" class="embed-retry">
-          <button class="btn ghost small" @click="reloadEmbed()">重新加载登录组件</button>
-        </div>
-      </div>
-
-      <div class="login-body">
-        <div class="eyebrow">Sign in</div>
-        <h1>登录 QQ 音乐</h1>
-        <p>
-          登录组件内嵌在左侧，可处理设备锁与安全验证。若组件无法使用，可展开下方的
-          Cookie 兜底入口；凭证会经 <span class="mono">safeStorage</span> 加密后写入本机用户目录。
-        </p>
-
-        <details class="cookie-box">
-          <summary>使用 Cookie 登录（兜底）</summary>
-          <p class="cookie-hint">
-            在浏览器打开 <span class="mono">y.qq.com</span> 并登录，开发者工具 → Network →
-            任选一个请求 → 复制 Request Headers 里的完整 Cookie，粘贴到下框。
-          </p>
-          <div class="field">
-            <textarea
-              v-model="cookie"
-              class="textarea"
-              spellcheck="false"
-              placeholder="uin=o0123456789; qm_keyst=...; qqmusic_key=..."
-            />
-          </div>
-          <button
-            class="btn primary"
-            style="margin-top: 10px"
-            :disabled="cookieSubmitting || !cookie.trim()"
-            @click="submitCookie()"
-          >
-            <AppIcon name="login" :size="15" />
-            {{ cookieSubmitting ? '验证中…' : '使用 Cookie 登录' }}
-          </button>
-        </details>
-
-        <div class="login-divider">POC 说明</div>
-        <p class="note" style="margin: 0">
-          本项目为非官方客户端，仅调用官方公开接口。VIP / 数字专辑内容只通过你本人的登录凭证获取，
-          不实现任何绕过授权的能力。上游接口随时可能变更。
-        </p>
-      </div>
+        <button
+          class="btn primary"
+          style="margin-top: 10px"
+          :disabled="cookieSubmitting || !cookie.trim()"
+          @click="submitCookie()"
+        >
+          <AppIcon name="login" :size="15" />
+          {{ cookieSubmitting ? '验证中…' : '使用 Cookie 登录' }}
+        </button>
+      </details>
     </section>
   </div>
 </template>
