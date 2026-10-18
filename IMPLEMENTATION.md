@@ -340,6 +340,7 @@ oauth authorize:
 | 其他异常 | `INTERNAL` |
 
 - 日志不输出凭证、Cookie、完整播放链接；登录诊断只输出 cookie 名称与长度、阶段状态。
+- 密钥环不可用时登录直接返回 `INTERNAL`（message 指明密钥环），凭证保存拒绝明文。
 - `check_sig` 失败时 message 里可能包含 `p_skey_forbid` 与 cookie 名列表；不含值。
 
 ## 12. 已知限制与未验证项

@@ -45,7 +45,7 @@
   <tr><td>API 层</td><td>自研 Node 版 QQ 音乐接口模块（仅参考 jsososo/QQMusicApi 的请求行为，不引入其代码与依赖），独立模块隔离接口细节</td></tr>
   <tr><td>播放引擎</td><td>HTML5 Audio；未来可能引入 libmpv 等更原生的播放引擎（参考 EchoMusic 的 napi 内嵌方案）</td></tr>
   <tr><td>歌词</td><td>LRC 解析渲染起步；逐字歌词参考 jixunmoe-go/qrc 做 QRC 解密</td></tr>
-  <tr><td>系统集成</td><td>MPRIS（mpris-service / dbus）、系统托盘、密钥环存凭证（keytar 或 safeStorage）</td></tr>
+  <tr><td>系统集成</td><td>MPRIS（mpris-service / dbus）、系统托盘、系统密钥环存凭证（safeStorage / libsecret）</td></tr>
   <tr><td>打包分发</td><td>electron-builder：deb / rpm / AppImage / pacman，x64 + arm64</td></tr>
 </table>
 

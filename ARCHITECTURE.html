@@ -57,7 +57,7 @@
   <li>登录失败时 <code>login:status</code> 的 <code>stage</code> 为 <code>failed</code>，<code>message</code> 携带可展示的错误摘要（不含凭证）。</li>
   <li>登录组件使用独立分区 session（<code>lychee-xlogin</code>），登录发起前与结束/超时后各清理一次；只放行 QQ 域名导航与子窗口，5 分钟超时按失败处理。</li>
   <li>主进程每秒轮询 session Cookie，同时看到 <code>p_skey</code> 与 <code>p_uin</code>/<code>pt4_token</code>/<code>uin</code> 才进入换证，避免把未完成登录误判为成功。</li>
-  <li>凭证在主进程内直接入库，任何状态下都不跨 IPC 下发；存储介质见 PENDING #10。</li>
+  <li>凭证在主进程内直接入库，任何状态下都不跨 IPC 下发；仅当系统密钥环可用时保存（<a href="#s2">§2</a> 凭证边界）。</li>
 </ul>
 
 <h3>3.3 播放单曲</h3>
