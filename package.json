@@ -4,7 +4,7 @@
   "description": "第三方 QQ 音乐 Linux 客户端（POC 验证版本）",
   "main": "./out/main/index.js",
   "author": "qqy contributors",
-  "license": "Apache-2.0",
+  "license": "GPL-3.0-only",
   "private": true,
   "scripts": {
     "dev": "ELECTRON_OZONE_PLATFORM_HINT=auto electron-vite dev",
