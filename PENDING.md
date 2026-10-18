@@ -4,13 +4,11 @@
 
 ## 10. 凭证存储的最终方案与文档表述
 
-POC 实现与现有文档表述不一致，需要拍板口径：
-
-- **文档现状**：ARCHITECTURE TERMS / §2 会话续期、README §2 均写「凭证存入系统密钥环」。
-- **实现现状**：凭证落在 `~/.config/lychee-player/credential.bin`（`{ version, encrypted, payload }`）；`safeStorage` 可用时加密（Linux 下 safeStorage 后端就是 libsecret / kwallet 密钥环），**不可用时退化为 base64 明文**（权限 0600）。POC.md 已列为已知限制。
-- **默认**：追认 POC 实现，文档措辞统一改为「safeStorage 加密落盘；无密钥环时明文兜底（已知限制）」
-- **备选**：正式版引入 keytar / libsecret 硬依赖，无密钥环时拒绝保存并提示（打包发布前需定）
-- 关联：`general-architecture.puml` / `seq-login.puml` 中的「系统密钥环」字样已临时改为中性表述，拍板后按结论回填
+- **实测（Hyprland + gnome-keyring 运行中）**：Electron 默认后端探测失败，`safeStorage.isEncryptionAvailable() === false`，凭证以 base64 明文落盘；显式 `--password-store=gnome-libsecret` 后返回 true 且加解密往返成功。`libsecret` 已内置于 Electron（safeStorage → Chromium OSCrypt → libsecret / D-Bus Secret Service），无需引入原生依赖。
+- 待拍板：
+  - **固定后端 + 拒绝明文**（推荐）：启动参数固定 `gnome-libsecret`（对 gnome-keyring 与 ksecretsservice 均有效）；无可用密钥环时拒绝保存并提示，旧明文凭证自动重加密
+  - 维持现状：明文兜底，文档标注限制
+- 默认：固定后端 + 拒绝明文；文档措辞回填「系统密钥环」（ARCHITECTURE TERMS/§2、README §2 恢复准确）。
 
 ## 12. AudioEngine 抽象的去留
 
