@@ -131,10 +131,19 @@
   <li>应用读取登录视图的 session Cookie，必须同时看到 <code>p_skey</code> 与 <code>p_uin</code> / <code>pt4_token</code> / <code>uin</code> 之一，才进入 OAuth 换证，避免把未完成登录误判为成功。</li>
   <li>OAuth 授权成功后，<code>QQConnectLogin.LoginServer/QQLogin</code> 返回 <code>musickey</code> 与续期字段；应用解析为 <code>Credential</code> 并在主进程入库。</li>
   <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；登录视图在结束或超时后清理。</li>
-  <li>应用内二维码备选路径（<code>ptqrshow</code> / <code>ptqrlogin</code> / <code>check_sig</code>）不属于当前默认登录契约。</li>
+  <li>扫码登录只走内嵌官方 xlogin 组件；Cookie 登录是兜底路径，见 <a href="#p3-2">§3.2</a>。</li>
 </ul>
 
-<h3 id="p3-2">3.2 播放链接协议</h3>
+<h3 id="p3-2">3.2 Cookie 登录协议</h3>
+<div class="diagram"><img src="diagram/prov-cookie.svg" alt="Cookie 登录上游协议时序图"></div>
+<ul class="note">
+  <li>Cookie 至少需要有效的 <code>uin</code> 与 <code>qm_keyst</code>；缺失或格式无效直接返回 <code>AUTH_EXPIRED</code>。</li>
+  <li>应用用该凭证请求用户资料接口，<code>g_tk</code> 由 <code>hash33(musickey, 5381)</code> 计算；<code>code === 0</code> 视为登录态有效。</li>
+  <li>验证成功后生成 <code>Credential</code>，保存在主进程；不保存浏览器 Cookie 原文。</li>
+  <li>验证失败返回 <code>AUTH_EXPIRED</code>，提示用户重新获取 Cookie。</li>
+</ul>
+
+<h3 id="p3-3">3.3 播放链接协议</h3>
 <div class="diagram"><img src="diagram/prov-play.svg" alt="播放链接上游协议时序图"></div>
 <ul class="note">
   <li>先通过 <code>get_song_detail_yqq</code> 获取 <code>media_mid</code>，再按请求音质拼出 vkey 的 <code>filename</code>。</li>
@@ -487,6 +496,73 @@ interface QqLoginPayload {
   <li>内部目标模型 <code>Song</code> / <code>PlaylistMeta</code> / <code>PlaylistDetail</code> / <code>SearchResult</code> / <code>Lyric</code> / <code>UserProfile</code> / <code>UrlResult</code> 的定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；<code>Credential</code> 的字段定义见 <a href="#p4-3">§4.3</a>。</li>
   <li><code>mediaMid</code>、<code>guid</code> 与原始 <code>purl</code> 只在主进程 API 层内部存在，不进入 IPC 数据模型。</li>
   <li><code>PayInfo</code> 仅用于界面角标；实际可播性以 vkey 结果为准。</li>
+</ul>
+
+<h3 id="p4-4">4.4 MPRIS</h3>
+<p>
+应用通过会话总线暴露 <code>org.mpris.MediaPlayer2.lychee</code>；D-Bus 是这里的传输层，
+桌面环境作为调用方。以下为实际接线的协议子集。
+</p>
+<pre><code>interface OrgMprisMediaPlayer2 {
+  Identity: string;
+  CanQuit: boolean;
+  CanRaise: boolean;
+  Raise(): void;
+  Quit(): void;
+}
+
+interface OrgMprisMediaPlayer2Player {
+  PlaybackStatus: 'Playing' | 'Paused' | 'Stopped';
+  Metadata: MprisMetadata;
+  Position: number;
+  CanControl: boolean;
+  CanPlay: boolean;
+  CanPause: boolean;
+  CanSeek: boolean;
+  CanGoNext: boolean;
+  CanGoPrevious: boolean;
+
+  Play(): void;
+  Pause(): void;
+  PlayPause(): void;
+  Stop(): void;
+  Next(): void;
+  Previous(): void;
+  Seek(offset: number): void;
+  SetPosition(trackId: string, position: number): void;
+}
+
+interface MprisMetadata {
+  'mpris:trackid': string;
+  'mpris:length': number;
+  'mpris:artUrl': string;
+  'xesam:title': string;
+  'xesam:artist': string[];
+  'xesam:album': string;
+}
+</code></pre>
+<table>
+  <tr><th>字段</th><th>含义</th></tr>
+  <tr><td><code>Position</code></td><td>当前播放位置，单位微秒。</td></tr>
+  <tr><td><code>mpris:trackid</code></td><td>曲目对象路径：<code>/org/mpris/MediaPlayer2/track/{songMid}</code>。</td></tr>
+  <tr><td><code>mpris:length</code></td><td>曲目时长，单位微秒。</td></tr>
+  <tr><td><code>mpris:artUrl</code></td><td>专辑封面 URL。</td></tr>
+  <tr><td><code>xesam:title</code></td><td>歌曲名。</td></tr>
+  <tr><td><code>xesam:artist</code></td><td>歌手名数组。</td></tr>
+  <tr><td><code>xesam:album</code></td><td>专辑名。</td></tr>
+</table>
+<table>
+  <tr><th>对象</th><th>成员</th><th>行为</th></tr>
+  <tr><td>Root</td><td><code>Identity</code> / <code>CanQuit</code> / <code>CanRaise</code> / <code>Raise</code> / <code>Quit</code></td><td>应用名固定 <code>Lychee Player</code>；<code>Raise</code> 显示并聚焦主窗口；<code>Quit</code> 走正常退出生命周期。</td></tr>
+  <tr><td>Player</td><td><code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code></td><td>由渲染进程发布的 <code>player:state</code> 驱动；元数据仅在切歌时更新。</td></tr>
+  <tr><td>Player</td><td><code>Play</code> / <code>Pause</code> / <code>PlayPause</code> / <code>Next</code> / <code>Previous</code> / <code>Seek</code> / <code>SetPosition</code></td><td>转为内部 <code>MprisCommand</code> 推送回渲染进程执行；<code>Stop</code> 按暂停处理。</td></tr>
+</table>
+<ul class="note">
+  <li><code>Seek</code> / <code>SetPosition</code> 的偏移与目标位置均以微秒计；内部转换为毫秒后定位。</li>
+  <li>D-Bus / MPRIS 不可用时静默降级，不影响应用内播放；托盘不可用时同理。</li>
+  <li><code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code> 等属性未与应用播放状态同步，不属于本契约。</li>
+  <li>入站命令如何转成 <code>MprisCommand</code>、播放状态如何发布，见 <a href="CORE.html#c5-6">CORE §5.6</a>；类型定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
+  <li>可用 <code>playerctl -p lychee</code> 验证总线上暴露的成员。</li>
 </ul>
 
 </body>

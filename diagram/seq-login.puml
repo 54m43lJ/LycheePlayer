@@ -7,12 +7,11 @@ participant "Lychee Player" as APP
 participant "QQ 登录" as QQ
 
 U -> APP : 打开登录页
-APP -> QQ : 显示官方扫码组件
-U -> QQ : 扫码并确认
-QQ --> APP : 登录成功
-APP --> U : 进入已登录状态
-
-break 超时 / 失败
-  APP --> U : 提示重新登录
+alt 扫码登录（默认）
+  APP -> QQ : 启动官方 xlogin 登录\n（见 PROVIDER §3.1）
+  QQ --> APP : 登录成功
+else Cookie 登录（兜底）
+  U -> APP : 粘贴浏览器 Cookie\n（见 PROVIDER §3.2）
 end
+APP --> U : 进入已登录状态
 @enduml

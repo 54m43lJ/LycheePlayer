@@ -42,7 +42,7 @@
 │   │   │   ├── <a href="#c4-12">playlist.ts</a>              歌单
 │   │   │   ├── <a href="#c4-13">user.ts</a>                  用户资料
 │   │   │   ├── <a href="#c4-14">lyric.ts</a>                 歌词
-│   │   │   ├── <a href="#c4-15">login.ts</a>                 登录、续期与二维码
+│   │   │   ├── <a href="#c4-15">login.ts</a>                 登录与续期
 │   │   │   └── <a href="#c4-16">web-login.ts</a>             官方 xlogin 内嵌登录
 │   │   ├── integration/                      桌面集成
 │   │   │   ├── <a href="#c4-17">mpris.ts</a>                 MPRIS 服务
@@ -105,7 +105,7 @@
   <tr><th>约定</th><th>内容</th></tr>
   <tr>
     <td>IPC 通道命名</td>
-    <td>请求型为 <code>域.动作</code>（如 <code>song.getUrls</code>）；推送型为 <code>域:事件</code>（如 <code>player:state</code>、<code>login:status</code>）。</td>
+    <td>请求型为 <code>域.动作</code>（如 <code>song.getUrls</code>）；推送型为 <code>域:事件</code>（如 <code>player:state</code>、<code>player:command</code>）。</td>
   </tr>
   <tr>
     <td>信封</td>
@@ -144,6 +144,33 @@
     <td>签名块省略 import 语句（如 <code>electron</code> 的 <code>BrowserWindow</code>），实现时按需引入。</td>
   </tr>
 </table>
+
+<h3 id="c2-1">2.1 Engineering constants</h3>
+<table>
+  <tr><th>变量（建议命名）</th><th>用途</th><th>推荐值</th></tr>
+  <tr><td><code>UPSTREAM_TIMEOUT_MS</code></td><td>单次上游请求超时</td><td>15_000 ms</td></tr>
+  <tr><td><code>UPSTREAM_RETRY_ATTEMPTS</code></td><td>网络错误 / 瞬时繁忙的最大尝试次数</td><td>3</td></tr>
+  <tr><td><code>UPSTREAM_NETWORK_BACKOFF_MS</code></td><td>网络错误重试的基础退避</td><td>400 ms，指数退避</td></tr>
+  <tr><td><code>UPSTREAM_QUOTA_BACKOFF_MS</code></td><td>限流重试的基础退避</td><td>600 ms，指数退避</td></tr>
+  <tr><td><code>LOGIN_EMBED_TIMEOUT_MS</code></td><td>内嵌 xlogin 登录总超时</td><td>5 × 60_000 ms</td></tr>
+  <tr><td><code>LOGIN_COOKIE_POLL_MS</code></td><td>内嵌登录读取 session Cookie 的轮询间隔</td><td>1000 ms</td></tr>
+  <tr><td><code>LOGIN_EMBED_PARTITION</code></td><td>登录组件的独立 session 分区名</td><td><code>lychee-xlogin</code></td></tr>
+  <tr><td><code>SESSION_REFRESH_INTERVAL_MS</code></td><td>会话续期定时器间隔</td><td>30 × 60_000 ms</td></tr>
+  <tr><td><code>SESSION_REFRESH_AHEAD_MS</code></td><td>凭证到期前提前续期的窗口</td><td>10 × 60_000 ms</td></tr>
+  <tr><td><code>SESSION_REFRESH_FALLBACK_MS</code></td><td>凭证无到期时间时的续期间隔</td><td>6 × 60 × 60_000 ms</td></tr>
+  <tr><td><code>PLAYER_STATE_THROTTLE_MS</code></td><td>播放状态推送的节流窗口</td><td>900 ms</td></tr>
+  <tr><td><code>TOAST_DURATION_MS</code></td><td>Toast 自动消失时间</td><td>3600 ms</td></tr>
+  <tr><td><code>IPC_SONG_MIDS_MAX</code></td><td><code>song.getUrls</code> 单次批量上限</td><td>100</td></tr>
+  <tr><td><code>SEARCH_PAGE_NO_MAX</code></td><td><code>search.byType</code> 页码上限</td><td>100</td></tr>
+  <tr><td><code>SEARCH_PAGE_SIZE_DEFAULT</code></td><td>搜索每页默认条数</td><td>20</td></tr>
+  <tr><td><code>SEARCH_PAGE_SIZE_MAX</code></td><td>搜索每页最大条数</td><td>50</td></tr>
+  <tr><td><code>PLAYLIST_PAGE_SIZE</code></td><td>歌单上游单页条数</td><td>100</td></tr>
+  <tr><td><code>PLAYLIST_PAGE_MAX</code></td><td>歌单本地最大分页数</td><td>20</td></tr>
+</table>
+<ul class="note">
+  <li>名称是文档建议；代码中的字面量是运行时的操作来源，调整时以真实系统实测为准。</li>
+  <li>UI 视觉字面量（窗口尺寸、间距、字号等）记录在 <a href="USER.html#u5">USER §5</a>，不在此表。</li>
+</ul>
 
 <h2 id="c3">3. SBOM</h2>
 <p><a href="#top">↑</a></p>
@@ -259,16 +286,6 @@ export interface Settings {
   theme: 'dark' | 'light';
 }
 
-export type QrStatus = {
-  stage: 'waiting' | 'scanned' | 'ok' | 'expired' | 'failed';
-  message?: string;
-};
-
-export interface QrSession {
-  imageDataUrl: string;
-  expiresAtMs: number;
-}
-
 export interface AuthStatus {
   loggedIn: boolean;
   musicid: string | null;
@@ -301,20 +318,17 @@ export interface EmbedRect {
   <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；其续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态。</li>
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
   <li><code>PlaylistDetail.songs</code> 是歌单当前已载入的歌曲；上游分页补齐后一次性返回。</li>
-  <li><code>QrStatus</code> / <code>QrSession</code> 服务于应用内二维码备选路径；默认登录页使用内嵌 xlogin。</li>
 </ul>
 
 <h3 id="c4-2">4.2 src/shared/ipc.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export interface LycheeApi {
   login: {
-    createQrKey(): Promise&lt;IpcResult&lt;QrSession&gt;&gt;;
     getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     openWebLogin(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     refreshSession(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     logout(): Promise&lt;IpcResult&lt;null&gt;&gt;;
     setEmbedBounds(rect: EmbedRect | null): void;
-    onStatus(callback: (status: QrStatus) =&gt; void): () =&gt; void;
   };
   search: {
     byType(req: SearchRequest): Promise&lt;IpcResult&lt;SearchResult&gt;&gt;;
@@ -344,7 +358,6 @@ export interface EmbedRect {
 </code></pre>
 <table>
   <tr><th>方向</th><th>通道</th><th>载荷</th><th>说明</th></tr>
-  <tr><td>main → renderer</td><td><code>login:status</code></td><td><code>QrStatus</code></td><td>扫码登录状态推进。</td></tr>
   <tr><td>main → renderer</td><td><code>player:command</code></td><td><code>MprisCommand</code></td><td>MPRIS / 托盘反向播放控制命令。</td></tr>
   <tr><td>renderer → main</td><td><code>player:state</code></td><td><code>PlayerState</code></td><td>播放器状态发布，主进程转投 MPRIS。</td></tr>
 </table>
@@ -465,22 +478,13 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 </code></pre>
 
 <h3 id="c4-15">4.15 src/main/api/login.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export interface LoginEvents {
-  onStatus(status: QrStatus): void;
-  onCredential(credential: Credential): Promise&lt;void&gt;;
-}
-
-export function initLoginEvents(next: LoginEvents): void;
-export function stopPolling(): void;
-export function requestOAuthCodeWithCookies(jar: Record&lt;string, string&gt;): Promise&lt;string&gt;;
+<pre><code>export function requestOAuthCodeWithCookies(jar: Record&lt;string, string&gt;): Promise&lt;string&gt;;
 export function exchangeQqLoginCode(code: string): Promise&lt;Credential&gt;;
 export function refreshSession(): Promise&lt;Credential&gt;;
 export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;
-export function createQrKey(): Promise&lt;QrSession&gt;;
 export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
 </code></pre>
 <ul class="note">
-  <li><code>createQrKey</code> 为应用内二维码备选路径；默认登录页使用 <code>web-login</code> 的内嵌 xlogin。</li>
   <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
   <li><code>refreshSession</code> 用 <code>refresh_token</code> 换新 <code>musickey</code> 并写回凭证；<code>refreshIfNeeded</code> 按到期时间或时间间隔触发。</li>
 </ul>
@@ -500,6 +504,9 @@ export function openWebLogin(): Promise&lt;Credential&gt;;
 <pre><code>export function initMpris(onCommand: (command: MprisCommand) =&gt; void): void;
 export function publishState(state: PlayerState | null): void;
 </code></pre>
+<ul class="note">
+  <li>媒体控制协议定义见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>；命令接收后的分发与执行见 <a href="#c5-6">§5.6</a>。</li>
+</ul>
 
 <h3 id="c4-18">4.18 src/main/integration/tray.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export interface TrayActions {
@@ -565,7 +572,7 @@ export function destroyTray(): void;
 <pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、歌词面板与 Toast。
 </code></pre>
 <ul class="note">
-  <li>挂载时并行恢复登录态与设置，订阅 <code>login:status</code> 与 <code>player:command</code>；卸载时取消订阅。</li>
+  <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
   <li>监听路由变化并关闭歌词面板。</li>
 </ul>
 
@@ -629,15 +636,8 @@ interface AuthStore {
   readonly displayName: string;
   readonly expiresAtMs: number | null;
   readonly canRefresh: boolean;
-  readonly qrImage: string;
-  readonly qrStage: QrStatus['stage'] | null;
-  readonly qrLoading: boolean;
-  readonly qrError: string;
-  readonly qrExpiresAt: number;
 
   refresh(): Promise&lt;void&gt;;
-  startQrLogin(): Promise&lt;void&gt;;
-  handleQrStatus(status: QrStatus): void;
   loginWithCookie(cookie: string): Promise&lt;void&gt;;
   openWebLogin(): Promise&lt;void&gt;;
   refreshSession(): Promise&lt;void&gt;;
@@ -893,22 +893,23 @@ app::requestSingleInstanceLock()
 │           └── webContents.loadURL(XLOGIN_URL)
 ├── new ResizeObserver(views/LoginView::sendBounds)
 ├── window.addEventListener('scroll', views/LoginView::sendBounds, true)
-└── stores/auth::openWebLogin()
-    └── window.lychee.login.openWebLogin()
-        └── ipc::handle('login.openWebLogin') → api/web-login::openWebLogin()
-            ├── 判断 safeStorage.isEncryptionAvailable() === false → 拒绝登录
-            ├── api/web-login::runEmbedLogin()
-            │   ├── session.fromPartition('lychee-xlogin').clearStorageData()
-            │   ├── setInterval(api/web-login::finishFromCookies, 1000)
-            │   ├── setTimeout(api/web-login::fail, 5 * 60_000)
-            │   ├── 判断 Cookie 含 p_skey 且含 p_uin/pt4_token/uin
-            │   ├── api/login::requestOAuthCodeWithCookies(jar)
-            │   └── api/login::exchangeQqLoginCode(code)
-            └── credential::saveCredential(credential)
+└── views/LoginView::startEmbedLogin()
+    └── stores/auth::openWebLogin()
+        └── window.lychee.login.openWebLogin()
+            └── ipc::handle('login.openWebLogin') → api/web-login::openWebLogin()
+                ├── 判断 safeStorage.isEncryptionAvailable() === false → 拒绝登录
+                ├── api/web-login::runEmbedLogin()
+                │   ├── session.fromPartition('lychee-xlogin').clearStorageData()
+                │   ├── setInterval(api/web-login::finishFromCookies, 1000)
+                │   ├── setTimeout(api/web-login::fail, 5 * 60_000)
+                │   ├── 判断 Cookie 含 p_skey 且含 p_uin/pt4_token/uin
+                │   ├── api/login::requestOAuthCodeWithCookies(jar)
+                │   └── api/login::exchangeQqLoginCode(code)
+                └── credential::saveCredential(credential)
 </code></pre>
 <ul class="note">
   <li>登录视图为独立 session 分区的 <code>WebContentsView</code>；只放行 QQ 域名导航与子窗口，登录前后各清理一次。</li>
-  <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；渲染进程只收到 <code>login:status</code> 状态推进。</li>
+  <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；成功后 <code>startEmbedLogin</code> 跳转“我的歌单”，没有独立的状态推送。</li>
 </ul>
 
 <h3 id="c5-4">5.4 Cookie 登录（兜底）</h3>
@@ -923,6 +924,7 @@ app::requestSingleInstanceLock()
 </code></pre>
 <ul class="note">
   <li>Cookie 至少需要有效的 <code>uin</code> 与 <code>qm_keyst</code>；资料接口验证失败返回 <code>AUTH_EXPIRED</code>。</li>
+  <li>验证成功后 <code>submitCookie</code> 跳转“我的歌单”，凭证只保存在主进程。</li>
 </ul>
 
 <h3 id="c5-5">5.5 播放单曲</h3>

@@ -76,7 +76,7 @@
   <tr>
     <td>系统集成</td>
     <td>通过 MPRIS 暴露媒体控制；托盘菜单提供显示主窗口、播放/暂停、上一首、下一首、退出；关闭主窗口默认隐藏到托盘。</td>
-    <td><a href="USER.html#u4-1">USER §4.1</a> · <a href="USER.html#u5-4">§5.4</a></td>
+    <td><a href="PROVIDER.html#p4-4">PROVIDER §4.4</a> · <a href="USER.html#u5-4">USER §5.4</a></td>
   </tr>
   <tr>
     <td>外观</td>
@@ -89,30 +89,10 @@
     <td><a href="USER.html#u5-2-7">USER §5.2.7</a></td>
   </tr>
 </table>
-<h2 id="r3">3. 原型</h2>
-<p><a href="#top">↑</a></p>
-<p>
-总体布局示意（深色主题）。原型用于固定区域关系，不是像素级还原；各组件的视觉契约见
-<a href="USER.html#u5-2">USER §5.2</a>。
-</p>
-
-<div class="ui-proto-wrap">
-<div class="ui-proto u-shell u-shell-map">
-  <aside class="u-region u-region-side"><b>侧栏</b><span>品牌 · 导航 · 账号入口</span><a href="USER.html#u5-2-2">→ 侧栏</a></aside>
-  <main class="u-region u-region-main"><b>内容区</b><span>页面头部 / 标签 / 列表或卡片（随路由）</span><a href="USER.html#u5-2-8">→ 页面结构</a></main>
-  <footer class="u-region u-region-player"><b>播放条</b><span>常驻贴底</span><a href="USER.html#u5-2-3">→ 播放条</a></footer>
-  <div class="u-region u-region-overlay"><b>歌词面板</b><span>浮层，可关闭</span><a href="USER.html#u5-2-5">→ 歌词面板</a></div>
-</div>
-</div>
-<ul class="note">
-  <li>侧栏、内容区、播放条三块固定关系，歌词面板浮于内容区右侧。</li>
-  <li>内容区按路由切换：搜索、我的歌单、歌单详情、设置、登录。</li>
-</ul>
-
-<h2 id="r4">4. Credits</h2>
+<h2 id="r3">3. Credits</h2>
 <p><a href="#top">↑</a></p>
 
-<h3>4.1 参考项目</h3>
+<h3>3.1 参考项目</h3>
 <table>
   <tr><th>项目</th><th>技术栈</th><th>参考点</th></tr>
   <tr><td>amtoaer/lyrune</td><td>Rust + GPUI</td><td>同为 Linux QQ 音乐第三方客户端，整体行为与 API 调用清单</td></tr>
@@ -125,10 +105,10 @@
   <tr><td>Team-Quaver/quaver-music</td><td>Electron + Vite</td><td>Wayland 适配、AppImage 双架构 CI</td></tr>
 </table>
 
-<h3>4.2 许可与非官方声明</h3>
+<h3>3.2 许可与例外声明</h3>
 <ul>
-  <li>本项目源码以 <strong>GPL-3.0-only</strong> 许可证发布（见 <code>LICENSE</code>）；衍生作品分发时须整体以同协议开源。</li>
-  <li>本项目为非官方客户端，与腾讯及 QQ 音乐无隶属关系；仅调用官方公开接口。</li>
+  <li>许可证正文见 <code>LICENSE</code>（GPL-3.0-only）；衍生作品分发时须整体以同协议开源。</li>
+  <li>以下为非官方项目的例外声明：本项目与腾讯及 QQ 音乐无隶属关系，仅调用官方公开接口。</li>
   <li>VIP / 数字专辑内容仅通过用户本人的登录凭证获取，不实现任何绕过授权的能力。</li>
   <li>上游接口随时可能变更导致功能失效，属预期风险。</li>
 </ul>

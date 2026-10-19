@@ -126,17 +126,17 @@
 <ul class="note">
   <li>音频流由渲染进程直接从流服务器加载，不经过主进程转发。</li>
   <li>凭证仅存在于主进程；渲染进程只持有登录态。</li>
-  <li>MPRIS 控制命令与播放状态经主进程桥接；内部调用路径见 <a href="CORE.html#c5-6">CORE §5.6</a>。</li>
+  <li>MPRIS 协议见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>；命令接收后的内部调用路径见 <a href="CORE.html#c5-6">CORE §5.6</a>。</li>
   <li>系统密钥环不可用时，登录功能禁用；免费内容的搜索与播放不受影响。</li>
 </ul>
 
-<h3 id="u3-2">3.2 扫码登录</h3>
-<div class="diagram"><img src="diagram/seq-login.svg" alt="扫码登录时序图"></div>
+<h3 id="u3-2">3.2 登录</h3>
+<div class="diagram"><img src="diagram/seq-login.svg" alt="登录流程图"></div>
 <ul class="note">
-  <li>默认路径是登录页内嵌官方 xlogin 组件扫码；Cookie 登录为兜底。</li>
-  <li>登录成功后自动进入“我的歌单”；失败时在登录组件下方提供“重新加载登录组件”。</li>
+  <li>登录方式二选一：扫码（默认，内嵌官方 xlogin）或 Cookie（兜底）。</li>
+  <li>扫码分支的详细协议见 <a href="PROVIDER.html#p3-1">PROVIDER §3.1</a>；Cookie 分支见 <a href="PROVIDER.html#p3-2">PROVIDER §3.2</a>。USER 只描述方式选择与结果，不重复协议细节。</li>
+  <li>登录成功后自动进入“我的歌单”；扫码失败时提供“重新加载登录组件”，Cookie 无效时提示重新获取。</li>
   <li>凭证在主进程内直接入库，任何状态下都不跨 IPC 下发。</li>
-  <li>上游协议与消息见 <a href="PROVIDER.html#p3-1">PROVIDER §3.1</a>。</li>
 </ul>
 
 <h3 id="u3-3">3.3 播放单曲</h3>
@@ -145,76 +145,20 @@
   <li>双击歌曲或“播放全部”会替换播放队列；单曲播放会追加到队尾。</li>
   <li>无可播链接时提示不可播，不自动跳过；具体文案见 <a href="#u5-3">§5.3</a>。</li>
   <li>实际音质可能低于请求音质；播放条以标记展示实际档位。</li>
-  <li>上游链接获取协议见 <a href="PROVIDER.html#p3-2">PROVIDER §3.2</a>。</li>
+  <li>上游链接获取协议见 <a href="PROVIDER.html#p3-3">PROVIDER §3.3</a>。</li>
 </ul>
 
 <h2 id="u4">4. INTERFACES</h2>
 <p><a href="#top">↑</a></p>
 
-<h3 id="u4-1">4.1 MPRIS</h3>
-<p>
-应用在会话总线暴露 <code>org.mpris.MediaPlayer2.lychee</code>，<code>Identity</code> 为
-<code>Lychee Player</code>，可用 <code>playerctl -p lychee</code> 验证。以下为实际接线的成员子集。
-</p>
-<pre><code>interface OrgMprisMediaPlayer2 {
-  Identity: string;
-  CanQuit: boolean;
-  CanRaise: boolean;
-  Raise(): void;
-  Quit(): void;
-}
-
-interface OrgMprisMediaPlayer2Player {
-  PlaybackStatus: 'Playing' | 'Paused' | 'Stopped';
-  Metadata: MprisMetadata;
-  Position: number;
-  CanControl: boolean;
-  CanPlay: boolean;
-  CanPause: boolean;
-  CanSeek: boolean;
-  CanGoNext: boolean;
-  CanGoPrevious: boolean;
-
-  Play(): void;
-  Pause(): void;
-  PlayPause(): void;
-  Stop(): void;
-  Next(): void;
-  Previous(): void;
-  Seek(offset: number): void;
-  SetPosition(trackId: string, position: number): void;
-}
-
-interface MprisMetadata {
-  'mpris:trackid': string;
-  'mpris:length': number;
-  'mpris:artUrl': string;
-  'xesam:title': string;
-  'xesam:artist': string[];
-  'xesam:album': string;
-}
-</code></pre>
 <table>
-  <tr><th>字段</th><th>含义</th></tr>
-  <tr><td><code>Position</code></td><td>当前播放位置，单位微秒。</td></tr>
-  <tr><td><code>mpris:trackid</code></td><td>曲目对象路径：<code>/org/mpris/MediaPlayer2/track/{songMid}</code>。</td></tr>
-  <tr><td><code>mpris:length</code></td><td>曲目时长，单位微秒。</td></tr>
-  <tr><td><code>mpris:artUrl</code></td><td>专辑封面 URL。</td></tr>
-  <tr><td><code>xesam:title</code></td><td>歌曲名。</td></tr>
-  <tr><td><code>xesam:artist</code></td><td>歌手名数组。</td></tr>
-  <tr><td><code>xesam:album</code></td><td>专辑名。</td></tr>
-</table>
-<table>
-  <tr><th>对象</th><th>成员</th><th>行为</th></tr>
-  <tr><td>Root</td><td><code>Identity</code> / <code>CanQuit</code> / <code>CanRaise</code> / <code>Raise</code> / <code>Quit</code></td><td>应用名固定 <code>Lychee Player</code>；<code>Raise</code> 显示并聚焦主窗口；<code>Quit</code> 走正常退出生命周期。</td></tr>
-  <tr><td>Player</td><td><code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code></td><td>由渲染进程发布的 <code>player:state</code> 驱动；元数据仅在切歌时更新。</td></tr>
-  <tr><td>Player</td><td><code>Play</code> / <code>Pause</code> / <code>PlayPause</code> / <code>Next</code> / <code>Previous</code> / <code>Seek</code> / <code>SetPosition</code></td><td>转为内部 <code>MprisCommand</code> 推送回渲染进程执行；<code>Stop</code> 按暂停处理。</td></tr>
+  <tr><th>接口</th><th>归属</th></tr>
+  <tr><td>面向依赖软件的 API</td><td>除 MPRIS 外，本应用不暴露其他 API。</td></tr>
+  <tr><td>MPRIS 媒体控制协议</td><td><a href="PROVIDER.html#p4-4">PROVIDER §4.4</a></td></tr>
+  <tr><td>命令接收后的内部处理</td><td><a href="CORE.html#c5-6">CORE §5.6</a></td></tr>
 </table>
 <ul class="note">
-  <li><code>Seek</code> / <code>SetPosition</code> 的偏移与目标位置均以微秒计；内部转换为毫秒后定位。</li>
-  <li>D-Bus / MPRIS 不可用时静默降级，不影响应用内播放；托盘不可用时同理。</li>
-  <li><code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code> 等属性未与应用播放状态同步，不属于本契约。</li>
-  <li>内部命令类型 <code>MprisCommand</code> 与状态类型 <code>PlayerState</code> 定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
+  <li>MPRIS 由 D-Bus 代为收发；USER 只描述用户可见的媒体控制行为，协议细节在 PROVIDER，内部响应在 CORE。</li>
 </ul>
 
 <h2 id="u5">5. UI</h2>
@@ -278,6 +222,19 @@ interface MprisMetadata {
   <tr><td>登录组件占位</td><td>高度 332px，横向占满登录页；主进程 <code>WebContentsView</code> 按该矩形定位。</td></tr>
   <tr><td>响应式断点</td><td>900px：侧栏收窄、设置页单列、歌曲列表隐藏专辑列、音量改为弹出式；560px：播放条双行、歌词全宽、音质 / 主题选项单列。</td></tr>
 </table>
+
+<div class="ui-proto-wrap">
+<div class="ui-proto u-shell u-shell-map">
+  <aside class="u-region u-region-side"><b>侧栏</b><span>品牌 · 导航 · 账号入口</span><a href="#u5-2-2">→ 侧栏</a></aside>
+  <main class="u-region u-region-main"><b>内容区</b><span>页面头部 / 标签 / 列表或卡片（随路由）</span><a href="#u5-2-8">→ 页面结构</a></main>
+  <footer class="u-region u-region-player"><b>播放条</b><span>常驻贴底</span><a href="#u5-2-3">→ 播放条</a></footer>
+  <div class="u-region u-region-overlay"><b>歌词面板</b><span>浮层，可关闭</span><a href="#u5-2-5">→ 歌词面板</a></div>
+</div>
+</div>
+<ul class="note">
+  <li>总体骨架：侧栏、内容区、播放条三块固定关系，歌词面板浮于内容区右侧。</li>
+  <li>内容区按路由切换：搜索、我的歌单、歌单详情、设置、登录。</li>
+</ul>
 
 <h4 id="u5-2-2">5.2.2 侧栏与导航</h4>
 <div class="ui-proto-wrap">
