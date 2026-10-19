@@ -3,35 +3,16 @@ skinparam shadowing false
 skinparam defaultTextAlignment center
 
 actor 用户 as U
-participant "登录页\n(renderer)" as UI
-participant "ipc.ts\n(main)" as IPC
-participant "api/web-login.ts\n(main)" as WL
-participant "登录页内嵌视图\nWebContentsView" as XW
-participant "上游 CGI" as UP
-participant "credential.ts\n(main)" as CR
+participant "Lychee Player" as APP
+participant "QQ 登录" as QQ
 
-U -> UI : 打开登录页\n（内嵌官方 xlogin 组件）
-UI -> IPC : invoke login.openWebLogin()
-IPC -> WL : openWebLogin()
-WL -> XW : 捕获 guest 导航 + 轮询分区 Cookie\n（独立分区，登录前后各清理一次）
-U -> XW : 扫码并确认
-XW -> XW : login_jump 写入 p_skey 等 Cookie
+U -> APP : 打开登录页
+APP -> QQ : 显示官方扫码组件
+U -> QQ : 扫码并确认
+QQ --> APP : 登录成功
+APP --> U : 进入已登录状态
 
-loop 主进程每秒轮询 session Cookie
-  WL -> WL : 读取 Cookie\n（需 p_skey + p_uin/pt4_token/uin）
-end
-
-WL -> UP : OAuth authorize（g_tk）→ code
-WL -> UP : QQConnectLogin.LoginServer / QQLogin
-UP --> WL : Credential
-WL --> IPC : Credential
-IPC -> CR : saveCredential(credential)
-IPC -->> UI : push login:status { ok }
-IPC -->> UI : { ok:true, data: AuthStatus }
-UI -> UI : 跳转首页
-
-break 超时（5 分钟）
-  WL --> IPC : AUTH_EXPIRED
-  IPC -->> UI : { ok:false }
+break 超时 / 失败
+  APP --> U : 提示重新登录
 end
 @enduml

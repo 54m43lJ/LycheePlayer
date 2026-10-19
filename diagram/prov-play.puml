@@ -1,0 +1,15 @@
+@startuml prov-play
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+participant "Lychee Player\n(主进程)" as APP
+participant "QQ 音乐\n(musicu.fcg)" as API
+participant "QQ 音乐\n(音频流)" as STREAM
+
+APP -> API : music.pf_song_detail_svr/get_song_detail_yqq\n{song_mid}
+API --> APP : track_info.file.media_mid
+APP -> API : vkey.GetVkeyServer/CgiGetVkey\n{guid, songmid[], filename[], uin}
+API --> APP : midurlinfo[].purl
+APP -> STREAM : GET https://ws.stream.qqmusic.qq.com/{purl}
+STREAM --> APP : audio/mpeg / audio/flac
+@enduml
