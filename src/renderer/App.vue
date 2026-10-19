@@ -21,7 +21,6 @@ const avatarLetter = computed(() => {
   return name.slice(0, 1).toUpperCase()
 })
 
-let offLogin: (() => void) | null = null
 let offCommand: (() => void) | null = null
 
 onMounted(() => {
@@ -31,12 +30,10 @@ onMounted(() => {
     player.applySettings()
   })()
 
-  offLogin = window.lychee.login.onStatus((status) => auth.handleQrStatus(status))
   offCommand = window.lychee.player.onCommand((command) => player.handleCommand(command))
 })
 
 onBeforeUnmount(() => {
-  offLogin?.()
   offCommand?.()
 })
 

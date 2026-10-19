@@ -1,5 +1,5 @@
 /**
- * 跨进程数据模型 — 对应 ARCHITECTURE §4.2 / §4.3。
+ * 跨进程数据模型。
  * 该文件是 IPC 两端的唯一类型来源。
  */
 
@@ -104,21 +104,6 @@ export interface Settings {
   theme: 'dark' | 'light'
 }
 
-export type QrStatus = {
-  stage: 'waiting' | 'scanned' | 'ok' | 'expired' | 'failed'
-  message?: string
-}
-
-/**
- * POC 扩展：二维码图片必须随创建结果返回，渲染进程才能显示。
- * 见 POC.md「与设计文档的差异」。
- */
-export interface QrSession {
-  imageDataUrl: string
-  expiresAtMs: number
-}
-
-/** POC 扩展：渲染进程启动时恢复登录态。 */
 export interface AuthStatus {
   loggedIn: boolean
   musicid: string | null

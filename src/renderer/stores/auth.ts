@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { AuthStatus, QrStatus, UserProfile } from '@shared/types'
-import { describeError, unwrap } from '../api'
+import type { AuthStatus, UserProfile } from '@shared/types'
+import { unwrap } from '../api'
 
 export const useAuthStore = defineStore('auth', () => {
   const loggedIn = ref(false)
@@ -10,12 +10,6 @@ export const useAuthStore = defineStore('auth', () => {
   const ready = ref(false)
   const expiresAtMs = ref<number | null>(null)
   const canRefresh = ref(false)
-
-  const qrImage = ref('')
-  const qrStage = ref<QrStatus['stage'] | null>(null)
-  const qrLoading = ref(false)
-  const qrError = ref('')
-  const qrExpiresAt = ref(0)
 
   const displayName = computed(() => profile.value?.nickname ?? (musicid.value ? `音乐 ID ${musicid.value}` : '未登录'))
 
@@ -49,46 +43,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function startQrLogin(): Promise<void> {
-    qrLoading.value = true
-    qrError.value = ''
-    qrStage.value = 'waiting'
-    try {
-      const session = unwrap(await window.lychee.login.createQrKey())
-      qrImage.value = session.imageDataUrl
-      qrExpiresAt.value = session.expiresAtMs
-      qrStage.value = 'waiting'
-    } catch (err) {
-      qrStage.value = 'expired'
-      qrError.value = describeError(err)
-    } finally {
-      qrLoading.value = false
-    }
-  }
-
-  function handleQrStatus(status: QrStatus): void {
-    qrStage.value = status.stage
-    if (status.message) qrError.value = status.message
-    if (status.stage === 'ok') {
-      qrImage.value = ''
-      qrError.value = ''
-      void refresh()
-    }
-  }
-
   async function loginWithCookie(cookie: string): Promise<void> {
     const status = unwrap(await window.lychee.login.loginWithCookie(cookie))
     applyStatus(status)
-    qrStage.value = 'ok'
-    qrImage.value = ''
   }
 
   async function openWebLogin(): Promise<void> {
     const status = unwrap(await window.lychee.login.openWebLogin())
     applyStatus(status)
-    qrStage.value = 'ok'
-    qrImage.value = ''
-    qrError.value = ''
   }
 
   async function refreshSession(): Promise<void> {
@@ -102,9 +64,6 @@ export const useAuthStore = defineStore('auth', () => {
     profile.value = null
     expiresAtMs.value = null
     canRefresh.value = false
-    qrStage.value = null
-    qrImage.value = ''
-    qrExpiresAt.value = 0
   }
 
   return {
@@ -115,14 +74,7 @@ export const useAuthStore = defineStore('auth', () => {
     displayName,
     expiresAtMs,
     canRefresh,
-    qrImage,
-    qrStage,
-    qrLoading,
-    qrError,
-    qrExpiresAt,
     refresh,
-    startQrLogin,
-    handleQrStatus,
     loginWithCookie,
     openWebLogin,
     refreshSession,

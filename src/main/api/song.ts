@@ -113,7 +113,7 @@ function buildStreamUrl(purl: string): string {
   if (/^https?:\/\//i.test(purl)) return purl
 
   // vkey 与查询参数（尤其是 fromtag）绑定，必须整体复用上游返回的 purl；
-  // 按前缀重新拼装会导致 403。此结论记录在 POC.md。
+  // 按前缀重新拼装会导致 403。
   return `https://ws.stream.qqmusic.qq.com/${purl}`
 }
 

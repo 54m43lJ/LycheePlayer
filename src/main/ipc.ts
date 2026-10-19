@@ -7,7 +7,7 @@ import type {
   SearchRequest,
   Settings
 } from '../shared/types'
-import { createQrKey, initLoginEvents, loginWithCookie, refreshSession, stopPolling } from './api/login'
+import { loginWithCookie, refreshSession } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
 import { getPlaylist, listMine } from './api/playlist'
@@ -56,14 +56,6 @@ export function sendPlayerCommand(command: MprisCommand): void {
 }
 
 export function registerIpc(): void {
-  initLoginEvents({
-    onStatus: (status) => broadcast('login:status', status),
-    onCredential: async (credential) => {
-      await saveCredential(credential)
-    }
-  })
-
-  handle('login.createQrKey', async () => createQrKey())
   handle('login.getStatus', async () => {
     // 密钥环解锁较晚时，状态查询会重试解密已保存的凭证。
     await loadCredential()
@@ -75,13 +67,11 @@ export function registerIpc(): void {
     }
     const credential = await loginWithCookie(cookie)
     await saveCredential(credential)
-    broadcast('login:status', { stage: 'ok' })
     return currentAuthStatus()
   })
   handle('login.openWebLogin', async () => {
     const credential = await openWebLogin()
     await saveCredential(credential)
-    broadcast('login:status', { stage: 'ok' })
     return currentAuthStatus()
   })
   handle('login.refreshSession', async () => {
@@ -89,7 +79,6 @@ export function registerIpc(): void {
     return currentAuthStatus()
   })
   handle('login.logout', async () => {
-    stopPolling()
     await clearCredential()
     return null
   })

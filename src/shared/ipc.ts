@@ -7,8 +7,6 @@ import type {
   PlaylistDetail,
   PlaylistMeta,
   Quality,
-  QrSession,
-  QrStatus,
   SearchRequest,
   SearchResult,
   Settings,
@@ -19,7 +17,6 @@ import type {
 
 export interface LycheeApi {
   login: {
-    createQrKey(): Promise<IpcResult<QrSession>>
     getStatus(): Promise<IpcResult<AuthStatus>>
     loginWithCookie(cookie: string): Promise<IpcResult<AuthStatus>>
     openWebLogin(): Promise<IpcResult<AuthStatus>>
@@ -27,7 +24,6 @@ export interface LycheeApi {
     logout(): Promise<IpcResult<null>>
     /** 上报登录组件占位区域（页面坐标）；null 摘除。主进程据此定位 WebContentsView。 */
     setEmbedBounds(rect: EmbedRect | null): void
-    onStatus(callback: (status: QrStatus) => void): () => void
   }
   search: {
     byType(req: SearchRequest): Promise<IpcResult<SearchResult>>

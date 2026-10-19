@@ -8,7 +8,7 @@ interface LyricResponse {
   trans?: string
 }
 
-/** 旧版歌词接口返回明文 LRC，避免在 POC 内实现 QRC 解密。 */
+/** 旧版歌词接口返回明文 LRC；当前不实现 QRC 解密。 */
 export async function getLyric(songMid: string): Promise<Lyric> {
   const data = await upstreamRequest<LyricResponse>({
     host: 'https://c.y.qq.com',

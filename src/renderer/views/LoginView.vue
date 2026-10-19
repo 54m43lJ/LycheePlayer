@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import { describeError } from '../api'
@@ -18,13 +18,6 @@ const frameRef = ref<HTMLElement | null>(null)
 let frameObserver: ResizeObserver | null = null
 
 const avatarLetter = computed(() => auth.displayName.slice(0, 1).toUpperCase())
-
-watch(
-  () => auth.qrStage,
-  (stage) => {
-    if (stage === 'ok') void router.replace('/library')
-  }
-)
 
 /** 登录组件由主进程 WebContentsView 绘制；渲染端只上报占位区域（页面坐标），null 摘除。 */
 function sendBounds(): void {
@@ -48,6 +41,7 @@ async function startEmbedLogin(): Promise<void> {
   try {
     await auth.openWebLogin()
     toast.show('扫码登录成功')
+    void router.replace('/library')
   } catch (err) {
     clearBounds()
     embedFailed.value = true
@@ -66,6 +60,7 @@ async function submitCookie(): Promise<void> {
   try {
     await auth.loginWithCookie(cookie.value.trim())
     toast.show('Cookie 登录成功')
+    void router.replace('/library')
   } catch (err) {
     toast.error(describeError(err))
   } finally {

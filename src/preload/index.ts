@@ -9,8 +9,6 @@ import type {
   PlaylistDetail,
   PlaylistMeta,
   Quality,
-  QrSession,
-  QrStatus,
   SearchRequest,
   SearchResult,
   Settings,
@@ -23,7 +21,6 @@ const invoke = <T>(channel: string, ...args: unknown[]): Promise<IpcResult<T>> =
 
 const api: LycheeApi = {
   login: {
-    createQrKey: () => invoke<QrSession>('login.createQrKey'),
     getStatus: () => invoke<AuthStatus>('login.getStatus'),
     loginWithCookie: (cookie) => invoke<AuthStatus>('login.loginWithCookie', cookie),
     openWebLogin: () => invoke<AuthStatus>('login.openWebLogin'),
@@ -31,12 +28,6 @@ const api: LycheeApi = {
     logout: () => invoke<null>('login.logout'),
     setEmbedBounds: (rect) => {
       ipcRenderer.send('login.setEmbedBounds', rect)
-    },
-    onStatus: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent, status: QrStatus): void =>
-        callback(status)
-      ipcRenderer.on('login:status', listener)
-      return () => ipcRenderer.removeListener('login:status', listener)
     }
   },
   search: {
