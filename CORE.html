@@ -151,7 +151,10 @@
   <tr><td><code>UPSTREAM_TIMEOUT_MS</code></td><td>单次上游请求超时</td><td>15_000 ms</td></tr>
   <tr><td><code>UPSTREAM_RETRY_ATTEMPTS</code></td><td>网络错误 / 瞬时繁忙的最大尝试次数</td><td>3</td></tr>
   <tr><td><code>UPSTREAM_NETWORK_BACKOFF_MS</code></td><td>网络错误重试的基础退避</td><td>400 ms，指数退避</td></tr>
-  <tr><td><code>UPSTREAM_QUOTA_BACKOFF_MS</code></td><td>限流重试的基础退避</td><td>600 ms，指数退避</td></tr>
+  <tr><td><code>UPSTREAM_QUOTA_BACKOFF_MS</code></td><td>HTTP 限流重试的基础退避</td><td>600 ms，指数退避</td></tr>
+  <tr><td><code>MUSICU_BUSY_BACKOFF_MS</code></td><td>上游瞬时繁忙码（2001 / 104604）重试的基础退避</td><td>500 ms，指数退避</td></tr>
+  <tr><td><code>SEARCH_EMPTY_RETRY_MS</code></td><td>搜索空结果重试延迟</td><td>350 ms</td></tr>
+  <tr><td><code>SEARCH_EMPTY_RETRY_COUNT</code></td><td>搜索空结果重试次数</td><td>1</td></tr>
   <tr><td><code>LOGIN_EMBED_TIMEOUT_MS</code></td><td>内嵌 xlogin 登录总超时</td><td>5 × 60_000 ms</td></tr>
   <tr><td><code>LOGIN_COOKIE_POLL_MS</code></td><td>内嵌登录读取 session Cookie 的轮询间隔</td><td>1000 ms</td></tr>
   <tr><td><code>LOGIN_EMBED_PARTITION</code></td><td>登录组件的独立 session 分区名</td><td><code>lychee-xlogin</code></td></tr>
