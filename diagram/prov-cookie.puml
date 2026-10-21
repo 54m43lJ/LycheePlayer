@@ -2,15 +2,14 @@
 skinparam shadowing false
 skinparam defaultTextAlignment center
 
-participant "Lychee Player\n(主进程)" as APP
+participant "Lychee Player" as APP
 participant "QQ 音乐资料接口\n(c6.y.qq.com)" as API
 
-APP -> APP : 解析 Cookie\n(uin / qm_keyst)
 APP -> API : GET fcg_get_profile_homepage.fcg\n(g_tk, loginUin, userid)
 API --> APP : { code, data.creator }
 alt code === 0
-  APP -> APP : 生成 Credential
+  APP -> APP : 内部生成 Credential
 else Cookie 字段无效或其他 code
-  APP -> APP : AUTH_EXPIRED
+  APP -> APP : 内部映射 AUTH_EXPIRED
 end
 @enduml

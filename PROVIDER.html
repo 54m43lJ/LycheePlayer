@@ -59,11 +59,15 @@
   </tr>
   <tr>
     <td><code>p_skey</code></td>
-    <td>QQ 登录成功后写入 xlogin 会话的 Cookie，用于计算 <code>g_tk</code> 并完成 OAuth 授权。</td>
+    <td>QQ 登录成功后写入 xlogin 会话的 Cookie，用于计算 OAuth <code>g_tk</code> 并完成 OAuth 授权。</td>
   </tr>
   <tr>
-    <td><code>g_tk</code></td>
-    <td>由 <code>p_skey</code> 经 <code>hash33(p_skey, 5381)</code> 计算的 CSRF 令牌，随 OAuth 与资料请求发送。</td>
+    <td><code>g_tk</code>（OAuth）</td>
+    <td>由 <code>p_skey</code> 经 <code>hash33(p_skey, 5381)</code> 计算的 CSRF 令牌，用于 OAuth authorize。</td>
+  </tr>
+  <tr>
+    <td><code>g_tk</code>（资料）</td>
+    <td>由 <code>musickey</code> 经 <code>hash33(musickey, 5381)</code> 计算的 CSRF 令牌，用于用户资料请求。</td>
   </tr>
   <tr>
     <td>xlogin</td>
@@ -72,6 +76,7 @@
 </table>
 <ul class="note">
   <li>音质档位与请求 / 实际音质的用户语义见 <a href="USER.html#u1">USER §1</a>；内部类型 <code>Quality</code> 见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
+  <li>歌词接口固定发送 <code>g_tk=5381</code>，不使用凭证派生值。</li>
 </ul>
 
 <h2 id="p2">2. CONVENTIONS</h2>
@@ -85,7 +90,7 @@
   </tr>
   <tr>
     <td>上游隔离</td>
-    <td>上游原始 JSON 只存在于 <code>api/</code> 层内部；离开该层的值必须是 <a href="CORE.html#c4-1">CORE §4.1</a> 定义的内部模型。</td>
+    <td>上游隔离规则见 <a href="CORE.html#c2">CORE §2</a>；本层只消费 <a href="CORE.html#c4-1">CORE §4.1</a> 定义的内部模型。</td>
   </tr>
   <tr>
     <td>凭证注入</td>
@@ -96,12 +101,12 @@
     <td><code>purl</code> 为绝对 URL 时直接使用；为相对路径时只在前面拼 <code>https://ws.stream.qqmusic.qq.com/</code>，不重建查询参数。</td>
   </tr>
   <tr>
-    <td>音质降档</td>
-    <td>请求档位无 <code>purl</code> 时按 <code>flac → 320k → 128k</code> 逐档重试；全部档位无链接时返回 <code>NO_STREAM</code>。</td>
+    <td>音质回退</td>
+    <td>先尝试请求档位；该档位无 <code>purl</code> 时，再按 <code>flac → 320k → 128k</code> 顺序尝试其余档位（跳过已尝试的请求档位）；全部档位无链接时返回 <code>NO_STREAM</code>。</td>
   </tr>
   <tr>
     <td>重试</td>
-    <td>HTTP 429、上游瞬时繁忙码（<code>2001</code> / <code>104604</code>）与网络错误做短退避重试；JSON 解析失败、响应结构缺失与未知错误码不重试，直接映射为 <code>UPSTREAM_CHANGED</code>。</td>
+    <td>HTTP 429、HTTP 非 2xx 与上游瞬时繁忙码（<code>2001</code> / <code>104604</code>）做短退避重试；连接失败 / 超时不重试，直接映射为 <code>UPSTREAM_NETWORK</code>。JSON 解析失败、响应结构缺失与未知错误码不重试，直接映射为 <code>UPSTREAM_CHANGED</code>。</td>
   </tr>
   <tr>
     <td>错误映射</td>
@@ -109,11 +114,11 @@
   </tr>
   <tr>
     <td>登录会话隔离</td>
-    <td>xlogin 使用独立 session 分区，只放行 QQ 域名导航与子窗口；登录发起前与结束 / 超时后各清理一次。</td>
+    <td>xlogin 使用独立 session 分区，只放行腾讯相关域名（<code>qq.com</code> / <code>gtimg.cn</code> / <code>weixin.qq.com</code>）导航与子窗口；登录发起前与结束 / 超时后各清理一次。</td>
   </tr>
   <tr>
     <td>密钥环</td>
-    <td>凭证通过 Electron <code>safeStorage</code>（Linux 后端为 libsecret）加密后落盘；密钥环不可用时拒绝保存凭证并禁用登录，绝不退化为明文。</td>
+    <td>凭证通过 Electron <code>safeStorage</code>（Linux 后端为 libsecret）加密后落盘；密钥环不可用时拒绝保存 / 加载凭证并禁用登录；旧明文仅在密钥环可用时迁移，否则拒绝登录，绝不退化为明文。</td>
   </tr>
   <tr>
     <td>D-Bus</td>
@@ -128,7 +133,8 @@
 <div class="diagram"><img src="diagram/prov-login.svg" alt="扫码登录上游协议时序图"></div>
 <ul class="note">
   <li>xlogin 组件加载官方登录页；应用不读取或保存用户密码。</li>
-  <li>应用读取登录视图的 session Cookie，必须同时看到 <code>p_skey</code> 与 <code>p_uin</code> / <code>pt4_token</code> / <code>uin</code> 之一，才进入 OAuth 换证，避免把未完成登录误判为成功。</li>
+  <li>Cookie 轮询路径必须同时看到 <code>p_skey</code> 与 <code>p_uin</code> / <code>pt4_token</code> / <code>uin</code> 之一，才进入 OAuth 换证，避免把未完成登录误判为成功。</li>
+  <li>xlogin 直接完成 OAuth 时，应用也可从 <code>will-navigate</code> / <code>will-redirect</code> / <code>did-navigate</code> 的 URL 捕获 <code>code</code>，直接进入换证。</li>
   <li>OAuth 授权成功后，<code>QQConnectLogin.LoginServer/QQLogin</code> 返回 <code>musickey</code> 与续期字段；应用解析为 <code>Credential</code> 并在主进程入库。</li>
   <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；登录视图在结束或超时后清理。</li>
   <li>扫码登录只走内嵌官方 xlogin 组件；Cookie 登录是兜底路径，见 <a href="#p3-2">§3.2</a>。</li>
@@ -148,8 +154,8 @@
 <ul class="note">
   <li>先通过 <code>get_song_detail_yqq</code> 获取 <code>media_mid</code>，再按请求音质拼出 vkey 的 <code>filename</code>。</li>
   <li>vkey 请求使用进程级稳定 <code>guid</code>、歌曲 <code>songmid</code> 数组、对应 <code>filename</code> 数组与账号 <code>uin</code>。</li>
-  <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按降档链继续请求下一档。</li>
-  <li>播放链接由渲染进程直接加载；主进程只经手链接字符串，不代理音频流。</li>
+  <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。</li>
+  <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；主进程只经手链接字符串，不代理音频流。</li>
   <li>vkey 失效时音频加载失败，界面提示“音频加载失败，可能链接已过期”；应用不会自动重新获取链接。</li>
 </ul>
 
@@ -171,7 +177,7 @@
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方扫码组件。</td></tr>
   <tr><td>OAuth 授权</td><td><code>POST https://graph.qq.com/oauth2.0/authorize</code></td><td>用 xlogin 的 Cookie 换取 <code>code</code>。</td></tr>
-  <tr><td>音频流</td><td><code>GET https://ws.stream.qqmusic.qq.com/{purl}</code></td><td>渲染进程直接加载的音频流。</td></tr>
+  <tr><td>音频流</td><td><code>GET https://ws.stream.qqmusic.qq.com/{purl}</code></td><td>渲染进程加载的音频流；加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</td></tr>
 </table>
 <table>
   <tr><th>接口</th><th>关键请求参数</th></tr>
@@ -216,8 +222,23 @@
     <td><code>response_type</code> · <code>client_id</code> · <code>redirect_uri</code> · <code>scope</code> · <code>state</code> · <code>switch</code> · <code>from_ptlogin</code> · <code>src</code> · <code>update_auth</code> · <code>openapi</code> · <code>g_tk</code> · <code>auth_time</code> · <code>ui</code></td>
   </tr>
 </table>
+<table>
+  <tr><th>端点</th><th>User-Agent</th><th>Referer</th><th>特别配置</th></tr>
+  <tr><td>搜索 <code>DoSearchForQQMusicDesktop</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>不携带 <code>comm</code></td></tr>
+  <tr><td>歌曲详情 <code>get_song_detail_yqq</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>vkey <code>CgiGetVkey</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>歌单详情 <code>CgiGetDiss</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>我的歌单 <code>GetPlaylistByUin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>歌词 <code>fcg_query_lyric_new.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=5381</code></td></tr>
+  <tr><td>用户资料 <code>fcg_get_profile_homepage.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=hash33(musickey, 5381)</code></td></tr>
+  <tr><td>QQ 登录换证 <code>QQLogin</code></td><td>iPhone iOS 13</td><td><code>https://y.qq.com/</code></td><td>JSON；不携带凭证</td></tr>
+  <tr><td>会话续期 <code>Login</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>JSON；携带当前凭证</td></tr>
+  <tr><td>OAuth authorize</td><td>桌面 Chrome 120（Windows）</td><td><code>https://xui.ptlogin2.qq.com/</code></td><td>form；Cookie 为 xlogin 会话；<code>redirect: manual</code></td></tr>
+  <tr><td>官方登录组件 xlogin</td><td>Chromium 默认</td><td>—</td><td><code>WebContentsView</code> 加载，不注入自定义请求头</td></tr>
+  <tr><td>音频流 <code>ws.stream.qqmusic.qq.com</code></td><td>应用默认</td><td>—</td><td>由播放器直接加载</td></tr>
+  <tr><td>封面图 <code>y.gtimg.cn</code></td><td>应用默认</td><td>—</td><td>由播放器直接加载</td></tr>
+</table>
 <ul class="note">
-  <li>请求头统一使用桌面浏览器 User-Agent 与 <code>Referer: https://y.qq.com/</code>；登录换证与续期使用移动端 User-Agent。</li>
   <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
   <li>公开 CGI 目前不需要额外签名；<code>g_tk</code> 只用于 OAuth 授权、歌词与用户资料请求。</li>
 </ul>
@@ -271,11 +292,13 @@ interface QqLoginRequest {
 <table>
   <tr><th>上游信号</th><th>内部 ErrorCode</th><th>含义 / 处理</th></tr>
   <tr><td><code>1000</code> / <code>104401</code> / <code>104400</code></td><td><code>AUTH_EXPIRED</code></td><td>凭证过期或无效；提示重新登录。</td></tr>
-  <tr><td><code>104604</code> / <code>100001</code> / <code>2001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流或繁忙；短退避重试，仍失败则提示稍后再试。</td></tr>
-  <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>当前账号无该音质权限；播放链接流程继续降档。</td></tr>
+  <tr><td><code>104604</code> / <code>2001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游瞬时繁忙；短退避重试，仍失败则提示稍后再试。</td></tr>
+  <tr><td><code>100001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；不重试，直接提示稍后再试。</td></tr>
+  <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>当前账号无该音质权限；播放链接流程继续回退。</td></tr>
   <tr><td><code>20261</code> / <code>20271</code> / <code>20272</code> / <code>20274</code> / <code>20277</code> / <code>20278</code> / <code>20279</code> / <code>20450</code></td><td><code>AUTH_EXPIRED</code></td><td>登录参数、验证码、账号绑定、账号受限或封禁；提示具体原因或重新登录。</td></tr>
   <tr><td>HTTP <code>429</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；退避重试。</td></tr>
-  <tr><td>HTTP 非 2xx / 超时</td><td><code>UPSTREAM_NETWORK</code></td><td>网络或服务不可用；提示网络异常。</td></tr>
+  <tr><td>HTTP 非 2xx</td><td><code>UPSTREAM_NETWORK</code></td><td>网络或服务不可用；短退避重试，仍失败则提示网络异常。</td></tr>
+  <tr><td>连接失败 / 超时</td><td><code>UPSTREAM_NETWORK</code></td><td>网络或服务不可用；不重试，直接提示网络异常。</td></tr>
   <tr><td>JSON 解析失败 / 缺少必需字段 / 未知业务码</td><td><code>UPSTREAM_CHANGED</code></td><td>上游结构变化；不重试，提示稍后再试。</td></tr>
 </table>
 <ul class="note">
@@ -457,7 +480,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqVkeyData</code> → <code>UrlResult[]</code></td>
-    <td>按 <code>songmid</code> 匹配 <code>purl</code>；<code>purl</code> 非空则生成播放链接并记录实际档位；无链接的歌曲继续降档。</td>
+    <td>按 <code>songmid</code> 匹配 <code>purl</code>；<code>purl</code> 非空则生成播放链接并记录实际档位；无链接的歌曲继续按回退顺序尝试。</td>
   </tr>
   <tr>
     <td><code>purl</code> → 播放链接</td>

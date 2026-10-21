@@ -14,7 +14,6 @@
 <a href="USER.html">USER</a>
 <a href="CORE.html">CORE</a>
 <a href="PROVIDER.html">PROVIDER</a>
-<a href="TODO.md">TODO</a>
 </p>
 
 <h2 id="r1">1. WHAT &amp; WHY</h2>
@@ -34,9 +33,6 @@
   <li>用户可自由选择音质；日常听歌可以完全替代官方 Linux 客户端。</li>
   <li>资源占用与启动速度显著优于官方 Electron 客户端。</li>
 </ul>
-<ul class="note">
-  <li>当前实现为可日常使用的 MVP；后续目标见 <a href="TODO.md">TODO.md</a>。</li>
-</ul>
 
 <h3>1.3 非目标</h3>
 <ul>
@@ -50,7 +46,7 @@
   <tr><th>场景</th><th>行为</th><th>详细契约</th></tr>
   <tr>
     <td>登录</td>
-    <td>登录页内嵌官方 xlogin 组件扫码（默认），或粘贴浏览器 Cookie（兜底）。凭证加密保存在系统密钥环；密钥环不可用时禁用登录，免费内容的搜索与播放不受影响。</td>
+    <td>登录页内嵌官方 xlogin 组件扫码（默认），或粘贴浏览器 Cookie（兜底）；凭证边界与密钥环策略见 <a href="USER.html#u2">USER §2</a>。</td>
     <td><a href="USER.html#u5-2-6">USER §5.2.6</a></td>
   </tr>
   <tr>
@@ -60,17 +56,17 @@
   </tr>
   <tr>
     <td>播放</td>
-    <td>双击歌曲或“播放全部”开始播放；支持播放队列、顺序播放、列表循环、单曲循环、随机播放、拖动进度、音量与音质选择；播放条展示实际生效音质。</td>
-    <td><a href="USER.html#u5-2-3">USER §5.2.3</a></td>
+    <td>双击歌曲或“播放全部”开始播放；“下一首播放”把对应歌曲插入播放队列头。</td>
+    <td><a href="USER.html#u5-2-3">USER §5.2.3</a> · <a href="USER.html#u5-2-9">§5.2.9</a></td>
   </tr>
   <tr>
     <td>歌词</td>
-    <td>LRC 滚动歌词与翻译合并显示；当前行高亮；点击歌词行跳转播放进度；切换路由自动关闭面板。</td>
+    <td>LRC 滚动歌词与翻译合并显示；当前行高亮；点击歌词行跳转播放进度。</td>
     <td><a href="USER.html#u5-2-5">USER §5.2.5</a></td>
   </tr>
   <tr>
     <td>歌单</td>
-    <td>浏览当前账号的歌单列表与公开歌单详情；歌单内支持播放全部与单曲播放。</td>
+    <td>浏览当前账号的歌单列表与公开歌单详情。</td>
     <td><a href="USER.html#u5-2-8">USER §5.2.8</a></td>
   </tr>
   <tr>

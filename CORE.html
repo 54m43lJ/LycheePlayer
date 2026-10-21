@@ -62,7 +62,7 @@
 │       │   ├── <a href="#c4-27">auth.ts</a>                   登录态与登录动作
 │       │   ├── <a href="#c4-28">player.ts</a>                 播放器状态与队列
 │       │   ├── <a href="#c4-29">settings.ts</a>               设置与主题
-│       │   └── <a href="#c4-30">ui.ts</a>                     歌词面板等 UI 状态
+│       │   └── <a href="#c4-30">ui.ts</a>                     歌词面板、播放队列等 UI 状态
 │       ├── utils/
 │       │   ├── <a href="#c4-31">format.ts</a>                 时长、计数、封面与歌手格式化
 │       │   └── <a href="#c4-32">lrc.ts</a>                    LRC 解析与活动行查找
@@ -89,13 +89,12 @@
 ├── package.json                              依赖、脚本与版本
 ├── tsconfig.json / tsconfig.node.json / tsconfig.web.json  TypeScript 配置
 ├── README.html / USER.html / CORE.html / PROVIDER.html       项目文档
-├── TODO.md                                   后续目标与待办
 ├── style.css                                 文档样式
 └── LICENSE                                   GPL-3.0-only
 </code></pre>
 <ul class="note">
   <li><code>src/shared/</code> 是 IPC 类型契约的唯一来源，主进程、preload 与渲染进程均从这里导入。</li>
-  <li>带链接的文件在 <a href="#c4">§4</a> 有对应的签名小节；其余条目为配置、资源或纯展示文件。</li>
+  <li>带链接的文件在 <a href="#c4">§4</a> 有对应的签名小节；其余条目为脚本、配置、资源或纯展示文件。</li>
 </ul>
 
 <h2 id="c2">2. CONVENTIONS</h2>
@@ -117,7 +116,7 @@
   </tr>
   <tr>
     <td>凭证边界</td>
-    <td>凭证只存在于主进程 <code>credential.ts</code>；不跨 IPC 下发、不写入日志、不进入渲染进程。仅当系统密钥环可用时保存，否则拒绝保存并禁用登录。</td>
+    <td>凭证只存在于主进程 <code>credential.ts</code>；不得跨 IPC、写日志或进入渲染进程。存储实现与密钥环降级见 <a href="PROVIDER.html#p2">PROVIDER §2</a>，用户侧边界见 <a href="USER.html#u2">USER §2</a>。</td>
   </tr>
   <tr>
     <td>上游隔离</td>
@@ -147,31 +146,31 @@
 
 <h3 id="c2-1">2.1 Engineering constants</h3>
 <table>
-  <tr><th>变量（建议命名）</th><th>用途</th><th>推荐值</th></tr>
-  <tr><td><code>UPSTREAM_TIMEOUT_MS</code></td><td>单次上游请求超时</td><td>15_000 ms</td></tr>
-  <tr><td><code>UPSTREAM_RETRY_ATTEMPTS</code></td><td>网络错误 / 瞬时繁忙的最大尝试次数</td><td>3</td></tr>
-  <tr><td><code>UPSTREAM_NETWORK_BACKOFF_MS</code></td><td>网络错误重试的基础退避</td><td>400 ms，指数退避</td></tr>
-  <tr><td><code>UPSTREAM_QUOTA_BACKOFF_MS</code></td><td>HTTP 限流重试的基础退避</td><td>600 ms，指数退避</td></tr>
-  <tr><td><code>MUSICU_BUSY_BACKOFF_MS</code></td><td>上游瞬时繁忙码（2001 / 104604）重试的基础退避</td><td>500 ms，指数退避</td></tr>
-  <tr><td><code>SEARCH_EMPTY_RETRY_MS</code></td><td>搜索空结果重试延迟</td><td>350 ms</td></tr>
-  <tr><td><code>SEARCH_EMPTY_RETRY_COUNT</code></td><td>搜索空结果重试次数</td><td>1</td></tr>
-  <tr><td><code>LOGIN_EMBED_TIMEOUT_MS</code></td><td>内嵌 xlogin 登录总超时</td><td>5 × 60_000 ms</td></tr>
-  <tr><td><code>LOGIN_COOKIE_POLL_MS</code></td><td>内嵌登录读取 session Cookie 的轮询间隔</td><td>1000 ms</td></tr>
-  <tr><td><code>LOGIN_EMBED_PARTITION</code></td><td>登录组件的独立 session 分区名</td><td><code>lychee-xlogin</code></td></tr>
-  <tr><td><code>SESSION_REFRESH_INTERVAL_MS</code></td><td>会话续期定时器间隔</td><td>30 × 60_000 ms</td></tr>
-  <tr><td><code>SESSION_REFRESH_AHEAD_MS</code></td><td>凭证到期前提前续期的窗口</td><td>10 × 60_000 ms</td></tr>
-  <tr><td><code>SESSION_REFRESH_FALLBACK_MS</code></td><td>凭证无到期时间时的续期间隔</td><td>6 × 60 × 60_000 ms</td></tr>
-  <tr><td><code>PLAYER_STATE_THROTTLE_MS</code></td><td>播放状态推送的节流窗口</td><td>900 ms</td></tr>
-  <tr><td><code>TOAST_DURATION_MS</code></td><td>Toast 自动消失时间</td><td>3600 ms</td></tr>
-  <tr><td><code>IPC_SONG_MIDS_MAX</code></td><td><code>song.getUrls</code> 单次批量上限</td><td>100</td></tr>
-  <tr><td><code>SEARCH_PAGE_NO_MAX</code></td><td><code>search.byType</code> 页码上限</td><td>100</td></tr>
-  <tr><td><code>SEARCH_PAGE_SIZE_DEFAULT</code></td><td>搜索每页默认条数</td><td>20</td></tr>
-  <tr><td><code>SEARCH_PAGE_SIZE_MAX</code></td><td>搜索每页最大条数</td><td>50</td></tr>
-  <tr><td><code>PLAYLIST_PAGE_SIZE</code></td><td>歌单上游单页条数</td><td>100</td></tr>
-  <tr><td><code>PLAYLIST_PAGE_MAX</code></td><td>歌单本地最大分页数</td><td>20</td></tr>
+  <tr><th>变量（建议命名）</th><th>用途</th><th>推荐值（注释）</th></tr>
+  <tr><td><code>UPSTREAM_TIMEOUT_MS</code></td><td>单次上游请求超时</td><td><code>// 15_000 ms</code></td></tr>
+  <tr><td><code>UPSTREAM_RETRY_ATTEMPTS</code></td><td>HTTP 非 2xx / 429 / 瞬时繁忙的最大尝试次数</td><td><code>// 3</code></td></tr>
+  <tr><td><code>UPSTREAM_NETWORK_BACKOFF_MS</code></td><td>HTTP 非 2xx 重试的基础退避</td><td><code>// 400 ms，指数退避</code></td></tr>
+  <tr><td><code>UPSTREAM_QUOTA_BACKOFF_MS</code></td><td>HTTP 限流重试的基础退避</td><td><code>// 600 ms，指数退避</code></td></tr>
+  <tr><td><code>MUSICU_BUSY_BACKOFF_MS</code></td><td>上游瞬时繁忙码（2001 / 104604）重试的基础退避</td><td><code>// 500 ms，指数退避</code></td></tr>
+  <tr><td><code>SEARCH_EMPTY_RETRY_MS</code></td><td>搜索空结果重试延迟</td><td><code>// 350 ms</code></td></tr>
+  <tr><td><code>SEARCH_EMPTY_RETRY_COUNT</code></td><td>搜索空结果重试次数</td><td><code>// 1</code></td></tr>
+  <tr><td><code>LOGIN_EMBED_TIMEOUT_MS</code></td><td>内嵌 xlogin 登录总超时</td><td><code>// 5 × 60_000 ms</code></td></tr>
+  <tr><td><code>LOGIN_COOKIE_POLL_MS</code></td><td>内嵌登录读取 session Cookie 的轮询间隔</td><td><code>// 1000 ms</code></td></tr>
+  <tr><td><code>LOGIN_EMBED_PARTITION</code></td><td>登录组件的独立 session 分区名</td><td><code>// 'lychee-xlogin'</code></td></tr>
+  <tr><td><code>SESSION_REFRESH_INTERVAL_MS</code></td><td>会话续期定时器间隔</td><td><code>// 30 × 60_000 ms</code></td></tr>
+  <tr><td><code>SESSION_REFRESH_AHEAD_MS</code></td><td>凭证到期前提前续期的窗口</td><td><code>// 10 × 60_000 ms</code></td></tr>
+  <tr><td><code>SESSION_REFRESH_FALLBACK_MS</code></td><td>凭证无到期时间时的续期间隔</td><td><code>// 6 × 60 × 60_000 ms</code></td></tr>
+  <tr><td><code>PLAYER_STATE_THROTTLE_MS</code></td><td>播放状态推送的节流窗口</td><td><code>// 900 ms</code></td></tr>
+  <tr><td><code>TOAST_DURATION_MS</code></td><td>Toast 自动消失时间</td><td><code>// 3600 ms</code></td></tr>
+  <tr><td><code>IPC_SONG_MIDS_MAX</code></td><td><code>song.getUrls</code> 单次批量上限</td><td><code>// 100</code></td></tr>
+  <tr><td><code>SEARCH_PAGE_NO_MAX</code></td><td><code>search.byType</code> 页码上限</td><td><code>// 100</code></td></tr>
+  <tr><td><code>SEARCH_PAGE_SIZE_DEFAULT</code></td><td>搜索每页默认条数</td><td><code>// 20</code></td></tr>
+  <tr><td><code>SEARCH_PAGE_SIZE_MAX</code></td><td>搜索每页最大条数</td><td><code>// 50</code></td></tr>
+  <tr><td><code>PLAYLIST_PAGE_SIZE</code></td><td>歌单上游单页条数</td><td><code>// 100</code></td></tr>
+  <tr><td><code>PLAYLIST_PAGE_MAX</code></td><td>歌单本地最大分页数</td><td><code>// 20</code></td></tr>
 </table>
 <ul class="note">
-  <li>名称是文档建议；代码中的字面量是运行时的操作来源，调整时以真实系统实测为准。</li>
+  <li>名称与用途是文档建议；推荐值仅以注释形式给出，不构成赋值。代码是运行时的操作来源，调整时以真实系统实测为准。</li>
   <li>UI 视觉字面量（窗口尺寸、间距、字号等）记录在 <a href="USER.html#u5">USER §5</a>，不在此表。</li>
 </ul>
 
@@ -407,7 +406,7 @@ export async function saveCredential(credential: Credential): Promise&lt;void&gt
 export async function clearCredential(): Promise&lt;void&gt;;
 </code></pre>
 <ul class="note">
-  <li><code>loadCredential</code> 解密失败时不缓存失败结果、保留文件，后续调用可重试；旧明文凭证在密钥环可用时重新加密落盘。</li>
+  <li><code>loadCredential</code> 只接受加密凭证；解密失败时不缓存失败结果、保留文件，后续调用可重试。检测到旧明文时，仅在密钥环可用时迁移；密钥环不可用则拒绝登录，不加载明文。</li>
   <li><code>saveCredential</code> 在密钥环不可用时抛错，拒绝明文保存。</li>
 </ul>
 
@@ -445,7 +444,7 @@ export function musicu&lt;T&gt;(
 export function mapUpstreamCode(code: number, context: string): UpstreamError;
 </code></pre>
 <ul class="note">
-  <li><code>upstreamRequest</code> 负责 UA / Referer / Cookie 注入、超时、HTTP 错误与网络退避；<code>musicu</code> 负责组装 <code>comm</code> / <code>req_0</code> 并处理瞬时繁忙码。</li>
+  <li><code>upstreamRequest</code> 负责 UA / Referer / Cookie 注入、超时、HTTP 错误与 HTTP 非 2xx 退避；<code>musicu</code> 负责组装 <code>comm</code> / <code>req_0</code> 并处理瞬时繁忙码。</li>
   <li><code>getGuid</code> 返回进程级稳定 GUID，供 vkey 请求使用。</li>
 </ul>
 
@@ -463,7 +462,7 @@ export function getStreamUrls(mids: string[], quality: Quality): Promise&lt;UrlR
 export function rawSongToSong(raw: unknown): Song;
 </code></pre>
 <ul class="note">
-  <li><code>getStreamUrls</code> 含音质降档链，是全应用唯一拼装播放链接的位置。</li>
+  <li><code>getStreamUrls</code> 是全应用唯一拼装播放链接的位置；回退规则见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射。</li>
 </ul>
 
@@ -499,8 +498,8 @@ export function disposeEmbedView(): void;
 export function openWebLogin(): Promise&lt;Credential&gt;;
 </code></pre>
 <ul class="note">
-  <li><code>setEmbedBounds</code> 由渲染进程上报的页面坐标驱动 <code>WebContentsView</code> 定位；<code>null</code> 摘除视图。</li>
-  <li><code>openWebLogin</code> 在独立 session 分区中加载官方 xlogin，读取 Cookie 换 OAuth code，再交给 <code>login.ts</code> 换凭证。</li>
+  <li><code>setEmbedBounds</code> 由渲染进程上报的页面坐标驱动 <code>WebContentsView</code> 的创建、定位与首次加载；<code>null</code> 摘除视图。</li>
+  <li><code>openWebLogin</code> 在独立 session 分区中启动登录流程：轮询 Cookie 或捕获 OAuth 回调 code，换取 <code>Credential</code>；不负责创建或定位视图。</li>
 </ul>
 
 <h3 id="c4-17">4.17 src/main/integration/mpris.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -572,11 +571,11 @@ export function destroyTray(): void;
 </code></pre>
 
 <h3 id="c4-22">4.22 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、歌词面板与 Toast。
+<pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、歌词面板、播放队列面板与 Toast。
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
-  <li>监听路由变化并关闭歌词面板。</li>
+  <li>监听路由变化并关闭歌词面板，规则见 <a href="USER.html#u2">USER §2</a>。</li>
 </ul>
 
 <h3 id="c4-23">4.23 src/renderer/api.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -657,6 +656,7 @@ export function usePlayerStore(): PlayerStore;
 
 interface PlayerStore {
   readonly current: Song | null;
+  readonly playOrder: Song[];
   readonly queue: Song[];
   readonly index: number;
   readonly status: 'stopped' | 'playing' | 'paused';
@@ -672,7 +672,7 @@ interface PlayerStore {
   readonly progress: number;
 
   playList(songs: Song[], startIndex?: number): void;
-  playSong(song: Song): void;
+  playNext(song: Song): void;
   playAt(index: number): void;
   toggle(): void;
   pause(): void;
@@ -687,6 +687,9 @@ interface PlayerStore {
 }
 </code></pre>
 <ul class="note">
+  <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，用于列表循环与随机预览，播放队列面板只绑定 <code>queue</code>。<code>playNext</code> 将歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>；已在其中则移动，<code>current</code> 本身不操作；无 <code>current</code> 时直接以该歌曲开始播放。用户可见规则见 <a href="USER.html#u1">USER §1</a> 与 <a href="USER.html#u5-2-9">USER §5.2.9</a>。</li>
+  <li><code>playOrder</code>、<code>queue</code> 的新语义与 <code>playNext</code> 为待实现设计，可以根据实际情况调整；<code>canPlay</code> 应同时考虑 <code>current</code> 与 <code>queue</code>，不能只按 <code>queue.length</code> 判断。队列面板的移除/清空直接修改 <code>playOrder</code>，不改变 <code>current</code>。</li>
+  <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放按洗牌后的 <code>playOrder</code> 进行。</li>
   <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档。</li>
   <li><code>sendState</code> 以节流方式发布 <code>player:state</code>；音量持久化在 <code>localStorage</code>。</li>
 </ul>
@@ -708,10 +711,16 @@ interface SettingsStore {
 
 interface UiStore {
   readonly lyricsOpen: boolean;
+  readonly queueOpen: boolean;
   toggleLyrics(): void;
   closeLyrics(): void;
+  toggleQueue(): void;
+  closeQueue(): void;
 }
 </code></pre>
+<ul class="note">
+  <li>歌词面板与播放队列面板互斥；打开一个时关闭另一个。队列面板相关状态为待实现设计，可以根据实际情况调整。</li>
+</ul>
 
 <h3 id="c4-31">4.31 src/renderer/utils/format.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function formatDuration(ms: number): string;
@@ -739,7 +748,7 @@ export function activeLyricIndex(lines: LyricLine[], positionMs: number): number
   loading: Ref&lt;boolean&gt;;
   error: Ref&lt;string&gt;;
   activeIndex: ComputedRef&lt;number&gt;;
-  reload(): Promise&lt;void&gt; | false;
+  reload(): Promise&lt;void&gt; | null;
 };
 </code></pre>
 
@@ -777,13 +786,19 @@ emits: none
 
 <h3 id="c4-38">4.38 src/renderer/components/SongTable.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>props: { songs: Song[]; activeMid?: string | null; showAlbum?: boolean };   // activeMid = null, showAlbum = true
-emits: { play: [index: number] }
+emits: { play: [index: number]; playNext: [index: number]; toggle: [] }
 </code></pre>
+<ul class="note">
+  <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由“下一首播放”按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。队列相关交互为待实现设计，可以根据实际情况调整。</li>
+</ul>
 
 <h3 id="c4-39">4.39 src/renderer/components/PlayerBar.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>props: none
 emits: none
 </code></pre>
+<ul class="note">
+  <li>播放条包含“播放队列”入口；点击切换 <code>UiStore.queueOpen</code>。队列入口为待实现设计，可以根据实际情况调整。</li>
+</ul>
 
 <h3 id="c4-40">4.40 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>props: none
@@ -800,7 +815,7 @@ emits: none
 emits: none
 </code></pre>
 <ul class="note">
-  <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。</li>
+  <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”。</li>
 </ul>
 
 <h3 id="c4-43">4.43 src/renderer/views/LibraryView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -816,7 +831,7 @@ emits: none
 emits: none
 </code></pre>
 <ul class="note">
-  <li>按路由参数加载歌单详情；支持播放全部、单曲播放、失败重试与返回搜索。</li>
+  <li>按路由参数加载歌单详情；支持播放全部、单曲播放、下一首播放、失败重试与返回搜索。</li>
 </ul>
 
 <h3 id="c4-45">4.45 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -857,7 +872,9 @@ emits: none
 ├── integration/tray::initTray(actions)
 ├── index::createMainWindow()
 ├── api/login::refreshIfNeeded()
-└── setInterval(() =&gt; { credential::loadCredential(); api/login::refreshIfNeeded(); }, 30 * 60_000)
+└── setInterval(30 * 60_000)
+    ├── credential::loadCredential()
+    └── api/login::refreshIfNeeded()
 </code></pre>
 <ul class="note">
   <li><code>loadCredential</code> 失败按未登录继续，不阻塞启动；定时器同时承担密钥环晚解锁后的重试。</li>
@@ -872,14 +889,19 @@ index::configureLinuxDisplay()
 ├── 判断 process.platform !== 'linux' → return
 ├── 判断 process.argv 含 --ozone-platform → return
 ├── 判断 LYCHEE_OZONE_PLATFORM === 'x11' → app.commandLine.appendSwitch('ozone-platform', 'x11')
-└── 判断 LYCHEE_OZONE_PLATFORM === 'wayland' 或 WAYLAND_DISPLAY → app.commandLine.appendSwitch('ozone-platform', 'wayland') + app.commandLine.appendSwitch('enable-wayland-ime')
+└── 判断 LYCHEE_OZONE_PLATFORM === 'wayland' 或 WAYLAND_DISPLAY
+    ├── app.commandLine.appendSwitch('ozone-platform', 'wayland')
+    └── app.commandLine.appendSwitch('enable-wayland-ime')
 
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
 app::requestSingleInstanceLock()
 ├── 判断 false → app.quit()
-└── 判断 true → app.whenReady().then(index::bootstrap)
-    └── app.on('second-instance') → index::showMainWindow()
+└── 判断 true
+    ├── app.on('second-instance')
+    │   └── index::showMainWindow()
+    └── app.whenReady()
+        └── index::bootstrap()
 </code></pre>
 <ul class="note">
   <li>启动参数在模块加载阶段固定；显式命令行 <code>--ozone-platform</code> 优先于环境变量与会话检测。</li>
@@ -890,27 +912,37 @@ app::requestSingleInstanceLock()
 ├── nextTick()
 ├── views/LoginView::sendBounds()
 │   └── window.lychee.login.setEmbedBounds(rect)
-│       └── ipcMain.on('login.setEmbedBounds') → api/web-login::setEmbedBounds(rect)
-│           ├── api/web-login::createEmbedView()
-│           └── webContents.loadURL(XLOGIN_URL)
+│       └── ipcMain.on('login.setEmbedBounds')
+│           └── api/web-login::setEmbedBounds(rect)
+│               ├── api/web-login::createEmbedView()
+│               │   └── api/web-login::attachCapture(webContents)
+│               │       ├── webContents.on('will-navigate')
+│               │       │   └── api/web-login::onWillNavigate()
+│               │       ├── webContents.on('will-redirect')
+│               │       │   └── api/web-login::onWillRedirect()
+│               │       └── webContents.on('did-navigate')
+│               │           └── api/web-login::onDidNavigate()
+│               └── webContents.loadURL(XLOGIN_URL)
 ├── new ResizeObserver(views/LoginView::sendBounds)
 ├── window.addEventListener('scroll', views/LoginView::sendBounds, true)
 └── views/LoginView::startEmbedLogin()
     └── stores/auth::openWebLogin()
         └── window.lychee.login.openWebLogin()
-            └── ipc::handle('login.openWebLogin') → api/web-login::openWebLogin()
-                ├── 判断 safeStorage.isEncryptionAvailable() === false → 拒绝登录
-                ├── api/web-login::runEmbedLogin()
-                │   ├── session.fromPartition('lychee-xlogin').clearStorageData()
-                │   ├── setInterval(api/web-login::finishFromCookies, 1000)
-                │   ├── setTimeout(api/web-login::fail, 5 * 60_000)
-                │   ├── 判断 Cookie 含 p_skey 且含 p_uin/pt4_token/uin
-                │   ├── api/login::requestOAuthCodeWithCookies(jar)
-                │   └── api/login::exchangeQqLoginCode(code)
+            └── ipc::handle('login.openWebLogin')
+                ├── api/web-login::openWebLogin()
+                │   ├── 判断 safeStorage.isEncryptionAvailable() === false → 拒绝登录
+                │   ├── api/web-login::runEmbedLogin()
+                │   │   ├── session.fromPartition('lychee-xlogin').clearStorageData()
+                │   │   ├── setInterval(api/web-login::finishFromCookies, 1000)
+                │   │   ├── setTimeout(api/web-login::fail, 5 * 60_000)
+                │   │   ├── 判断 Cookie 含 p_skey 且含 p_uin/pt4_token/uin
+                │   │   ├── api/login::requestOAuthCodeWithCookies(jar)
+                │   │   └── api/login::exchangeQqLoginCode(code)
                 └── credential::saveCredential(credential)
 </code></pre>
 <ul class="note">
-  <li>登录视图为独立 session 分区的 <code>WebContentsView</code>；只放行 QQ 域名导航与子窗口，登录前后各清理一次。</li>
+  <li>登录视图为独立 session 分区的 <code>WebContentsView</code>；只放行腾讯相关域名（<code>qq.com</code> / <code>gtimg.cn</code> / <code>weixin.qq.com</code>）导航与子窗口，登录前后各清理一次。</li>
+  <li>OAuth 回调路径：<code>attachCapture</code> 监听 <code>will-navigate</code> / <code>will-redirect</code> / <code>did-navigate</code>，<code>extractOauthCode</code> 从 URL 提取 <code>code</code>，<code>emitCode</code> 调用 <code>succeed(code)</code> → <code>exchangeQqLoginCode(code)</code>。Cookie 轮询路径需要 <code>p_skey</code> 与 <code>p_uin</code> / <code>pt4_token</code> / <code>uin</code> 之一。</li>
   <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；成功后 <code>startEmbedLogin</code> 跳转“我的歌单”，没有独立的状态推送。</li>
 </ul>
 
@@ -926,7 +958,7 @@ app::requestSingleInstanceLock()
 </code></pre>
 <ul class="note">
   <li>Cookie 至少需要有效的 <code>uin</code> 与 <code>qm_keyst</code>；资料接口验证失败返回 <code>AUTH_EXPIRED</code>。</li>
-  <li>验证成功后 <code>submitCookie</code> 跳转“我的歌单”，凭证只保存在主进程。</li>
+  <li>验证成功后 <code>submitCookie</code> 跳转“我的歌单”；凭证保存边界见 <a href="USER.html#u2">USER §2</a>。</li>
 </ul>
 
 <h3 id="c5-5">5.5 播放单曲</h3>
@@ -935,58 +967,93 @@ app::requestSingleInstanceLock()
     └── stores/player::playAt(index)
         └── stores/player::loadAndPlay(song)
             ├── window.lychee.song.getUrls([song.songMid], quality)
-            │   └── ipc::handle('song.getUrls') → api/song::getStreamUrls(mids, quality)
-            │       ├── api/song::fetchTrack(mid) → api/client::musicu('music.pf_song_detail_svr', 'get_song_detail_yqq', ...)
-            │       ├── api/song::requestQuality(tracks, quality) → api/client::musicu('vkey.GetVkeyServer', 'CgiGetVkey', ...)
-            │       ├── 判断 purl 为空 → 下一档重试
-            │       └── api/song::buildStreamUrl(purl)
+            │   └── ipc::handle('song.getUrls')
+            │       └── api/song::getStreamUrls(mids, quality)
+            │           ├── api/song::fetchTrack(mid)
+            │           │   └── api/client::musicu('music.pf_song_detail_svr', 'get_song_detail_yqq', ...)
+            │           ├── api/song::requestQuality(tracks, quality)
+            │           │   └── api/client::musicu('vkey.GetVkeyServer', 'CgiGetVkey', ...)
+            │           ├── 判断 purl 为空 → 下一档重试
+            │           └── api/song::buildStreamUrl(purl)
             ├── 判断 result.url === null → composables/toast::useToast().error(NO_STREAM)
             ├── audio/engine::loadAndPlay(url)
             └── window.lychee.player.sendState(state)
-                └── ipcMain.on('player:state') → integration/mpris::publishState(state)
+                └── ipcMain.on('player:state')
+                    └── integration/mpris::publishState(state)
 
 audio/engine::onEnded
-├── 判断 mode === 'repeat-one' → stores/player::seek(0) + stores/player::resume()
+├── 判断 mode === 'repeat-one'
+│   ├── stores/player::seek(0)
+│   └── stores/player::resume()
 └── stores/player::next(true)
     └── stores/player::playAt(index + 1)
 </code></pre>
 <ul class="note">
-  <li>音频流由渲染进程直接加载，主进程只经手链接字符串。</li>
-  <li>音质降档在 <code>api/song.ts</code> 内部完成；实际档位随 <code>UrlResult.quality</code> 返回并写入播放状态。</li>
+  <li>双击、播放全部、单曲播放都走 <code>playList</code>（替换队列）；“下一首播放”走 <code>playNext</code>，只把歌曲插入 <code>playOrder</code> 当前项之后，不改变 <code>current</code>；无 <code>current</code> 时直接以该歌曲开始播放。队列模型见 <a href="#c4-28">§4.28</a>，用户可见规则见 <a href="USER.html#u1">USER §1</a>。</li>
+  <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；主进程只经手链接字符串。</li>
+  <li>音质回退在 <code>api/song.ts</code> 内部完成；实际档位随 <code>UrlResult.quality</code> 返回并写入播放状态。</li>
 </ul>
 
 <h3 id="c5-6">5.6 MPRIS 控制</h3>
 <pre><code>integration/mpris::initMpris(ipc::sendPlayerCommand)
-├── player.on('play') → ipc::sendPlayerCommand('play')
-├── player.on('pause') → ipc::sendPlayerCommand('pause')
-├── player.on('playpause') → ipc::sendPlayerCommand('toggle')
-├── player.on('next') → ipc::sendPlayerCommand('next')
-├── player.on('previous') → ipc::sendPlayerCommand('previous')
-├── player.on('stop') → ipc::sendPlayerCommand('pause')
-├── player.on('seek') → ipc::sendPlayerCommand({ seekTo })
-├── player.on('position') → ipc::sendPlayerCommand({ seekTo })
-├── player.on('raise') → BrowserWindow::show() + BrowserWindow::focus()
-└── player.on('quit') → app::quit()
-    └── ipc::sendPlayerCommand(command) → webContents.send('player:command', command)
-        └── stores/player::handleCommand(command)
+├── player.on('play')
+│   └── onCommand('play')
+├── player.on('pause')
+│   └── onCommand('pause')
+├── player.on('playpause')
+│   └── onCommand('toggle')
+├── player.on('next')
+│   └── onCommand('next')
+├── player.on('previous')
+│   └── onCommand('previous')
+├── player.on('stop')
+│   └── onCommand('pause')
+├── player.on('seek')
+│   └── onCommand({ seekTo })
+├── player.on('position')
+│   └── onCommand({ seekTo })
+├── player.on('raise')
+│   ├── BrowserWindow.getAllWindows()
+│   ├── 判断 window 存在
+│   │   ├── 判断 window.isMinimized() → BrowserWindow::restore()
+│   │   ├── BrowserWindow::show()
+│   │   └── BrowserWindow::focus()
+├── player.on('quit')
+│   └── app.quit()
+└── player.on('error')   // D-Bus 断开 → player = null，静默降级
 </code></pre>
+<ul class="note">
+  <li><code>initMpris</code> 的 <code>onCommand</code> 形参由 <code>bootstrap</code> 传入 <code>ipc::sendPlayerCommand</code>；播放控制事件经它下发，<code>raise</code> / <code>quit</code> 不经过它。<code>sendPlayerCommand</code> 的展开见 <a href="#c5-6-1">§5.6.1</a>。</li>
+  <li>源码按 MPRIS 事件分别注册监听，不存在单一 <code>player.on(command)</code> 入口；<code>error</code> 事件静默降级为 <code>player = null</code>。</li>
+</ul>
+
+<h4 id="c5-6-1">5.6.1 命令下发</h4>
+<pre><code>ipc::sendPlayerCommand(command)
+└── webContents.send('player:command', command)
+    └── stores/player::handleCommand(command)
+</code></pre>
+<ul class="note">
+  <li><code>sendPlayerCommand</code> 遍历所有未销毁窗口，逐个 <code>webContents.send</code> 广播。</li>
+</ul>
 
 <h3 id="c5-7">5.7 会话续期</h3>
 <pre><code>api/login::refreshIfNeeded()
 ├── 判断无凭证 → return
-├── 判断 expiredAtMs - now &lt;= 10 * 60_000 或距上次续期 ≥ 6 * 60 * 60_000
-└── api/login::refreshSession()
+└── 判断续期条件 → api/login::refreshSession()
     └── api/login::refreshMusickey(current)
         └── api/client::upstreamRequest('music.login.LoginServer/Login')
             └── credential::saveCredential(refreshed)
 </code></pre>
 <ul class="note">
+  <li>续期条件分两种情况：凭证有到期时间时，在 <code>SESSION_REFRESH_AHEAD_MS</code> 窗口内触发；凭证无到期时间时，达到 <code>SESSION_REFRESH_FALLBACK_MS</code> 触发。两种情况都不满足则跳过。</li>
   <li>续期失败保留旧凭证并等待下一次重试；启动检查与定时器都会触发该路径。</li>
 </ul>
 
 <h3 id="c5-8">5.8 关闭与退出</h3>
 <pre><code>BrowserWindow.on('close')
-└── 判断 !quitting &amp;&amp; settings::getSettings().closeToTray → event.preventDefault() + window.hide()
+└── 判断 !quitting &amp;&amp; settings::getSettings().closeToTray
+    ├── event.preventDefault()
+    └── window.hide()
 
 app.on('before-quit')
 ├── index::clearInterval(refreshTimer)
@@ -996,6 +1063,7 @@ app.on('before-quit')
 └── settings::saveSettings(settings::getSettings())
 </code></pre>
 <ul class="note">
+  <li><code>before-quit</code> 先将 <code>quitting</code> 置为 <code>true</code>，避免关闭窗口被 <code>closeToTray</code> 拦截为隐藏。</li>
   <li>退出路径不等待 <code>saveSettings</code> 完成；凭证默认保留，清除仅由 <code>login.logout()</code> 触发。</li>
   <li><code>closeToTray</code> 生效时关闭窗口仅隐藏；<code>before-quit</code> 只在托盘退出或应用退出时触发。</li>
 </ul>

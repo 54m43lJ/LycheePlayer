@@ -2,7 +2,7 @@
 skinparam shadowing false
 skinparam defaultTextAlignment center
 
-participant "Lychee Player\n(主进程)" as APP
+participant "Lychee Player" as APP
 participant "QQ 音乐\n(musicu.fcg)" as API
 participant "QQ 音乐\n(音频流)" as STREAM
 
