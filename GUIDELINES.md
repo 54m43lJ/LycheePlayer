@@ -12,6 +12,8 @@ Documents per project, in HTML — the development docs split by boundary:
 | 4 | [PROVIDER](#provider) | lower — underlying data sources / dependencies (system services, IPC, hardware, daemons, network endpoints, …); omit when absent | protocols · conventions · APIs · workflows | whole-system view → [USER](#user) · internal handling → [CORE](#core) |
 | 5 | [BUILD](#build) | written after development | how to use & build on the project | — |
 
+**Proximity principle** — place a concern at the nearest boundary it directly faces; an indirect relationship does not move it to a higher document.
+
 **End goal** — a set of design constraints immediately useful to any developer implementing the code.
 
 **AVOID at all costs** — comparisons to historical design · rationale for a specific design choice (broad general principles excepted).
@@ -39,7 +41,7 @@ Documents per project, in HTML — the development docs split by boundary:
 1. **WHAT & WHY** — IDEAL: the problem to solve · GOAL: what success looks like · non-goals (optional)
 2. **User interactions**
 3. **Project map** — optional; root project of a multi-project repo only · ASCII tree of the project family
-4. **Credits** — always present, always last
+4. **Credits** — always present, always last; list the credited projects (and stack/license where useful), not what was referenced
 
 ## User
 
@@ -61,7 +63,7 @@ Documents per project, in HTML — the development docs split by boundary:
 5. **UI** — optional; graphical programs only; all UI prototypes/mocks live here
    - prototype/mock — code, pictures or videos
    - palette — color tokens and their semantic roles
-   - visual presentation — the per-component visual contract (geometry, states, styling); drawn samples preferred over prose
+   - visual presentation — the per-component visual contract (geometry, states, styling); concrete requirements must be stated in prose/code; a prototype illustrates but does not replace the written/encoded contract, and exact numeric parity with the prototype is not required
 
 ## Core
 
@@ -70,7 +72,7 @@ Documents per project, in HTML — the development docs split by boundary:
 **Rules**
 - not exhaustive — key execution paths only: startup, key events, shutdown
 - symbols already defined in USER/PROVIDER → one-line declaration with trailing `//见 USER §xx.xx` / `//见 PROVIDER §xx.xx` — project language, no body, no redefinition; everything else syntactically valid in the project language
-- engineering constants (bus names, periods, capacities, …) — declare the constant name and purpose; a concrete value may appear only as a recommended value in a comment (e.g. `// 推荐值 15_000`), never as an assignment in the declaration; tuned against the real system, code stays the operational source of truth; a literal may appear inline in a call stack where that flow depends on it; exception: UI visual literals (dimensions, radii, font sizes, …) pin the visual contract and may be stated in USER's UI chapters — CSS/code stays the operational source of truth
+- engineering constants (bus names, periods, capacities, …) — in the owning source file's signature subsection, declare the constant name and purpose; a concrete value may appear only as a recommended value in a comment (e.g. `// 推荐值 15_000`), never as an assignment in the declaration; do not use a separate constants table; tuned against the real system, code stays the operational source of truth; a literal may appear inline in a call stack where that flow depends on it; exception: UI visual literals (dimensions, radii, font sizes, …) pin the visual contract and may be stated in USER's UI chapters — CSS/code stays the operational source of truth
 - no implementation reference → draft meaningful names/signatures marked `待实现，可以根据实际情况调整` (call-stack lines use the drafted names, no marker at the call site); a reference exists (main branch, breadpan, std / GTK APIs) → use its real names
 
 **Chapters**

@@ -155,7 +155,7 @@ div.diagram img { display: block; }
 .u-lyric.active { color: var(--p-cream); border-left-color: var(--p-gold); background: rgba(157, 126, 77, 0.12); font-weight: 600; }
 
 /* 登录页 */
-.u-login { width: 1080px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+.u-login { width: 100%; max-width: 800px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .u-embed { height: 332px; border: 1px dashed var(--p-gold); border-radius: 10px; background: #fff; color: #4b5563; display: grid; place-items: center; text-align: center; font-size: 11px; }
 .u-cookie { border: 1px solid var(--p-line); border-radius: 8px; padding: 8px 12px; color: var(--p-muted); }
 

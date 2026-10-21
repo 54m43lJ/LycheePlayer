@@ -29,7 +29,7 @@
 <h3>1.2 GOAL：什么算成功</h3>
 <ul>
   <li>用户能用自己的 QQ 音乐账号登录，浏览、搜索并播放自己有权收听的内容（含 VIP 曲库按账号权限）。</li>
-  <li>完整的 MPRIS 媒体控制与系统托盘，行为符合 freedesktop 规范。</li>
+  <li>系统托盘与 Linux 桌面集成。</li>
   <li>用户可自由选择音质；日常听歌可以完全替代官方 Linux 客户端。</li>
   <li>资源占用与启动速度显著优于官方 Electron 客户端。</li>
 </ul>
@@ -90,21 +90,21 @@
 
 <h3>3.1 参考项目</h3>
 <table>
-  <tr><th>项目</th><th>技术栈</th><th>参考点</th></tr>
-  <tr><td>amtoaer/lyrune</td><td>Rust + GPUI</td><td>同为 Linux QQ 音乐第三方客户端，整体行为与 API 调用清单</td></tr>
-  <tr><td>jsososo/QQMusicApi</td><td>Node.js</td><td>上游接口行为与参数（仅作行为参考，不直接依赖）</td></tr>
-  <tr><td>L-1124/QQMusicApi</td><td>Python</td><td>凭证刷新、设备指纹、多平台请求</td></tr>
-  <tr><td>jixunmoe-go/qrc</td><td>Go</td><td>QRC 逐字歌词解密（进阶歌词功能）</td></tr>
-  <tr><td>lyswhut/lx-music-desktop</td><td>Electron + Vue</td><td>工程化结构与免责声明范本（Apache-2.0）</td></tr>
-  <tr><td>imsyy/SPlayer</td><td>Electron + Vue3</td><td>MPRIS 实现、歌词 UI</td></tr>
-  <tr><td>MoeKoeMusic</td><td>Electron + Vue3</td><td>扫码登录流程</td></tr>
-  <tr><td>Team-Quaver/quaver-music</td><td>Electron + Vite</td><td>Wayland 适配、AppImage 双架构 CI</td></tr>
+  <tr><th>项目</th><th>技术栈</th></tr>
+  <tr><td>amtoaer/lyrune</td><td>Rust + GPUI</td></tr>
+  <tr><td>jsososo/QQMusicApi</td><td>Node.js</td></tr>
+  <tr><td>L-1124/QQMusicApi</td><td>Python</td></tr>
+  <tr><td>jixunmoe-go/qrc</td><td>Go</td></tr>
+  <tr><td>lyswhut/lx-music-desktop</td><td>Electron + Vue（Apache-2.0）</td></tr>
+  <tr><td>imsyy/SPlayer</td><td>Electron + Vue3</td></tr>
+  <tr><td>MoeKoeMusic</td><td>Electron + Vue3</td></tr>
+  <tr><td>Team-Quaver/quaver-music</td><td>Electron + Vite</td></tr>
 </table>
 
 <h3>3.2 许可与例外声明</h3>
 <ul>
   <li>许可证正文见 <code>LICENSE</code>（GPL-3.0-only）；衍生作品分发时须整体以同协议开源。</li>
-  <li>以下为非官方项目的例外声明：本项目与腾讯及 QQ 音乐无隶属关系，仅调用官方公开接口。</li>
+  <li>以下为非官方项目的例外声明：本项目与腾讯及 QQ 音乐无隶属关系，仅调用官方可访问接口（无公开文档）。</li>
   <li>VIP / 数字专辑内容仅通过用户本人的登录凭证获取，不实现任何绕过授权的能力。</li>
   <li>上游接口随时可能变更导致功能失效，属预期风险。</li>
 </ul>

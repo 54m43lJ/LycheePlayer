@@ -143,34 +143,8 @@
   </tr>
 </table>
 
-<h3 id="c2-1">2.1 Engineering constants</h3>
-<table>
-  <tr><th>变量（建议命名）</th><th>用途</th><th>推荐值（注释）</th></tr>
-  <tr><td><code>UPSTREAM_TIMEOUT_MS</code></td><td>单次上游请求超时</td><td><code>// 15_000 ms</code></td></tr>
-  <tr><td><code>UPSTREAM_RETRY_ATTEMPTS</code></td><td>HTTP 非 2xx / 429 / 瞬时繁忙的最大尝试次数</td><td><code>// 3</code></td></tr>
-  <tr><td><code>UPSTREAM_NETWORK_BACKOFF_MS</code></td><td>HTTP 非 2xx 重试的基础退避</td><td><code>// 400 ms，指数退避</code></td></tr>
-  <tr><td><code>UPSTREAM_QUOTA_BACKOFF_MS</code></td><td>HTTP 限流重试的基础退避</td><td><code>// 600 ms，指数退避</code></td></tr>
-  <tr><td><code>MUSICU_BUSY_BACKOFF_MS</code></td><td>上游瞬时繁忙码（2001 / 104604）重试的基础退避</td><td><code>// 500 ms，指数退避</code></td></tr>
-  <tr><td><code>SEARCH_EMPTY_RETRY_MS</code></td><td>搜索空结果重试延迟</td><td><code>// 350 ms</code></td></tr>
-  <tr><td><code>SEARCH_EMPTY_RETRY_COUNT</code></td><td>搜索空结果重试次数</td><td><code>// 1</code></td></tr>
-  <tr><td><code>LOGIN_EMBED_TIMEOUT_MS</code></td><td>内嵌 xlogin 登录总超时</td><td><code>// 5 × 60_000 ms</code></td></tr>
-  <tr><td><code>LOGIN_COOKIE_POLL_MS</code></td><td>内嵌登录读取 session Cookie 的轮询间隔</td><td><code>// 1000 ms</code></td></tr>
-  <tr><td><code>LOGIN_EMBED_PARTITION</code></td><td>登录组件的独立 session 分区名</td><td><code>// 'lychee-xlogin'</code></td></tr>
-  <tr><td><code>SESSION_REFRESH_INTERVAL_MS</code></td><td>会话续期定时器间隔</td><td><code>// 30 × 60_000 ms</code></td></tr>
-  <tr><td><code>SESSION_REFRESH_AHEAD_MS</code></td><td>凭证到期前提前续期的窗口</td><td><code>// 10 × 60_000 ms</code></td></tr>
-  <tr><td><code>SESSION_REFRESH_FALLBACK_MS</code></td><td>凭证无到期时间时的续期间隔</td><td><code>// 6 × 60 × 60_000 ms</code></td></tr>
-  <tr><td><code>PLAYER_STATE_THROTTLE_MS</code></td><td>播放状态推送的节流窗口</td><td><code>// 900 ms</code></td></tr>
-  <tr><td><code>TOAST_DURATION_MS</code></td><td>Toast 自动消失时间</td><td><code>// 3600 ms</code></td></tr>
-  <tr><td><code>IPC_SONG_MIDS_MAX</code></td><td><code>song.getUrls</code> 单次批量上限</td><td><code>// 100</code></td></tr>
-  <tr><td><code>SEARCH_PAGE_NO_MAX</code></td><td><code>search.byType</code> 页码上限</td><td><code>// 100</code></td></tr>
-  <tr><td><code>SEARCH_PAGE_SIZE_DEFAULT</code></td><td>搜索每页默认条数</td><td><code>// 20</code></td></tr>
-  <tr><td><code>SEARCH_PAGE_SIZE_MAX</code></td><td>搜索每页最大条数</td><td><code>// 50</code></td></tr>
-  <tr><td><code>PLAYLIST_PAGE_SIZE</code></td><td>歌单上游单页条数</td><td><code>// 100</code></td></tr>
-  <tr><td><code>PLAYLIST_PAGE_MAX</code></td><td>歌单本地最大分页数</td><td><code>// 20</code></td></tr>
-</table>
 <ul class="note">
-  <li>名称与用途是文档建议；推荐值仅以注释形式给出，不构成赋值。代码是运行时的操作来源，调整时以真实系统实测为准。</li>
-  <li>UI 视觉字面量（窗口尺寸、间距、字号等）记录在 <a href="USER.html#u5">USER §5</a>，不在此表。</li>
+  <li>工程常量在各自源文件的签名小节中声明；推荐值只以注释形式给出，不构成赋值；UI 视觉字面量见 <a href="USER.html#u5">USER §5</a>。</li>
 </ul>
 
 <h2 id="c3">3. SBOM</h2>
@@ -294,13 +268,25 @@ export interface AuthStatus {
   canRefresh: boolean;
 }
 
-export type MprisCommand = 'play' | 'pause' | 'toggle' | 'next' | 'previous' | { seekTo: number };
+export type MprisCommand =
+  | 'play'
+  | 'pause'
+  | 'toggle'
+  | 'next'
+  | 'previous'
+  | { seekTo: number }
+  | { setVolume: number }
+  | { setLoopStatus: 'None' | 'Track' | 'Playlist' }
+  | { setShuffle: boolean };
 
 export interface PlayerState {
   song: Song | null;
   status: 'stopped' | 'playing' | 'paused';
   positionMs: number;
   quality: Quality;
+  volume: number;
+  loopStatus: 'None' | 'Track' | 'Playlist';
+  shuffle: boolean;
 }
 
 export interface UserProfile {
@@ -377,6 +363,8 @@ export function bootstrap(): Promise&lt;void&gt;;
 function checkCredentialStore(): Promise&lt;void&gt;;
 function configureLinuxDisplay(): void;
 function showMainWindow(): void;
+
+declare const SESSION_REFRESH_INTERVAL_MS: number;   // 推荐值 30 × 60_000 ms；会话续期定时器间隔
 </code></pre>
 <ul class="note">
   <li>模块加载阶段完成 Linux 显示后端与启动参数配置；<code>bootstrap()</code> 只在 <code>app.whenReady()</code> 后执行一次。</li>
@@ -389,6 +377,8 @@ export function sendPlayerCommand(command: MprisCommand): void;
 
 function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;): Promise&lt;IpcResult&lt;T&gt;&gt;;
 function handle(channel: string, fn: (...args: any[]) =&gt; Promise&lt;unknown&gt;): void;
+
+declare const IPC_SONG_MIDS_MAX: number;   // 推荐值 100；song.getUrls 单次批量上限
 </code></pre>
 <ul class="note">
   <li><code>registerIpc</code> 注册全部请求型通道与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>。</li>
@@ -444,6 +434,12 @@ export function musicu&lt;T&gt;(
   options?: MusicuOptions
 ): Promise&lt;T&gt;;
 export function mapUpstreamCode(code: number, context: string): UpstreamError;
+
+declare const UPSTREAM_TIMEOUT_MS: number;        // 推荐值 15_000 ms；单次上游请求超时
+declare const UPSTREAM_RETRY_ATTEMPTS: number;    // 推荐值 3；HTTP 非 2xx / 429 / 瞬时繁忙的最大尝试次数
+declare const UPSTREAM_NETWORK_BACKOFF_MS: number; // 推荐值 400 ms；HTTP 非 2xx 重试的基础退避，指数退避
+declare const UPSTREAM_QUOTA_BACKOFF_MS: number;  // 推荐值 600 ms；HTTP 限流重试的基础退避，指数退避
+declare const MUSICU_BUSY_BACKOFF_MS: number;     // 推荐值 500 ms；瞬时繁忙码（2001 / 104604）重试的基础退避，指数退避
 </code></pre>
 <ul class="note">
   <li><code>upstreamRequest</code> 负责 UA / Referer / Cookie 注入、超时、HTTP 错误与 HTTP 非 2xx 退避；<code>musicu</code> 负责组装 <code>comm</code> / <code>req_0</code> 并处理瞬时繁忙码。</li>
@@ -456,6 +452,12 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
 
 <h3 id="c4-10">4.10 src/main/api/search.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function searchByType(req: SearchRequest): Promise&lt;SearchResult&gt;;
+
+declare const SEARCH_EMPTY_RETRY_MS: number;      // 推荐值 350 ms；搜索空结果重试延迟
+declare const SEARCH_EMPTY_RETRY_COUNT: number;   // 推荐值 1；搜索空结果重试次数
+declare const SEARCH_PAGE_NO_MAX: number;         // 推荐值 100；search.byType 页码上限
+declare const SEARCH_PAGE_SIZE_DEFAULT: number;   // 推荐值 20；搜索每页默认条数
+declare const SEARCH_PAGE_SIZE_MAX: number;       // 推荐值 50；搜索每页最大条数
 </code></pre>
 
 <h3 id="c4-11">4.11 src/main/api/song.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -477,6 +479,9 @@ function buildStreamUrl(purl: string): string;
 <h3 id="c4-12">4.12 src/main/api/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getPlaylist(id: string): Promise&lt;PlaylistDetail&gt;;
 export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
+
+declare const PLAYLIST_PAGE_SIZE: number;   // 推荐值 100；歌单上游单页条数
+declare const PLAYLIST_PAGE_MAX: number;    // 推荐值 20；歌单本地最大分页数
 </code></pre>
 
 <h3 id="c4-13">4.13 src/main/api/user.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -495,6 +500,9 @@ export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;
 export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
 async function refreshMusickey(current: Credential): Promise&lt;Credential&gt;;
 async function probeCredential(credential: Credential): Promise&lt;'ok' | 'expired'&gt;;
+
+declare const SESSION_REFRESH_AHEAD_MS: number;    // 推荐值 10 × 60_000 ms；凭证到期前提前续期的窗口
+declare const SESSION_REFRESH_FALLBACK_MS: number; // 推荐值 6 × 60 × 60_000 ms；凭证无到期时间时的续期间隔
 </code></pre>
 <ul class="note">
   <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
@@ -513,6 +521,10 @@ function onWillRedirect(event: ElectronEvent, url: string): void;
 function onDidNavigate(event: ElectronEvent, url: string): void;
 function extractOauthCode(url: string): string | null;
 function runEmbedLogin(): Promise&lt;Credential&gt;;
+
+declare const LOGIN_EMBED_TIMEOUT_MS: number;   // 推荐值 5 × 60_000 ms；内嵌 xlogin 登录总超时
+declare const LOGIN_COOKIE_POLL_MS: number;     // 推荐值 1000 ms；内嵌登录读取 session Cookie 的轮询间隔
+declare const LOGIN_EMBED_PARTITION: string;    // 推荐值 'lychee-xlogin'；登录组件的独立 session 分区名
 </code></pre>
 <ul class="note">
   <li><code>setEmbedBounds</code> 由渲染进程上报的页面坐标驱动 <code>WebContentsView</code> 的创建、定位与首次加载；<code>null</code> 摘除视图。</li>
@@ -524,7 +536,7 @@ function runEmbedLogin(): Promise&lt;Credential&gt;;
 export function publishState(state: PlayerState | null): void;
 </code></pre>
 <ul class="note">
-  <li>媒体控制协议定义见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>；命令接收后的分发与执行见 <a href="#c5-6">§5.6</a>。</li>
+  <li>媒体控制协议定义见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>；<code>publishState</code> 同步 <code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code> / <code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code>；命令接收后的分发与执行见 <a href="#c5-6">§5.6</a>。</li>
 </ul>
 
 <h3 id="c4-18">4.18 src/main/integration/tray.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -702,13 +714,15 @@ interface PlayerStore {
   applySettings(): void;
   handleCommand(command: MprisCommand): void;
 }
+
+declare const PLAYER_STATE_THROTTLE_MS: number;   // 推荐值 900 ms；播放状态推送的节流窗口
 </code></pre>
 <ul class="note">
   <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，用于列表循环与随机预览，播放队列面板只绑定 <code>queue</code>。<code>playNext</code> 将歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>；已在其中则移动，<code>current</code> 本身不操作；无 <code>current</code> 时直接以该歌曲开始播放。用户可见规则见 <a href="USER.html#u1">USER §1</a> 与 <a href="USER.html#u5-2-9">USER §5.2.9</a>。</li>
-  <li><code>playOrder</code>、<code>queue</code> 的新语义与 <code>playNext</code> 为待实现设计，可以根据实际情况调整；<code>canPlay</code> 应同时考虑 <code>current</code> 与 <code>queue</code>，不能只按 <code>queue.length</code> 判断。队列面板的移除/清空直接修改 <code>playOrder</code>，不改变 <code>current</code>。</li>
+  <li><code>playOrder</code>、<code>queue</code> 的新语义与 <code>playNext</code> 为待实现设计，可以根据实际情况调整；<code>canPlay</code> 应同时考虑 <code>current</code> 与 <code>queue</code>，不能只按 <code>queue.length</code> 判断。当前歌曲不可播时 <code>canPlay</code> 为 <code>false</code>，<code>play</code> / <code>resume</code> 不执行；该标志不阻止显式的上一首 / 下一首切换。队列面板的移除/清空直接修改 <code>playOrder</code>，不改变 <code>current</code>。</li>
   <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放按洗牌后的 <code>playOrder</code> 进行。</li>
   <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档。</li>
-  <li><code>sendState</code> 以节流方式发布 <code>player:state</code>；音量持久化在 <code>localStorage</code>。</li>
+  <li><code>sendState</code> 以节流方式发布 <code>player:state</code>，包含 <code>volume</code> / <code>loopStatus</code> / <code>shuffle</code>；音量持久化在 <code>localStorage</code>。</li>
 </ul>
 
 <h3 id="c4-29">4.29 src/renderer/stores/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -784,6 +798,8 @@ export function useToast(): {
   error(message: string): void;
   dismiss(id: number): void;
 };
+
+declare const TOAST_DURATION_MS: number;   // 推荐值 3600 ms；Toast 自动消失时间
 </code></pre>
 
 <h3 id="c4-35">4.35 src/renderer/components/AppIcon.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -997,6 +1013,7 @@ app::requestSingleInstanceLock()
 </code></pre>
 <ul class="note">
   <li>双击、播放全部、单曲播放都走 <code>playList</code>（替换队列）；“下一首播放”走 <code>playNext</code>，只把歌曲插入 <code>playOrder</code> 当前项之后，不改变 <code>current</code>；无 <code>current</code> 时直接以该歌曲开始播放。队列模型见 <a href="#c4-28">§4.28</a>，用户可见规则见 <a href="USER.html#u1">USER §1</a>。</li>
+  <li><code>NO_STREAM</code> 时保留 <code>current</code> / <code>index</code> 与播放条展示，<code>status = stopped</code>、<code>canPlay = false</code>；不得因再次 <code>play</code> / <code>resume</code> 或任何强制调用自动回退到上一首。</li>
   <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；主进程只经手链接字符串。</li>
   <li>音质回退在 <code>api/song.ts</code> 内部完成；实际档位随 <code>UrlResult.quality</code> 返回并写入播放状态。</li>
 </ul>
@@ -1028,6 +1045,12 @@ app::requestSingleInstanceLock()
 │   └── onCommand({ seekTo })
 ├── player.on('position')
 │   └── onCommand({ seekTo })
+├── player.on('volume')
+│   └── onCommand({ setVolume })
+├── player.on('loopstatus')
+│   └── onCommand({ setLoopStatus })
+├── player.on('shuffle')
+│   └── onCommand({ setShuffle })
 ├── player.on('raise')
 │   ├── BrowserWindow.getAllWindows()
 │   ├── 判断 window 存在
@@ -1041,6 +1064,7 @@ app::requestSingleInstanceLock()
 <ul class="note">
   <li><code>initMpris</code> 的 <code>onCommand</code> 形参由 <code>bootstrap</code> 传入 <code>ipc::sendPlayerCommand</code>；播放控制事件经它下发，<code>raise</code> / <code>quit</code> 不经过它。<code>sendPlayerCommand</code> 的展开见 <a href="#c5-6-1">§5.6.1</a>。</li>
   <li>源码按 MPRIS 事件分别注册监听，不存在单一 <code>player.on(command)</code> 入口；<code>error</code> 事件静默降级为 <code>player = null</code>。</li>
+  <li><code>volume</code> / <code>loopstatus</code> / <code>shuffle</code> 监听与 <code>setVolume</code> / <code>setLoopStatus</code> / <code>setShuffle</code> 命令为待实现，用于补齐 MPRIS 属性同步。</li>
 </ul>
 
 <h4 id="c5-6-1">5.6.1 命令下发</h4>

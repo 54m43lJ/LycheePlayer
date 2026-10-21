@@ -86,7 +86,7 @@
   <tr><th>约定</th><th>内容</th></tr>
   <tr>
     <td>契约范围</td>
-    <td>只记录应用实际消费的字段与方法；上游完整定义以官方文档为准。QQ 音乐未提供公开接口文档，本文档的权威来源是实际消费的请求与响应字段。</td>
+    <td>只记录应用实际消费的字段与方法；QQ 音乐未提供公开接口文档，本文档的权威来源是实际消费的官方可访问接口（无公开文档）。</td>
   </tr>
   <tr>
     <td>上游隔离</td>
@@ -524,7 +524,7 @@ interface QqLoginPayload {
 <h3 id="p4-4">4.4 MPRIS</h3>
 <p>
 应用通过会话总线暴露 <code>org.mpris.MediaPlayer2.lychee</code>；D-Bus 是这里的传输层，
-桌面环境作为调用方。以下为实际接线的协议子集。
+桌面环境作为调用方。MPRIS 直接面向 D-Bus，按就近原则归本文件。以下为 MPRIS 契约。
 </p>
 <pre><code>interface OrgMprisMediaPlayer2 {
   Identity: string;
@@ -538,6 +538,9 @@ interface OrgMprisMediaPlayer2Player {
   PlaybackStatus: 'Playing' | 'Paused' | 'Stopped';
   Metadata: MprisMetadata;
   Position: number;
+  Volume: number;
+  LoopStatus: 'None' | 'Track' | 'Playlist';
+  Shuffle: boolean;
   CanControl: boolean;
   CanPlay: boolean;
   CanPause: boolean;
@@ -567,6 +570,9 @@ interface MprisMetadata {
 <table>
   <tr><th>字段</th><th>含义</th></tr>
   <tr><td><code>Position</code></td><td>当前播放位置，单位微秒。</td></tr>
+  <tr><td><code>Volume</code></td><td>播放器音量，<code>0</code>–<code>1</code>，可写。</td></tr>
+  <tr><td><code>LoopStatus</code></td><td>循环模式：<code>sequence</code> → <code>None</code>；<code>repeat-all</code> / <code>shuffle</code> → <code>Playlist</code>；<code>repeat-one</code> → <code>Track</code>。可写。</td></tr>
+  <tr><td><code>Shuffle</code></td><td><code>shuffle</code> 模式为 <code>true</code>，其余为 <code>false</code>。可写。</td></tr>
   <tr><td><code>mpris:trackid</code></td><td>曲目对象路径：<code>/org/mpris/MediaPlayer2/track/{songMid}</code>。</td></tr>
   <tr><td><code>mpris:length</code></td><td>曲目时长，单位微秒。</td></tr>
   <tr><td><code>mpris:artUrl</code></td><td>专辑封面 URL。</td></tr>
@@ -577,13 +583,14 @@ interface MprisMetadata {
 <table>
   <tr><th>对象</th><th>成员</th><th>行为</th></tr>
   <tr><td>Root</td><td><code>Identity</code> / <code>CanQuit</code> / <code>CanRaise</code> / <code>Raise</code> / <code>Quit</code></td><td>应用名固定 <code>Lychee Player</code>；<code>Raise</code> 显示并聚焦主窗口；<code>Quit</code> 走正常退出生命周期。</td></tr>
-  <tr><td>Player</td><td><code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code></td><td>由渲染进程发布的 <code>player:state</code> 驱动；元数据仅在切歌时更新。</td></tr>
+  <tr><td>Player</td><td><code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code> / <code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code></td><td>由渲染进程发布的 <code>player:state</code> 驱动；元数据仅在切歌时更新。</td></tr>
   <tr><td>Player</td><td><code>Play</code> / <code>Pause</code> / <code>PlayPause</code> / <code>Next</code> / <code>Previous</code> / <code>Seek</code> / <code>SetPosition</code></td><td>转为内部 <code>MprisCommand</code> 推送回渲染进程执行；<code>Stop</code> 按暂停处理。</td></tr>
+  <tr><td>Player</td><td><code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code></td><td>可写属性；变更转为 <code>setVolume</code> / <code>setLoopStatus</code> / <code>setShuffle</code> 命令回送渲染进程。</td></tr>
 </table>
 <ul class="note">
   <li><code>Seek</code> / <code>SetPosition</code> 的偏移与目标位置均以微秒计；内部转换为毫秒后定位。</li>
   <li>D-Bus / MPRIS 不可用时静默降级，不影响应用内播放；托盘不可用时同理。</li>
-  <li><code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code> 等属性未与应用播放状态同步，不属于本契约。</li>
+  <li><code>LoopStatus</code> 与 <code>Shuffle</code> 的写入同步更新播放模式；<code>Volume</code> 写入同步更新播放器音量。</li>
   <li>入站命令如何转成 <code>MprisCommand</code>、播放状态如何发布，见 <a href="CORE.html#c5-6">CORE §5.6</a>；类型定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
   <li>可用 <code>playerctl -p lychee</code> 验证总线上暴露的成员。</li>
 </ul>

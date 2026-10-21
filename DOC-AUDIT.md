@@ -15,7 +15,7 @@
 | B. 重复（违反单一事实源） | 6 组 | 6 | 0 |
 | C. 与参考实现不符 / 疑似事实错误 | 14 | 14 | 3 |
 | D. 违反 GUIDELINES 形式要求 | 7 | 7 | 3 |
-| E. 拿不准 / 需确认 | 10 组 | — | — |
+| E. 拿不准 / 需确认 | 10 组 | 7 组已处理，1 组部分处理 | — |
 
 ### 修复状态
 
@@ -81,8 +81,8 @@
 
 - 解决（2026-10-21）：CORE §5.7 只列“凭证有到期时间 / 无到期时间”两种条件和处理策略，不再写条件表达式。
 - 以下为审计时的问题记录（已按上述决策处理）：
-- 位置：`CORE.html` §5.7（L977）；`CORE.html` §2.1（L163）。
-- 冲突：§2.1 明确 `SESSION_REFRESH_FALLBACK_MS` 是“凭证无到期时间时的续期间隔”；§5.7 却写成“到期前 10 分钟**或**距上次续期 ≥ 6 小时”，看起来对所有凭证都成立。
+- 位置：`CORE.html` §5.7（L977）；`CORE.html` §4.15（`SESSION_REFRESH_AHEAD_MS` / `SESSION_REFRESH_FALLBACK_MS`）。
+- 冲突：§4.15 明确 `SESSION_REFRESH_FALLBACK_MS` 是“凭证无到期时间时的续期间隔”；§5.7 却写成“到期前 10 分钟**或**距上次续期 ≥ 6 小时”，看起来对所有凭证都成立。
 - 参考实现：`src/main/api/login.ts:291-295` 的条件是二选一：有 `expiredAtMs` 时只看 10 分钟窗口，没有到期时间时才看 6 小时间隔。
 - 建议：改为 `expiredAtMs !== null ? (expiredAtMs - now <= 10min) : (now - lastRefreshAt >= 6h)`。
 
@@ -238,7 +238,7 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
 
 ### C8 [中] “网络错误重试 3 次”在参考实现中只覆盖 HTTP 非 2xx / 429
 
-- 位置：`CORE.html` §2.1（L152）、§4.8 注（L448）；`PROVIDER.html` §2（L104）。
+- 位置：`CORE.html` §4.8（`UPSTREAM_RETRY_ATTEMPTS` 等）、§4.8 注；`PROVIDER.html` §2（L104）。
 - 文档：网络错误做短退避重试，最大尝试次数 3。
 - 参考实现：`src/main/api/client.ts:97-124` 只对 `UpstreamError` 且 code 为 `QUOTA_LIMITED` / `UPSTREAM_NETWORK` 的情况重试；`fetch` 连接失败抛出的 `TypeError`、`AbortSignal.timeout` 抛出的 `TimeoutError` 都不是 `UpstreamError`，会直接抛出，不重试。`UPSTREAM_NETWORK` 目前主要来自 HTTP 非 2xx（`fetchOnce`）。
 - 影响：文档承诺的“网络错误重试”对真实断网/超时不成立。
@@ -358,27 +358,33 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
 
 ## E. 拿不准 / 需确认（未判定为问题）
 
+> 2026-10-21：E1–E5、E7、E9 已处理；E10 登录宽度已处理，设置页“关于信息”待确认；E6 暂不处理；E8 不构成违规。
+
 以下条目取决于产品口径、文档定位或团队约定，未直接判为错误；建议确认后再决定是否修改。
 
-### E1 [边界判断] MPRIS 到底归 USER 还是 PROVIDER
+### E1 [已处理] MPRIS 到底归 USER 还是 PROVIDER
 
+- 处理：按就近原则，MPRIS 直接面向 D-Bus，归 `PROVIDER.html` §4.4；GUIDELINES 已增加就近原则。
 - GUIDELINES 把 USER 定义为“上层：最终用户 / 依赖软件”，内容包含“协议、API”；PROVIDER 是“下层：数据源 / 依赖（系统服务、IPC……）”，且 Provider 规则要求“只记录被消费的子集”。
 - 当前 `PROVIDER.html` §4.4 承载了应用**暴露给桌面环境**的 MPRIS 契约；`USER.html` §4 只剩“除 MPRIS 外没有其他 API”和指向 PROVIDER 的链接。MPRIS 的调用方是桌面环境（依赖软件），按边界定义更像 USER 的接口。
 - 另一种解释：D-Bus 是下层系统服务，MPRIS 作为 D-Bus 上的协议可以归 PROVIDER；团队在提交 `d60c9c6` 中也明确选择了这一方案。
 - 建议：若保留现方案，在 GUIDELINES 或 PROVIDER §4.4 明确“MPRIS 作为 D-Bus 契约归 PROVIDER”的例外；否则把 §4.4 迁到 USER §4。由于两种解释都说得通，本节不把它列为确认违规。
 
-### E2 [目标口径] README “完整的 MPRIS 媒体控制”与 PROVIDER §4.4 的范围
+### E2 [已处理] README “完整的 MPRIS 媒体控制”与 PROVIDER §4.4 的范围
 
-- `README.html` L33 把“完整的 MPRIS 媒体控制”列为成功标准；`PROVIDER.html` L563 明确 `Volume` / `LoopStatus` / `Shuffle` 未同步、不属于契约。
+- 处理：README GOAL 不再单列“完整 MPRIS”；PROVIDER §4.4 补全 `Volume` / `LoopStatus` / `Shuffle` 契约与映射，CORE 类型及 §5.6 事件同步；代码实现记入 `TODO.md`。
+- 审计时记录：`README.html` L33 把“完整的 MPRIS 媒体控制”列为成功标准；`PROVIDER.html` L563 明确 `Volume` / `LoopStatus` / `Shuffle` 未同步、不属于契约。
 - “完整”如果指播放控制方法（Play/Pause/Next/Previous/Seek），当前子集可以算完整；如果按 MPRIS 规范理解，则目标尚未覆盖。建议在 README 改成“核心 MPRIS 播放控制”，或在 PROVIDER 说明后续范围。
 
-### E3 [措辞] “官方公开接口”与“未提供公开接口文档”
+### E3 [已处理] “官方公开接口”与“未提供公开接口文档”
 
-- `README.html` L111 称“仅调用官方公开接口”；`PROVIDER.html` §2（L84）称“QQ 音乐未提供公开接口文档，本文档的权威来源是实际消费的请求与响应字段”。
+- 处理：README、USER 页脚、PROVIDER §2 统一为“官方可访问接口（无公开文档）”。
+- 审计时记录：`README.html` L111 称“仅调用官方公开接口”；`PROVIDER.html` §2（L84）称“QQ 音乐未提供公开接口文档，本文档的权威来源是实际消费的请求与响应字段”。
 - 两者可以同时成立（接口可公开访问但无公开文档），但读者容易理解为矛盾。建议统一为“官方可访问接口（无公开文档）”。
 
-### E4 [原型一致性] 文档原型 CSS 与正文/产品 CSS 的数值差异
+### E4 [已处理] 文档原型 CSS 与正文/产品 CSS 的数值差异
 
+- 处理：不要求原型与正文数值一致；GUIDELINES 与 USER §5.2 已明确样式规定以文字/代码为准，原型只作示意。
 - `style.css` 是文档原型样式，不是产品样式；正文明确说“原型不是像素级截图”。
 - 仍有几处值得确认是否要对齐：
   - 歌词行：`style.css` `.u-lyric` 12px / 继承 1.45，而 USER §5.2.5 写 14px / 1.7；产品 `src/renderer/styles/main.css:1594-1601` 是 14px / 1.7。
@@ -386,38 +392,42 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
   - 歌曲列表封面：`style.css` `.u-cover` 30px，USER §5.2.4 写 38px；产品 `main.css:730-733` 是 38px。
 - 若原型只是示意，可保持现状；若要求原型“固定几何”，建议把 `style.css` 调到与正文/产品一致。
 
-### E5 [TODO 时效] “回退上一首歌但播放条没回退”
+### E5 [已处理] “回退上一首歌但播放条没回退”
 
-- `TODO.md` L9 记录该 bug；`USER.html` §2（L97）与 CORE §5.5 的约定是“加载失败停止，不自动跳下一首”。参考实现 `loadAndPlay` 也不自动回退（`src/renderer/stores/player.ts:113-144`）。
+- 处理：`TODO.md` 已改为“歌曲不存在时停止；再次播放不得自动回退上一首，播放条保留该曲且按钮置灰”。USER §2/§5.2.3 与 CORE §4.28/§5.5 写明不可播歌曲的展示、禁用与禁止自动回退机制。
+- 审计时记录：`TODO.md` L9 记录该 bug；`USER.html` §2（L97）与 CORE §5.5 的约定是“加载失败停止，不自动跳下一首”。参考实现 `loadAndPlay` 也不自动回退（`src/renderer/stores/player.ts:113-144`）。
 - 可能 TODO 已过期，或 bug 只在特定路径出现。建议确认后删除/更新 TODO，避免与文档约定冲突。
 
-### E6 [计划变更] 歌单详情“返回搜索” vs TODO“返回我的歌单”
+### E6 [暂缓] 歌单详情“返回搜索” vs TODO“返回我的歌单”
 
+- 处理：按用户要求暂不处理。
 - `USER.html` §5.2.8（L393）与 `CORE.html` §4.44（L819）写“返回搜索”；`TODO.md` L8 要求改为“返回我的歌单列表”。
 - 这是已记录的未来变更，不算文档错误；实现变更时请同步更新 USER/CORE，避免文档滞后。
 
-### E7 [结构选择] CORE 2.1 Engineering constants 放在 CONVENTIONS 下
+### E7 [已处理] 工程常量的落点
 
-- GUIDELINES 的 CORE 章节目录没有单独的“constants”章；当前把 2.1 放在 CONVENTIONS 下可以工作，但 CONVENTIONS 的定义是“跨接口共享约定”，工程常量不完全是约定。
-- 如果严格按章节语义，可考虑把它作为 CORE §2.1 的独立小节标题（现状）或新增“2.1 工程常量”说明；不建议再拆一级章节，以免偏离 GUIDELINES 的五章结构。
+- 处理：GUIDELINES 已明确工程常量在所属源文件的签名小节中声明，推荐值只以注释形式给出；CORE 原 §2.1 的集中表已移除，常量已分散到 §4 各文件小节。
 
-### E8 [风格] 少量“设计理由”表述
+### E8 [不处理] 少量“设计理由”表述
 
+- 处理：不构成违规，不处理。
 - GUIDELINES 开头要求避免“针对具体设计选择的理由”。以下句子接近该限制：
   - `CORE.html` §4.26 注“替换为 mpv 等引擎时实现同一接口……”；
   - `CORE.html` §5.1 注“定时器同时承担密钥环晚解锁后的重试”；
   - `PROVIDER.html` §3.1 注“避免把未完成登录误判为成功”。
 - 这些是短句且有助于理解契约，是否算违规取决于执行尺度；若严格，可移到提交说明或 CORE 的散文说明中。
 
-### E9 [外部事实] README 对官方客户端与参考项目的描述
+### E9 [已处理] README 对官方客户端与参考项目的描述
 
-- Credits 中 8 个仓库均可访问（`imsyy/SPlayer` 会重定向到 `SPlayer-Dev/SPlayer`，其余返回 200）；`lyswhut/lx-music-desktop` 的 Apache-2.0 已核对。
+- 处理：README Credits 删除“参考点”列，仅保留项目与技术栈/许可；GUIDELINES Credits 规则明确不写参考内容。
+- 审计时记录：Credits 中 8 个仓库均可访问（`imsyy/SPlayer` 会重定向到 `SPlayer-Dev/SPlayer`，其余返回 200）；`lyswhut/lx-music-desktop` 的 Apache-2.0 已核对。
 - “官方 Linux 客户端基于 Electron、MPRIS 残缺、不支持音质选择”等属于外部产品事实，本仓库无法验证；本次未据此判定为捏造。
 - “Team-Quaver/quaver-music 的 Wayland 适配、AppImage 双架构 CI”等参考点也未逐项核对仓库内容。
 
-### E10 [原型细节] 登录页宽度与设置页“关于信息”
+### E10 [部分处理] 登录页宽度与设置页“关于信息”
 
-- `USER.html` §5.2.6 L332 称组件“横向占满登录页宽度”；参考实现 `.login-wide` 是 `width: min(1080px, 100%)`（`main.css:1026-1032`），在更宽窗口中不会占满整个页面。若“登录页”指登录卡片，则描述成立。
+- 处理：登录组件改为宽度 100% + 最大宽度 800px（暂定，按实现调整），USER §5.2.1/§5.2.6 与 `TODO.md` 已记录；“关于信息”部分仍待确认。
+- 审计时记录：`USER.html` §5.2.6 L332 称组件“横向占满登录页宽度”；参考实现 `.login-wide` 是 `width: min(1080px, 100%)`（`main.css:1026-1032`），在更宽窗口中不会占满整个页面。若“登录页”指登录卡片，则描述成立。
 - `USER.html` §5.2.7 注称右列含“账号与关于信息”，但该节原型只画了账号面板；参考实现有版本信息面板。原型可能只是截取，建议确认是否补齐。
 
 ---
@@ -429,7 +439,7 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
 - **PlantUML 源/导出**：6 个 `.puml` 与 6 个 `.svg` 一一对应，所有 SVG 都被 USER/PROVIDER 引用；用 PlantUML 1.2026.8 重新导出后，文本节点与已提交 SVG 一致。
 - **图表形式**：未发现 Mermaid；CORE 文件树是 GUIDELINES 要求的 ASCII 树，不属于被禁止的“ASCII 图”。
 - **章节顺序**：README（WHAT & WHY → 用户交互 → Credits）、USER（TERMS → CONVENTIONS → DIAGRAMS → INTERFACES → UI）、CORE（File tree → CONVENTIONS → SBOM → types → call stack）、PROVIDER（TERMS → CONVENTIONS → DIAGRAMS → INTERFACES）均符合 GUIDELINES 的章节目录。
-- **CORE 2.1 推荐值**：表中的超时、退避、重试次数、分页上限、轮询间隔等与参考实现一致，且现在以注释形式记录；5.7 的两种情况描述见 A4（已解决）。
+- **工程常量**：已分散到 CORE §4 各文件签名小节，推荐值以注释形式记录；5.7 的两种情况描述见 A4（已解决）。
 - **SBOM**：依赖清单与 `dev/evol-1:package.json` 一致（`electron`、`vue`、`pinia`、`vue-router`、`mpris-service`、TypeScript/Vite 工具链）。
 - **Credits**：列出的 8 个仓库均存在；`lyswhut/lx-music-desktop` 的 Apache-2.0 许可已核对。
 
@@ -437,7 +447,7 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
 
 ## G. 建议修复顺序
 
-1. **代码待办**：C4 凭证明文 fallback、C5 音质回退；文档已修正，代码实现见 `TODO.md`。
-2. **待确认/外部事实**：E 系列（原型细节、外部项目描述等）。
+1. **代码待办**：C4 凭证明文 fallback、C5 音质回退、MPRIS Volume/LoopStatus/Shuffle 同步；文档已修正，代码实现见 `TODO.md`。
+2. **暂缓**：E6 歌单详情返回路径，按用户要求暂不处理。
 
-> 本报告最初只做审计；A1–A8、B1–B6、C1–C14、D1–D7 的文档修订已同步。剩余待办集中在 C4/C5 的代码实现与 E 系列的待确认项。
+> 本报告最初只做审计；A1–A8、B1–B6、C1–C14、D1–D7 与 E1–E5/E7/E9 及 E10 登录宽度的文档修订已同步。剩余待办集中在代码实现、E6 暂缓项与 E10 设置页“关于信息”。
