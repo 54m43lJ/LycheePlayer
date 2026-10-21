@@ -18,13 +18,17 @@ export const PLAY_MODE_LABEL: Record<PlayMode, string> = {
 
 const MODES: PlayMode[] = ['sequence', 'repeat-all', 'repeat-one', 'shuffle']
 
+// 推荐值 900 ms；播放状态推送的节流窗口。
+const PLAYER_STATE_THROTTLE_MS = 900
+
 export const usePlayerStore = defineStore('player', () => {
   const settings = useSettingsStore()
   const auth = useAuthStore()
   const toast = useToast()
 
   const current = ref<Song | null>(null)
-  const queue = ref<Song[]>([])
+  /** 完整播放顺序；current 位于 index，queue 是 index 之后的切片。 */
+  const playOrder = ref<Song[]>([])
   const index = ref(-1)
   const status = ref<'stopped' | 'playing' | 'paused'>('stopped')
   const positionMs = ref(0)
@@ -34,6 +38,8 @@ export const usePlayerStore = defineStore('player', () => {
   const quality = ref<Quality>('320k')
   const requestedQuality = ref<Quality>('320k')
   const loading = ref(false)
+  /** 当前歌曲是否拿到过播放链接；NO_STREAM 时置为 false，阻止 play / resume。 */
+  const playable = ref(false)
 
   let loadToken = 0
   let lastSentAt = 0
@@ -50,12 +56,35 @@ export const usePlayerStore = defineStore('player', () => {
     return auth.loggedIn ? 'flac' : '320k'
   })
 
+  const queue = computed(() =>
+    index.value >= 0 ? playOrder.value.slice(index.value + 1) : playOrder.value.slice()
+  )
+
+  const loopStatus = computed<'None' | 'Track' | 'Playlist'>(() => {
+    if (mode.value === 'repeat-one') return 'Track'
+    if (mode.value === 'repeat-all' || mode.value === 'shuffle') return 'Playlist'
+    return 'None'
+  })
+
+  const canPlay = computed(() => {
+    if (current.value) return playable.value
+    return playOrder.value.length > 0
+  })
+
+  const progress = computed(() => {
+    const total = durationMs.value || current.value?.durationMs || 0
+    return total > 0 ? Math.min(100, (positionMs.value / total) * 100) : 0
+  })
+
   function statePayload(): PlayerState {
     return {
       song: current.value ? (toRaw(current.value) as Song) : null,
       status: status.value,
       positionMs: Math.round(positionMs.value),
-      quality: quality.value
+      quality: quality.value,
+      volume: volume.value,
+      loopStatus: loopStatus.value,
+      shuffle: mode.value === 'shuffle'
     }
   }
 
@@ -70,7 +99,7 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function sendStateThrottled(): void {
-    if (Date.now() - lastSentAt >= 900) sendState()
+    if (Date.now() - lastSentAt >= PLAYER_STATE_THROTTLE_MS) sendState()
   }
 
   const engine = createAudioEngine({
@@ -99,7 +128,7 @@ export const usePlayerStore = defineStore('player', () => {
         void resume()
         return
       }
-      void next(true)
+      next(true)
     },
     onError() {
       if (!current.value || !engine.sourceUrl) return
@@ -110,10 +139,24 @@ export const usePlayerStore = defineStore('player', () => {
   })
   engine.setVolume(volume.value)
 
+  function shuffleUpcoming(): void {
+    const start = index.value + 1
+    if (start >= playOrder.value.length) return
+    const tail = playOrder.value.slice(start)
+    for (let cursor = tail.length - 1; cursor > 0; cursor -= 1) {
+      const swap = Math.floor(Math.random() * (cursor + 1))
+      const value = tail[cursor]
+      tail[cursor] = tail[swap]
+      tail[swap] = value
+    }
+    playOrder.value = [...playOrder.value.slice(0, start), ...tail]
+  }
+
   async function loadAndPlay(song: Song, forcedQuality?: Quality): Promise<void> {
     const token = ++loadToken
     loading.value = true
     current.value = song
+    playable.value = true
     status.value = 'stopped'
     positionMs.value = 0
     durationMs.value = song.durationMs
@@ -131,10 +174,12 @@ export const usePlayerStore = defineStore('player', () => {
 
       quality.value = result.quality
       await engine.loadAndPlay(result.url)
+      if (token !== loadToken) return
       status.value = 'playing'
       sendState()
     } catch (err) {
       if (token !== loadToken) return
+      playable.value = !(err instanceof IpcCallError && err.code === 'NO_STREAM')
       status.value = 'stopped'
       toast.error(describeError(err))
       sendState()
@@ -144,31 +189,54 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function playAt(target: number): void {
-    if (target < 0 || target >= queue.value.length) return
+    if (target < 0 || target >= playOrder.value.length) return
     index.value = target
-    void loadAndPlay(queue.value[target])
+    void loadAndPlay(playOrder.value[target])
   }
 
-  /** 列表播放：双击歌曲或“播放全部”走此入口。 */
+  /** 双击、单曲播放与“播放全部”都替换播放顺序；startIndex 成为当前歌曲。 */
   function playList(songs: Song[], startIndex = 0): void {
     if (songs.length === 0) return
-    queue.value = songs.slice()
-    playAt(Math.min(Math.max(0, startIndex), songs.length - 1))
+    const start = Math.min(Math.max(0, startIndex), songs.length - 1)
+    playOrder.value = songs.slice()
+    index.value = start
+    if (mode.value === 'shuffle') shuffleUpcoming()
+    playAt(index.value)
   }
 
-  function playSong(song: Song): void {
-    const existing = queue.value.findIndex((item) => item.songMid === song.songMid)
-    if (existing >= 0) {
-      playAt(existing)
+  /** 下一首播放：插入当前歌曲之后；已在队列中则移动，当前歌曲本身不操作。 */
+  function playNext(song: Song): void {
+    if (!current.value) {
+      playList([song])
       return
     }
-    queue.value.push(song)
-    playAt(queue.value.length - 1)
+    if (song.songMid === current.value.songMid) return
+
+    const existing = playOrder.value.findIndex((item) => item.songMid === song.songMid)
+    if (existing >= 0) {
+      playOrder.value.splice(existing, 1)
+      if (existing < index.value) index.value -= 1
+    }
+    playOrder.value.splice(index.value + 1, 0, song)
+  }
+
+  function removeFromQueue(queueIndex: number): void {
+    if (queueIndex < 0 || queueIndex >= queue.value.length) return
+    playOrder.value.splice(index.value + 1 + queueIndex, 1)
+  }
+
+  function clearQueue(): void {
+    if (index.value < 0) {
+      playOrder.value = []
+      return
+    }
+    playOrder.value.splice(index.value + 1)
   }
 
   async function resume(): Promise<void> {
+    if (!canPlay.value) return
     if (!current.value) {
-      if (queue.value.length > 0) playAt(Math.max(0, index.value))
+      playAt(0)
       return
     }
     try {
@@ -194,26 +262,24 @@ export const usePlayerStore = defineStore('player', () => {
     void resume()
   }
 
-  function next(auto = false): void {
-    if (queue.value.length === 0) return
-    if (mode.value === 'shuffle' && queue.value.length > 1) {
-      let target = index.value
-      while (target === index.value) target = Math.floor(Math.random() * queue.value.length)
-      playAt(target)
-      return
-    }
-    if (index.value < queue.value.length - 1) {
+  function stopAtEnd(): void {
+    engine.pause()
+    status.value = 'stopped'
+    positionMs.value = durationMs.value
+    sendState()
+  }
+
+  function next(_auto = false): void {
+    if (playOrder.value.length === 0) return
+    if (index.value < playOrder.value.length - 1) {
       playAt(index.value + 1)
       return
     }
-    if (mode.value === 'repeat-all' || !auto) {
+    if (mode.value === 'repeat-all') {
       playAt(0)
       return
     }
-    status.value = 'stopped'
-    positionMs.value = durationMs.value
-    engine.pause()
-    sendState()
+    stopAtEnd()
   }
 
   function previous(): void {
@@ -225,8 +291,8 @@ export const usePlayerStore = defineStore('player', () => {
       playAt(index.value - 1)
       return
     }
-    if (mode.value === 'repeat-all' && queue.value.length > 0) {
-      playAt(queue.value.length - 1)
+    if (mode.value === 'repeat-all' && playOrder.value.length > 0) {
+      playAt(playOrder.value.length - 1)
       return
     }
     seek(0)
@@ -245,9 +311,10 @@ export const usePlayerStore = defineStore('player', () => {
     volume.value = clampVolume(value)
     engine.setVolume(volume.value)
     localStorage.setItem('lychee.volume', String(volume.value))
+    sendState()
   }
 
-  /** 手动切换音质：重载当前曲目，实际音质以上游降档结果为准。 */
+  /** 手动切换音质：重载当前曲目，实际音质以上游回退结果为准。 */
   function setQuality(nextQuality: Quality): void {
     requestedQuality.value = nextQuality
     if (current.value) {
@@ -257,9 +324,29 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  function setLoopStatus(nextStatus: 'None' | 'Track' | 'Playlist'): void {
+    if (nextStatus === 'Track') mode.value = 'repeat-one'
+    else if (nextStatus === 'None') mode.value = 'sequence'
+    else if (mode.value !== 'shuffle') mode.value = 'repeat-all'
+    sendState()
+  }
+
+  function setShuffle(enabled: boolean): void {
+    if (enabled) {
+      if (mode.value !== 'shuffle') {
+        mode.value = 'shuffle'
+        shuffleUpcoming()
+      }
+    } else if (mode.value === 'shuffle') {
+      mode.value = 'repeat-all'
+    }
+    sendState()
+  }
+
   function cycleMode(): void {
     const currentIndex = MODES.indexOf(mode.value)
     mode.value = MODES[(currentIndex + 1) % MODES.length]
+    if (mode.value === 'shuffle') shuffleUpcoming()
     toast.show(PLAY_MODE_LABEL[mode.value])
     sendState()
   }
@@ -280,19 +367,20 @@ export const usePlayerStore = defineStore('player', () => {
       next()
     } else if (command === 'previous') {
       previous()
-    } else if (typeof command === 'object' && 'seekTo' in command) {
+    } else if ('seekTo' in command) {
       seek(command.seekTo)
+    } else if ('setVolume' in command) {
+      setVolume(command.setVolume)
+    } else if ('setLoopStatus' in command) {
+      setLoopStatus(command.setLoopStatus)
+    } else if ('setShuffle' in command) {
+      setShuffle(command.setShuffle)
     }
   }
 
-  const canPlay = computed(() => queue.value.length > 0)
-  const progress = computed(() => {
-    const total = durationMs.value || current.value?.durationMs || 0
-    return total > 0 ? Math.min(100, (positionMs.value / total) * 100) : 0
-  })
-
   return {
     current,
+    playOrder,
     queue,
     index,
     status,
@@ -307,7 +395,7 @@ export const usePlayerStore = defineStore('player', () => {
     canPlay,
     progress,
     playList,
-    playSong,
+    playNext,
     playAt,
     toggle,
     pause,
@@ -316,8 +404,12 @@ export const usePlayerStore = defineStore('player', () => {
     seek,
     setVolume,
     setQuality,
+    setLoopStatus,
+    setShuffle,
     cycleMode,
     applySettings,
-    handleCommand
+    handleCommand,
+    removeFromQueue,
+    clearQueue
   }
 })

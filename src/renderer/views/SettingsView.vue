@@ -15,6 +15,8 @@ const player = usePlayerStore()
 const router = useRouter()
 const toast = useToast()
 const sessionRefreshing = ref(false)
+const appVersion = __APP_VERSION__
+const appLicense = __APP_LICENSE__
 
 const expiryText = computed(() => {
   if (!auth.loggedIn) return '未登录'
@@ -157,7 +159,7 @@ async function refreshSession(): Promise<void> {
         <section class="panel">
           <div class="panel-head">
             <h2>窗口</h2>
-            <p>POC 已包含托盘图标与右键菜单。</p>
+            <p>关闭主窗口时隐藏到托盘，托盘菜单可退出应用。</p>
           </div>
           <div class="panel-body">
             <div class="setting-row">
@@ -227,13 +229,13 @@ async function refreshSession(): Promise<void> {
 
         <section class="panel">
           <div class="panel-head">
-            <h2>关于 POC</h2>
-            <p>验证上游接口与主进程 / 渲染进程边界。</p>
+            <h2>关于</h2>
+            <p>版本、音频引擎与许可信息。</p>
           </div>
           <div class="panel-body">
             <div class="setting-row">
               <span class="setting-name">版本</span>
-              <span class="mono faint">0.1.0-poc</span>
+              <span class="mono faint">{{ appVersion }}</span>
             </div>
             <div class="setting-row">
               <span class="setting-name">音频引擎</span>
@@ -241,10 +243,10 @@ async function refreshSession(): Promise<void> {
             </div>
             <div class="setting-row">
               <span class="setting-name">许可证</span>
-              <span class="faint">Apache-2.0（待最终确认）</span>
+              <span class="faint">{{ appLicense }}</span>
             </div>
             <p class="note" style="margin: 14px 0 0">
-              非官方客户端，与腾讯及 QQ 音乐无隶属关系；仅调用官方公开接口，不绕过授权。
+              非官方客户端，与腾讯及 QQ 音乐无隶属关系；仅调用官方可访问接口（无公开文档），不绕过授权。
             </p>
           </div>
         </section>

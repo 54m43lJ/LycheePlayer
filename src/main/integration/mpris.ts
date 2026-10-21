@@ -3,6 +3,7 @@ import mpris from 'mpris-service'
 import type { MprisCommand, PlayerState } from '../../shared/types'
 
 type MprisPlayer = ReturnType<typeof mpris>
+type LoopStatus = 'None' | 'Track' | 'Playlist'
 
 let player: MprisPlayer | null = null
 let lastState: PlayerState | null = null
@@ -16,6 +17,15 @@ function albumArt(state: PlayerState): string {
 function playbackStatus(state: PlayerState | null): 'Playing' | 'Paused' | 'Stopped' {
   if (!state || state.status === 'stopped') return 'Stopped'
   return state.status === 'playing' ? 'Playing' : 'Paused'
+}
+
+function trackId(songMid: string): string {
+  const segment = songMid.replace(/[^A-Za-z0-9_]/g, '_') || 'unknown'
+  return `/org/mpris/MediaPlayer2/track/${segment}`
+}
+
+function asLoopStatus(value: unknown): LoopStatus {
+  return value === 'Track' || value === 'Playlist' ? value : 'None'
 }
 
 /**
@@ -40,6 +50,12 @@ export function initMpris(onCommand: (command: MprisCommand) => void): void {
     player.canGoNext = true
     player.canGoPrevious = true
     player.volume = 1
+    player.loopStatus = 'None'
+    player.shuffle = false
+
+    const sendLoopStatus = (value: unknown): void => {
+      onCommand({ setLoopStatus: asLoopStatus(value) })
+    }
 
     player.on('play', () => onCommand('play'))
     player.on('pause', () => onCommand('pause'))
@@ -53,6 +69,14 @@ export function initMpris(onCommand: (command: MprisCommand) => void): void {
     })
     player.on('position', (payload: { position: number }) => {
       onCommand({ seekTo: Math.max(0, Math.round(payload.position / 1000)) })
+    })
+    player.on('volume', (value: number) => {
+      onCommand({ setVolume: Math.min(1, Math.max(0, value)) })
+    })
+    player.on('loopStatus', sendLoopStatus)
+    player.on('loopstatus', sendLoopStatus)
+    player.on('shuffle', (enabled: boolean) => {
+      onCommand({ setShuffle: Boolean(enabled) })
     })
     player.on('raise', () => {
       const window = BrowserWindow.getAllWindows()[0]
@@ -86,10 +110,14 @@ export function publishState(state: PlayerState | null): void {
     return
   }
 
+  player.volume = state.volume
+  player.loopStatus = state.loopStatus
+  player.shuffle = state.shuffle
+
   if (currentTrack !== state.song.songMid) {
     currentTrack = state.song.songMid
     player.metadata = {
-      'mpris:trackid': player.objectPath(`track/${state.song.songMid || 'unknown'}`),
+      'mpris:trackid': trackId(state.song.songMid),
       'mpris:length': Math.max(0, state.song.durationMs) * 1000,
       'mpris:artUrl': albumArt(state),
       'xesam:title': state.song.name,

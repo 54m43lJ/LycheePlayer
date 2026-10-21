@@ -130,7 +130,7 @@ watch(
       <div v-else class="empty">
         <div class="empty-icon"><AppIcon name="list" :size="25" /></div>
         <h3>这个账号下还没有歌单</h3>
-        <p>可以先去搜索页浏览公开歌单；收藏与歌单管理不在 POC 范围内。</p>
+        <p>可以先去搜索页浏览公开歌单；收藏与歌单管理尚未实现。</p>
       </div>
     </template>
   </div>

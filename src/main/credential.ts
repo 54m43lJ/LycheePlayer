@@ -40,14 +40,16 @@ export async function loadCredential(): Promise<Credential | null> {
     const stored = JSON.parse(raw) as StoredCredential
     if (stored.version !== 1 || typeof stored.payload !== 'string') return null
 
+    // 旧明文凭证只在密钥环可用时加载并迁移；不可用则拒绝登录，不把明文载入内存。
+    if (!stored.encrypted && !safeStorage.isEncryptionAvailable()) return null
+
     const json = stored.encrypted
       ? safeStorage.decryptString(Buffer.from(stored.payload, 'base64'))
       : Buffer.from(stored.payload, 'base64').toString('utf8')
     const parsed: unknown = JSON.parse(json)
     if (!isValidCredential(parsed)) return null
     cached = parsed
-    // 迁移：旧的明文凭证在密钥环可用时重加密落盘；失败则不缓存加载成功，稍后重试。
-    if (!stored.encrypted && safeStorage.isEncryptionAvailable()) {
+    if (!stored.encrypted) {
       await saveCredential(parsed)
     }
     loaded = true

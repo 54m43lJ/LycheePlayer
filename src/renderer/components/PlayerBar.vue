@@ -130,7 +130,7 @@ onBeforeUnmount(() => {
           <button
             class="play-button"
             :title="status === 'playing' ? '暂停' : '播放'"
-            :disabled="player.loading"
+            :disabled="player.loading || !player.canPlay"
             @click="player.toggle()"
           >
             <span v-if="player.loading" class="spinner" />
@@ -146,6 +146,14 @@ onBeforeUnmount(() => {
             @click="ui.toggleLyrics()"
           >
             <AppIcon name="lyrics" :size="17" />
+          </button>
+          <button
+            class="icon-btn"
+            :class="{ active: ui.queueOpen }"
+            title="播放队列"
+            @click="ui.toggleQueue()"
+          >
+            <AppIcon name="list" :size="17" />
           </button>
         </div>
         <div class="progress-row">

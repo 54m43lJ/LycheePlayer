@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
+import CoverArt from './components/CoverArt.vue'
 import LyricsPanel from './components/LyricsPanel.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ToastStack from './components/ToastStack.vue'
@@ -9,6 +10,7 @@ import { useAuthStore } from './stores/auth'
 import { usePlayerStore } from './stores/player'
 import { useSettingsStore } from './stores/settings'
 import { useUiStore } from './stores/ui'
+import { singerNames, songCover } from './utils/format'
 
 const auth = useAuthStore()
 const player = usePlayerStore()
@@ -91,7 +93,7 @@ watch(
           </span>
           <AppIcon name="chevron-right" :size="15" />
         </RouterLink>
-        <p class="sidebar-note">POC 验证版本<br />仅调用 QQ 音乐官方公开接口</p>
+        <p class="sidebar-note">仅调用 QQ 音乐官方可访问接口（无公开文档）<br />非官方客户端，不绕过授权</p>
       </div>
     </aside>
 
@@ -101,6 +103,57 @@ watch(
 
     <PlayerBar />
     <LyricsPanel />
+
+    <aside class="lyrics-panel queue-panel" :class="{ open: ui.queueOpen }">
+      <div class="lyrics-head">
+        <div>
+          <h2>播放队列</h2>
+          <p>接下来 {{ player.queue.length }} 首</p>
+        </div>
+        <button class="icon-btn" title="关闭播放队列" @click="ui.closeQueue()">
+          <AppIcon name="close" :size="18" />
+        </button>
+      </div>
+
+      <div class="queue-now">
+        <div class="queue-now-label">正在播放</div>
+        <div v-if="player.current" class="queue-now-song">
+          <CoverArt :src="songCover(player.current, 300)" image-class="cover-thumb" :icon-size="16" />
+          <div class="song-text">
+            <div class="song-title">{{ player.current.name }}</div>
+            <div class="song-artist">{{ singerNames(player.current) }}</div>
+          </div>
+        </div>
+        <div v-else class="queue-empty-inline">暂无歌曲</div>
+        <span class="queue-note">不属于队列</span>
+      </div>
+
+      <div v-if="player.queue.length === 0" class="lyrics-empty">
+        <AppIcon name="list" :size="26" />
+        <span>队列为空，当前歌曲之后的歌曲会显示在这里</span>
+      </div>
+      <div v-else class="queue-list">
+        <div
+          v-for="(song, queueIndex) in player.queue"
+          :key="`${song.songMid}-${queueIndex}`"
+          class="queue-row"
+        >
+          <span class="queue-index">{{ queueIndex + 1 }}</span>
+          <CoverArt :src="songCover(song, 300)" image-class="cover-thumb" :icon-size="16" />
+          <div class="song-text">
+            <div class="song-title">{{ song.name }}</div>
+            <div class="song-artist">{{ singerNames(song) }}</div>
+          </div>
+          <div class="queue-album" :title="song.album.name">{{ song.album.name || '—' }}</div>
+          <button class="song-next" @click="player.removeFromQueue(queueIndex)">移除</button>
+        </div>
+        <div class="queue-footer">
+          <button class="song-next" @click="player.clearQueue()">清空队列</button>
+          <span>按播放顺序排列</span>
+        </div>
+      </div>
+    </aside>
+
     <ToastStack />
   </div>
 </template>

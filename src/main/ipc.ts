@@ -19,6 +19,9 @@ import { clearCredential, getCredential, loadCredential, saveCredential } from '
 import { getSettings, saveSettings } from './settings'
 import { publishState } from './integration/mpris'
 
+// 推荐值 100；song.getUrls 单次批量上限。
+const IPC_SONG_MIDS_MAX = 100
+
 function broadcast(channel: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) window.webContents.send(channel, payload)
@@ -98,8 +101,8 @@ export function registerIpc(): void {
   handle('search.byType', async (req: SearchRequest) => searchByType(req))
 
   handle('song.getUrls', async (mids: unknown, quality: string) => {
-    if (!Array.isArray(mids) || mids.length === 0 || mids.length > 100) {
-      throw new Error('mids 必须为非空数组且不超过 100 个')
+    if (!Array.isArray(mids) || mids.length === 0 || mids.length > IPC_SONG_MIDS_MAX) {
+      throw new Error(`mids 必须为非空数组且不超过 ${IPC_SONG_MIDS_MAX} 个`)
     }
     if (quality !== '128k' && quality !== '320k' && quality !== 'flac') {
       throw new Error(`非法音质：${quality}`)

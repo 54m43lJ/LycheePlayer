@@ -111,13 +111,25 @@ export interface AuthStatus {
   canRefresh: boolean
 }
 
-export type MprisCommand = 'play' | 'pause' | 'toggle' | 'next' | 'previous' | { seekTo: number }
+export type MprisCommand =
+  | 'play'
+  | 'pause'
+  | 'toggle'
+  | 'next'
+  | 'previous'
+  | { seekTo: number }
+  | { setVolume: number }
+  | { setLoopStatus: 'None' | 'Track' | 'Playlist' }
+  | { setShuffle: boolean }
 
 export interface PlayerState {
   song: Song | null
   status: 'stopped' | 'playing' | 'paused'
   positionMs: number
   quality: Quality
+  volume: number
+  loopStatus: 'None' | 'Track' | 'Playlist'
+  shuffle: boolean
 }
 
 export interface UserProfile {

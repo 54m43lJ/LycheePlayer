@@ -7,6 +7,17 @@ const USER_AGENT =
 /** 进程级稳定 GUID，播放链接请求使用。 */
 const GUID = String(Math.floor(1_000_000_000 + Math.random() * 8_000_000_000))
 
+// 推荐值 15_000 ms；单次上游请求超时。
+const UPSTREAM_TIMEOUT_MS = 15_000
+// 推荐值 3；HTTP 非 2xx / 429 / 瞬时繁忙的最大尝试次数。
+const UPSTREAM_RETRY_ATTEMPTS = 3
+// 推荐值 400 ms；HTTP 非 2xx 重试的基础退避，指数退避。
+const UPSTREAM_NETWORK_BACKOFF_MS = 400
+// 推荐值 600 ms；HTTP 限流重试的基础退避，指数退避。
+const UPSTREAM_QUOTA_BACKOFF_MS = 600
+// 推荐值 500 ms；瞬时繁忙码（2001 / 104604）重试的基础退避，指数退避。
+const MUSICU_BUSY_BACKOFF_MS = 500
+
 export class UpstreamError extends Error {
   readonly code: ErrorCode
 
@@ -74,7 +85,7 @@ async function fetchOnce(req: UpstreamRequest): Promise<Response> {
       ...req.headers
     },
     body: req.body,
-    signal: AbortSignal.timeout(req.timeoutMs ?? 15_000)
+    signal: AbortSignal.timeout(req.timeoutMs ?? UPSTREAM_TIMEOUT_MS)
   })
 
   if (response.status === 429) {
@@ -96,7 +107,7 @@ function sleep(ms: number): Promise<void> {
  */
 export async function upstreamRequest<T>(req: UpstreamRequest): Promise<T> {
   let lastError: unknown
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < UPSTREAM_RETRY_ATTEMPTS; attempt += 1) {
     try {
       const response = await fetchOnce(req)
       const text = await response.text()
@@ -108,12 +119,20 @@ export async function upstreamRequest<T>(req: UpstreamRequest): Promise<T> {
     } catch (err) {
       lastError = err
       if (err instanceof UpstreamError && err.code === 'UPSTREAM_CHANGED') throw err
-      if (err instanceof UpstreamError && err.code === 'QUOTA_LIMITED' && attempt < 2) {
-        await sleep(600 * 2 ** attempt)
+      if (
+        err instanceof UpstreamError &&
+        err.code === 'QUOTA_LIMITED' &&
+        attempt < UPSTREAM_RETRY_ATTEMPTS - 1
+      ) {
+        await sleep(UPSTREAM_QUOTA_BACKOFF_MS * 2 ** attempt)
         continue
       }
-      if (err instanceof UpstreamError && err.code === 'UPSTREAM_NETWORK' && attempt < 2) {
-        await sleep(400 * 2 ** attempt)
+      if (
+        err instanceof UpstreamError &&
+        err.code === 'UPSTREAM_NETWORK' &&
+        attempt < UPSTREAM_RETRY_ATTEMPTS - 1
+      ) {
+        await sleep(UPSTREAM_NETWORK_BACKOFF_MS * 2 ** attempt)
         continue
       }
       throw err
@@ -167,7 +186,7 @@ export async function musicu<T>(
   }
   if (comm) payload.comm = comm
 
-  for (let attempt = 0; attempt < 3; attempt += 1) {
+  for (let attempt = 0; attempt < UPSTREAM_RETRY_ATTEMPTS; attempt += 1) {
     const response = await upstreamRequest<MusicuResponse<T>>({
       host: 'https://u.y.qq.com',
       path: '/cgi-bin/musicu.fcg',
@@ -179,8 +198,8 @@ export async function musicu<T>(
     const code = response.code !== 0 ? response.code : (node?.code ?? 0)
     if (code !== 0) {
       // 2001 / 104604 为上游瞬时繁忙，短退避后重试。
-      if ((code === 2001 || code === 104604) && attempt < 2) {
-        await new Promise((resolve) => setTimeout(resolve, 500 * 2 ** attempt))
+      if ((code === 2001 || code === 104604) && attempt < UPSTREAM_RETRY_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, MUSICU_BUSY_BACKOFF_MS * 2 ** attempt))
         continue
       }
       throw mapUpstreamCode(code, `${module}.${method}`)

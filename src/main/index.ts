@@ -12,6 +12,9 @@ let mainWindow: BrowserWindow | null = null
 let quitting = false
 let refreshTimer: NodeJS.Timeout | null = null
 
+// 推荐值 30 × 60_000 ms；会话续期定时器间隔。
+const SESSION_REFRESH_INTERVAL_MS = 30 * 60_000
+
 app.setName('Lychee Player')
 
 // Hyprland 等非 GNOME/KDE 桌面下 Chromium 的后端自动探测会落到 basic_text，显式固定 libsecret 后端。
@@ -57,7 +60,7 @@ export function createMainWindow(): BrowserWindow {
     minHeight: 440,
     show: false,
     autoHideMenuBar: true,
-    backgroundColor: '#0e0e12',
+    backgroundColor: '#231F1F',
     title: 'Lychee Player',
     icon: iconPath(),
     webPreferences: {
@@ -151,7 +154,7 @@ export async function bootstrap(): Promise<void> {
       await loadCredential()
       await refreshIfNeeded()
     })()
-  }, 30 * 60_000)
+  }, SESSION_REFRESH_INTERVAL_MS)
 }
 
 const hasLock = app.requestSingleInstanceLock()

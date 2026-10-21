@@ -6,6 +6,11 @@ import { hash33 } from './hash'
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
 
+// 推荐值 10 × 60_000 ms；凭证到期前提前续期的窗口。
+const SESSION_REFRESH_AHEAD_MS = 10 * 60_000
+// 推荐值 6 × 60 × 60_000 ms；凭证无到期时间时的续期间隔。
+const SESSION_REFRESH_FALLBACK_MS = 6 * 60 * 60_000
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
@@ -234,7 +239,7 @@ async function refreshMusickey(current: Credential): Promise<Credential> {
   const expiredAtMs =
     createdAtMs > 0 && expiresIn > 0
       ? createdAtMs + expiresIn * 1000
-      : Date.now() + 6 * 60 * 60_000
+      : Date.now() + SESSION_REFRESH_FALLBACK_MS
 
   const merged: Credential = {
     ...current,
@@ -291,8 +296,8 @@ export function refreshIfNeeded(force = false): Promise<void> {
   const due =
     force ||
     (current.expiredAtMs !== null
-      ? current.expiredAtMs - now <= 10 * 60_000
-      : now - lastRefreshAt >= 6 * 60 * 60_000)
+      ? current.expiredAtMs - now <= SESSION_REFRESH_AHEAD_MS
+      : now - lastRefreshAt >= SESSION_REFRESH_FALLBACK_MS)
   if (!due) return Promise.resolve()
   return refreshSession()
     .then(() => undefined)

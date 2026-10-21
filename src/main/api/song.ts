@@ -36,10 +36,11 @@ const QUALITY_FILE: Record<Quality, { prefix: string; ext: string }> = {
   flac: { prefix: 'F000', ext: '.flac' }
 }
 
-const QUALITY_CHAIN: Record<Quality, Quality[]> = {
-  flac: ['flac', '320k', '128k'],
-  '320k': ['320k', '128k'],
-  '128k': ['128k']
+const QUALITY_FALLBACK_ORDER: Quality[] = ['flac', '320k', '128k']
+
+/** 先请求档位，再按 flac → 320k → 128k 兜底（跳过已尝试的请求档位）。 */
+function qualityAttempts(requested: Quality): Quality[] {
+  return [requested, ...QUALITY_FALLBACK_ORDER.filter((quality) => quality !== requested)]
 }
 
 const mediaMidCache = new Map<string, string>()
@@ -146,7 +147,7 @@ async function requestQuality(
 }
 
 /**
- * 获取播放链接：flac → 320k → 128k 单向降档，逐个 songMid 记录实际音质。
+ * 获取播放链接：先尝试请求档位，再按 flac → 320k → 128k 兜底；逐个 songMid 记录实际音质。
  * 全批量在所有档位都无链接时抛 NO_STREAM。
  */
 export async function getStreamUrls(mids: string[], quality: Quality): Promise<UrlResult[]> {
@@ -168,7 +169,7 @@ export async function getStreamUrls(mids: string[], quality: Quality): Promise<U
   const urls = new Map<string, string>()
   let pending = tracks
 
-  for (const step of QUALITY_CHAIN[quality]) {
+  for (const step of qualityAttempts(quality)) {
     if (pending.length === 0) break
     const resolved = await requestQuality(pending, step)
     for (const track of pending) {
@@ -183,7 +184,7 @@ export async function getStreamUrls(mids: string[], quality: Quality): Promise<U
   const results = unique.map<UrlResult>((mid) => ({
     songMid: mid,
     url: urls.get(mid) ?? null,
-    quality: actualQuality.get(mid) ?? QUALITY_CHAIN[quality][QUALITY_CHAIN[quality].length - 1]
+    quality: actualQuality.get(mid) ?? quality
   }))
 
   if (results.every((result) => result.url === null)) {

@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import type { Song } from '@shared/types'
+import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
+import { usePlayerStore } from '../stores/player'
 import { formatDuration, singerNames, songCover } from '../utils/format'
 
 withDefaults(
@@ -13,7 +15,10 @@ withDefaults(
   { activeMid: null, showAlbum: true }
 )
 
-const emit = defineEmits<{ play: [index: number] }>()
+const emit = defineEmits<{ play: [index: number]; playNext: [index: number]; toggle: [] }>()
+
+const player = usePlayerStore()
+const playing = computed(() => player.status === 'playing')
 </script>
 
 <template>
@@ -23,7 +28,8 @@ const emit = defineEmits<{ play: [index: number] }>()
         <th class="song-index">#</th>
         <th>标题</th>
         <th v-if="showAlbum">专辑</th>
-        <th style="width: 70px; text-align: right">时长</th>
+        <th class="song-duration-col">时长</th>
+        <th class="song-action">操作</th>
       </tr>
     </thead>
     <tbody>
@@ -35,8 +41,13 @@ const emit = defineEmits<{ play: [index: number] }>()
         @dblclick="emit('play', index)"
       >
         <td class="song-index">
-          <button class="song-play" title="播放" @click.stop="emit('play', index)">
-            <AppIcon name="play" :size="13" />
+          <span class="song-index-text">{{ index + 1 }}</span>
+          <button
+            class="song-play"
+            :title="song.songMid === activeMid ? (playing ? '暂停' : '继续播放') : '播放'"
+            @click.stop="song.songMid === activeMid ? emit('toggle') : emit('play', index)"
+          >
+            <AppIcon :name="song.songMid === activeMid && playing ? 'pause' : 'play'" :size="13" />
           </button>
         </td>
         <td>
@@ -57,6 +68,11 @@ const emit = defineEmits<{ play: [index: number] }>()
           <div class="song-album" :title="song.album.name">{{ song.album.name || '—' }}</div>
         </td>
         <td class="song-duration">{{ formatDuration(song.durationMs) }}</td>
+        <td class="song-action">
+          <button class="song-next" title="下一首播放" @click.stop="emit('playNext', index)">
+            下一首
+          </button>
+        </td>
       </tr>
     </tbody>
   </table>

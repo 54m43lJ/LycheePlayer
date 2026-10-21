@@ -697,13 +697,27 @@ a {
 }
 
 .song-index {
+  position: relative;
   width: 36px;
   color: var(--faint);
   font-variant-numeric: tabular-nums;
   text-align: right !important;
 }
 
+.song-index-text {
+  display: inline;
+}
+
+.song-row:hover .song-index-text,
+.song-row.active .song-index-text {
+  visibility: hidden;
+}
+
 .song-play {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
   display: grid;
   place-items: center;
   width: 26px;
@@ -712,12 +726,36 @@ a {
   color: var(--text);
   background: var(--subtle-bg-strong);
   opacity: 0;
+  pointer-events: none;
   transition: opacity 0.12s ease;
 }
 
 .song-row:hover .song-play,
 .song-row.active .song-play {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.song-duration-col {
+  width: 70px;
+  text-align: right !important;
+}
+
+.song-action {
+  width: 88px;
+  text-align: right !important;
+}
+
+.song-next {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: color 0.14s ease;
+}
+
+.song-next:hover {
+  color: var(--accent-strong);
 }
 
 .song-main {
@@ -1022,9 +1060,10 @@ a {
   box-shadow: var(--shadow);
 }
 
-/* 登录页宽版：官方登录组件（主进程 WebContentsView）占满整页宽度，仅下方保留 Cookie 折叠面板 */
+/* 登录页宽版：官方登录组件（主进程 WebContentsView）占满内容宽度，仅下方保留 Cookie 折叠面板 */
 .login-wide {
-  width: min(1080px, 100%);
+  width: 100%;
+  max-width: 800px;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1641,6 +1680,85 @@ a {
   color: var(--faint);
   font-size: 12px;
   text-align: center;
+}
+
+/* ---------- Queue ---------- */
+
+.queue-now {
+  position: relative;
+  margin: 16px 18px 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--subtle-bg);
+}
+
+.queue-now-label {
+  color: var(--accent-strong);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.queue-now-song {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  min-width: 0;
+}
+
+.queue-note {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.queue-empty-inline {
+  margin-top: 8px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
+.queue-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0 18px 24px;
+}
+
+.queue-row {
+  display: grid;
+  grid-template-columns: 20px 38px minmax(0, 1fr) 90px 40px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--subtle-bg);
+}
+
+.queue-index {
+  color: var(--faint);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.queue-album {
+  overflow: hidden;
+  color: var(--faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 2px 0;
+  color: var(--faint);
+  font-size: 11px;
 }
 
 .spinner {

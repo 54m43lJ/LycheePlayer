@@ -38,6 +38,11 @@ interface MineData {
   total?: number
 }
 
+// 推荐值 100；歌单上游单页条数。
+const PLAYLIST_PAGE_SIZE = 100
+// 推荐值 20；歌单本地最大分页数。
+const PLAYLIST_PAGE_MAX = 20
+
 function normalizeCover(value: string | undefined): string {
   if (!value) return ''
   return value.startsWith('http://') ? `https://${value.slice(7)}` : value
@@ -63,7 +68,7 @@ export async function getPlaylist(id: string): Promise<PlaylistDetail> {
   let meta: PlaylistMeta | null = null
   let total = 0
 
-  for (let page = 0; page < 20; page += 1) {
+  for (let page = 0; page < PLAYLIST_PAGE_MAX; page += 1) {
     const data = await musicu<PlaylistData>(
       'music.srfDissInfo.DissInfo',
       'CgiGetDiss',
@@ -72,7 +77,7 @@ export async function getPlaylist(id: string): Promise<PlaylistDetail> {
         dirid: 0,
         tag: true,
         song_begin: songs.length,
-        song_num: 100,
+        song_num: PLAYLIST_PAGE_SIZE,
         userinfo: true,
         orderlist: true,
         onlysonglist: false
@@ -94,7 +99,7 @@ export async function getPlaylist(id: string): Promise<PlaylistDetail> {
 
     const batch = data.songlist ?? []
     songs.push(...batch.map(rawSongToSong))
-    if (batch.length === 0 || songs.length >= total || batch.length < 100) break
+    if (batch.length === 0 || songs.length >= total || batch.length < PLAYLIST_PAGE_SIZE) break
   }
 
   if (!meta) {

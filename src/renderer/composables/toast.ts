@@ -11,6 +11,9 @@ export interface ToastItem {
 const state = reactive<{ items: ToastItem[] }>({ items: [] })
 let sequence = 0
 
+// 推荐值 3600 ms；Toast 自动消失时间。
+const TOAST_DURATION_MS = 3600
+
 function dismiss(id: number): void {
   const index = state.items.findIndex((item) => item.id === id)
   if (index >= 0) state.items.splice(index, 1)
@@ -19,7 +22,7 @@ function dismiss(id: number): void {
 function show(message: string, kind: ToastKind = 'info'): void {
   const id = ++sequence
   state.items.push({ id, message, kind })
-  window.setTimeout(() => dismiss(id), 3600)
+  window.setTimeout(() => dismiss(id), TOAST_DURATION_MS)
 }
 
 export function useToast() {

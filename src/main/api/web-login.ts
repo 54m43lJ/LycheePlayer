@@ -5,7 +5,12 @@ import { XLOGIN_URL } from '../../shared/xlogin'
 import { UpstreamError } from './client'
 import { exchangeQqLoginCode, requestOAuthCodeWithCookies } from './login'
 
-const PARTITION = 'lychee-xlogin'
+// 推荐值 5 × 60_000 ms；内嵌 xlogin 登录总超时。
+const LOGIN_EMBED_TIMEOUT_MS = 5 * 60_000
+// 推荐值 1000 ms；内嵌登录读取 session Cookie 的轮询间隔。
+const LOGIN_COOKIE_POLL_MS = 1000
+// 推荐值 'lychee-xlogin'；登录组件的独立 session 分区名。
+const LOGIN_EMBED_PARTITION = 'lychee-xlogin'
 
 function isAllowedHost(url: string): boolean {
   try {
@@ -13,7 +18,9 @@ function isAllowedHost(url: string): boolean {
     return (
       host === 'qq.com' ||
       host.endsWith('.qq.com') ||
+      host === 'gtimg.cn' ||
       host.endsWith('.gtimg.cn') ||
+      host === 'weixin.qq.com' ||
       host.endsWith('.weixin.qq.com')
     )
   } catch {
@@ -83,7 +90,7 @@ export function disposeEmbedView(): void {
 function createEmbedView(): WebContentsView {
   const view = new WebContentsView({
     webPreferences: {
-      partition: PARTITION,
+      partition: LOGIN_EMBED_PARTITION,
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -132,7 +139,7 @@ function attachCapture(wc: WebContents): void {
       action: 'allow',
       overrideBrowserWindowOptions: {
         autoHideMenuBar: true,
-        webPreferences: { partition: PARTITION, sandbox: true }
+        webPreferences: { partition: LOGIN_EMBED_PARTITION, sandbox: true }
       }
     }
   })
@@ -156,7 +163,7 @@ export function openWebLogin(): Promise<Credential> {
 }
 
 function runEmbedLogin(): Promise<Credential> {
-  const partitionSession = session.fromPartition(PARTITION)
+  const partitionSession = session.fromPartition(LOGIN_EMBED_PARTITION)
   void clearLoginSession(partitionSession)
 
   return new Promise<Credential>((resolve, reject) => {
@@ -224,10 +231,10 @@ function runEmbedLogin(): Promise<Credential> {
 
     timeoutTimer = setTimeout(() => {
       void fail('扫码登录超时，请重试')
-    }, 5 * 60_000)
+    }, LOGIN_EMBED_TIMEOUT_MS)
 
     cookieTimer = setInterval(() => {
       void finishFromCookies()
-    }, 1000)
+    }, LOGIN_COOKIE_POLL_MS)
   })
 }

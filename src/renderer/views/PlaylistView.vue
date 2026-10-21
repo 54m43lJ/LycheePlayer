@@ -40,6 +40,11 @@ function playAt(index: number): void {
   player.playList(songs.value, index)
 }
 
+function playNextAt(index: number): void {
+  const song = songs.value[index]
+  if (song) player.playNext(song)
+}
+
 watch(() => route.params.id, load, { immediate: true })
 </script>
 
@@ -87,6 +92,7 @@ watch(() => route.params.id, load, { immediate: true })
         :songs="songs"
         :active-mid="player.current?.songMid"
         @play="playAt"
+        @play-next="playNextAt"
       />
       <div v-else class="empty">
         <div class="empty-icon"><AppIcon name="music" :size="25" /></div>

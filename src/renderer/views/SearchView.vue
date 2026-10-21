@@ -86,6 +86,11 @@ function playSongAt(index: number): void {
   player.playList(songs.value, index)
 }
 
+function playNextAt(index: number): void {
+  const song = songs.value[index]
+  if (song) player.playNext(song)
+}
+
 function searchBySinger(name: string): void {
   useKeyword(name)
 }
@@ -159,6 +164,7 @@ function changePage(delta: number): void {
           :songs="songs"
           :active-mid="player.current?.songMid"
           @play="playSongAt"
+          @play-next="playNextAt"
         />
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="search" :size="25" /></div>

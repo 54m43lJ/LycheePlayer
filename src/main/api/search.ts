@@ -46,6 +46,17 @@ const SEARCH_TYPE = {
   playlist: 3
 } as const
 
+// 推荐值 350 ms；搜索空结果重试延迟。
+const SEARCH_EMPTY_RETRY_MS = 350
+// 推荐值 1；搜索空结果重试次数。
+const SEARCH_EMPTY_RETRY_COUNT = 1
+// 推荐值 100；search.byType 页码上限。
+const SEARCH_PAGE_NO_MAX = 100
+// 推荐值 20；搜索每页默认条数。
+const SEARCH_PAGE_SIZE_DEFAULT = 20
+// 推荐值 50；搜索每页最大条数。
+const SEARCH_PAGE_SIZE_MAX = 50
+
 function coverUrl(value: string | undefined): string {
   if (!value) return ''
   return value.startsWith('http://') ? `https://${value.slice(7)}` : value
@@ -103,8 +114,11 @@ export async function searchByType(req: SearchRequest): Promise<SearchResult> {
   if (!keyword) {
     return { songs: [], singers: [], albums: [], playlists: [], total: 0 }
   }
-  const pageNo = Math.max(1, Math.min(100, Math.floor(req.pageNo) || 1))
-  const pageSize = Math.max(1, Math.min(50, Math.floor(req.pageSize) || 20))
+  const pageNo = Math.max(1, Math.min(SEARCH_PAGE_NO_MAX, Math.floor(req.pageNo) || 1))
+  const pageSize = Math.max(
+    1,
+    Math.min(SEARCH_PAGE_SIZE_MAX, Math.floor(req.pageSize) || SEARCH_PAGE_SIZE_DEFAULT)
+  )
   const body = {
     num_per_page: pageSize,
     page_num: pageNo,
@@ -113,7 +127,7 @@ export async function searchByType(req: SearchRequest): Promise<SearchResult> {
     searchid: String(Date.now())
   }
 
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  for (let attempt = 0; attempt <= SEARCH_EMPTY_RETRY_COUNT; attempt += 1) {
     const data = await musicu<SearchData>(
       'music.search.SearchCgiService',
       'DoSearchForQQMusicDesktop',
@@ -121,8 +135,8 @@ export async function searchByType(req: SearchRequest): Promise<SearchResult> {
       { comm: false }
     )
     const result = parseSearch(data)
-    if (!isEmpty(result) || attempt === 1) return result
-    await new Promise((resolve) => setTimeout(resolve, 350))
+    if (!isEmpty(result) || attempt === SEARCH_EMPTY_RETRY_COUNT) return result
+    await new Promise((resolve) => setTimeout(resolve, SEARCH_EMPTY_RETRY_MS))
   }
   return { songs: [], singers: [], albums: [], playlists: [], total: 0 }
 }

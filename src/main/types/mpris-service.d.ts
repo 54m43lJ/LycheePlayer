@@ -15,6 +15,8 @@ declare module 'mpris-service' {
   interface MprisPlayer extends EventEmitter {
     playbackStatus: 'Playing' | 'Paused' | 'Stopped'
     metadata: Record<string, unknown>
+    loopStatus: 'None' | 'Track' | 'Playlist'
+    shuffle: boolean
     canGoNext: boolean
     canGoPrevious: boolean
     canPlay: boolean
