@@ -173,7 +173,7 @@ div.diagram img { display: block; }
 .u-switch.off { background: var(--p-line); }
 .u-switch.off::after { left: 2px; right: auto; }
 
-/* 6.1 骨架图：抽象区域 + 章节引用 */
+/* USER §5.2.1 骨架图：抽象区域 + 章节引用 */
 .u-shell-map { width: 900px; height: 480px; }
 .u-region { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; margin: 10px; border: 1px dashed #8a8188; border-radius: 8px; color: var(--p-muted); font-size: 11px; text-align: center; }
 .u-region b { color: var(--p-fg); font-size: 12px; }

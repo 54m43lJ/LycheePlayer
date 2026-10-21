@@ -14,7 +14,7 @@
 | A. 自相矛盾 / 结构性错误 | 8 | 8 | 3 |
 | B. 重复（违反单一事实源） | 6 组 | 6 | 0 |
 | C. 与参考实现不符 / 疑似事实错误 | 14 | 14 | 3 |
-| D. 违反 GUIDELINES 形式要求 | 7 | 2 | 3 |
+| D. 违反 GUIDELINES 形式要求 | 7 | 7 | 3 |
 | E. 拿不准 / 需确认 | 10 组 | — | — |
 
 ### 修复状态
@@ -293,14 +293,18 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
 - 见 B1–B6。重复的规则包括凭证边界、音质降档链、路由关闭歌词面板、音频流直连、上游隔离，以及 TODO 中的队列术语。
 - GUIDELINES L25 要求“定义只出现一次，其他地方用超链接”。
 
-### D2 [中] 违反 Global #2 不得记录修订历史
+### D2 [中][已解决] 违反 Global #2 不得记录修订历史
 
+- 解决（2026-10-21）：TODO 删除“路线图移入”等迁移说明；版本阶段迁移条目已替换为用户要求的“删除任何阶段提示和字样”跟踪项。
+- 以下为审计时的问题记录：
 - 位置：`TODO.md` 中旧的“版本阶段迁移”说明与“路线图移入”说明。
 - 这两处记录了文档/路线图的迁移历史，属于 GUIDELINES L26 明确禁止的“changes against previous versions”。
 - 建议：把历史放进提交说明；TODO 只保留当前待办。
 
-### D3 [高] CORE 签名块不是合法的项目语言语法
+### D3 [高][已解决] CORE 签名块不是合法的项目语言语法
 
+- 解决（2026-10-21）：`Credential` 改为空接口，`XLOGIN_URL` 改为 `declare const`，`router` 改为 `createRouter(...)` 初始化；Vue 组件统一改用 `defineProps` / `withDefaults` / `defineEmits`，无 props/emits 的组件改用注释。
+- 以下为审计时的问题记录：
 - `CORE.html` L278：`export interface Credential;` —— TypeScript 接口不能没有 body。
 - `CORE.html` L373：`export const XLOGIN_URL: string;` —— 没有 `declare` 或初始化器，普通 `.ts` 文件中非法。
 - `CORE.html` L592：`const router: Router;` —— 没有初始化器，非法。
@@ -312,8 +316,10 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
   - `const router = createRouter({...})`；
   - Vue props/emits 改用 `defineProps` / `defineEmits`，或在 CONVENTIONS 明确声明这是伪代码记法。
 
-### D4 [中] CORE §4 的方法签名覆盖不完整
+### D4 [中][已解决] CORE §4 的方法签名覆盖不完整
 
+- 解决（2026-10-21）：GUIDELINES 明确“签名必须覆盖核心流程相关方法；非核心辅助方法可酌情引入”。CORE 已补 `checkCredentialStore`、`configureLinuxDisplay`、`showMainWindow`、`refreshMusickey`、`probeCredential`、`createEmbedView`、`attachCapture`、`extractOauthCode`、`runEmbedLogin`、`fetchTrack`、`requestQuality`、`buildStreamUrl` 等核心方法签名；`parseCookieString` 等辅助方法允许省略。
+- 以下为审计时的问题记录：
 - GUIDELINES Core 第 4 章要求“每个源文件一个小节；方法：签名 + 至多一行用途”。当前只列了导出 API，但调用树引用了多个未声明的内部函数：
   - `src/main/index.ts`：`checkCredentialStore`、`configureLinuxDisplay`、`showMainWindow`（CORE §5.1/§5.2 使用）。
   - `src/main/api/song.ts`：`fetchTrack`、`requestQuality`、`buildStreamUrl`（CORE §5.5 使用）。
@@ -331,16 +337,20 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
 - `diagram/prov-play.puml`：`APP (主进程) -> STREAM` 既违反该规则，也与“渲染进程直连”的契约冲突（见 C3）。
 - 建议：删除/改写这些自消息，只保留 xlogin/QQ、资料接口、vkey、音频流等跨边界消息；内部流程放到 CORE §5.3/§5.4/§5.5。
 
-### D6 [中] 违反 Global #8 “一块一流程”
+### D6 [中][已解决] 违反 Global #8 “一块一流程”
 
+- 解决（2026-10-21）：CORE §5.5 拆出 §5.5.1“播放结束”；§5.8 拆成 §5.8.1“关闭窗口”与 §5.8.2“应用退出”。
+- 以下为审计时的问题记录：
 - `CORE.html` §5.5（L932–L951）：`audio/engine::onEnded` 是一个与前面“点击播放”分离的根流程，却放在同一代码块。
 - `CORE.html` §5.8（L988–L996）：`BrowserWindow.on('close')` 与 `app.on('before-quit')` 是两个独立事件处理器，放在同一代码块。
 - 建议：拆成独立小节或独立代码块；§5.5 可分为“5.5.1 开始播放 / 5.5.2 播放结束”，§5.8 可分为“关闭窗口 / 应用退出”。
 
-### D7 [低] 其他形式问题
+### D7 [低][已解决] 其他形式问题
 
-- `TODO.md` 是 Markdown，而 GUIDELINES 开篇要求“Documents per project, in HTML”。TODO 若只是工作笔记可例外；若被视为项目文档，应转 HTML 或明确其非正式文档地位。
-- `CORE.html` §1 文件树没有列出根目录的 `GUIDELINES.md`（`style.css` 等已列出），文件树不完整。
+- 解决（2026-10-21）：GUIDELINES 明确文件树只列源码、构建配置与资源，文档及其样式不在其中；CORE 文件树移除文档、`style.css` 与 `LICENSE`，仅保留 TODO 作为跟踪例外；`style.css` 的陈旧“6.1”注释改为 USER §5.2.1；CORE §4.47 注释缩减为“主题 token 与布局样式”，其余信息移入注记。
+- 以下为审计时的问题记录：
+- `TODO.md` 是 Markdown，而 GUIDELINES 开篇要求“Documents per project, in HTML”。TODO 作为工作跟踪例外保留。
+- `CORE.html` §1 文件树列出 `style.css`，但它是文档样式，与源码无关；已移除。
 - `style.css` L175 注释仍写“6.1 骨架图”，当前对应章节是 USER §5.2.1，属陈旧编号。
 - `CORE.html` §4.47 的注释“无导出：主题 token、布局、组件样式与响应式断点”包含 4 个信息点，按 Global #7 应移到代码块后的 `ul.note`。
 
@@ -428,7 +438,6 @@ GUIDELINES Global #1 要求“定义只出现一次，其他地方用链接”�
 ## G. 建议修复顺序
 
 1. **代码待办**：C4 凭证明文 fallback、C5 音质回退；文档已修正，代码实现见 `TODO.md`。
-2. **文档结构**：D3（非法 TypeScript）、D4（签名覆盖）、D6（一块一流程）。
-3. **其余低优先级**：D7、E 系列。
+2. **待确认/外部事实**：E 系列（原型细节、外部项目描述等）。
 
-> 本报告最初只做审计；A1–A8/B1–B6 与 C1–C14 的文档修订已同步。剩余待办集中在 C4/C5 的代码实现与 D3/D4/D6 的文档结构。
+> 本报告最初只做审计；A1–A8、B1–B6、C1–C14、D1–D7 的文档修订已同步。剩余待办集中在 C4/C5 的代码实现与 E 系列的待确认项。

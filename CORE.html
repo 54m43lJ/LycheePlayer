@@ -88,12 +88,11 @@
 ├── electron.vite.config.ts                   Electron / Vite 构建配置
 ├── package.json                              依赖、脚本与版本
 ├── tsconfig.json / tsconfig.node.json / tsconfig.web.json  TypeScript 配置
-├── README.html / USER.html / CORE.html / PROVIDER.html       项目文档
-├── style.css                                 文档样式
-└── LICENSE                                   GPL-3.0-only
+└── TODO.md                                   文档修改指导
 </code></pre>
 <ul class="note">
   <li><code>src/shared/</code> 是 IPC 类型契约的唯一来源，主进程、preload 与渲染进程均从这里导入。</li>
+  <li>文件树只列源码、构建配置与资源；文档与文档样式不在其中，<code>TODO.md</code> 作为文档修改跟踪的例外保留。</li>
   <li>带链接的文件在 <a href="#c4">§4</a> 有对应的签名小节；其余条目为脚本、配置、资源或纯展示文件。</li>
 </ul>
 
@@ -274,7 +273,7 @@ export interface Lyric {
   trans: string | null;
 }
 
-export interface Credential;   //见 PROVIDER §4.3
+export interface Credential {}   //见 PROVIDER §4.3
 
 export interface UrlResult {
   songMid: string;
@@ -369,12 +368,15 @@ export interface EmbedRect {
 </ul>
 
 <h3 id="c4-3">4.3 src/shared/xlogin.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export const XLOGIN_URL: string;   //见 PROVIDER §4.1
+<pre><code>export declare const XLOGIN_URL: string;   //见 PROVIDER §4.1
 </code></pre>
 
 <h3 id="c4-4">4.4 src/main/index.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function createMainWindow(): BrowserWindow;
 export function bootstrap(): Promise&lt;void&gt;;
+function checkCredentialStore(): Promise&lt;void&gt;;
+function configureLinuxDisplay(): void;
+function showMainWindow(): void;
 </code></pre>
 <ul class="note">
   <li>模块加载阶段完成 Linux 显示后端与启动参数配置；<code>bootstrap()</code> 只在 <code>app.whenReady()</code> 后执行一次。</li>
@@ -460,6 +462,12 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
 <pre><code>export function getDetail(mids: string[]): Promise&lt;Song[]&gt;;
 export function getStreamUrls(mids: string[], quality: Quality): Promise&lt;UrlResult[]&gt;;
 export function rawSongToSong(raw: unknown): Song;
+async function fetchTrack(mid: string): Promise&lt;unknown&gt;;
+function requestQuality(
+  tracks: Array&lt;{ songMid: string; mediaMid: string }&gt;,
+  quality: Quality
+): Promise&lt;Map&lt;string, string&gt;&gt;;
+function buildStreamUrl(purl: string): string;
 </code></pre>
 <ul class="note">
   <li><code>getStreamUrls</code> 是全应用唯一拼装播放链接的位置；回退规则见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。</li>
@@ -485,6 +493,8 @@ export function exchangeQqLoginCode(code: string): Promise&lt;Credential&gt;;
 export function refreshSession(): Promise&lt;Credential&gt;;
 export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;
 export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
+async function refreshMusickey(current: Credential): Promise&lt;Credential&gt;;
+async function probeCredential(credential: Credential): Promise&lt;'ok' | 'expired'&gt;;
 </code></pre>
 <ul class="note">
   <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
@@ -496,6 +506,13 @@ export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
 export function setEmbedBounds(rect: EmbedRect | null): void;
 export function disposeEmbedView(): void;
 export function openWebLogin(): Promise&lt;Credential&gt;;
+function createEmbedView(): WebContentsView;
+function attachCapture(wc: WebContents): void;
+function onWillNavigate(event: ElectronEvent, url: string): void;
+function onWillRedirect(event: ElectronEvent, url: string): void;
+function onDidNavigate(event: ElectronEvent, url: string): void;
+function extractOauthCode(url: string): string | null;
+function runEmbedLogin(): Promise&lt;Credential&gt;;
 </code></pre>
 <ul class="note">
   <li><code>setEmbedBounds</code> 由渲染进程上报的页面坐标驱动 <code>WebContentsView</code> 的创建、定位与首次加载；<code>null</code> 摘除视图。</li>
@@ -588,7 +605,7 @@ export function describeError(error: unknown): string;
 </code></pre>
 
 <h3 id="c4-24">4.24 src/renderer/router/index.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>const router: Router;   // hash history；/ → /search
+<pre><code>const router: Router = createRouter({ history: createWebHashHistory(), routes: [] });   // hash history；/ → /search
 export default router;
 </code></pre>
 
@@ -770,73 +787,70 @@ export function useToast(): {
 </code></pre>
 
 <h3 id="c4-35">4.35 src/renderer/components/AppIcon.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: { name: string; size?: number };   // size = 20
-emits: none
+<pre><code>const props = withDefaults(defineProps&lt;{ name: string; size?: number }&gt;(), { size: 20 });
 </code></pre>
 
 <h3 id="c4-36">4.36 src/renderer/components/CoverArt.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: { src?: string; imageClass?: string; iconSize?: number };   // src = '', imageClass = '', iconSize = 24
-emits: none
+<pre><code>const props = withDefaults(defineProps&lt;{ src?: string; imageClass?: string; iconSize?: number }&gt;(), {
+  src: '',
+  imageClass: '',
+  iconSize: 24
+});
 </code></pre>
 
 <h3 id="c4-37">4.37 src/renderer/components/MarqueeText.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: { text: string; speed?: number };   // speed = 30
-emits: none
+<pre><code>const props = withDefaults(defineProps&lt;{ text: string; speed?: number }&gt;(), { speed: 30 });
 </code></pre>
 
 <h3 id="c4-38">4.38 src/renderer/components/SongTable.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: { songs: Song[]; activeMid?: string | null; showAlbum?: boolean };   // activeMid = null, showAlbum = true
-emits: { play: [index: number]; playNext: [index: number]; toggle: [] }
+<pre><code>const props = withDefaults(
+  defineProps&lt;{ songs: Song[]; activeMid?: string | null; showAlbum?: boolean }&gt;(),
+  { activeMid: null, showAlbum: true }
+);
+const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; toggle: [] }&gt;();
 </code></pre>
 <ul class="note">
   <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由“下一首播放”按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。队列相关交互为待实现设计，可以根据实际情况调整。</li>
 </ul>
 
 <h3 id="c4-39">4.39 src/renderer/components/PlayerBar.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: none
-emits: none
+<pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>播放条包含“播放队列”入口；点击切换 <code>UiStore.queueOpen</code>。队列入口为待实现设计，可以根据实际情况调整。</li>
 </ul>
 
 <h3 id="c4-40">4.40 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: none
-emits: none
+<pre><code>// 无 props / emits。
 </code></pre>
 
 <h3 id="c4-41">4.41 src/renderer/components/ToastStack.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: none
-emits: none
+<pre><code>// 无 props / emits。
 </code></pre>
 
 <h3 id="c4-42">4.42 src/renderer/views/SearchView.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: none
-emits: none
+<pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”。</li>
 </ul>
 
 <h3 id="c4-43">4.43 src/renderer/views/LibraryView.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: none
-emits: none
+<pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>登录后加载“我的歌单”，支持刷新与退出登录；未登录显示空状态。</li>
 </ul>
 
 <h3 id="c4-44">4.44 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: none
-emits: none
+<pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>按路由参数加载歌单详情；支持播放全部、单曲播放、下一首播放、失败重试与返回搜索。</li>
 </ul>
 
 <h3 id="c4-45">4.45 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: none
-emits: none
+<pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>挂载后上报登录组件占位矩形并启动内嵌登录；ResizeObserver 与滚动监听保持矩形同步，卸载时摘除视图。</li>
@@ -844,8 +858,7 @@ emits: none
 </ul>
 
 <h3 id="c4-46">4.46 src/renderer/views/SettingsView.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>props: none
-emits: none
+<pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>设置项即时写盘；播放中切换默认音质会立即重载当前曲目。</li>
@@ -853,10 +866,11 @@ emits: none
 </ul>
 
 <h3 id="c4-47">4.47 src/renderer/styles/main.css <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无导出：主题 token、布局、组件样式与响应式断点。
+<pre><code>// 无导出：主题 token 与布局样式。
 </code></pre>
 <ul class="note">
   <li>深色与浅色 token 定义在 <code>:root</code> / <code>[data-theme]</code>；视觉契约见 <a href="USER.html#u5">USER §5</a>。</li>
+  <li>组件样式与响应式断点也在同一文件维护。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
@@ -980,19 +994,21 @@ app::requestSingleInstanceLock()
             └── window.lychee.player.sendState(state)
                 └── ipcMain.on('player:state')
                     └── integration/mpris::publishState(state)
-
-audio/engine::onEnded
-├── 判断 mode === 'repeat-one'
-│   ├── stores/player::seek(0)
-│   └── stores/player::resume()
-└── stores/player::next(true)
-    └── stores/player::playAt(index + 1)
 </code></pre>
 <ul class="note">
   <li>双击、播放全部、单曲播放都走 <code>playList</code>（替换队列）；“下一首播放”走 <code>playNext</code>，只把歌曲插入 <code>playOrder</code> 当前项之后，不改变 <code>current</code>；无 <code>current</code> 时直接以该歌曲开始播放。队列模型见 <a href="#c4-28">§4.28</a>，用户可见规则见 <a href="USER.html#u1">USER §1</a>。</li>
   <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；主进程只经手链接字符串。</li>
   <li>音质回退在 <code>api/song.ts</code> 内部完成；实际档位随 <code>UrlResult.quality</code> 返回并写入播放状态。</li>
 </ul>
+
+<h4 id="c5-5-1">5.5.1 播放结束</h4>
+<pre><code>audio/engine::onEnded
+├── 判断 mode === 'repeat-one'
+│   ├── stores/player::seek(0)
+│   └── stores/player::resume()
+└── stores/player::next(true)
+    └── stores/player::playAt(index + 1)
+</code></pre>
 
 <h3 id="c5-6">5.6 MPRIS 控制</h3>
 <pre><code>integration/mpris::initMpris(ipc::sendPlayerCommand)
@@ -1050,12 +1066,15 @@ audio/engine::onEnded
 </ul>
 
 <h3 id="c5-8">5.8 关闭与退出</h3>
+<h4 id="c5-8-1">5.8.1 关闭窗口</h4>
 <pre><code>BrowserWindow.on('close')
 └── 判断 !quitting &amp;&amp; settings::getSettings().closeToTray
     ├── event.preventDefault()
     └── window.hide()
+</code></pre>
 
-app.on('before-quit')
+<h4 id="c5-8-2">5.8.2 应用退出</h4>
+<pre><code>app.on('before-quit')
 ├── index::clearInterval(refreshTimer)
 ├── integration/mpris::publishState(null)
 ├── integration/tray::destroyTray()
