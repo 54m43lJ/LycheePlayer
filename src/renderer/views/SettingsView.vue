@@ -30,16 +30,16 @@ const expiryText = computed(() => {
   })
 })
 
-const QUALITIES: Array<{ value: Settings['defaultQuality']; label: string; hint: string }> = [
-  { value: 'auto', label: '自动', hint: '登录默认无损 · 未登录 320k' },
-  { value: '128k', label: '标准', hint: '128 kbps MP3' },
-  { value: '320k', label: '高品质', hint: '320 kbps MP3' },
-  { value: 'flac', label: '无损', hint: 'FLAC · 需账号权限' }
+const QUALITIES: Array<{ value: Settings['defaultQuality']; label: string }> = [
+  { value: 'auto', label: '自动' },
+  { value: '128k', label: '标准' },
+  { value: '320k', label: '高品质' },
+  { value: 'flac', label: '无损' }
 ]
 
-const THEMES: Array<{ value: Settings['theme']; label: string; hint: string }> = [
-  { value: 'dark', label: '深色', hint: 'Dark · 奶油紫' },
-  { value: 'light', label: '浅色', hint: 'Light · Alabaster' }
+const THEMES: Array<{ value: Settings['theme']; label: string }> = [
+  { value: 'dark', label: '深色' },
+  { value: 'light', label: '浅色' }
 ]
 
 async function chooseQuality(quality: Settings['defaultQuality']): Promise<void> {
@@ -105,7 +105,6 @@ async function refreshSession(): Promise<void> {
       <div>
         <div class="eyebrow">Preferences</div>
         <h1 class="page-title">设置</h1>
-        <p class="page-sub">音质、窗口行为与登录状态。</p>
       </div>
     </div>
 
@@ -114,7 +113,6 @@ async function refreshSession(): Promise<void> {
         <section class="panel">
           <div class="panel-head">
             <h2>播放</h2>
-            <p>默认音质；自动=已登录默认无损、未登录 320k，无权限时上游自动降档且不提示。</p>
           </div>
           <div class="panel-body">
             <div class="quality-options">
@@ -126,19 +124,14 @@ async function refreshSession(): Promise<void> {
                 @click="chooseQuality(quality.value)"
               >
                 <strong>{{ quality.label }}</strong>
-                <span>{{ quality.hint }}</span>
               </button>
             </div>
-            <p class="note" style="margin: 14px 0 0">
-              播放中切换会立即重新获取链接；实际音质以账号权限和上游返回为准，降档结果会显示在播放条。
-            </p>
           </div>
         </section>
 
         <section class="panel">
           <div class="panel-head">
             <h2>外观</h2>
-            <p>调色板来自项目统一的 palette，可在深色 / 浅色间切换。</p>
           </div>
           <div class="panel-body">
             <div class="theme-options">
@@ -150,7 +143,6 @@ async function refreshSession(): Promise<void> {
                 @click="chooseTheme(theme.value)"
               >
                 <strong>{{ theme.label }}</strong>
-                <span>{{ theme.hint }}</span>
               </button>
             </div>
           </div>
@@ -159,13 +151,11 @@ async function refreshSession(): Promise<void> {
         <section class="panel">
           <div class="panel-head">
             <h2>窗口</h2>
-            <p>关闭主窗口时隐藏到托盘，托盘菜单可退出应用。</p>
           </div>
           <div class="panel-body">
             <div class="setting-row">
               <div>
                 <div class="setting-name">关闭到托盘</div>
-                <div class="setting-desc">关闭主窗口时隐藏而非退出；需从托盘菜单选择退出。</div>
               </div>
               <button
                 class="switch"
@@ -182,7 +172,6 @@ async function refreshSession(): Promise<void> {
         <section class="panel">
           <div class="panel-head">
             <h2>账号</h2>
-            <p>凭证只保存在主进程，不跨 IPC 下发。</p>
           </div>
           <div class="panel-body">
             <template v-if="auth.loggedIn">
@@ -206,9 +195,6 @@ async function refreshSession(): Promise<void> {
                   {{ sessionRefreshing ? '续期中…' : '立即续期' }}
                 </button>
               </div>
-              <p class="note" style="margin: 0 0 14px">
-                登录态每 30 分钟检查一次，到期前自动换取新 musickey。若续期失败，旧凭证会保留到下一次重试。
-              </p>
               <div style="display: flex; gap: 8px; margin-top: 16px">
                 <button class="btn small" @click="router.push('/library')">我的歌单</button>
                 <button class="btn ghost small" @click="logout()">
@@ -218,7 +204,6 @@ async function refreshSession(): Promise<void> {
               </div>
             </template>
             <template v-else>
-              <p class="note" style="margin: 0 0 14px">当前未登录。搜索与免费歌曲播放仍可使用。</p>
               <button class="btn primary small" @click="router.push('/login')">
                 <AppIcon name="login" :size="14" />
                 去登录
@@ -230,7 +215,6 @@ async function refreshSession(): Promise<void> {
         <section class="panel">
           <div class="panel-head">
             <h2>关于</h2>
-            <p>版本、音频引擎与许可信息。</p>
           </div>
           <div class="panel-body">
             <div class="setting-row">
@@ -245,9 +229,6 @@ async function refreshSession(): Promise<void> {
               <span class="setting-name">许可证</span>
               <span class="faint">{{ appLicense }}</span>
             </div>
-            <p class="note" style="margin: 14px 0 0">
-              非官方客户端，与腾讯及 QQ 音乐无隶属关系；仅调用官方可访问接口（无公开文档），不绕过授权。
-            </p>
           </div>
         </section>
       </div>

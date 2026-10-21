@@ -10,6 +10,7 @@ import type {
 import { loginWithCookie, refreshSession } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
+import { getComments } from './api/comment'
 import { getPlaylist, listMine } from './api/playlist'
 import { searchByType } from './api/search'
 import { getStreamUrls } from './api/song'
@@ -113,6 +114,7 @@ export function registerIpc(): void {
   handle('playlist.get', async (id: unknown) => getPlaylist(String(id)))
   handle('playlist.listMine', async () => listMine())
   handle('lyric.get', async (songMid: unknown) => getLyric(String(songMid)))
+  handle('comment.get', async (songId: unknown) => getComments(String(songId)))
   handle('user.getProfile', async () => getProfile())
 
   handle('settings.get', async () => getSettings())

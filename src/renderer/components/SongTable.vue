@@ -41,14 +41,16 @@ const playing = computed(() => player.status === 'playing')
         @dblclick="emit('play', index)"
       >
         <td class="song-index">
-          <span class="song-index-text">{{ index + 1 }}</span>
-          <button
-            class="song-play"
-            :title="song.songMid === activeMid ? (playing ? '暂停' : '继续播放') : '播放'"
-            @click.stop="song.songMid === activeMid ? emit('toggle') : emit('play', index)"
-          >
-            <AppIcon :name="song.songMid === activeMid && playing ? 'pause' : 'play'" :size="13" />
-          </button>
+          <span class="song-index-slot">
+            <span class="song-index-text">{{ index + 1 }}</span>
+            <button
+              class="song-play"
+              :title="song.songMid === activeMid ? (playing ? '暂停' : '继续播放') : '播放'"
+              @click.stop="song.songMid === activeMid ? emit('toggle') : emit('play', index)"
+            >
+              <AppIcon :name="song.songMid === activeMid && playing ? 'pause' : 'play'" :size="13" />
+            </button>
+          </span>
         </td>
         <td>
           <div class="song-main">

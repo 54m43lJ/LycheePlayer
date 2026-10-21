@@ -16,6 +16,7 @@ export interface AudioEngine {
   loadAndPlay(url: string): Promise<void>
   play(): Promise<void>
   pause(): void
+  stop(): void
   seek(positionMs: number): void
   setVolume(volume: number): void
   readonly positionMs: number
@@ -53,6 +54,11 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine {
     },
     pause() {
       audio.pause()
+    },
+    stop() {
+      audio.pause()
+      audio.removeAttribute('src')
+      audio.load()
     },
     seek(positionMs) {
       if (Number.isFinite(audio.duration) && audio.duration > 0) {

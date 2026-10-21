@@ -61,7 +61,6 @@ watch(
       <div>
         <div class="eyebrow">Library</div>
         <h1 class="page-title">我的歌单</h1>
-        <p class="page-sub">登录后浏览账号下的创建与收藏歌单。</p>
       </div>
       <button class="btn small" :disabled="loading || !auth.loggedIn" @click="refreshAll()">
         <AppIcon name="refresh" :size="14" />
@@ -74,7 +73,6 @@ watch(
     <div v-else-if="!auth.loggedIn" class="empty">
       <div class="empty-icon"><AppIcon name="user" :size="26" /></div>
       <h3>登录后查看你的歌单</h3>
-      <p>使用手机 QQ 扫码，或粘贴浏览器 Cookie。凭证只保存在主进程的加密存储中。</p>
       <button class="btn primary" @click="router.push('/login')">
         <AppIcon name="login" :size="15" />
         去登录
@@ -89,7 +87,7 @@ watch(
         </span>
         <div>
           <h2>{{ auth.displayName }}</h2>
-          <p>音乐 ID {{ auth.musicid }} · 凭证仅存于主进程</p>
+          <p>musicid {{ auth.musicid }}</p>
         </div>
         <div class="profile-actions">
           <button class="btn ghost small" @click="logout()">
@@ -130,7 +128,6 @@ watch(
       <div v-else class="empty">
         <div class="empty-icon"><AppIcon name="list" :size="25" /></div>
         <h3>这个账号下还没有歌单</h3>
-        <p>可以先去搜索页浏览公开歌单；收藏与歌单管理尚未实现。</p>
       </div>
     </template>
   </div>

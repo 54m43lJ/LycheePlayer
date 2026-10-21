@@ -1,6 +1,6 @@
 import type { UserProfile } from '../../shared/types'
 import { getCredential } from '../credential'
-import { UpstreamError, upstreamRequest } from './client'
+import { UpstreamError, musicu, upstreamRequest } from './client'
 import { hash33 } from './hash'
 
 interface ProfileResponse {
@@ -46,5 +46,53 @@ export async function getProfile(): Promise<UserProfile> {
   return {
     nickname: creator?.nick ?? credential.musicid,
     avatarUrl: creator?.headpic?.replace(/^http:/, 'https:') ?? ''
+  }
+}
+
+interface VipData {
+  svip?: number
+  identity?: {
+    vip?: number
+    huge_vip?: number
+    HugeVip?: number
+  }
+}
+
+interface VipCache {
+  musicid: string
+  expiresAt: number
+  isVip: boolean
+}
+
+// 推荐值 5 × 60_000 ms；VIP 状态缓存时长。
+const VIP_CACHE_MS = 5 * 60_000
+
+let vipCache: VipCache | null = null
+
+/** 当前登录账号是否具有 VIP 权益；接口失败时按非 VIP 处理。 */
+export async function isVipUser(): Promise<boolean> {
+  const credential = getCredential()
+  if (!credential) return false
+  if (
+    vipCache &&
+    vipCache.musicid === credential.musicid &&
+    vipCache.expiresAt > Date.now()
+  ) {
+    return vipCache.isVip
+  }
+
+  try {
+    const data = await musicu<VipData>('VipLogin.VipLoginInter', 'vip_login_base', {})
+    const isVip = Boolean(
+      data.identity?.vip || data.identity?.huge_vip || data.identity?.HugeVip || data.svip
+    )
+    vipCache = {
+      musicid: credential.musicid,
+      expiresAt: Date.now() + VIP_CACHE_MS,
+      isVip
+    }
+    return isVip
+  } catch {
+    return false
   }
 }

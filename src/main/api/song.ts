@@ -1,6 +1,7 @@
 import type { Quality, Song, UrlResult } from '../../shared/types'
 import { getCredential } from '../credential'
 import { UpstreamError, getGuid, musicu } from './client'
+import { isVipUser } from './user'
 
 interface RawSong {
   id?: number | string
@@ -188,7 +189,11 @@ export async function getStreamUrls(mids: string[], quality: Quality): Promise<U
   }))
 
   if (results.every((result) => result.url === null)) {
-    throw new UpstreamError('NO_STREAM', '没有可用的播放链接（可能需要 VIP 或已下架）')
+    const vip = await isVipUser()
+    throw new UpstreamError(
+      'NO_STREAM',
+      vip ? '当前内容已下架' : '当前内容不可播放（可能需要 VIP 或已下架）'
+    )
   }
   return results
 }

@@ -93,7 +93,6 @@ watch(
           </span>
           <AppIcon name="chevron-right" :size="15" />
         </RouterLink>
-        <p class="sidebar-note">仅调用 QQ 音乐官方可访问接口（无公开文档）<br />非官方客户端，不绕过授权</p>
       </div>
     </aside>
 
@@ -125,7 +124,6 @@ watch(
           </div>
         </div>
         <div v-else class="queue-empty-inline">暂无歌曲</div>
-        <span class="queue-note">不属于队列</span>
       </div>
 
       <div v-if="player.queue.length === 0" class="lyrics-empty">
@@ -149,7 +147,6 @@ watch(
         </div>
         <div class="queue-footer">
           <button class="song-next" @click="player.clearQueue()">清空队列</button>
-          <span>按播放顺序排列</span>
         </div>
       </div>
     </aside>

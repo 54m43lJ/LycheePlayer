@@ -112,10 +112,6 @@ onBeforeUnmount(() => {
 
       <details class="cookie-box">
         <summary>使用 Cookie 登录（兜底）</summary>
-        <p class="cookie-hint">
-          在浏览器打开 <span class="mono">y.qq.com</span> 并登录，开发者工具 → Network →
-          任选一个请求 → 复制 Request Headers 里的完整 Cookie，粘贴到下框。
-        </p>
         <div class="field">
           <textarea
             v-model="cookie"

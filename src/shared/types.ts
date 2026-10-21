@@ -78,6 +78,22 @@ export interface Lyric {
   trans: string | null
 }
 
+export interface Comment {
+  id: string
+  nickname: string
+  avatarUrl: string
+  content: string
+  likedCount: number
+  replyCount: number
+  createdAtMs: number
+}
+
+export interface CommentPage {
+  comments: Comment[]
+  total: number
+  hasMore: boolean
+}
+
 export interface Credential {
   musicid: string
   musickey: string

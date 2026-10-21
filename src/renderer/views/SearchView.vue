@@ -115,7 +115,6 @@ function changePage(delta: number): void {
     <section class="search-hero">
       <div class="eyebrow">Explore</div>
       <h1>搜你想听的</h1>
-      <p>单曲、歌手、专辑与歌单，数据直达 QQ 音乐。</p>
       <form class="search-box" @submit.prevent="search(1)">
         <span class="search-icon"><AppIcon name="search" :size="19" /></span>
         <input
@@ -169,7 +168,6 @@ function changePage(delta: number): void {
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
           <h3>没有找到单曲</h3>
-          <p>换个关键词试试，或检查是否开启了拼写错误。</p>
         </div>
       </div>
 
@@ -190,7 +188,6 @@ function changePage(delta: number): void {
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="user" :size="25" /></div>
           <h3>没有找到歌手</h3>
-          <p>试试更短的关键词。</p>
         </div>
       </div>
 
@@ -206,7 +203,6 @@ function changePage(delta: number): void {
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="music" :size="25" /></div>
           <h3>没有找到专辑</h3>
-          <p>试试更短的关键词。</p>
         </div>
       </div>
 
@@ -227,7 +223,6 @@ function changePage(delta: number): void {
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="list" :size="25" /></div>
           <h3>没有找到歌单</h3>
-          <p>试试更短的关键词。</p>
         </div>
       </div>
 
@@ -245,7 +240,6 @@ function changePage(delta: number): void {
     <div v-else class="empty">
       <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
       <h3>开始探索</h3>
-      <p>输入关键词，或点击上方热门搜索。双击歌曲即可播放。</p>
     </div>
   </div>
 </template>

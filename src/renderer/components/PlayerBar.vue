@@ -99,12 +99,14 @@ onBeforeUnmount(() => {
   <footer class="player">
     <div v-if="!current" class="player-empty">
       <AppIcon name="music" :size="16" />
-      还没有播放中的歌曲，搜索并双击任意歌曲开始
+      还没有播放中的歌曲
     </div>
 
     <template v-else>
       <div class="player-now">
-        <CoverArt :src="cover" image-class="player-cover" :icon-size="20" />
+        <button class="player-cover-button" title="歌词与评论" @click="ui.toggleLyrics()">
+          <CoverArt :src="cover" image-class="player-cover" :icon-size="20" />
+        </button>
         <div class="player-text">
           <div class="player-title-row">
             <MarqueeText class="player-title" :text="current.name" />
@@ -138,14 +140,6 @@ onBeforeUnmount(() => {
           </button>
           <button class="icon-btn" title="下一首" @click="player.next()">
             <AppIcon name="next" :size="17" />
-          </button>
-          <button
-            class="icon-btn"
-            :class="{ active: ui.lyricsOpen }"
-            title="歌词"
-            @click="ui.toggleLyrics()"
-          >
-            <AppIcon name="lyrics" :size="17" />
           </button>
           <button
             class="icon-btn"

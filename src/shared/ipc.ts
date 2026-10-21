@@ -1,5 +1,6 @@
 import type {
   AuthStatus,
+  CommentPage,
   EmbedRect,
   IpcResult,
   Lyric,
@@ -40,6 +41,9 @@ export interface LycheeApi {
   }
   lyric: {
     get(songMid: string): Promise<IpcResult<Lyric>>
+  }
+  comment: {
+    get(songId: string): Promise<IpcResult<CommentPage>>
   }
   settings: {
     get(): Promise<IpcResult<Settings>>

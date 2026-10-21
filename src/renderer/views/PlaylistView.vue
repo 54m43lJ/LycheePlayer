@@ -97,7 +97,6 @@ watch(() => route.params.id, load, { immediate: true })
       <div v-else class="empty">
         <div class="empty-icon"><AppIcon name="music" :size="25" /></div>
         <h3>这个歌单还没有可播放的歌曲</h3>
-        <p>可能是空歌单，或上游未返回歌曲数据。</p>
       </div>
     </template>
   </div>

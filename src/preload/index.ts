@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import type { LycheeApi } from '../shared/ipc'
 import type {
   AuthStatus,
+  CommentPage,
   IpcResult,
   Lyric,
   MprisCommand,
@@ -46,6 +47,9 @@ const api: LycheeApi = {
   },
   lyric: {
     get: (songMid: string) => invoke<Lyric>('lyric.get', songMid)
+  },
+  comment: {
+    get: (songId: string) => invoke<CommentPage>('comment.get', songId)
   },
   settings: {
     get: () => invoke<Settings>('settings.get'),

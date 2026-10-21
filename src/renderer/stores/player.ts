@@ -104,6 +104,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   const engine = createAudioEngine({
     onTimeUpdate(position) {
+      if (loading.value) return
       positionMs.value = position
       sendStateThrottled()
     },
@@ -154,10 +155,11 @@ export const usePlayerStore = defineStore('player', () => {
 
   async function loadAndPlay(song: Song, forcedQuality?: Quality): Promise<void> {
     const token = ++loadToken
+    status.value = 'stopped'
+    engine.stop()
     loading.value = true
     current.value = song
     playable.value = true
-    status.value = 'stopped'
     positionMs.value = 0
     durationMs.value = song.durationMs
     sendState()

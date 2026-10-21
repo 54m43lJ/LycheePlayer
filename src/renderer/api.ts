@@ -25,6 +25,7 @@ export function describeError(error: unknown): string {
       QUOTA_LIMITED: '请求过于频繁，请稍后重试',
       INTERNAL: '主进程内部错误'
     }
+    if (error.code === 'NO_STREAM' && error.message) return error.message
     return hints[error.code] ?? error.message
   }
   return error instanceof Error ? error.message : String(error)
