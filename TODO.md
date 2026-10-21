@@ -29,7 +29,7 @@
 - 打包分发：electron-builder（deb / rpm / AppImage）、x64 + arm64 CI、补 BUILD.html
 - 为 api 层补 fixture 回放测试，降低上游变更导致的回归成本
 - 提前探测歌单内不可用的歌（顺便探测歌曲最高可用音质）。如果API只支持单首歌提取的话，加入并发限制，防止大歌单并发数爆炸
-- 删除任何 POC 和 MVP 相关提示和字样
+- 删除任何 POC 和 MVP 相关提示和字样；设置页“关于”区的版本 / 许可证对齐 `package.json`（GPL-3.0-only）。
 
 ## 进阶目标
 
