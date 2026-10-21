@@ -3,29 +3,18 @@ skinparam shadowing false
 skinparam defaultTextAlignment center
 
 actor 用户 as U
-participant "playerStore\n(renderer)" as S
-participant "AudioEngine\n(audio/engine.ts)" as A
-participant "ipc.ts\n(main)" as IPC
-participant "api/song.ts\n(main)" as SG
-participant "上游 CGI" as UP
+participant "Lychee Player" as APP
+participant "QQ 音乐" as QQ
+participant "桌面环境" as DESKTOP
 
-U -> S : 双击歌曲
-S -> IPC : invoke song.getUrls(songMid, quality)
-IPC -> SG : getStreamUrls(songMid, quality)
-SG -> UP : 播放链接 CGI
-UP --> SG : 响应
-SG -> SG : 解析 vkey 播放链接
-
-break 链接为空（无权限或已下架）
-  SG --> IPC : IpcError NO_STREAM
-  IPC --> S : { ok:false }
-  S --> U : 提示需 VIP / 数字专辑
+U -> APP : 双击歌曲 / 播放全部
+APP -> QQ : 请求播放链接
+alt 有可播链接
+  QQ --> APP : 音频流地址
+  APP --> U : 开始播放
+  APP --> DESKTOP : 发布播放状态
+else 无可播链接
+  QQ --> APP : 无链接
+  APP --> U : 提示不可播
 end
-
-SG --> IPC : UrlResult[]
-IPC --> S : { ok:true }
-S -> A : loadAndPlay(url)
-A --> S : timeupdate / ended
-S -> IPC : send player:state
-IPC -> IPC : integration/mpris.publishState(state)
 @enduml

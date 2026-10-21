@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>USER — Lychee Player</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a id="top"></a>
+<h1>USER — Lychee Player</h1>
+
+<p class="doc-links">
+<a href="README.html">README</a>
+<a href="CORE.html">CORE</a>
+<a href="PROVIDER.html">PROVIDER</a>
+</p>
+
+<h2 id="u1">1. TERMS</h2>
+<p><a href="#top">↑</a></p>
+
+<table>
+  <tr><th>术语</th><th>定义</th></tr>
+  <tr>
+    <td>歌曲（Song）</td>
+    <td>可被搜索、加入播放队列并播放的曲目。展示字段与内部模型见 <a href="CORE.html#c4-1">CORE §4.1</a> 的 <code>Song</code>。</td>
+  </tr>
+  <tr>
+    <td>歌手（Singer）</td>
+    <td>歌曲的表演者，一首歌可有多位。界面以“ / ”连接展示。</td>
+  </tr>
+  <tr>
+    <td>专辑（Album）</td>
+    <td>歌曲所属专辑；用于列表展示、播放条信息与封面地址推导。</td>
+  </tr>
+  <tr>
+    <td>歌单（Playlist）</td>
+    <td>一组歌曲的集合。分为当前账号的“我的歌单”与公开歌单详情。</td>
+  </tr>
+  <tr>
+    <td>播放队列（Queue）</td>
+    <td>排在当前播放歌曲之后、按播放顺序等待播放的歌曲序列；当前歌曲不属于队列。双击歌曲、“播放全部”与单曲播放都会替换队列；“下一首播放”把歌曲插入队列头。</td>
+  </tr>
+  <tr>
+    <td>单曲播放（Single play）</td>
+    <td>在歌曲列表中点击非当前曲目行携带的播放按钮；以该曲目为当前歌曲并替换播放队列，效果与双击该行相同。当前曲目的按钮用于暂停 / 继续。</td>
+  </tr>
+  <tr>
+    <td>下一首播放（Play next）</td>
+    <td>把对应歌曲插入播放队列头；当前歌曲与队列其余顺序不变。歌曲已在队列中时移动到队列头；歌曲是当前歌曲时不操作；无当前歌曲时直接开始播放该歌曲。队列只支持头部插入，不提供队尾插入。</td>
+  </tr>
+  <tr>
+    <td>播放模式（PlayMode）</td>
+    <td><code>sequence</code> 顺序播放 · <code>repeat-all</code> 列表循环 · <code>repeat-one</code> 单曲循环 · <code>shuffle</code> 随机播放。</td>
+  </tr>
+  <tr>
+    <td>音质（Quality）</td>
+    <td><code>128k</code> 标准 · <code>320k</code> 高品质 · <code>flac</code> 无损。设置项 <code>auto</code> 不是音质档位，而是按登录态取默认档。</td>
+  </tr>
+  <tr>
+    <td>请求音质 / 实际音质</td>
+    <td>请求音质是用户或设置选择的档位；实际音质是上游最终返回链接对应的档位，可能更低，也可能因仅高音质源而更高。播放条同时展示两者。</td>
+  </tr>
+  <tr>
+    <td>登录态（AuthStatus）</td>
+    <td>渲染进程可见的登录状态；字段定义见 <a href="CORE.html#c4-1">CORE §4.1</a> 的 <code>AuthStatus</code>。渲染进程只持有登录态，不持有凭证。</td>
+  </tr>
+  <tr>
+    <td>登录凭证（Credential）</td>
+    <td>用户登录后由上游签发的访问凭据；数据模型与字段见 <a href="PROVIDER.html#p1">PROVIDER §1</a> 与 <a href="PROVIDER.html#p4-3">§4.3</a>。保存与使用边界见 <a href="#u2">§2</a>。</td>
+  </tr>
+  <tr>
+    <td>权限（PayInfo）</td>
+    <td>歌曲对当前账号的可播属性：免费、VIP 或数字专辑；字段见 <a href="CORE.html#c4-1">CORE §4.1</a> 的 <code>PayInfo</code>。仅用于界面角标，实际可播性以播放链接结果为准。</td>
+  </tr>
+  <tr>
+    <td>歌词（Lyric）</td>
+    <td>LRC 原文与可选的翻译文本；界面按时间戳合并展示。</td>
+  </tr>
+  <tr>
+    <td>MPRIS</td>
+    <td>桌面环境的媒体控制规范；本应用通过 D-Bus 暴露的协议见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>。</td>
+  </tr>
+</table>
+
+<h2 id="u2">2. CONVENTIONS</h2>
+<p><a href="#top">↑</a></p>
+
+<table>
+  <tr><th>约定</th><th>内容</th></tr>
+  <tr>
+    <td>默认音质</td>
+    <td><code>Settings.defaultQuality</code> 为 <code>auto</code> 时：已登录取 <code>flac</code>，未登录取 <code>320k</code>；设置页可固定 <code>128k</code> / <code>320k</code> / <code>flac</code>。</td>
+  </tr>
+  <tr>
+    <td>音质回退</td>
+    <td>请求档位无权限或无链接时静默回退，不弹提示，实际音质显示在播放条；实际音质可能高于或低于请求档位；全部档位无链接时提示不可播。回退规则见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。</td>
+  </tr>
+  <tr>
+    <td>播放模式切换</td>
+    <td>按 <code>sequence → repeat-all → repeat-one → shuffle</code> 循环切换，并通过 Toast 显示当前模式。</td>
+  </tr>
+  <tr>
+    <td>播放失败</td>
+    <td>单曲加载失败时停止当前加载并提示错误，不自动跳到下一首；不可播歌曲仍显示在播放条，但播放按钮置灰不可点击，且不得自动回退上一首；上一首 / 下一首切换正常。顺序播放到队尾时停止。</td>
+  </tr>
+  <tr>
+    <td>登录凭证边界</td>
+    <td>凭证只存在于主进程；渲染进程只消费登录态。系统密钥环不可用时禁用登录，绝不退化为明文保存。</td>
+  </tr>
+  <tr>
+    <td>主题</td>
+    <td>通过 <code>&lt;html data-theme="dark|light"&gt;</code> 切换，选择持久化在 <code>Settings.theme</code>；组件只使用语义变量，不直接写死颜色。</td>
+  </tr>
+  <tr>
+    <td>关闭行为</td>
+    <td><code>Settings.closeToTray</code> 默认开启：关闭主窗口时隐藏到托盘；仅在托盘菜单选择“退出”时结束进程。</td>
+  </tr>
+  <tr>
+    <td>路由</td>
+    <td>Hash 路由；页面为 <code>/search</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/login</code>、<code>/settings</code>，根路径重定向到 <code>/search</code>。切换路由自动关闭歌词面板。</td>
+  </tr>
+</table>
+
+<h2 id="u3">3. DIAGRAMS</h2>
+<p><a href="#top">↑</a></p>
+
+<h3 id="u3-1">3.1 总体架构</h3>
+<div class="diagram"><img src="diagram/general-architecture.svg" alt="总体架构组件图"></div>
+<ul class="note">
+  <li>音频流由渲染进程直接从流服务器加载，不经过主进程转发。</li>
+  <li>凭证与密钥环边界见 <a href="#u2">§2</a>。</li>
+  <li>MPRIS 协议见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>；命令接收后的内部调用路径见 <a href="CORE.html#c5-6">CORE §5.6</a>。</li>
+</ul>
+
+<h3 id="u3-2">3.2 登录</h3>
+<div class="diagram"><img src="diagram/seq-login.svg" alt="登录流程图"></div>
+<ul class="note">
+  <li>登录方式二选一：扫码（默认，内嵌官方 xlogin）或 Cookie（兜底）。</li>
+  <li>扫码分支的详细协议见 <a href="PROVIDER.html#p3-1">PROVIDER §3.1</a>；Cookie 分支见 <a href="PROVIDER.html#p3-2">PROVIDER §3.2</a>。USER 只描述方式选择与结果，不重复协议细节。</li>
+  <li>登录成功后自动进入“我的歌单”；扫码失败时提供“重新加载登录组件”，Cookie 无效时提示重新获取。</li>
+  <li>凭证在主进程内直接入库；保存与使用边界见 <a href="#u2">§2</a>。</li>
+</ul>
+
+<h3 id="u3-3">3.3 播放单曲</h3>
+<div class="diagram"><img src="diagram/seq-play.svg" alt="播放单曲时序图"></div>
+<ul class="note">
+  <li>双击歌曲、“播放全部”与单曲播放都会替换播放队列；“下一首播放”只把歌曲插入队列头，不改变当前歌曲。</li>
+  <li>播放队列入口与面板见 <a href="#u5-2-9">§5.2.9</a>；无可播链接时提示不可播，不自动跳过，具体文案见 <a href="#u5-3">§5.3</a>。</li>
+  <li>实际音质可能与请求音质不同；播放条以标记展示实际档位。</li>
+  <li>上游链接获取协议见 <a href="PROVIDER.html#p3-3">PROVIDER §3.3</a>。</li>
+</ul>
+
+<h2 id="u4">4. INTERFACES</h2>
+<p><a href="#top">↑</a></p>
+
+<table>
+  <tr><th>接口</th><th>归属</th></tr>
+  <tr><td>面向依赖软件的 API</td><td>除 MPRIS 外，本应用不暴露其他 API。</td></tr>
+  <tr><td>MPRIS 媒体控制协议</td><td><a href="PROVIDER.html#p4-4">PROVIDER §4.4</a></td></tr>
+  <tr><td>命令接收后的内部处理</td><td><a href="CORE.html#c5-6">CORE §5.6</a></td></tr>
+</table>
+<ul class="note">
+  <li>MPRIS 由 D-Bus 代为收发；USER 只描述用户可见的媒体控制行为，协议细节在 PROVIDER，内部响应在 CORE。</li>
+</ul>
+
+<h2 id="u5">5. UI</h2>
+<p><a href="#top">↑</a></p>
+
+<h3 id="u5-1">5.1 调色板</h3>
+<p>
+界面只使用下表 token 派生的语义变量。深色与浅色按语义角色对应，token 名不要求相同；所有语义变量必须从当前主题的调色盘取色，不得跨主题取色，也不得使用调色盘外的字面量。主题通过
+<code>&lt;html data-theme="dark|light"&gt;</code> 切换，选择持久化在 <code>Settings.theme</code>。
+</p>
+
+<h4>Dark</h4>
+<table>
+  <tr><th>预览</th><th>Token</th><th>HEX</th><th>语义</th></tr>
+  <tr><td><span class="palette-swatch" style="background:#231F1F"></span></td><td><code>bg</code></td><td><code>#231F1F</code></td><td>主背景、窗口边框、选中底</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#3E3542"></span></td><td><code>surface</code></td><td><code>#3E3542</code></td><td>次级浮层：通知底、弹窗、输入框底</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#D6CAB6"></span></td><td><code>fg</code></td><td><code>#D6CAB6</code></td><td>正文文字、slider 轨道</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#B0B4BC"></span></td><td><code>muted</code></td><td><code>#B0B4BC</code></td><td>中性边框、图标、次要文字</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#89338E"></span></td><td><code>purple</code></td><td><code>#89338E</code></td><td>accent：hover / 选中填充；亮底上的文字</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#E593E7"></span></td><td><code>purple-light</code></td><td><code>#E593E7</code></td><td>accent 提亮：深浮层上的文字、hover 高亮</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#9D7E4D"></span></td><td><code>gold</code></td><td><code>#9D7E4D</code></td><td>accent：细线、进度填充、副标题弱文字</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#FFF7E4"></span></td><td><code>cream</code></td><td><code>#FFF7E4</code></td><td>最亮色：亮面背景、选中 / hover 文字、装饰亮线</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#CC2A47"></span></td><td><code>red</code></td><td><code>#CC2A47</code></td><td>警告 / 危险：错误填充、危险操作</td></tr>
+</table>
+
+<h4>Light</h4>
+<table>
+  <tr><th>预览</th><th>Token</th><th>HEX</th><th>语义</th></tr>
+  <tr><td><span class="palette-swatch" style="background:#F7F7F7"></span></td><td><code>bg</code></td><td><code>#F7F7F7</code></td><td>主背景（Alabaster background）</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#F2F0EF"></span></td><td><code>surface</code></td><td><code>#F2F0EF</code></td><td>次级浮层：弹窗、输入框底（微暖 off-white）</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#000000"></span></td><td><code>fg</code></td><td><code>#000000</code></td><td>正文文字（Alabaster foreground）</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#55585C"></span></td><td><code>muted</code></td><td><code>#55585C</code></td><td>次要文字、边框（冷灰，呼应 dark mode）</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#8A2E8F"></span></td><td><code>purple</code></td><td><code>#8A2E8F</code></td><td>accent 主紫；亮底上的文字、按钮填充</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#D998D9"></span></td><td><code>purple-light</code></td><td><code>#D998D9</code></td><td>柔和填充：hover / 选中底，需配深色文字</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#5C4824"></span></td><td><code>gold</code></td><td><code>#5C4824</code></td><td>accent 金：细线、进度填充、副标题文字</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#E9DBF2"></span></td><td><code>highlight</code></td><td><code>#E9DBF2</code></td><td>选中态高亮底（对应 dark 的 cream 角色）</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#AB3248"></span></td><td><code>red</code></td><td><code>#AB3248</code></td><td>错误 / 危险（樱桃红，与 dark 同族）</td></tr>
+</table>
+
+<h4>语义变量映射</h4>
+<table>
+  <tr><th>语义变量</th><th>Dark token</th><th>Light token</th><th>说明</th></tr>
+  <tr><td><code>--bg</code></td><td><code>bg</code></td><td><code>bg</code></td><td>主背景</td></tr>
+  <tr><td><code>--panel</code></td><td><code>surface</code></td><td><code>surface</code></td><td>次级浮层</td></tr>
+  <tr><td><code>--text</code></td><td><code>fg</code></td><td><code>fg</code></td><td>正文文字</td></tr>
+  <tr><td><code>--muted</code> / <code>--note</code></td><td><code>muted</code></td><td><code>muted</code></td><td>次要文字</td></tr>
+  <tr><td><code>--accent</code></td><td><code>purple</code></td><td><code>purple</code></td><td>主 accent</td></tr>
+  <tr><td><code>--accent-strong</code></td><td><code>purple-light</code></td><td><code>purple</code></td><td>强调文字 / 填充</td></tr>
+  <tr><td><code>--accent-soft</code></td><td><code>purple</code></td><td><code>purple-light</code></td><td>accent 软填充（由 token 派生）</td></tr>
+  <tr><td><code>--accent-line</code></td><td><code>purple</code></td><td><code>purple</code></td><td>accent 边线（由 token 派生）</td></tr>
+  <tr><td><code>--gold</code></td><td><code>gold</code></td><td><code>gold</code></td><td>金色 accent</td></tr>
+  <tr><td><code>--danger</code></td><td><code>red</code></td><td><code>red</code></td><td>错误 / 危险</td></tr>
+  <tr><td><code>--on-accent</code></td><td><code>cream</code></td><td><code>highlight</code></td><td>accent 上的文字 / 前景</td></tr>
+</table>
+
+<ul class="note">
+  <li>映射按语义角色对应，不要求两套 token 同名；所有变量只能从当前主题的调色盘取色。dark 与 light 不得互相取色。</li>
+  <li>dark 的 <code>purple</code> 在深底上仅适合填充，文字强调用 <code>purple-light</code>；light 的 <code>purple-light</code> 是粉彩填充，压深色文字；light 的 <code>--on-accent</code> 取 <code>highlight</code>，不要直接写白色。</li>
+  <li>深 / 浅两套 token 色相保持同族（purple 297°、purple-light ~300°、red ~349°、gold ~37–39°），切换时视觉语言一致。</li>
+</ul>
+
+<h3 id="u5-2">5.2 视觉呈现</h3>
+<p>
+以下尺寸均为 CSS 像素。样式规定以文字与代码为准；原型只作示意，不要求与数值完全一致。颜色取自
+<a href="#u5-1">§5.1</a>。
+</p>
+
+<h4 id="u5-2-1">5.2.1 窗口与布局</h4>
+<table>
+  <tr><th>项目</th><th>契约</th></tr>
+  <tr><td>默认窗口</td><td>1280×820；最小 280×440；无系统菜单栏。</td></tr>
+  <tr><td>主网格</td><td>两列：侧栏 + 内容区；底部播放条通栏；内容区独立滚动，播放条常驻贴底。</td></tr>
+  <tr><td>侧栏宽度</td><td>224px；≤900px 为 64px 图标栏；≤560px 为 56px。</td></tr>
+  <tr><td>内容区</td><td>最大宽度 1240px，居中；页面内边距 28/34/40px（上/左右/下）。</td></tr>
+  <tr><td>播放条高度</td><td>92px；≤900px 为 84px；≤560px 为 116px 双行。</td></tr>
+  <tr><td>歌词面板</td><td>右侧固定浮层，宽 390px，底部让出播放条高度；≤560px 全宽。</td></tr>
+  <tr><td>播放队列面板</td><td>与歌词面板同位置的右侧固定浮层，宽 390px，底部让出播放条高度；≤560px 全宽；与歌词面板互斥，同时只打开一个。</td></tr>
+  <tr><td>登录组件占位</td><td>高度 332px；宽度 100%，最大宽度 800px（暂定，按实现调整）；≤560px 保持 100%；主进程 <code>WebContentsView</code> 按该矩形定位。</td></tr>
+  <tr><td>响应式断点</td><td>900px：侧栏收窄、设置页单列、歌曲列表隐藏专辑列、音量改为弹出式；560px：播放条双行、歌词全宽、音质 / 主题选项单列。</td></tr>
+</table>
+
+<div class="ui-proto-wrap">
+<div class="ui-proto u-shell u-shell-map">
+  <aside class="u-region u-region-side"><b>侧栏</b><span>品牌 · 导航 · 账号入口</span><a href="#u5-2-2">→ 侧栏</a></aside>
+  <main class="u-region u-region-main"><b>内容区</b><span>页面头部 / 标签 / 列表或卡片（随路由）</span><a href="#u5-2-8">→ 页面结构</a></main>
+  <footer class="u-region u-region-player"><b>播放条</b><span>常驻贴底</span><a href="#u5-2-3">→ 播放条</a></footer>
+  <div class="u-region u-region-overlay"><b>歌词面板</b><span>浮层，可关闭</span><a href="#u5-2-5">→ 歌词面板</a></div>
+</div>
+</div>
+<ul class="note">
+  <li>总体骨架：侧栏、内容区、播放条三块固定关系，歌词面板浮于内容区右侧。</li>
+  <li>内容区按路由切换：搜索、我的歌单、歌单详情、设置、登录。</li>
+</ul>
+
+<h4 id="u5-2-2">5.2.2 侧栏与导航</h4>
+<div class="ui-proto-wrap">
+<div style="display: flex; gap: 18px; align-items: flex-start">
+  <div class="ui-proto u-side" style="width: 224px; height: 400px; border-radius: 10px; border-right: 1px solid var(--p-line)">
+    <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>QQ Music · Linux</small></span></div>
+    <div class="u-nav-label">浏览</div>
+    <div class="u-nav-item active">搜索</div>
+    <div class="u-nav-item">我的歌单</div>
+    <div class="u-nav-label">应用</div>
+    <div class="u-nav-item">设置</div>
+    <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>已登录 · 0123456789</small></span></div>
+    <div class="u-footnote">仅调用 QQ 音乐官方可访问接口（无公开文档）</div>
+  </div>
+  <div class="ui-proto u-side narrow" style="height: 400px; border-radius: 10px">
+    <span class="u-mark">♪</span>
+    <div class="u-nav-item active" style="padding: 8px 10px">⌕</div>
+    <div class="u-nav-item" style="padding: 8px 10px">≡</div>
+    <div class="u-nav-item" style="padding: 8px 10px">⚙</div>
+    <div class="u-pill" style="margin-top: auto; padding: 6px"><span class="u-avatar" style="width: 20px; height: 20px">L</span></div>
+  </div>
+</div>
+</div>
+<ul class="note">
+  <li>宽态：品牌区、分组导航（浏览 / 应用）、底部账号 pill 与版本说明；账号 pill 未登录时进入登录页，已登录时进入设置页。</li>
+  <li>≤900px：收为 64px 图标栏，仅保留图标与头像；≤560px 收为 56px。</li>
+  <li>导航项激活态使用 accent 软填充与强调文字；悬停态只改变背景与文字颜色。</li>
+</ul>
+
+<h4 id="u5-2-3">5.2.3 播放条</h4>
+<div class="ui-proto-wrap">
+<div class="ui-proto" style="width: 900px; height: 92px; display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 0 16px">
+  <div class="u-now" style="min-width: 300px"><span class="u-cover" style="width: 54px; height: 54px"></span><span style="min-width: 0"><span class="u-title">晴天 <span class="u-qmark">FLAC</span></span><small>周杰伦 · 叶惠美</small></span></div>
+  <div>
+    <div class="u-controls" style="justify-content: center"><span class="u-ctl">≡</span><span class="u-ctl">◀</span><span class="u-ctl play">▶</span><span class="u-ctl">▶</span><span class="u-ctl">词</span><span class="u-ctl" title="播放队列">☰</span></div>
+    <div class="u-progress" style="margin-top: 6px"><span class="u-time">0:42</span><span class="u-bar"><i></i></span><span class="u-time">4:29</span></div>
+  </div>
+  <div class="u-right"><span class="u-chip">FLAC</span><span class="u-ctl">♪</span><span class="u-bar vol"><i></i></span></div>
+</div>
+</div>
+<ul class="note">
+  <li>左：封面 54px + 标题 + 实际音质标记（金色小标签）+「歌手 · 专辑」行；标题与歌手行超宽时跑马灯滚动，音质标记固定最右。</li>
+  <li>中：播放模式、上一首、播放 / 暂停（38px 圆形主按钮）、下一首、歌词面板开关、播放队列入口；下方进度条（gold 填充）与时间。播放队列入口打开 <a href="#u5-2-9">§5.2.9</a> 面板。</li>
+  <li>右：请求音质芯片（点击弹出 128k / 320k / flac 菜单，选择后立即重载当前曲目）+ 音量；≤900px 音量改为点击弹出竖直滑块。</li>
+  <li>无歌曲时播放条显示“还没有播放中的歌曲，搜索并双击任意歌曲开始”；不可播歌曲仍显示在播放条，播放按钮置灰不可点击。</li>
+</ul>
+
+<h4 id="u5-2-4">5.2.4 歌曲列表</h4>
+<div class="ui-proto-wrap">
+<div class="ui-proto" style="width: 760px; padding: 14px">
+  <div class="u-table">
+    <div class="u-th with-action"><span>#</span><span>标题</span><span>专辑</span><span style="text-align: right">时长</span><span style="text-align: right">操作</span></div>
+    <div class="u-tr with-action active"><span class="u-idx">▶</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">晴天 <span class="u-badge gold">VIP</span></span><small>周杰伦</small></span></span><span>叶惠美</span><span class="u-muted" style="text-align: right">4:29</span><span style="text-align: right"><span class="u-tab">下一首</span></span></div>
+    <div class="u-tr with-action"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年 <span class="u-badge">数字专辑</span></span><small>五月天</small></span></span><span>自传</span><span class="u-muted" style="text-align: right">4:28</span><span style="text-align: right"><span class="u-tab">下一首</span></span></div>
+    <div class="u-tr with-action"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span>启示录</span><span class="u-muted" style="text-align: right">4:41</span><span style="text-align: right"><span class="u-tab">下一首</span></span></div>
+    <div class="u-tr with-action"><span class="u-idx">4</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span>孤勇者</span><span class="u-muted" style="text-align: right">4:16</span><span style="text-align: right"><span class="u-tab">下一首</span></span></div>
+  </div>
+</div>
+</div>
+<ul class="note">
+  <li>列：# / 标题 / 专辑 / 时长 / 操作；标题单元格含 38px 封面、歌名与下一行的歌手，专辑为独立列。</li>
+  <li>双击行播放并替换队列；悬停或当前播放行在 # 列显示播放 / 暂停按钮，其余显示从 1 开始的序号文本；当前播放行以 accent 底色标记。</li>
+  <li>点击非当前行的播放按钮即单曲播放，与双击一样替换播放队列；当前行的按钮切换暂停 / 继续。操作列的“下一首”按钮执行“下一首播放”，只把歌曲插入队列头，不改变当前歌曲。</li>
+  <li>权限角标：VIP / 数字专辑 / 付费；能否播放最终以播放链接结果为准。≤900px 隐藏专辑列，操作列保留。</li>
+</ul>
+
+<h4 id="u5-2-5">5.2.5 歌词面板</h4>
+<div class="ui-proto-wrap">
+<div class="ui-proto u-lyrics" style="height: 420px">
+  <div class="u-lyrics-head"><div><h5>歌词</h5><small>晴天 · 周杰伦</small></div><span class="u-ctl">×</span></div>
+  <div class="u-lyrics-body">
+    <div class="u-lyric">故事的小黄花</div>
+    <div class="u-lyric active">从出生那年就飘着<small>The little yellow flower of the story</small></div>
+    <div class="u-lyric">童年的荡秋千</div>
+    <div class="u-lyric">随记忆一直晃到现在</div>
+    <div class="u-lyric">Re So So Si Do Si La</div>
+    <div class="u-lyric">So La Si Si Si Si La Si La So</div>
+  </div>
+</div>
+</div>
+<ul class="note">
+  <li>面板固定于内容右侧，宽 390px（≤560px 时全宽）；路由切换时关闭，规则见 <a href="#u2">§2</a>。</li>
+  <li>当前行只改变字重、颜色、左侧强调线与背景，字号与行高固定（14px / 1.7），避免滚动时重叠。</li>
+  <li>已有翻译时按相同时间戳合并显示在原文下一行；面板打开时自动滚到活动行，点击行跳转播放进度。</li>
+  <li>无歌词或加载失败时显示空状态；加载中显示 spinner。</li>
+</ul>
+
+<h4 id="u5-2-6">5.2.6 登录页</h4>
+<div class="ui-proto-wrap">
+<div class="ui-proto u-login">
+  <div class="u-embed"><span>官方 xlogin 登录组件<br />（WebContentsView 占位区域，实际高度 332px）</span></div>
+  <div class="u-cookie">▸ 使用 Cookie 登录（兜底，默认折叠）</div>
+</div>
+</div>
+<ul class="note">
+  <li>未登录时整页只有登录组件与下方 Cookie 折叠入口；组件宽度 100%，最大 800px（暂定），≤560px 保持 100%。</li>
+  <li>组件由主进程 <code>WebContentsView</code> 按占位矩形定位（<code>login.setEmbedBounds</code>），登录页本身不承载远程内容。</li>
+  <li>扫码成功自动跳转“我的歌单”；失败时在组件下方出现“重新加载登录组件”。</li>
+  <li>已登录状态下页面显示账号头像、昵称、musicid 与“进入我的歌单 / 退出登录”。</li>
+</ul>
+
+<h4 id="u5-2-7">5.2.7 设置页</h4>
+<div class="ui-proto-wrap">
+<div class="ui-proto u-settings">
+  <div class="u-col">
+    <div class="u-panel">
+      <h5>播放</h5>
+      <div class="u-opts">
+        <div class="u-opt active"><b>自动</b>登录无损 · 未登录 320k</div>
+        <div class="u-opt"><b>标准</b>128 kbps MP3</div>
+        <div class="u-opt"><b>高品质</b>320 kbps MP3</div>
+        <div class="u-opt"><b>无损</b>FLAC · 需账号权限</div>
+      </div>
+    </div>
+    <div class="u-panel">
+      <h5>外观</h5>
+      <div class="u-opts">
+        <div class="u-opt active"><b>深色</b>Dark · 奶油紫</div>
+        <div class="u-opt"><b>浅色</b>Light · Alabaster</div>
+      </div>
+    </div>
+    <div class="u-panel">
+      <h5>窗口</h5>
+      <div class="u-rowline"><span>关闭到托盘<br /><small>关闭主窗口时隐藏而非退出</small></span><span class="u-switch on"></span></div>
+    </div>
+  </div>
+  <div class="u-col">
+    <div class="u-panel">
+      <h5>账号</h5>
+      <div class="u-rowline"><span>Lychee<br /><small>musicid 0123456789</small></span><span class="u-badge accent">已登录</span></div>
+      <div class="u-rowline"><span>凭证到期<br /><small>2026-10-21 12:00</small></span><span class="u-tab">立即续期</span></div>
+      <div class="u-rowline"><span class="u-tab">我的歌单</span><span class="u-tab">退出登录</span></div>
+    </div>
+    <div class="u-panel">
+      <h5>关于</h5>
+      <div class="u-rowline"><span>版本</span><span>0.1.0</span></div>
+      <div class="u-rowline"><span>音频引擎</span><span>HTML5 Audio</span></div>
+      <div class="u-rowline"><span>许可证</span><span>GPL-3.0-only</span></div>
+      <div class="u-footnote">非官方客户端，与腾讯及 QQ 音乐无隶属关系；仅调用官方可访问接口（无公开文档），不绕过授权。</div>
+    </div>
+  </div>
+</div>
+</div>
+<ul class="note">
+  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口，右列账号与关于信息。</li>
+  <li>关于区展示版本、音频引擎、许可证与非官方声明；版本与许可证以构建配置为准。</li>
+  <li>音质四档，默认“自动”；回退静默，不弹提示。</li>
+  <li>关闭到托盘默认开启；账号区展示到期时间，手动 Cookie 凭证禁用“立即续期”。</li>
+  <li>修改设置即写盘，无保存按钮；播放中切换音质会立即重载当前曲目。</li>
+</ul>
+
+<h4 id="u5-2-8">5.2.8 页面结构</h4>
+<table>
+  <tr><th>页面</th><th>结构</th></tr>
+  <tr>
+    <td>搜索</td>
+    <td>页头（标题 / 说明）+ 搜索框 + 四类标签（单曲 / 歌手 / 专辑 / 歌单）+ 热门关键词 chips + 结果区（歌曲表、歌手卡片、专辑卡片、歌单卡片）+ 分页。</td>
+  </tr>
+  <tr>
+    <td>我的歌单</td>
+    <td>登录后：账号资料带 + 歌单卡片网格；未登录：空状态 + “去登录”。卡片显示封面、名称与歌曲数。</td>
+  </tr>
+  <tr>
+    <td>歌单详情</td>
+    <td>歌单头图（封面 180px、名称、歌曲数 / 歌单 ID / 已载入数、播放全部）+ 歌曲表；加载失败显示重试与返回搜索。</td>
+  </tr>
+  <tr>
+    <td>Toast</td>
+    <td>固定于右下、播放条上方；3.6 秒自动消失；info 左侧 accent 边，error 左侧 danger 边。</td>
+  </tr>
+</table>
+
+<h4 id="u5-2-9">5.2.9 播放队列</h4>
+<div class="ui-proto-wrap">
+<div class="ui-proto" style="width: 390px; padding: 14px">
+  <div class="u-lyrics-head"><div><h5>播放队列</h5><small>接下来 3 首</small></div><span class="u-ctl">×</span></div>
+  <div class="u-rowline" style="padding: 10px 0"><span>正在播放<br /><small>晴天 · 周杰伦</small></span><span class="u-muted">不属于队列</span></div>
+  <div class="u-table">
+    <div class="u-th"><span>#</span><span>标题</span><span>专辑</span><span style="text-align: right">操作</span></div>
+    <div class="u-tr"><span class="u-idx">1</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年</span><small>五月天</small></span></span><span>自传</span><span style="text-align: right"><span class="u-tab">移除</span></span></div>
+    <div class="u-tr"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span>启示录</span><span style="text-align: right"><span class="u-tab">移除</span></span></div>
+    <div class="u-tr"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span>孤勇者</span><span style="text-align: right"><span class="u-tab">移除</span></span></div>
+  </div>
+  <div class="u-rowline" style="padding-top: 10px"><span class="u-tab">清空队列</span><span class="u-muted">按播放顺序排列</span></div>
+</div>
+</div>
+<ul class="note">
+  <li>入口为播放条上的“播放队列”按钮；面板固定于内容区右侧，与歌词面板互斥，同时只打开一个。</li>
+  <li>当前歌曲单独显示在面板顶部并标注“正在播放”，不计入队列；下方只列当前歌曲之后的待播放歌曲，顺序即实际播放顺序。</li>
+  <li>队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲。“下一首播放”把歌曲插入队列头，当前歌曲不变。</li>
+  <li>随机播放下队列展示实际随机顺序，切换随机模式时重排队列，预览顺序与真实播放一致；顺序播放到队尾停止，列表循环回到本次播放顺序头部，单曲循环重播当前歌曲。</li>
+</ul>
+
+<h3 id="u5-3">5.3 错误与通知</h3>
+<table>
+  <tr><th>ErrorCode</th><th>界面提示</th><th>行为</th></tr>
+  <tr><td><code>UPSTREAM_NETWORK</code></td><td>网络异常，请稍后重试</td><td>保留当前状态，允许用户重试。</td></tr>
+  <tr><td><code>AUTH_EXPIRED</code></td><td>登录已失效，请重新登录</td><td>提示用户前往登录页；不自动清除凭证。</td></tr>
+  <tr><td><code>NO_STREAM</code></td><td>当前内容不可播放（可能需要 VIP 或已下架）</td><td>停止当前加载，不自动跳下一首。</td></tr>
+  <tr><td><code>UPSTREAM_CHANGED</code></td><td>上游接口发生变化</td><td>提示稍后再试；保留当前状态。</td></tr>
+  <tr><td><code>QUOTA_LIMITED</code></td><td>请求过于频繁，请稍后重试</td><td>提示稍后再试；用户可手动重试。</td></tr>
+  <tr><td><code>INTERNAL</code></td><td>主进程内部错误</td><td>提示主进程内部错误，详情只写入主进程日志。</td></tr>
+</table>
+<ul class="note">
+  <li>展示方式：页面级数据加载失败使用页面内联错误区并提供重试；用户操作失败使用 Toast。错误码文案与行为见上表。</li>
+  <li>错误码的完整定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；上游错误码到内部错误码的映射见 <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。</li>
+  <li>登录流程中的具体失败原因（验证码、设备限制等）由上游返回；界面是否展示原始原因取决于错误映射策略。</li>
+</ul>
+
+<h3 id="u5-4">5.4 托盘</h3>
+<table>
+  <tr><th>菜单项</th><th>行为</th></tr>
+  <tr><td>显示主窗口</td><td>恢复并聚焦主窗口；单击托盘图标同样触发。</td></tr>
+  <tr><td>播放 / 暂停</td><td>向渲染进程发送 <code>toggle</code> 命令。</td></tr>
+  <tr><td>上一首 / 下一首</td><td>向渲染进程发送 <code>previous</code> / <code>next</code> 命令。</td></tr>
+  <tr><td>退出 Lychee Player</td><td>结束应用进程，不受“关闭到托盘”影响。</td></tr>
+</table>
+<ul class="note">
+  <li>托盘初始化失败时静默降级，应用内播放与窗口行为不受影响。</li>
+</ul>
+
+</body>
+</html>

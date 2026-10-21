@@ -7,90 +7,107 @@
 </head>
 <body>
 
+<a id="top"></a>
 <h1>Lychee Player — 第三方 QQ 音乐 Linux 客户端</h1>
 
-<h2>1. WHAT &amp; WHY</h2>
+<p class="doc-links">
+<a href="USER.html">USER</a>
+<a href="CORE.html">CORE</a>
+<a href="PROVIDER.html">PROVIDER</a>
+</p>
 
-<h3>1.1 IDEAL：我们要解决的问题</h3>
+<h2 id="r1">1. WHAT &amp; WHY</h2>
+<p><a href="#top">↑</a></p>
+
+<h3>1.1 IDEAL：要解决的问题</h3>
 <p>
 腾讯官方的 QQ 音乐 Linux 版基于 Electron，资源占用偏高，MPRIS 媒体控制残缺，
 不支持音质选择，无法融入 Linux 桌面生态（托盘、桌面歌词、全局快捷键等）。
-我们希望有一个由社区驱动、原生融入 Linux 桌面的 QQ 音乐客户端。
+本项目希望提供一个由社区驱动、原生融入 Linux 桌面的 QQ 音乐客户端。
 </p>
 
 <h3>1.2 GOAL：什么算成功</h3>
 <ul>
-  <li>能用自己的 QQ 音乐账号登录，浏览、搜索并播放自己有权收听的内容（含 VIP 曲库按账号权限）。</li>
-  <li>完整的 MPRIS 媒体控制与系统托盘，行为符合 freedesktop 规范。</li>
-  <li>可自由选择音质；日常听歌可以完全替代官方 Linux 客户端。</li>
+  <li>用户能用自己的 QQ 音乐账号登录，浏览、搜索并播放自己有权收听的内容（含 VIP 曲库按账号权限）。</li>
+  <li>系统托盘与 Linux 桌面集成。</li>
+  <li>用户可自由选择音质；日常听歌可以完全替代官方 Linux 客户端。</li>
   <li>资源占用与启动速度显著优于官方 Electron 客户端。</li>
 </ul>
 
-<h2>2. 用户交互</h2>
+<h3>1.3 非目标</h3>
 <ul>
-  <li>扫码登录（默认，官方组件）或手动粘贴 Cookie（备用），凭证存入系统密钥环。</li>
-  <li>搜索：单曲 / 歌手 / 专辑 / 歌单。</li>
-  <li>播放：双击播放、播放队列、顺序 / 列表循环 / 单曲循环 / 随机、拖动进度、音量、音质选择。</li>
-  <li>歌词：LRC 滚动歌词与翻译合并。</li>
-  <li>歌单：我的歌单与公开歌单详情。</li>
-  <li>系统集成：MPRIS、托盘（含关闭最小化）。</li>
-  <li>外观：深色 / 浅色主题。</li>
+  <li>不实现任何绕过授权、付费墙或数字专辑限制的能力。</li>
+  <li>不内置、分发或镜像音乐内容；所有内容均通过用户本人的登录凭证从上游获取。</li>
 </ul>
 
-<h2>3. 技术栈</h2>
+<h2 id="r2">2. 用户交互</h2>
+<p><a href="#top">↑</a></p>
 <table>
-  <tr><th>层次</th><th>选型</th></tr>
-  <tr><td>桌面壳</td><td>Electron</td></tr>
-  <tr><td>前端</td><td>Vue 3 + TypeScript + Vite + Pinia + Vue Router</td></tr>
-  <tr><td>API 层</td><td>自研 Node 版 QQ 音乐接口模块（仅参考 jsososo/QQMusicApi 的请求行为，不引入其代码与依赖），独立模块隔离接口细节</td></tr>
-  <tr><td>播放引擎</td><td>HTML5 Audio；未来可能引入 libmpv 等更原生的播放引擎（参考 EchoMusic 的 napi 内嵌方案）</td></tr>
-  <tr><td>歌词</td><td>LRC 解析渲染起步；逐字歌词参考 jixunmoe-go/qrc 做 QRC 解密</td></tr>
-  <tr><td>系统集成</td><td>MPRIS（mpris-service / dbus）、系统托盘、系统密钥环存凭证（safeStorage / libsecret）</td></tr>
-  <tr><td>打包分发</td><td>electron-builder：deb / rpm / AppImage / pacman，x64 + arm64</td></tr>
+  <tr><th>场景</th><th>行为</th><th>详细契约</th></tr>
+  <tr>
+    <td>登录</td>
+    <td>登录页内嵌官方 xlogin 组件扫码（默认），或粘贴浏览器 Cookie（兜底）；凭证边界与密钥环策略见 <a href="USER.html#u2">USER §2</a>。</td>
+    <td><a href="USER.html#u5-2-6">USER §5.2.6</a></td>
+  </tr>
+  <tr>
+    <td>搜索</td>
+    <td>按单曲、歌手、专辑、歌单四类搜索；结果分页展示；双击歌曲播放，点击歌单卡片进入详情。</td>
+    <td><a href="USER.html#u5-2-8">USER §5.2.8</a></td>
+  </tr>
+  <tr>
+    <td>播放</td>
+    <td>双击歌曲或“播放全部”开始播放；“下一首播放”把对应歌曲插入播放队列头。</td>
+    <td><a href="USER.html#u5-2-3">USER §5.2.3</a> · <a href="USER.html#u5-2-9">§5.2.9</a></td>
+  </tr>
+  <tr>
+    <td>歌词</td>
+    <td>LRC 滚动歌词与翻译合并显示；当前行高亮；点击歌词行跳转播放进度。</td>
+    <td><a href="USER.html#u5-2-5">USER §5.2.5</a></td>
+  </tr>
+  <tr>
+    <td>歌单</td>
+    <td>浏览当前账号的歌单列表与公开歌单详情。</td>
+    <td><a href="USER.html#u5-2-8">USER §5.2.8</a></td>
+  </tr>
+  <tr>
+    <td>系统集成</td>
+    <td>通过 MPRIS 暴露媒体控制；托盘菜单提供显示主窗口、播放/暂停、上一首、下一首、退出；关闭主窗口默认隐藏到托盘。</td>
+    <td><a href="PROVIDER.html#p4-4">PROVIDER §4.4</a> · <a href="USER.html#u5-4">USER §5.4</a></td>
+  </tr>
+  <tr>
+    <td>外观</td>
+    <td>深色 / 浅色主题；窄屏下自动切换为紧凑布局（断点见 <a href="USER.html#u5-2-1">USER §5.2.1</a>）。</td>
+    <td><a href="USER.html#u5-1">USER §5.1</a></td>
+  </tr>
+  <tr>
+    <td>设置</td>
+    <td>默认音质、主题、关闭到托盘、账号状态、立即续期与退出登录；修改即写盘，无保存按钮。</td>
+    <td><a href="USER.html#u5-2-7">USER §5.2.7</a></td>
+  </tr>
+</table>
+<h2 id="r3">3. Credits</h2>
+<p><a href="#top">↑</a></p>
+
+<h3>3.1 参考项目</h3>
+<table>
+  <tr><th>项目</th><th>技术栈</th></tr>
+  <tr><td>amtoaer/lyrune</td><td>Rust + GPUI</td></tr>
+  <tr><td>jsososo/QQMusicApi</td><td>Node.js</td></tr>
+  <tr><td>L-1124/QQMusicApi</td><td>Python</td></tr>
+  <tr><td>jixunmoe-go/qrc</td><td>Go</td></tr>
+  <tr><td>lyswhut/lx-music-desktop</td><td>Electron + Vue（Apache-2.0）</td></tr>
+  <tr><td>imsyy/SPlayer</td><td>Electron + Vue3</td></tr>
+  <tr><td>MoeKoeMusic</td><td>Electron + Vue3</td></tr>
+  <tr><td>Team-Quaver/quaver-music</td><td>Electron + Vite</td></tr>
 </table>
 
-<h2>4. 功能路线图</h2>
-<h3>MVP（已交付）</h3>
+<h3>3.2 许可与例外声明</h3>
 <ul>
-  <li>扫码 / Cookie 登录，凭证持久化。</li>
-  <li>搜索（单曲 / 歌手 / 专辑 / 歌单）与搜索结果页。</li>
-  <li>播放队列与播放控制；音质选择（默认跟随登录态，无权限自动降档）。</li>
-  <li>LRC 滚动歌词与翻译。</li>
-  <li>我的歌单与公开歌单详情。</li>
-  <li>MPRIS、托盘与关闭最小化，深 / 浅主题。</li>
-</ul>
-<p>
-后续目标（进阶）统一维护在 <a href="TODO.md">TODO.md</a>，不在项目文档中展开。
-</p>
-
-<h2>5. 法律与合规边界</h2>
-<ul>
-  <li>本项目为非官方客户端，与腾讯及 QQ 音乐无隶属关系；仅调用官方公开接口。</li>
+  <li>许可证正文见 <code>LICENSE</code>（GPL-3.0-only）；衍生作品分发时须整体以同协议开源。</li>
+  <li>以下为非官方项目的例外声明：本项目与腾讯及 QQ 音乐无隶属关系，仅调用官方可访问接口（无公开文档）。</li>
   <li>VIP / 数字专辑内容仅通过用户本人的登录凭证获取，不实现任何绕过授权的能力。</li>
-  <li>本项目源码以 <strong>GPL-3.0-only</strong> 许可证发布（见 LICENSE）；衍生作品分发时须整体以同协议开源。</li>
   <li>上游接口随时可能变更导致功能失效，属预期风险。</li>
 </ul>
-
-<h2>6. 相关文档</h2>
-<ul>
-  <li><a href="ARCHITECTURE.html">ARCHITECTURE.html</a> — 架构：术语、约定、图与接口契约</li>
-  <li><a href="CODE.html">CODE.html</a> — 代码结构：文件树、草案签名与调用栈</li>
-  <li><a href="TODO.md">TODO.md</a> — 后续目标与待办清单</li>
-  <li>BUILD.html — 开发完成后编写</li>
-</ul>
-
-<h2>7. 参考开源项目</h2>
-<table>
-  <tr><th>项目</th><th>技术栈</th><th>参考点</th></tr>
-  <tr><td>amtoaer/lyrune</td><td>Rust + GPUI</td><td>同为 Linux QQ 音乐第三方客户端，整体行为与 API 调用清单</td></tr>
-  <tr><td>jsososo/QQMusicApi</td><td>Node.js</td><td>上游接口行为与参数（维护放缓，仅作行为参考，不直接依赖）</td></tr>
-  <tr><td>L-1124/QQMusicApi</td><td>Python</td><td>凭证刷新、设备指纹、多平台请求（活跃维护）</td></tr>
-  <tr><td>jixunmoe-go/qrc</td><td>Go</td><td>QRC 逐字歌词解密（进阶歌词功能）</td></tr>
-  <tr><td>lyswhut/lx-music-desktop</td><td>Electron + Vue</td><td>工程化结构与免责声明范本（Apache-2.0）</td></tr>
-  <tr><td>imsyy/SPlayer</td><td>Electron + Vue3</td><td>MPRIS 实现、歌词 UI</td></tr>
-  <tr><td>MoeKoeMusic</td><td>Electron + Vue3</td><td>扫码登录流程</td></tr>
-  <tr><td>Team-Quaver/quaver-music</td><td>Electron + Vite</td><td>Wayland 适配、AppImage 双架构 CI</td></tr>
-</table>
 
 </body>
 </html>

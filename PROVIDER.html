@@ -1,0 +1,599 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>PROVIDER — Lychee Player</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a id="top"></a>
+<h1>PROVIDER — Lychee Player</h1>
+
+<p class="doc-links">
+<a href="README.html">README</a>
+<a href="USER.html">USER</a>
+<a href="CORE.html">CORE</a>
+</p>
+
+<h2 id="p1">1. TERMS</h2>
+<p><a href="#top">↑</a></p>
+
+<table>
+  <tr><th>术语</th><th>定义</th></tr>
+  <tr>
+    <td>上游（Upstream）</td>
+    <td>QQ 音乐的内容 CGI、登录服务、音频流服务器与封面图服务的统称。</td>
+  </tr>
+  <tr>
+    <td><code>musicu.fcg</code></td>
+    <td>上游统一的 JSON RPC 入口：请求体包含 <code>comm</code> 与 <code>req_0</code>（或 <code>req</code>），响应在 <code>req_0</code> / <code>req</code> 中返回数据。</td>
+  </tr>
+  <tr>
+    <td><code>songMid</code></td>
+    <td>歌曲在 QQ 音乐的业务主键（字符串）。内容接口与播放链接请求均以它为标识。</td>
+  </tr>
+  <tr>
+    <td><code>mediaMid</code></td>
+    <td>音频文件级标识。付费歌曲的 <code>mediaMid</code> 可能与 <code>songMid</code> 不同；vkey 请求的 <code>filename</code> 必须使用它。</td>
+  </tr>
+  <tr>
+    <td><code>vkey</code></td>
+    <td>上游签发的音频流访问令牌，附于流 URL 查询参数，有时效；失效后需要重新获取。</td>
+  </tr>
+  <tr>
+    <td><code>purl</code></td>
+    <td>vkey 接口返回的相对或绝对播放地址。其查询参数（<code>guid</code> / <code>vkey</code> / <code>uin</code> / <code>fromtag</code> 等）与令牌绑定，必须整体复用。</td>
+  </tr>
+  <tr>
+    <td>播放链接</td>
+    <td>由 <code>purl</code> 拼成的音频流 URL；相对路径拼为 <code>https://ws.stream.qqmusic.qq.com/{purl}</code>。</td>
+  </tr>
+  <tr>
+    <td>登录凭证（<code>Credential</code>）</td>
+    <td>QQ 登录换取的访问凭据：<code>musicid</code>、<code>musickey</code> 及续期所需字段。仅主进程持有。</td>
+  </tr>
+  <tr>
+    <td><code>musicid</code></td>
+    <td>QQ 音乐账号的数字标识；用于 Cookie、<code>comm.uin</code>、歌单与资料请求。</td>
+  </tr>
+  <tr>
+    <td><code>p_skey</code></td>
+    <td>QQ 登录成功后写入 xlogin 会话的 Cookie，用于计算 OAuth <code>g_tk</code> 并完成 OAuth 授权。</td>
+  </tr>
+  <tr>
+    <td><code>g_tk</code>（OAuth）</td>
+    <td>由 <code>p_skey</code> 经 <code>hash33(p_skey, 5381)</code> 计算的 CSRF 令牌，用于 OAuth authorize。</td>
+  </tr>
+  <tr>
+    <td><code>g_tk</code>（资料）</td>
+    <td>由 <code>musickey</code> 经 <code>hash33(musickey, 5381)</code> 计算的 CSRF 令牌，用于用户资料请求。</td>
+  </tr>
+  <tr>
+    <td>xlogin</td>
+    <td>QQ 官方扫码登录组件；登录页以独立视图加载，应用不接触用户密码。</td>
+  </tr>
+</table>
+<ul class="note">
+  <li>音质档位与请求 / 实际音质的用户语义见 <a href="USER.html#u1">USER §1</a>；内部类型 <code>Quality</code> 见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
+  <li>歌词接口固定发送 <code>g_tk=5381</code>，不使用凭证派生值。</li>
+</ul>
+
+<h2 id="p2">2. CONVENTIONS</h2>
+<p><a href="#top">↑</a></p>
+
+<table>
+  <tr><th>约定</th><th>内容</th></tr>
+  <tr>
+    <td>契约范围</td>
+    <td>只记录应用实际消费的字段与方法；QQ 音乐未提供公开接口文档，本文档的权威来源是实际消费的官方可访问接口（无公开文档）。</td>
+  </tr>
+  <tr>
+    <td>上游隔离</td>
+    <td>上游隔离规则见 <a href="CORE.html#c2">CORE §2</a>；本层只消费 <a href="CORE.html#c4-1">CORE §4.1</a> 定义的内部模型。</td>
+  </tr>
+  <tr>
+    <td>凭证注入</td>
+    <td>请求携带 Cookie：<code>uin</code>、<code>qqmusic_uin</code>、<code>qm_keyst</code>、<code>qqmusic_key</code>。凭证、Cookie 与完整播放链接不写入日志。</td>
+  </tr>
+  <tr>
+    <td>播放链接拼装</td>
+    <td><code>purl</code> 为绝对 URL 时直接使用；为相对路径时只在前面拼 <code>https://ws.stream.qqmusic.qq.com/</code>，不重建查询参数。</td>
+  </tr>
+  <tr>
+    <td>音质回退</td>
+    <td>先尝试请求档位；该档位无 <code>purl</code> 时，再按 <code>flac → 320k → 128k</code> 顺序尝试其余档位（跳过已尝试的请求档位）；全部档位无链接时返回 <code>NO_STREAM</code>。</td>
+  </tr>
+  <tr>
+    <td>重试</td>
+    <td>HTTP 429、HTTP 非 2xx 与上游瞬时繁忙码（<code>2001</code> / <code>104604</code>）做短退避重试；连接失败 / 超时不重试，直接映射为 <code>UPSTREAM_NETWORK</code>。JSON 解析失败、响应结构缺失与未知错误码不重试，直接映射为 <code>UPSTREAM_CHANGED</code>。</td>
+  </tr>
+  <tr>
+    <td>错误映射</td>
+    <td>上游业务码、HTTP 状态与网络异常统一映射为内部 <code>ErrorCode</code>；映射表见 <a href="#p4-2">§4.2</a>。</td>
+  </tr>
+  <tr>
+    <td>登录会话隔离</td>
+    <td>xlogin 使用独立 session 分区，只放行腾讯相关域名（<code>qq.com</code> / <code>gtimg.cn</code> / <code>weixin.qq.com</code>）导航与子窗口；登录发起前与结束 / 超时后各清理一次。</td>
+  </tr>
+  <tr>
+    <td>密钥环</td>
+    <td>凭证通过 Electron <code>safeStorage</code>（Linux 后端为 libsecret）加密后落盘；密钥环不可用时拒绝保存 / 加载凭证并禁用登录；旧明文仅在密钥环可用时迁移，否则拒绝登录，绝不退化为明文。</td>
+  </tr>
+  <tr>
+    <td>D-Bus</td>
+    <td>MPRIS 依赖会话总线；D-Bus 不可用时 MPRIS 静默降级，不影响应用内播放。规范见 <a href="https://specifications.freedesktop.org/mpris-spec/latest/">MPRIS Specification</a>。</td>
+  </tr>
+</table>
+
+<h2 id="p3">3. DIAGRAMS</h2>
+<p><a href="#top">↑</a></p>
+
+<h3 id="p3-1">3.1 扫码登录协议</h3>
+<div class="diagram"><img src="diagram/prov-login.svg" alt="扫码登录上游协议时序图"></div>
+<ul class="note">
+  <li>xlogin 组件加载官方登录页；应用不读取或保存用户密码。</li>
+  <li>Cookie 轮询路径必须同时看到 <code>p_skey</code> 与 <code>p_uin</code> / <code>pt4_token</code> / <code>uin</code> 之一，才进入 OAuth 换证，避免把未完成登录误判为成功。</li>
+  <li>xlogin 直接完成 OAuth 时，应用也可从 <code>will-navigate</code> / <code>will-redirect</code> / <code>did-navigate</code> 的 URL 捕获 <code>code</code>，直接进入换证。</li>
+  <li>OAuth 授权成功后，<code>QQConnectLogin.LoginServer/QQLogin</code> 返回 <code>musickey</code> 与续期字段；应用解析为 <code>Credential</code> 并在主进程入库。</li>
+  <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；登录视图在结束或超时后清理。</li>
+  <li>扫码登录只走内嵌官方 xlogin 组件；Cookie 登录是兜底路径，见 <a href="#p3-2">§3.2</a>。</li>
+</ul>
+
+<h3 id="p3-2">3.2 Cookie 登录协议</h3>
+<div class="diagram"><img src="diagram/prov-cookie.svg" alt="Cookie 登录上游协议时序图"></div>
+<ul class="note">
+  <li>Cookie 至少需要有效的 <code>uin</code> 与 <code>qm_keyst</code>；缺失或格式无效直接返回 <code>AUTH_EXPIRED</code>。</li>
+  <li>应用用该凭证请求用户资料接口，<code>g_tk</code> 由 <code>hash33(musickey, 5381)</code> 计算；<code>code === 0</code> 视为登录态有效。</li>
+  <li>验证成功后生成 <code>Credential</code>，保存在主进程；不保存浏览器 Cookie 原文。</li>
+  <li>验证失败返回 <code>AUTH_EXPIRED</code>，提示用户重新获取 Cookie。</li>
+</ul>
+
+<h3 id="p3-3">3.3 播放链接协议</h3>
+<div class="diagram"><img src="diagram/prov-play.svg" alt="播放链接上游协议时序图"></div>
+<ul class="note">
+  <li>先通过 <code>get_song_detail_yqq</code> 获取 <code>media_mid</code>，再按请求音质拼出 vkey 的 <code>filename</code>。</li>
+  <li>vkey 请求使用进程级稳定 <code>guid</code>、歌曲 <code>songmid</code> 数组、对应 <code>filename</code> 数组与账号 <code>uin</code>。</li>
+  <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。</li>
+  <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；主进程只经手链接字符串，不代理音频流。</li>
+  <li>vkey 失效时音频加载失败，界面提示“音频加载失败，可能链接已过期”；应用不会自动重新获取链接。</li>
+</ul>
+
+<h2 id="p4">4. INTERFACES</h2>
+<p><a href="#top">↑</a></p>
+
+<h3 id="p4-1">4.1 消费的 HTTP 接口</h3>
+<table>
+  <tr><th>接口</th><th>方法 / 路径</th><th>用途</th></tr>
+  <tr><td>内容 RPC</td><td><code>https://u.y.qq.com/cgi-bin/musicu.fcg</code>（内容请求 GET；登录换证 / 续期 POST）</td><td>统一 <code>musicu</code> 请求入口；搜索、歌曲详情、vkey、歌单、资料、登录与续期。</td></tr>
+  <tr><td>搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code></td><td>按单曲 / 歌手 / 专辑 / 歌单搜索。</td></tr>
+  <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code> 与歌曲展示字段。</td></tr>
+  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>。</td></tr>
+  <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表。</td></tr>
+  <tr><td>我的歌单</td><td><code>music.musicasset.PlaylistBaseRead / GetPlaylistByUin</code></td><td>当前账号创建 / 收藏的歌单列表。</td></tr>
+  <tr><td>会话续期</td><td><code>music.login.LoginServer / Login</code></td><td>用 <code>refresh_token</code> 换新 <code>musickey</code>。</td></tr>
+  <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
+  <tr><td>歌词</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回明文 LRC 与翻译。</td></tr>
+  <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
+  <tr><td>官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方扫码组件。</td></tr>
+  <tr><td>OAuth 授权</td><td><code>POST https://graph.qq.com/oauth2.0/authorize</code></td><td>用 xlogin 的 Cookie 换取 <code>code</code>。</td></tr>
+  <tr><td>音频流</td><td><code>GET https://ws.stream.qqmusic.qq.com/{purl}</code></td><td>渲染进程加载的音频流；加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</td></tr>
+</table>
+<table>
+  <tr><th>接口</th><th>关键请求参数</th></tr>
+  <tr>
+    <td>搜索</td>
+    <td><code>num_per_page</code> · <code>page_num</code> · <code>query</code> · <code>search_type</code>（0 单曲 / 1 歌手 / 2 专辑 / 3 歌单） · <code>searchid</code></td>
+  </tr>
+  <tr>
+    <td>歌曲详情</td>
+    <td><code>song_mid</code></td>
+  </tr>
+  <tr>
+    <td>vkey</td>
+    <td><code>guid</code> · <code>songmid[]</code> · <code>songtype[]</code>（全 0） · <code>filename[]</code> · <code>uin</code> · <code>loginflag</code> · <code>platform</code></td>
+  </tr>
+  <tr>
+    <td>歌单详情</td>
+    <td><code>disstid</code> · <code>dirid</code> · <code>tag</code> · <code>song_begin</code> · <code>song_num</code> · <code>userinfo</code> · <code>orderlist</code> · <code>onlysonglist</code></td>
+  </tr>
+  <tr>
+    <td>我的歌单</td>
+    <td><code>uin</code></td>
+  </tr>
+  <tr>
+    <td>会话续期</td>
+    <td><code>openid</code> · <code>access_token</code> · <code>refresh_token</code> · <code>expired_in</code> · <code>musicid</code> · <code>musickey</code> · <code>refresh_key</code> · <code>loginMode</code></td>
+  </tr>
+  <tr>
+    <td>QQ 登录换证</td>
+    <td><code>comm.tmeLoginType</code> · <code>param.code</code></td>
+  </tr>
+  <tr>
+    <td>歌词</td>
+    <td><code>songmid</code> · <code>format</code> · <code>nobase64</code> · <code>trans</code> · <code>g_tk</code> · <code>loginUin</code> · <code>hostUin</code> · <code>inCharset</code> · <code>outCharset</code> · <code>notice</code> · <code>platform</code> · <code>needNewCode</code></td>
+  </tr>
+  <tr>
+    <td>用户资料</td>
+    <td><code>g_tk</code> · <code>format</code> · <code>inCharset</code> · <code>outCharset</code> · <code>notice</code> · <code>cid</code> · <code>needNewCode</code> · <code>loginUin</code> · <code>hostUin</code> · <code>userid</code> · <code>reqfrom</code></td>
+  </tr>
+  <tr>
+    <td>OAuth authorize</td>
+    <td><code>response_type</code> · <code>client_id</code> · <code>redirect_uri</code> · <code>scope</code> · <code>state</code> · <code>switch</code> · <code>from_ptlogin</code> · <code>src</code> · <code>update_auth</code> · <code>openapi</code> · <code>g_tk</code> · <code>auth_time</code> · <code>ui</code></td>
+  </tr>
+</table>
+<table>
+  <tr><th>端点</th><th>User-Agent</th><th>Referer</th><th>特别配置</th></tr>
+  <tr><td>搜索 <code>DoSearchForQQMusicDesktop</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>不携带 <code>comm</code></td></tr>
+  <tr><td>歌曲详情 <code>get_song_detail_yqq</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>vkey <code>CgiGetVkey</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>歌单详情 <code>CgiGetDiss</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>我的歌单 <code>GetPlaylistByUin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>歌词 <code>fcg_query_lyric_new.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=5381</code></td></tr>
+  <tr><td>用户资料 <code>fcg_get_profile_homepage.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=hash33(musickey, 5381)</code></td></tr>
+  <tr><td>QQ 登录换证 <code>QQLogin</code></td><td>iPhone iOS 13</td><td><code>https://y.qq.com/</code></td><td>JSON；不携带凭证</td></tr>
+  <tr><td>会话续期 <code>Login</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>JSON；携带当前凭证</td></tr>
+  <tr><td>OAuth authorize</td><td>桌面 Chrome 120（Windows）</td><td><code>https://xui.ptlogin2.qq.com/</code></td><td>form；Cookie 为 xlogin 会话；<code>redirect: manual</code></td></tr>
+  <tr><td>官方登录组件 xlogin</td><td>Chromium 默认</td><td>—</td><td><code>WebContentsView</code> 加载，不注入自定义请求头</td></tr>
+  <tr><td>音频流 <code>ws.stream.qqmusic.qq.com</code></td><td>应用默认</td><td>—</td><td>由播放器直接加载</td></tr>
+  <tr><td>封面图 <code>y.gtimg.cn</code></td><td>应用默认</td><td>—</td><td>由播放器直接加载</td></tr>
+</table>
+<ul class="note">
+  <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
+  <li>公开 CGI 目前不需要额外签名；<code>g_tk</code> 只用于 OAuth 授权、歌词与用户资料请求。</li>
+</ul>
+
+<h3 id="p4-2">4.2 消息与错误</h3>
+<pre><code>interface MusicuRequest {
+  comm?: {
+    uin?: number;
+    format?: 'json';
+    ct?: number;
+    cv?: number;
+    tmeLoginType?: number;
+    tmeAppID?: string;
+  };
+  req_0?: { module: string; method: string; param: Record&lt;string, unknown&gt; };
+  req?: { module: string; method: string; param: Record&lt;string, unknown&gt; };
+}
+
+interface MusicuResponse&lt;T&gt; {
+  code: number;
+  req_0?: { code: number; data?: T; message?: string };
+  req?: { code: number; data?: T; message?: string };
+}
+
+interface OAuthAuthorizeRequest {
+  response_type: 'code';
+  client_id: string;
+  redirect_uri: string;
+  scope: string;
+  state: string;
+  g_tk: string;
+  auth_time: string;
+  ui: string;
+}
+
+interface OAuthAuthorizeResponse {
+  status: number;              // 302
+  location: string;            // 携带 ?code=...
+}
+
+interface QqLoginRequest {
+  comm: { tmeLoginType: number };
+  req: {
+    module: 'QQConnectLogin.LoginServer';
+    method: 'QQLogin';
+    param: { code: string };
+  };
+}
+</code></pre>
+
+<table>
+  <tr><th>上游信号</th><th>内部 ErrorCode</th><th>含义 / 处理</th></tr>
+  <tr><td><code>1000</code> / <code>104401</code> / <code>104400</code></td><td><code>AUTH_EXPIRED</code></td><td>凭证过期或无效；提示重新登录。</td></tr>
+  <tr><td><code>104604</code> / <code>2001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游瞬时繁忙；短退避重试，仍失败则提示稍后再试。</td></tr>
+  <tr><td><code>100001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；不重试，直接提示稍后再试。</td></tr>
+  <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>当前账号无该音质权限；播放链接流程继续回退。</td></tr>
+  <tr><td><code>20261</code> / <code>20271</code> / <code>20272</code> / <code>20274</code> / <code>20277</code> / <code>20278</code> / <code>20279</code> / <code>20450</code></td><td><code>AUTH_EXPIRED</code></td><td>登录参数、验证码、账号绑定、账号受限或封禁；提示具体原因或重新登录。</td></tr>
+  <tr><td>HTTP <code>429</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；退避重试。</td></tr>
+  <tr><td>HTTP 非 2xx</td><td><code>UPSTREAM_NETWORK</code></td><td>网络或服务不可用；短退避重试，仍失败则提示网络异常。</td></tr>
+  <tr><td>连接失败 / 超时</td><td><code>UPSTREAM_NETWORK</code></td><td>网络或服务不可用；不重试，直接提示网络异常。</td></tr>
+  <tr><td>JSON 解析失败 / 缺少必需字段 / 未知业务码</td><td><code>UPSTREAM_CHANGED</code></td><td>上游结构变化；不重试，提示稍后再试。</td></tr>
+</table>
+<ul class="note">
+  <li>内部错误码与界面文案的对应关系见 <a href="USER.html#u5-3">USER §5.3</a>；类型定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
+  <li>登录业务码携带的具体文案来自 <code>mapUpstreamCode</code>；是否直接展示给用户由界面错误策略决定。</li>
+</ul>
+
+<h3 id="p4-3">4.3 数据模型与转换</h3>
+<pre><code>interface QqSong {
+  id?: number | string;
+  mid?: string;
+  name?: string;
+  title?: string;
+  interval?: number;
+  singer?: Array&lt;{ mid?: string; name?: string }&gt;;
+  album?: { mid?: string; name?: string };
+  pay?: { pay_play?: number; price_album?: number };
+  file?: { media_mid?: string };
+}
+
+interface QqVkeyData {
+  midurlinfo?: Array&lt;{
+    songmid?: string;
+    purl?: string;
+    result?: number;
+  }&gt;;
+}
+
+interface QqPlaylistData {
+  dirinfo?: {
+    id?: string | number;
+    title?: string;
+    picurl?: string;
+    songnum?: number;
+  };
+  songlist?: QqSong[];
+}
+
+interface QqMineData {
+  v_playlist?: Array&lt;{
+    dissid?: string | number;
+    disstid?: string | number;
+    tid?: string | number;
+    dirId?: string | number;
+    dissname?: string;
+    name?: string;
+    title?: string;
+    dirName?: string;
+    imgurl?: string;
+    picurl?: string;
+    cover?: string;
+    bigpicUrl?: string;
+    song_count?: number;
+    songnum?: number;
+    songNum?: number;
+    song_cnt?: number;
+  }&gt;;
+}
+
+interface QqSearchData {
+  body?: {
+    song?: { list?: QqSong[] };
+    singer?: { list?: Array&lt;{ singerMID?: string; singerName?: string }&gt; };
+    album?: { list?: Array&lt;{ albumMID?: string; albumName?: string }&gt; };
+    songlist?: { list?: QqMineData['v_playlist'] };
+    meta?: { sum?: number; estimate_sum?: number };
+  };
+}
+
+interface QqLyricResponse {
+  code?: number;
+  retcode?: number;
+  lyric?: string;
+  trans?: string;
+}
+
+interface QqProfileResponse {
+  code?: number;
+  data?: {
+    creator?: {
+      nick?: string;
+      headpic?: string;
+      hostuin?: string;
+    };
+  };
+}
+
+interface Credential {
+  musicid: string;
+  musickey: string;
+  expiredAtMs: number | null;
+  refreshKey?: string;
+  refreshToken?: string;
+  accessToken?: string;
+  openid?: string;
+  unionid?: string;
+  loginType?: number;
+}
+
+interface QqLoginPayload {
+  musickey?: string;
+  str_musicid?: string;
+  musicid?: string;
+  uin?: string | number;
+  qq?: string | number;
+  keyExpiresIn?: number;
+  musickeyCreateTime?: number;
+  refresh_key?: string;
+  refresh_token?: string;
+  access_token?: string;
+  openid?: string;
+  unionid?: string;
+  loginType?: number;
+}
+</code></pre>
+
+<table>
+  <tr><th>对象</th><th>消费字段</th><th>说明</th></tr>
+  <tr>
+    <td><code>QqSong</code></td>
+    <td><code>id</code> · <code>mid</code> · <code>name</code> / <code>title</code> · <code>interval</code> · <code>singer[]</code> · <code>album</code> · <code>pay</code> · <code>file.media_mid</code></td>
+    <td><code>interval</code> 单位为秒；<code>pay.pay_play</code> 与 <code>price_album</code> 用于权限角标。</td>
+  </tr>
+  <tr>
+    <td><code>QqVkeyData</code></td>
+    <td><code>midurlinfo[].songmid</code> · <code>purl</code> · <code>result</code></td>
+    <td><code>purl</code> 为空表示该档位无链接；当前实现不消费 <code>result</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqPlaylistData</code></td>
+    <td><code>dirinfo.id</code> / <code>title</code> / <code>picurl</code> / <code>songnum</code> · <code>songlist[]</code></td>
+    <td>单次最多返回 100 首；按 <code>songnum</code> 分页补齐。</td>
+  </tr>
+  <tr>
+    <td><code>QqMineData</code></td>
+    <td><code>v_playlist[]</code> 的 <code>dissid</code> / <code>disstid</code> / <code>tid</code> / <code>dirId</code> · 名称 · 封面 · 歌曲数</td>
+    <td>过滤空 ID 与 <code>0</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqSearchData</code></td>
+    <td><code>body.song.list</code> · <code>body.singer.list</code> · <code>body.album.list</code> · <code>body.songlist.list</code> · <code>body.meta.sum</code> / <code>estimate_sum</code></td>
+    <td>搜索类型由 <code>search_type</code> 选择；空结果重试一次。</td>
+  </tr>
+  <tr>
+    <td><code>QqLyricResponse</code></td>
+    <td><code>code</code> · <code>retcode</code> · <code>lyric</code> · <code>trans</code></td>
+    <td><code>-1901</code> 表示无歌词，返回空歌词而非错误。</td>
+  </tr>
+  <tr>
+    <td><code>QqProfileResponse</code></td>
+    <td><code>data.creator.nick</code> · <code>headpic</code></td>
+    <td>头像地址的 <code>http:</code> 前缀改为 <code>https:</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqLoginPayload</code></td>
+    <td><code>musickey</code> · <code>str_musicid</code> / <code>musicid</code> / <code>uin</code> / <code>qq</code> · <code>keyExpiresIn</code> · <code>musickeyCreateTime</code> · <code>refresh_*</code> · <code>access_token</code> · <code>openid</code> · <code>unionid</code> · <code>loginType</code></td>
+    <td>凭证对象可能嵌套在 <code>data</code> / <code>credential</code> / <code>result</code> 中；以包含 <code>musickey</code> 的对象为准。</td>
+  </tr>
+  <tr>
+    <td><code>Credential</code></td>
+    <td><code>musicid</code> · <code>musickey</code> · <code>expiredAtMs</code> · <code>refreshKey</code> · <code>refreshToken</code> · <code>accessToken</code> · <code>openid</code> · <code>unionid</code> · <code>loginType</code></td>
+    <td>项目归一化后的登录凭证；仅主进程持有，<code>Credential</code> 的续期字段不跨 IPC。</td>
+  </tr>
+</table>
+
+<table>
+  <tr><th>转换</th><th>规则</th></tr>
+  <tr>
+    <td><code>QqSong</code> → <code>Song</code></td>
+    <td><code>mid → songMid</code>；<code>id</code> 转字符串 → <code>songId</code>；<code>name ?? title → name</code>；<code>interval × 1000 → durationMs</code>；<code>singer[]</code> 取 <code>mid</code> / <code>name</code>；<code>album</code> 取 <code>mid</code> / <code>name</code>；<code>pay</code> 映射为 <code>PayInfo</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqSong.pay</code> → <code>PayInfo</code></td>
+    <td><code>price_album &gt; 0 → album</code>；否则 <code>pay_play === 1 → vip</code>；<code>pay_play === 0 → free</code>。</td>
+  </tr>
+  <tr>
+    <td><code>Quality</code> → vkey <code>filename</code></td>
+    <td><code>128k → M500{mediaMid}.mp3</code>；<code>320k → M800{mediaMid}.mp3</code>；<code>flac → F000{mediaMid}.flac</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqVkeyData</code> → <code>UrlResult[]</code></td>
+    <td>按 <code>songmid</code> 匹配 <code>purl</code>；<code>purl</code> 非空则生成播放链接并记录实际档位；无链接的歌曲继续按回退顺序尝试。</td>
+  </tr>
+  <tr>
+    <td><code>purl</code> → 播放链接</td>
+    <td>绝对 URL 原样使用；相对路径拼接 <code>https://ws.stream.qqmusic.qq.com/</code>，查询串保持不变。</td>
+  </tr>
+  <tr>
+    <td><code>QqPlaylistData</code> → <code>PlaylistDetail</code></td>
+    <td><code>dirinfo</code> → <code>PlaylistMeta</code>；<code>songlist[]</code> → <code>Song[]</code>；按 <code>dirinfo.songnum</code> 判断是否继续分页。</td>
+  </tr>
+  <tr>
+    <td><code>QqMineData</code> → <code>PlaylistMeta[]</code></td>
+    <td><code>dissid ?? disstid ?? tid ?? dirId ?? id → id</code>；名称、封面与歌曲数按字段回退链取值；过滤空 ID 与 <code>0</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqSearchData</code> → <code>SearchResult</code></td>
+    <td><code>song.list → songs</code>；<code>singer.list</code> / <code>album.list</code> / <code>songlist.list</code> 分别映射为 <code>Singer[]</code> / <code>Album[]</code> / <code>PlaylistMeta[]</code>；<code>meta.sum ?? estimate_sum → total</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqLyricResponse</code> → <code>Lyric</code></td>
+    <td><code>lyric → lrc</code>；<code>trans</code> 去空白后为空则 <code>null</code>；<code>-1901</code> → 空歌词。</td>
+  </tr>
+  <tr>
+    <td><code>QqProfileResponse</code> → <code>UserProfile</code></td>
+    <td><code>nick</code> 缺省回退到 <code>musicid</code>；<code>headpic</code> 的 <code>http:</code> 改为 <code>https:</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqLoginPayload</code> → <code>Credential</code></td>
+    <td><code>musicid</code> 去前导 <code>o</code> 并校验为数字；<code>expiredAtMs = musickeyCreateTime + keyExpiresIn × 1000</code>（秒 / 毫秒时间戳自适应）；续期字段按存在性拷贝。</td>
+  </tr>
+  <tr>
+    <td>专辑 <code>mid</code> → 封面 URL</td>
+    <td><code>https://y.gtimg.cn/music/photo_new/T002R{size}x{size}M000{mid}.jpg</code>；<code>size</code> 为 300 / 500 等。</td>
+  </tr>
+</table>
+<ul class="note">
+  <li>内部目标模型 <code>Song</code> / <code>PlaylistMeta</code> / <code>PlaylistDetail</code> / <code>SearchResult</code> / <code>Lyric</code> / <code>UserProfile</code> / <code>UrlResult</code> 的定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；<code>Credential</code> 的字段定义见 <a href="#p4-3">§4.3</a>。</li>
+  <li><code>mediaMid</code>、<code>guid</code> 与原始 <code>purl</code> 只在主进程 API 层内部存在，不进入 IPC 数据模型。</li>
+  <li><code>PayInfo</code> 仅用于界面角标；实际可播性以 vkey 结果为准。</li>
+</ul>
+
+<h3 id="p4-4">4.4 MPRIS</h3>
+<p>
+应用通过会话总线暴露 <code>org.mpris.MediaPlayer2.lychee</code>；D-Bus 是这里的传输层，
+桌面环境作为调用方。MPRIS 直接面向 D-Bus，按就近原则归本文件。以下为 MPRIS 契约。
+</p>
+<pre><code>interface OrgMprisMediaPlayer2 {
+  Identity: string;
+  CanQuit: boolean;
+  CanRaise: boolean;
+  Raise(): void;
+  Quit(): void;
+}
+
+interface OrgMprisMediaPlayer2Player {
+  PlaybackStatus: 'Playing' | 'Paused' | 'Stopped';
+  Metadata: MprisMetadata;
+  Position: number;
+  Volume: number;
+  LoopStatus: 'None' | 'Track' | 'Playlist';
+  Shuffle: boolean;
+  CanControl: boolean;
+  CanPlay: boolean;
+  CanPause: boolean;
+  CanSeek: boolean;
+  CanGoNext: boolean;
+  CanGoPrevious: boolean;
+
+  Play(): void;
+  Pause(): void;
+  PlayPause(): void;
+  Stop(): void;
+  Next(): void;
+  Previous(): void;
+  Seek(offset: number): void;
+  SetPosition(trackId: string, position: number): void;
+}
+
+interface MprisMetadata {
+  'mpris:trackid': string;
+  'mpris:length': number;
+  'mpris:artUrl': string;
+  'xesam:title': string;
+  'xesam:artist': string[];
+  'xesam:album': string;
+}
+</code></pre>
+<table>
+  <tr><th>字段</th><th>含义</th></tr>
+  <tr><td><code>Position</code></td><td>当前播放位置，单位微秒。</td></tr>
+  <tr><td><code>Volume</code></td><td>播放器音量，<code>0</code>–<code>1</code>，可写。</td></tr>
+  <tr><td><code>LoopStatus</code></td><td>循环模式：<code>sequence</code> → <code>None</code>；<code>repeat-all</code> / <code>shuffle</code> → <code>Playlist</code>；<code>repeat-one</code> → <code>Track</code>。可写。</td></tr>
+  <tr><td><code>Shuffle</code></td><td><code>shuffle</code> 模式为 <code>true</code>，其余为 <code>false</code>。可写。</td></tr>
+  <tr><td><code>mpris:trackid</code></td><td>曲目对象路径：<code>/org/mpris/MediaPlayer2/track/{songMid}</code>。</td></tr>
+  <tr><td><code>mpris:length</code></td><td>曲目时长，单位微秒。</td></tr>
+  <tr><td><code>mpris:artUrl</code></td><td>专辑封面 URL。</td></tr>
+  <tr><td><code>xesam:title</code></td><td>歌曲名。</td></tr>
+  <tr><td><code>xesam:artist</code></td><td>歌手名数组。</td></tr>
+  <tr><td><code>xesam:album</code></td><td>专辑名。</td></tr>
+</table>
+<table>
+  <tr><th>对象</th><th>成员</th><th>行为</th></tr>
+  <tr><td>Root</td><td><code>Identity</code> / <code>CanQuit</code> / <code>CanRaise</code> / <code>Raise</code> / <code>Quit</code></td><td>应用名固定 <code>Lychee Player</code>；<code>Raise</code> 显示并聚焦主窗口；<code>Quit</code> 走正常退出生命周期。</td></tr>
+  <tr><td>Player</td><td><code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code> / <code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code></td><td>由渲染进程发布的 <code>player:state</code> 驱动；元数据仅在切歌时更新。</td></tr>
+  <tr><td>Player</td><td><code>Play</code> / <code>Pause</code> / <code>PlayPause</code> / <code>Next</code> / <code>Previous</code> / <code>Seek</code> / <code>SetPosition</code></td><td>转为内部 <code>MprisCommand</code> 推送回渲染进程执行；<code>Stop</code> 按暂停处理。</td></tr>
+  <tr><td>Player</td><td><code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code></td><td>可写属性；变更转为 <code>setVolume</code> / <code>setLoopStatus</code> / <code>setShuffle</code> 命令回送渲染进程。</td></tr>
+</table>
+<ul class="note">
+  <li><code>Seek</code> / <code>SetPosition</code> 的偏移与目标位置均以微秒计；内部转换为毫秒后定位。</li>
+  <li>D-Bus / MPRIS 不可用时静默降级，不影响应用内播放；托盘不可用时同理。</li>
+  <li><code>LoopStatus</code> 与 <code>Shuffle</code> 的写入同步更新播放模式；<code>Volume</code> 写入同步更新播放器音量。</li>
+  <li>入站命令如何转成 <code>MprisCommand</code>、播放状态如何发布，见 <a href="CORE.html#c5-6">CORE §5.6</a>；类型定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
+  <li>可用 <code>playerctl -p lychee</code> 验证总线上暴露的成员。</li>
+</ul>
+
+</body>
+</html>

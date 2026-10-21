@@ -1,0 +1,19 @@
+@startuml prov-login
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+actor 用户 as U
+participant "Lychee Player" as APP
+participant "QQ 登录服务\n(ptlogin / graph.qq.com)" as QQ
+participant "QQ 音乐登录服务\n(QQConnectLogin.LoginServer)" as QM
+
+APP -> QQ : 加载官方 xlogin
+QQ --> APP : 登录组件
+U -> APP : 扫码并确认
+QQ --> APP : 登录完成\n(p_skey 等 Cookie / OAuth code)
+APP -> APP : 内部读取登录结果
+APP -> QQ : POST /oauth2.0/authorize\n(g_tk, client_id, redirect_uri)
+QQ --> APP : 302 Location\n?code=...
+APP -> QM : musicu.fcg\nQQConnectLogin.LoginServer/QQLogin {code}
+QM --> APP : musickey / refresh_token / ...
+@enduml
