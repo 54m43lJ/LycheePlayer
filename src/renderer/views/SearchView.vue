@@ -164,6 +164,7 @@ function changePage(delta: number): void {
           :active-mid="player.current?.songMid"
           @play="playSongAt"
           @play-next="playNextAt"
+          @toggle="player.toggle()"
         />
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="search" :size="25" /></div>

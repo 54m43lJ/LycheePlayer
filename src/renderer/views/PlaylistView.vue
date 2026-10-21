@@ -93,6 +93,7 @@ watch(() => route.params.id, load, { immediate: true })
         :active-mid="player.current?.songMid"
         @play="playAt"
         @play-next="playNextAt"
+        @toggle="player.toggle()"
       />
       <div v-else class="empty">
         <div class="empty-icon"><AppIcon name="music" :size="25" /></div>
