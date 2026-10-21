@@ -42,48 +42,50 @@
 │   │   │   ├── <a href="#c4-12">playlist.ts</a>              歌单
 │   │   │   ├── <a href="#c4-13">user.ts</a>                  用户资料
 │   │   │   ├── <a href="#c4-14">lyric.ts</a>                 歌词
-│   │   │   ├── <a href="#c4-15">login.ts</a>                 登录与续期
-│   │   │   └── <a href="#c4-16">web-login.ts</a>             官方 xlogin 内嵌登录
+│   │   │   ├── <a href="#c4-15">comment.ts</a>               歌曲评论
+│   │   │   ├── <a href="#c4-16">login.ts</a>                 登录与续期
+│   │   │   └── <a href="#c4-17">web-login.ts</a>             官方 xlogin 内嵌登录
 │   │   ├── integration/                      桌面集成
-│   │   │   ├── <a href="#c4-17">mpris.ts</a>                 MPRIS 服务
-│   │   │   └── <a href="#c4-18">tray.ts</a>                  系统托盘
+│   │   │   ├── <a href="#c4-18">mpris.ts</a>                 MPRIS 服务
+│   │   │   └── <a href="#c4-19">tray.ts</a>                  系统托盘
 │   │   └── types/
-│   │       └── <a href="#c4-19">mpris-service.d.ts</a>       mpris-service 类型声明
+│   │       └── <a href="#c4-20">mpris-service.d.ts</a>       mpris-service 类型声明
 │   ├── preload/
-│   │   └── <a href="#c4-20">index.ts</a>                      contextBridge 桥接
+│   │   └── <a href="#c4-21">index.ts</a>                      contextBridge 桥接
 │   └── renderer/                             Vue 3 SPA
-│       ├── <a href="#c4-21">main.ts</a>                       应用挂载
-│       ├── <a href="#c4-22">App.vue</a>                       应用外壳与全局布局
-│       ├── <a href="#c4-23">api.ts</a>                        IpcResult 解包与错误文案
-│       ├── <a href="#c4-24">router/index.ts</a>               路由表
-│       ├── <a href="#c4-25">env.d.ts</a>                      Window 类型扩展
-│       ├── <a href="#c4-26">audio/engine.ts</a>               AudioEngine 接口与 HTML5 Audio 实现
+│       ├── <a href="#c4-22">main.ts</a>                       应用挂载
+│       ├── <a href="#c4-23">App.vue</a>                       应用外壳与全局布局
+│       ├── <a href="#c4-24">api.ts</a>                        IpcResult 解包与错误文案
+│       ├── <a href="#c4-25">router/index.ts</a>               路由表
+│       ├── <a href="#c4-26">env.d.ts</a>                      Window 类型扩展
+│       ├── <a href="#c4-27">audio/engine.ts</a>               AudioEngine 接口与 HTML5 Audio 实现
 │       ├── stores/
-│       │   ├── <a href="#c4-27">auth.ts</a>                   登录态与登录动作
-│       │   ├── <a href="#c4-28">player.ts</a>                 播放器状态与队列
-│       │   ├── <a href="#c4-29">settings.ts</a>               设置与主题
-│       │   └── <a href="#c4-30">ui.ts</a>                     歌词面板、播放队列等 UI 状态
+│       │   ├── <a href="#c4-28">auth.ts</a>                   登录态与登录动作
+│       │   ├── <a href="#c4-29">player.ts</a>                 播放器状态与队列
+│       │   ├── <a href="#c4-30">settings.ts</a>               设置与主题
+│       │   └── <a href="#c4-31">ui.ts</a>                     歌词 / 评论、播放队列等 UI 状态
 │       ├── utils/
-│       │   ├── <a href="#c4-31">format.ts</a>                 时长、计数、封面与歌手格式化
-│       │   └── <a href="#c4-32">lrc.ts</a>                    LRC 解析与活动行查找
+│       │   ├── <a href="#c4-32">format.ts</a>                 时长、计数、封面与歌手格式化
+│       │   └── <a href="#c4-33">lrc.ts</a>                    LRC 解析与活动行查找
 │       ├── composables/
-│       │   ├── <a href="#c4-33">lyrics.ts</a>                 歌词加载与缓存
-│       │   └── <a href="#c4-34">toast.ts</a>                  Toast 队列
+│       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
+│       │   └── <a href="#c4-35">toast.ts</a>                  Toast 队列
 │       ├── components/
-│       │   ├── <a href="#c4-35">AppIcon.vue</a>               图标集
-│       │   ├── <a href="#c4-36">CoverArt.vue</a>              封面与占位
-│       │   ├── <a href="#c4-37">MarqueeText.vue</a>           超宽文本跑马灯
-│       │   ├── <a href="#c4-38">SongTable.vue</a>             歌曲列表
-│       │   ├── <a href="#c4-39">PlayerBar.vue</a>             播放条
-│       │   ├── <a href="#c4-40">LyricsPanel.vue</a>           歌词面板
-│       │   └── <a href="#c4-41">ToastStack.vue</a>            Toast 容器
+│       │   ├── <a href="#c4-36">AppIcon.vue</a>               图标集
+│       │   ├── <a href="#c4-37">CoverArt.vue</a>              封面与占位
+│       │   ├── <a href="#c4-38">MarqueeText.vue</a>           超宽文本跑马灯
+│       │   ├── <a href="#c4-39">SongTable.vue</a>             歌曲列表
+│       │   ├── <a href="#c4-40">PlayerBar.vue</a>             播放条
+│       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词 / 评论容器
+│       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         评论面板
+│       │   └── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
 │       ├── views/
-│       │   ├── <a href="#c4-42">SearchView.vue</a>            搜索页
-│       │   ├── <a href="#c4-43">LibraryView.vue</a>           我的歌单
-│       │   ├── <a href="#c4-44">PlaylistView.vue</a>          歌单详情
-│       │   ├── <a href="#c4-45">LoginView.vue</a>             登录页
-│       │   └── <a href="#c4-46">SettingsView.vue</a>          设置页
-│       ├── <a href="#c4-47">styles/main.css</a>               主题 token、布局与组件样式
+│       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
+│       │   ├── <a href="#c4-45">LibraryView.vue</a>           我的歌单
+│       │   ├── <a href="#c4-46">PlaylistView.vue</a>          歌单详情
+│       │   ├── <a href="#c4-47">LoginView.vue</a>             登录页
+│       │   └── <a href="#c4-48">SettingsView.vue</a>          设置页
+│       ├── <a href="#c4-49">styles/main.css</a>               主题 token、布局与组件样式
 │       └── index.html                        渲染进程 HTML 入口
 ├── electron.vite.config.ts                   Electron / Vite 构建配置
 ├── package.json                              依赖、脚本与版本
@@ -247,6 +249,22 @@ export interface Lyric {
   trans: string | null;
 }
 
+export interface Comment {
+  id: string;
+  nickname: string;
+  avatarUrl: string;
+  content: string;
+  likedCount: number;
+  replyCount: number;
+  createdAtMs: number;
+}
+
+export interface CommentPage {
+  comments: Comment[];
+  total: number;
+  hasMore: boolean;
+}
+
 export interface Credential {}   //见 PROVIDER §4.3
 
 export interface UrlResult {
@@ -304,6 +322,7 @@ export interface EmbedRect {
 <ul class="note">
   <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；其续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态。</li>
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
+  <li><code>Comment</code> / <code>CommentPage</code> 是 <code>comment.get</code> 的跨 IPC 数据模型；原始字段映射见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
   <li><code>PlaylistDetail.songs</code> 是歌单当前已载入的歌曲；上游分页补齐后一次性返回。</li>
 </ul>
 
@@ -332,6 +351,9 @@ export interface EmbedRect {
   };
   lyric: {
     get(songMid: string): Promise&lt;IpcResult&lt;Lyric&gt;&gt;;
+  };
+  comment: {
+    get(songId: string): Promise&lt;IpcResult&lt;CommentPage&gt;&gt;;
   };
   settings: {
     get(): Promise&lt;IpcResult&lt;Settings&gt;&gt;;
@@ -473,6 +495,7 @@ function buildStreamUrl(purl: string): string;
 </code></pre>
 <ul class="note">
   <li><code>getStreamUrls</code> 是全应用唯一拼装播放链接的位置；回退规则见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。</li>
+  <li>全部档位均无链接时，按 <a href="#c4-13">§4.13</a> 的 <code>isVipUser()</code> 生成 <code>NO_STREAM</code> 消息：VIP 账号提示“当前内容已下架”，其余情况提示可能需要 VIP 或已下架。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射。</li>
 </ul>
 
@@ -486,13 +509,28 @@ declare const PLAYLIST_PAGE_MAX: number;    // 推荐值 20；歌单本地最大
 
 <h3 id="c4-13">4.13 src/main/api/user.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getProfile(): Promise&lt;UserProfile&gt;;
+export function isVipUser(): Promise&lt;boolean&gt;;
+
+declare const VIP_CACHE_MS: number;   // 推荐值 5 × 60_000 ms；VIP 状态缓存时长
 </code></pre>
+<ul class="note">
+  <li><code>isVipUser</code> 通过 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a> 的 VIP 状态接口查询当前账号权益；未登录、接口失败均按非 VIP 处理。</li>
+</ul>
 
 <h3 id="c4-14">4.14 src/main/api/lyric.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getLyric(songMid: string): Promise&lt;Lyric&gt;;
 </code></pre>
 
-<h3 id="c4-15">4.15 src/main/api/login.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-15">4.15 src/main/api/comment.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function getComments(songId: string): Promise&lt;CommentPage&gt;;
+
+declare const COMMENT_PAGE_SIZE: number;   // 推荐值 20；单次评论请求条数（上游上限 25）
+</code></pre>
+<ul class="note">
+  <li>评论读取固定匿名发送，不携带当前登录凭证；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
+</ul>
+
+<h3 id="c4-16">4.16 src/main/api/login.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function requestOAuthCodeWithCookies(jar: Record&lt;string, string&gt;): Promise&lt;string&gt;;
 export function exchangeQqLoginCode(code: string): Promise&lt;Credential&gt;;
 export function refreshSession(): Promise&lt;Credential&gt;;
@@ -509,7 +547,7 @@ declare const SESSION_REFRESH_FALLBACK_MS: number; // 推荐值 6 × 60 × 60_00
   <li><code>refreshSession</code> 用 <code>refresh_token</code> 换新 <code>musickey</code> 并写回凭证；<code>refreshIfNeeded</code> 按到期时间或时间间隔触发。</li>
 </ul>
 
-<h3 id="c4-16">4.16 src/main/api/web-login.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-17">4.17 src/main/api/web-login.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function isAllowedHost(url: string): boolean;
 export function setEmbedBounds(rect: EmbedRect | null): void;
 export function disposeEmbedView(): void;
@@ -531,7 +569,7 @@ declare const LOGIN_EMBED_PARTITION: string;    // 推荐值 'lychee-xlogin'；�
   <li><code>openWebLogin</code> 在独立 session 分区中启动登录流程：轮询 Cookie 或捕获 OAuth 回调 code，换取 <code>Credential</code>；不负责创建或定位视图。</li>
 </ul>
 
-<h3 id="c4-17">4.17 src/main/integration/mpris.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-18">4.18 src/main/integration/mpris.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function initMpris(onCommand: (command: MprisCommand) =&gt; void): void;
 export function publishState(state: PlayerState | null): void;
 </code></pre>
@@ -539,7 +577,7 @@ export function publishState(state: PlayerState | null): void;
   <li>媒体控制协议定义见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>；<code>publishState</code> 同步 <code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code> / <code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code>；命令接收后的分发与执行见 <a href="#c5-6">§5.6</a>。</li>
 </ul>
 
-<h3 id="c4-18">4.18 src/main/integration/tray.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-19">4.19 src/main/integration/tray.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export interface TrayActions {
   onShow(): void;
   onToggle(): void;
@@ -552,7 +590,7 @@ export function initTray(actions: TrayActions): void;
 export function destroyTray(): void;
 </code></pre>
 
-<h3 id="c4-19">4.19 src/main/types/mpris-service.d.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-20">4.20 src/main/types/mpris-service.d.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>declare module 'mpris-service' {
   import type { EventEmitter } from 'node:events';
 
@@ -588,26 +626,26 @@ export function destroyTray(): void;
 }
 </code></pre>
 
-<h3 id="c4-20">4.20 src/preload/index.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-21">4.21 src/preload/index.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function exposeApi(): void;
 </code></pre>
 <ul class="note">
   <li>经 contextBridge 暴露唯一命名空间 <code>window.lychee</code>，其类型面即 <a href="#c4-2">§4.2</a>。</li>
 </ul>
 
-<h3 id="c4-21">4.21 src/renderer/main.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-22">4.22 src/renderer/main.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>createApp(App).use(createPinia()).use(router).mount('#app');
 </code></pre>
 
-<h3 id="c4-22">4.22 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、歌词面板、播放队列面板与 Toast。
+<h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、歌词 / 评论面板、播放队列面板与 Toast。
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
-  <li>监听路由变化并关闭歌词面板，规则见 <a href="USER.html#u2">USER §2</a>。</li>
+  <li>监听路由变化并关闭歌词 / 评论面板，规则见 <a href="USER.html#u2">USER §2</a>。</li>
 </ul>
 
-<h3 id="c4-23">4.23 src/renderer/api.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-24">4.24 src/renderer/api.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export class IpcCallError extends Error {
   readonly code: IpcError['code'];
 }
@@ -616,12 +654,12 @@ export function unwrap&lt;T&gt;(result: IpcResult&lt;T&gt;): T;
 export function describeError(error: unknown): string;
 </code></pre>
 
-<h3 id="c4-24">4.24 src/renderer/router/index.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-25">4.25 src/renderer/router/index.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const router: Router = createRouter({ history: createWebHashHistory(), routes: [] });   // hash history；/ → /search
 export default router;
 </code></pre>
 
-<h3 id="c4-25">4.25 src/renderer/env.d.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-26">4.26 src/renderer/env.d.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>declare global {
   interface Window {
     lychee: LycheeApi;
@@ -629,7 +667,7 @@ export default router;
 }
 </code></pre>
 
-<h3 id="c4-26">4.26 src/renderer/audio/engine.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-27">4.27 src/renderer/audio/engine.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export interface AudioEngineHandlers {
   onTimeUpdate(positionMs: number): void;
   onDurationChange(durationMs: number): void;
@@ -643,6 +681,7 @@ export interface AudioEngine {
   loadAndPlay(url: string): Promise&lt;void&gt;;
   play(): Promise&lt;void&gt;;
   pause(): void;
+  stop(): void;
   seek(positionMs: number): void;
   setVolume(volume: number): void;
   readonly positionMs: number;
@@ -653,10 +692,11 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine;
 </code></pre>
 <ul class="note">
   <li>渲染进程唯一直接持有 HTML5 Audio 的模块；播放器 store 只依赖 <code>AudioEngine</code> 接口。</li>
+  <li><code>stop</code> 暂停并清空旧音源；切换歌曲前调用，避免旧音频的 <code>timeupdate</code> 干扰新歌状态。</li>
   <li>替换为 mpv 等引擎时实现同一接口，事件回调与命令面不变。</li>
 </ul>
 
-<h3 id="c4-27">4.27 src/renderer/stores/auth.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-28">4.28 src/renderer/stores/auth.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function useAuthStore(): AuthStore;
 
 interface AuthStore {
@@ -676,7 +716,7 @@ interface AuthStore {
 }
 </code></pre>
 
-<h3 id="c4-28">4.28 src/renderer/stores/player.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-29">4.29 src/renderer/stores/player.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export type PlayMode = 'sequence' | 'repeat-all' | 'repeat-one' | 'shuffle';
 
 export const PLAY_MODE_LABEL: Record&lt;PlayMode, string&gt;;
@@ -710,22 +750,26 @@ interface PlayerStore {
   seek(positionMs: number): void;
   setVolume(volume: number): void;
   setQuality(quality: Quality): void;
+  setLoopStatus(status: 'None' | 'Track' | 'Playlist'): void;
+  setShuffle(enabled: boolean): void;
   cycleMode(): void;
   applySettings(): void;
   handleCommand(command: MprisCommand): void;
+  removeFromQueue(queueIndex: number): void;
+  clearQueue(): void;
 }
 
 declare const PLAYER_STATE_THROTTLE_MS: number;   // 推荐值 900 ms；播放状态推送的节流窗口
 </code></pre>
 <ul class="note">
   <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，用于列表循环与随机预览，播放队列面板只绑定 <code>queue</code>。<code>playNext</code> 将歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>；已在其中则移动，<code>current</code> 本身不操作；无 <code>current</code> 时直接以该歌曲开始播放。用户可见规则见 <a href="USER.html#u1">USER §1</a> 与 <a href="USER.html#u5-2-9">USER §5.2.9</a>。</li>
-  <li><code>playOrder</code>、<code>queue</code> 的新语义与 <code>playNext</code> 为待实现设计，可以根据实际情况调整；<code>canPlay</code> 应同时考虑 <code>current</code> 与 <code>queue</code>，不能只按 <code>queue.length</code> 判断。当前歌曲不可播时 <code>canPlay</code> 为 <code>false</code>，<code>play</code> / <code>resume</code> 不执行；该标志不阻止显式的上一首 / 下一首切换。队列面板的移除/清空直接修改 <code>playOrder</code>，不改变 <code>current</code>。</li>
+  <li><code>playOrder</code>、<code>queue</code> 与 <code>playNext</code> 按上述语义实现；<code>canPlay</code> 同时考虑 <code>current</code> 与 <code>queue</code>。当前歌曲不可播时 <code>canPlay</code> 为 <code>false</code>，<code>play</code> / <code>resume</code> 不执行；该标志不阻止显式的上一首 / 下一首切换。队列面板的移除 / 清空直接修改 <code>playOrder</code>，不改变 <code>current</code>。</li>
   <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放按洗牌后的 <code>playOrder</code> 进行。</li>
   <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档。</li>
   <li><code>sendState</code> 以节流方式发布 <code>player:state</code>，包含 <code>volume</code> / <code>loopStatus</code> / <code>shuffle</code>；音量持久化在 <code>localStorage</code>。</li>
 </ul>
 
-<h3 id="c4-29">4.29 src/renderer/stores/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-30">4.30 src/renderer/stores/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function useSettingsStore(): SettingsStore;
 
 interface SettingsStore {
@@ -737,7 +781,7 @@ interface SettingsStore {
 }
 </code></pre>
 
-<h3 id="c4-30">4.30 src/renderer/stores/ui.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-31">4.31 src/renderer/stores/ui.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function useUiStore(): UiStore;
 
 interface UiStore {
@@ -750,10 +794,10 @@ interface UiStore {
 }
 </code></pre>
 <ul class="note">
-  <li>歌词面板与播放队列面板互斥；打开一个时关闭另一个。队列面板相关状态为待实现设计，可以根据实际情况调整。</li>
+  <li>歌词 / 评论面板与播放队列面板互斥；打开一个时关闭另一个。</li>
 </ul>
 
-<h3 id="c4-31">4.31 src/renderer/utils/format.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-32">4.32 src/renderer/utils/format.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function formatDuration(ms: number): string;
 export function formatCount(count: number): string;
 export function albumCover(mid: string, size?: number): string;
@@ -762,7 +806,7 @@ export function singerNames(song: Song): string;
 export function playlistSubtitle(playlist: PlaylistMeta): string;
 </code></pre>
 
-<h3 id="c4-32">4.32 src/renderer/utils/lrc.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-33">4.33 src/renderer/utils/lrc.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export interface LyricLine {
   timeMs: number;
   text: string;
@@ -773,7 +817,7 @@ export function parseLyric(lrc: string, trans: string | null): LyricLine[];
 export function activeLyricIndex(lines: LyricLine[], positionMs: number): number;
 </code></pre>
 
-<h3 id="c4-33">4.33 src/renderer/composables/lyrics.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-34">4.34 src/renderer/composables/lyrics.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function useLyrics(): {
   lines: Ref&lt;LyricLine[]&gt;;
   loading: Ref&lt;boolean&gt;;
@@ -783,7 +827,7 @@ export function activeLyricIndex(lines: LyricLine[], positionMs: number): number
 };
 </code></pre>
 
-<h3 id="c4-34">4.34 src/renderer/composables/toast.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-35">4.35 src/renderer/composables/toast.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export type ToastKind = 'info' | 'error';
 
 export interface ToastItem {
@@ -802,11 +846,11 @@ export function useToast(): {
 declare const TOAST_DURATION_MS: number;   // 推荐值 3600 ms；Toast 自动消失时间
 </code></pre>
 
-<h3 id="c4-35">4.35 src/renderer/components/AppIcon.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-36">4.36 src/renderer/components/AppIcon.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const props = withDefaults(defineProps&lt;{ name: string; size?: number }&gt;(), { size: 20 });
 </code></pre>
 
-<h3 id="c4-36">4.36 src/renderer/components/CoverArt.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-37">4.37 src/renderer/components/CoverArt.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const props = withDefaults(defineProps&lt;{ src?: string; imageClass?: string; iconSize?: number }&gt;(), {
   src: '',
   imageClass: '',
@@ -814,11 +858,11 @@ declare const TOAST_DURATION_MS: number;   // 推荐值 3600 ms；Toast 自动�
 });
 </code></pre>
 
-<h3 id="c4-37">4.37 src/renderer/components/MarqueeText.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-38">4.38 src/renderer/components/MarqueeText.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const props = withDefaults(defineProps&lt;{ text: string; speed?: number }&gt;(), { speed: 30 });
 </code></pre>
 
-<h3 id="c4-38">4.38 src/renderer/components/SongTable.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-39">4.39 src/renderer/components/SongTable.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const props = withDefaults(
   defineProps&lt;{ songs: Song[]; activeMid?: string | null; showAlbum?: boolean }&gt;(),
   { activeMid: null, showAlbum: true }
@@ -826,46 +870,60 @@ declare const TOAST_DURATION_MS: number;   // 推荐值 3600 ms；Toast 自动�
 const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; toggle: [] }&gt;();
 </code></pre>
 <ul class="note">
-  <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由“下一首播放”按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。队列相关交互为待实现设计，可以根据实际情况调整。</li>
+  <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由“下一首播放”按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。</li>
 </ul>
 
-<h3 id="c4-39">4.39 src/renderer/components/PlayerBar.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-40">4.40 src/renderer/components/PlayerBar.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>播放条包含“播放队列”入口；点击切换 <code>UiStore.queueOpen</code>。队列入口为待实现设计，可以根据实际情况调整。</li>
+  <li>点击封面切换 <code>UiStore.lyricsOpen</code>，打开歌词 / 评论面板；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
+  <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束。</li>
 </ul>
 
-<h3 id="c4-40">4.40 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-41">4.41 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。
+</code></pre>
+<ul class="note">
+  <li>歌词 / 评论组合面板：左侧歌词，右侧 <a href="#c4-42">CommentsPanel</a>；覆盖侧栏与播放条以外的主区域，两列各占一半。</li>
+  <li>按 <code>player.positionMs</code> 计算活动行并自动滚动；点击歌词行调用 <code>player.seek()</code>。</li>
+  <li>面板开关由 <code>UiStore.lyricsOpen</code> 驱动；路由切换时由 <code>App.vue</code> 关闭。</li>
+</ul>
+
+<h3 id="c4-42">4.42 src/renderer/components/CommentsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。
+</code></pre>
+<ul class="note">
+  <li>监听 <code>player.current.songId</code> 与 <code>UiStore.lyricsOpen</code>；面板打开且存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
+  <li>状态：加载中、暂无评论、加载失败；列表展示头像、昵称、正文与点赞数。</li>
+</ul>
+
+<h3 id="c4-43">4.43 src/renderer/components/ToastStack.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 
-<h3 id="c4-41">4.41 src/renderer/components/ToastStack.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。
-</code></pre>
-
-<h3 id="c4-42">4.42 src/renderer/views/SearchView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-44">4.44 src/renderer/views/SearchView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”。</li>
 </ul>
 
-<h3 id="c4-43">4.43 src/renderer/views/LibraryView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-45">4.45 src/renderer/views/LibraryView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>登录后加载“我的歌单”，支持刷新与退出登录；未登录显示空状态。</li>
 </ul>
 
-<h3 id="c4-44">4.44 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-46">4.46 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>按路由参数加载歌单详情；支持播放全部、单曲播放、下一首播放、失败重试与返回搜索。</li>
 </ul>
 
-<h3 id="c4-45">4.45 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-47">4.47 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
@@ -873,15 +931,15 @@ const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; 
   <li>Cookie 登录为折叠兜底入口；登录成功后路由跳转到“我的歌单”。</li>
 </ul>
 
-<h3 id="c4-46">4.46 src/renderer/views/SettingsView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-48">4.48 src/renderer/views/SettingsView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
   <li>设置项即时写盘；播放中切换默认音质会立即重载当前曲目。</li>
-  <li>账号区展示登录态、到期时间、续期与退出登录；关于区展示版本、音频引擎、许可证与非官方声明，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>账号区展示登录态、到期时间、续期与退出登录；关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
 </ul>
 
-<h3 id="c4-47">4.47 src/renderer/styles/main.css <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-49">4.49 src/renderer/styles/main.css <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无导出：主题 token 与布局样式。
 </code></pre>
 <ul class="note">
@@ -996,6 +1054,7 @@ app::requestSingleInstanceLock()
 └── stores/player::playList(songs, index)
     └── stores/player::playAt(index)
         └── stores/player::loadAndPlay(song)
+            ├── audio/engine::stop()
             ├── window.lychee.song.getUrls([song.songMid], quality)
             │   └── ipc::handle('song.getUrls')
             │       └── api/song::getStreamUrls(mids, quality)
@@ -1004,6 +1063,8 @@ app::requestSingleInstanceLock()
             │           ├── api/song::requestQuality(tracks, quality)
             │           │   └── api/client::musicu('vkey.GetVkeyServer', 'CgiGetVkey', ...)
             │           ├── 判断 purl 为空 → 下一档重试
+            │           ├── 判断全部档位均无 purl → api/user::isVipUser()
+            │           ├── 判断 VIP → 抛出 NO_STREAM（VIP：“当前内容已下架”）
             │           └── api/song::buildStreamUrl(purl)
             ├── 判断 result.url === null → composables/toast::useToast().error(NO_STREAM)
             ├── audio/engine::loadAndPlay(url)
@@ -1012,8 +1073,10 @@ app::requestSingleInstanceLock()
                     └── integration/mpris::publishState(state)
 </code></pre>
 <ul class="note">
-  <li>双击、播放全部、单曲播放都走 <code>playList</code>（替换队列）；“下一首播放”走 <code>playNext</code>，只把歌曲插入 <code>playOrder</code> 当前项之后，不改变 <code>current</code>；无 <code>current</code> 时直接以该歌曲开始播放。队列模型见 <a href="#c4-28">§4.28</a>，用户可见规则见 <a href="USER.html#u1">USER §1</a>。</li>
+  <li>双击、播放全部、单曲播放都走 <code>playList</code>（替换队列）；“下一首播放”走 <code>playNext</code>，只把歌曲插入 <code>playOrder</code> 当前项之后，不改变 <code>current</code>；无 <code>current</code> 时直接以该歌曲开始播放。队列模型见 <a href="#c4-29">§4.29</a>，用户可见规则见 <a href="USER.html#u1">USER §1</a>。</li>
   <li><code>NO_STREAM</code> 时保留 <code>current</code> / <code>index</code> 与播放条展示，<code>status = stopped</code>、<code>canPlay = false</code>；不得因再次 <code>play</code> / <code>resume</code> 或任何强制调用自动回退到上一首。</li>
+  <li>切换歌曲前先 <code>audio/engine::stop()</code>，清空旧音源，避免旧音频的时间更新影响上一首 / 下一首判断。</li>
+  <li>全部档位无链接时按 VIP 状态生成提示；VIP 检测见 <a href="#c4-13">§4.13</a>。</li>
   <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；主进程只经手链接字符串。</li>
   <li>音质回退在 <code>api/song.ts</code> 内部完成；实际档位随 <code>UrlResult.quality</code> 返回并写入播放状态。</li>
 </ul>
@@ -1047,7 +1110,7 @@ app::requestSingleInstanceLock()
 │   └── onCommand({ seekTo })
 ├── player.on('volume')
 │   └── onCommand({ setVolume })
-├── player.on('loopstatus')
+├── player.on('loopStatus')
 │   └── onCommand({ setLoopStatus })
 ├── player.on('shuffle')
 │   └── onCommand({ setShuffle })
@@ -1064,7 +1127,7 @@ app::requestSingleInstanceLock()
 <ul class="note">
   <li><code>initMpris</code> 的 <code>onCommand</code> 形参由 <code>bootstrap</code> 传入 <code>ipc::sendPlayerCommand</code>；播放控制事件经它下发，<code>raise</code> / <code>quit</code> 不经过它。<code>sendPlayerCommand</code> 的展开见 <a href="#c5-6-1">§5.6.1</a>。</li>
   <li>源码按 MPRIS 事件分别注册监听，不存在单一 <code>player.on(command)</code> 入口；<code>error</code> 事件静默降级为 <code>player = null</code>。</li>
-  <li><code>volume</code> / <code>loopstatus</code> / <code>shuffle</code> 监听与 <code>setVolume</code> / <code>setLoopStatus</code> / <code>setShuffle</code> 命令为待实现，用于补齐 MPRIS 属性同步。</li>
+  <li><code>volume</code> / <code>loopStatus</code> / <code>shuffle</code> 监听与 <code>setVolume</code> / <code>setLoopStatus</code> / <code>setShuffle</code> 命令用于 MPRIS 属性同步；<code>publishState</code> 同时写回 <code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code>。</li>
 </ul>
 
 <h4 id="c5-6-1">5.6.1 命令下发</h4>
@@ -1109,6 +1172,21 @@ app::requestSingleInstanceLock()
   <li><code>before-quit</code> 先将 <code>quitting</code> 置为 <code>true</code>，避免关闭窗口被 <code>closeToTray</code> 拦截为隐藏。</li>
   <li>退出路径不等待 <code>saveSettings</code> 完成；凭证默认保留，清除仅由 <code>login.logout()</code> 触发。</li>
   <li><code>closeToTray</code> 生效时关闭窗口仅隐藏；<code>before-quit</code> 只在托盘退出或应用退出时触发。</li>
+</ul>
+
+<h3 id="c5-9">5.9 歌词与评论</h3>
+<pre><code>components/CommentsPanel::watch([player.current.songId, ui.lyricsOpen])
+└── components/CommentsPanel::load()
+    ├── 判断 !ui.lyricsOpen || !songId → 清空并返回
+    └── window.lychee.comment.get(songId)
+        └── ipc::handle('comment.get')
+            └── api/comment::getComments(songId)
+                └── api/client::musicu('music.globalComment.CommentRead', 'GetNewCommentList', ...)
+</code></pre>
+<ul class="note">
+  <li>播放条封面调用 <code>UiStore.toggleLyrics()</code> 打开歌词 / 评论组合面板；歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>。</li>
+  <li>评论请求匿名发送，单页条数见 <a href="#c4-15">§4.15</a>；接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
+  <li>路由切换时 <code>App.vue</code> 调用 <code>UiStore.closeLyrics()</code>。</li>
 </ul>
 
 </body>

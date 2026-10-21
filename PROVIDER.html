@@ -113,6 +113,14 @@
     <td>上游业务码、HTTP 状态与网络异常统一映射为内部 <code>ErrorCode</code>；映射表见 <a href="#p4-2">§4.2</a>。</td>
   </tr>
   <tr>
+    <td>评论读取</td>
+    <td>固定匿名发送，不携带凭证；单页条数不超过 25，应用固定 20。条数与上游参数见 <a href="#p4-1">§4.1</a>，内部签名见 <a href="CORE.html#c4-15">CORE §4.15</a>。</td>
+  </tr>
+  <tr>
+    <td>VIP 状态</td>
+    <td>仅用于不可播文案判断；未登录或接口失败按非 VIP 处理，缓存见 <a href="CORE.html#c4-13">CORE §4.13</a>。</td>
+  </tr>
+  <tr>
     <td>登录会话隔离</td>
     <td>xlogin 使用独立 session 分区，只放行腾讯相关域名（<code>qq.com</code> / <code>gtimg.cn</code> / <code>weixin.qq.com</code>）导航与子窗口；登录发起前与结束 / 超时后各清理一次。</td>
   </tr>
@@ -165,7 +173,7 @@
 <h3 id="p4-1">4.1 消费的 HTTP 接口</h3>
 <table>
   <tr><th>接口</th><th>方法 / 路径</th><th>用途</th></tr>
-  <tr><td>内容 RPC</td><td><code>https://u.y.qq.com/cgi-bin/musicu.fcg</code>（内容请求 GET；登录换证 / 续期 POST）</td><td>统一 <code>musicu</code> 请求入口；搜索、歌曲详情、vkey、歌单、资料、登录与续期。</td></tr>
+  <tr><td>内容 RPC</td><td><code>https://u.y.qq.com/cgi-bin/musicu.fcg</code>（内容请求 GET；登录换证 / 续期 POST）</td><td>统一 <code>musicu</code> 请求入口；搜索、歌曲详情、vkey、歌单、资料、评论、VIP 状态、登录与续期。</td></tr>
   <tr><td>搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code></td><td>按单曲 / 歌手 / 专辑 / 歌单搜索。</td></tr>
   <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code> 与歌曲展示字段。</td></tr>
   <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>。</td></tr>
@@ -174,6 +182,8 @@
   <tr><td>会话续期</td><td><code>music.login.LoginServer / Login</code></td><td>用 <code>refresh_token</code> 换新 <code>musickey</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
   <tr><td>歌词</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回明文 LRC 与翻译。</td></tr>
+  <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲评论列表。</td></tr>
+  <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号 VIP 权益，用于不可播提示。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方扫码组件。</td></tr>
   <tr><td>OAuth 授权</td><td><code>POST https://graph.qq.com/oauth2.0/authorize</code></td><td>用 xlogin 的 Cookie 换取 <code>code</code>。</td></tr>
@@ -214,6 +224,14 @@
     <td><code>songmid</code> · <code>format</code> · <code>nobase64</code> · <code>trans</code> · <code>g_tk</code> · <code>loginUin</code> · <code>hostUin</code> · <code>inCharset</code> · <code>outCharset</code> · <code>notice</code> · <code>platform</code> · <code>needNewCode</code></td>
   </tr>
   <tr>
+    <td>歌曲评论</td>
+    <td><code>BizId</code>（数字歌曲 ID） · <code>BizType</code>（1） · <code>BizSubType</code>（2） · <code>PageSize</code>（≤25） · <code>PageNum</code> · <code>LastCommentSeqNo</code> · <code>HashTagID</code> · <code>SelfSeeEnable</code> · <code>PicEnable</code> · <code>AudioEnable</code></td>
+  </tr>
+  <tr>
+    <td>VIP 状态</td>
+    <td>无</td>
+  </tr>
+  <tr>
     <td>用户资料</td>
     <td><code>g_tk</code> · <code>format</code> · <code>inCharset</code> · <code>outCharset</code> · <code>notice</code> · <code>cid</code> · <code>needNewCode</code> · <code>loginUin</code> · <code>hostUin</code> · <code>userid</code> · <code>reqfrom</code></td>
   </tr>
@@ -230,6 +248,8 @@
   <tr><td>歌单详情 <code>CgiGetDiss</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>我的歌单 <code>GetPlaylistByUin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>歌词 <code>fcg_query_lyric_new.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=5381</code></td></tr>
+  <tr><td>歌曲评论 <code>GetNewCommentList</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>匿名；不携带 Cookie</td></tr>
+  <tr><td>VIP 状态 <code>vip_login_base</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>用户资料 <code>fcg_get_profile_homepage.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=hash33(musickey, 5381)</code></td></tr>
   <tr><td>QQ 登录换证 <code>QQLogin</code></td><td>iPhone iOS 13</td><td><code>https://y.qq.com/</code></td><td>JSON；不携带凭证</td></tr>
   <tr><td>会话续期 <code>Login</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>JSON；携带当前凭证</td></tr>
@@ -241,6 +261,7 @@
 <ul class="note">
   <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
   <li>公开 CGI 目前不需要额外签名；<code>g_tk</code> 只用于 OAuth 授权、歌词与用户资料请求。</li>
+  <li>歌曲评论单页最多 25 条；超过上限时上游返回业务码 <code>10000</code>，因此应用固定使用 20 条。评论请求匿名发送，不携带登录凭证。</li>
 </ul>
 
 <h3 id="p4-2">4.2 消息与错误</h3>
@@ -375,6 +396,33 @@ interface QqLyricResponse {
   trans?: string;
 }
 
+interface QqComment {
+  CmId?: string | number;
+  Nick?: string;
+  Avatar?: string;
+  Content?: string;
+  PubTime?: number;
+  PraiseNum?: number;
+  ReplyCnt?: number;
+}
+
+interface QqCommentList {
+  CommentList?: {
+    Comments?: QqComment[];
+    Total?: number;
+    HasMore?: number;
+  };
+}
+
+interface QqVipData {
+  svip?: number;
+  identity?: {
+    vip?: number;
+    huge_vip?: number;
+    HugeVip?: number;
+  };
+}
+
 interface QqProfileResponse {
   code?: number;
   data?: {
@@ -448,6 +496,16 @@ interface QqLoginPayload {
     <td><code>-1901</code> 表示无歌词，返回空歌词而非错误。</td>
   </tr>
   <tr>
+    <td><code>QqCommentList</code></td>
+    <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
+    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。</td>
+  </tr>
+  <tr>
+    <td><code>QqVipData</code></td>
+    <td><code>identity.vip</code> · <code>identity.huge_vip</code> / <code>HugeVip</code> · <code>svip</code></td>
+    <td>任一权益为真即视为 VIP；接口失败按非 VIP 处理。</td>
+  </tr>
+  <tr>
     <td><code>QqProfileResponse</code></td>
     <td><code>data.creator.nick</code> · <code>headpic</code></td>
     <td>头像地址的 <code>http:</code> 前缀改为 <code>https:</code>。</td>
@@ -503,6 +561,10 @@ interface QqLoginPayload {
     <td><code>lyric → lrc</code>；<code>trans</code> 去空白后为空则 <code>null</code>；<code>-1901</code> → 空歌词。</td>
   </tr>
   <tr>
+    <td><code>QqCommentList</code> → <code>CommentPage</code></td>
+    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。</td>
+  </tr>
+  <tr>
     <td><code>QqProfileResponse</code> → <code>UserProfile</code></td>
     <td><code>nick</code> 缺省回退到 <code>musicid</code>；<code>headpic</code> 的 <code>http:</code> 改为 <code>https:</code>。</td>
   </tr>
@@ -516,7 +578,7 @@ interface QqLoginPayload {
   </tr>
 </table>
 <ul class="note">
-  <li>内部目标模型 <code>Song</code> / <code>PlaylistMeta</code> / <code>PlaylistDetail</code> / <code>SearchResult</code> / <code>Lyric</code> / <code>UserProfile</code> / <code>UrlResult</code> 的定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；<code>Credential</code> 的字段定义见 <a href="#p4-3">§4.3</a>。</li>
+  <li>内部目标模型 <code>Song</code> / <code>PlaylistMeta</code> / <code>PlaylistDetail</code> / <code>SearchResult</code> / <code>Lyric</code> / <code>Comment</code> / <code>CommentPage</code> / <code>UserProfile</code> / <code>UrlResult</code> 的定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；<code>Credential</code> 的字段定义见 <a href="#p4-3">§4.3</a>。</li>
   <li><code>mediaMid</code>、<code>guid</code> 与原始 <code>purl</code> 只在主进程 API 层内部存在，不进入 IPC 数据模型。</li>
   <li><code>PayInfo</code> 仅用于界面角标；实际可播性以 vkey 结果为准。</li>
 </ul>
