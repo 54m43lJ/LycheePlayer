@@ -49,12 +49,14 @@ Documents per project, in HTML — the development docs split by boundary:
 
 **Rules**
 - finer requirements not expressible by a straightforward mechanism → complement at the end of the section; last resort — prefer mechanism over specific constraint
+- USER states user-visible behavior only; internal mechanism names (cache, probe, queue construction) and engineering constants belong to CORE.
 
 **Chapters**
 1. **TERMS** — domain keywords, never synonymized, full definition; when used, no further explanation
 2. **CONVENTIONS** — shared across interfaces (Global constraints #9)
 3. **DIAGRAMS** — mechanisms are the preferred documentation form
    - general architecture — how the application interacts with others (Component Diagram)
+   - page / URL navigation — Component Diagram with pages as nodes and navigation edges; do not maintain a route list in CONVENTIONS
    - workflows — business language; terms/API names only for well-known standards; Sequence Diagram / Activity Diagram with Swimlanes, form per [Diagrams](#diagrams-plantuml)
 4. **INTERFACES**
    - exposed API specifications — code, or pseudocode for multi-language support
