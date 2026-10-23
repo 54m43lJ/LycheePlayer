@@ -22,18 +22,24 @@
 <pre><code>lychee-player/
 ├── diagram/                                  PlantUML 图源与导出 SVG
 ├── resources/                                应用与托盘图标
+│   └── flags.conf.example                    启动参数示例
 ├── scripts/
-│   └── probe.mjs                             上游接口可达性探针
+│   ├── probe.mjs                             上游接口可达性探针
+│   └── record-fixtures.mjs                   fixture 录制脚本
+├── build/                                    electron-builder 图标资源
+├── packaging/arch/lychee-player.desktop      Arch 桌面入口
 ├── src/
 │   ├── shared/                               IPC 契约与共享常量
 │   │   ├── <a href="#c4-1">types.ts</a>                      跨进程数据模型
 │   │   ├── <a href="#c4-2">ipc.ts</a>                        主进程 / 渲染进程 API 契约
+│   │   ├── <a href="#c4-50">constants.ts</a>                 工程常量集中声明
 │   │   └── <a href="#c4-3">xlogin.ts</a>                     官方 xlogin 组件地址
 │   ├── main/                                 Electron 主进程
 │   │   ├── <a href="#c4-4">index.ts</a>                      应用入口与生命周期
 │   │   ├── <a href="#c4-5">ipc.ts</a>                        IPC 路由注册
 │   │   ├── <a href="#c4-6">settings.ts</a>                   设置持久化
 │   │   ├── <a href="#c4-7">credential.ts</a>                 凭证存取
+│   │   ├── <a href="#c4-51">startup-flags.ts</a>             启动参数文件解析与应用
 │   │   ├── api/                              上游接口层
 │   │   │   ├── <a href="#c4-8">client.ts</a>                 统一请求、错误与重试
 │   │   │   ├── <a href="#c4-9">hash.ts</a>                   hash33 / g_tk
@@ -44,10 +50,25 @@
 │   │   │   ├── <a href="#c4-14">lyric.ts</a>                 歌词
 │   │   │   ├── <a href="#c4-15">comment.ts</a>               歌曲评论
 │   │   │   ├── <a href="#c4-16">login.ts</a>                 登录与续期
-│   │   │   └── <a href="#c4-17">web-login.ts</a>             官方 xlogin 内嵌登录
+│   │   │   ├── <a href="#c4-17">web-login.ts</a>             官方 xlogin 内嵌登录
+│   │   │   ├── <a href="#c4-52">availability.ts</a>          歌曲可用性探测
+│   │   │   ├── <a href="#c4-53">recommend.ts</a>             每日推荐 / 雷达 / 猜你喜欢
+│   │   │   ├── <a href="#c4-54">favorite.ts</a>              收藏读写
+│   │   │   ├── <a href="#c4-55">playlist-write.ts</a>        歌单写入
+│   │   │   └── <a href="#c4-56">mv.ts</a>                    MV 搜索 / 详情 / 取流
+│   │   ├── cache/
+│   │   │   ├── <a href="#c4-57">playlist.ts</a>              歌单缓存
+│   │   │   └── <a href="#c4-58">audio.ts</a>                 音频体缓存
+│   │   ├── media/
+│   │   │   └── <a href="#c4-59">audio-protocol.ts</a>        本地音频协议
+│   │   ├── download/
+│   │   │   └── <a href="#c4-60">manager.ts</a>               下载管理器
 │   │   ├── integration/                      桌面集成
 │   │   │   ├── <a href="#c4-18">mpris.ts</a>                 MPRIS 服务
-│   │   │   └── <a href="#c4-19">tray.ts</a>                  系统托盘
+│   │   │   ├── <a href="#c4-19">tray.ts</a>                  系统托盘
+│   │   │   └── <a href="#c4-61">global-shortcuts.ts</a>      全局快捷键
+│   │   ├── audio/
+│   │   │   └── <a href="#c4-62">mpv.ts</a>                   mpv 子进程与 JSON IPC
 │   │   └── types/
 │   │       └── <a href="#c4-20">mpris-service.d.ts</a>       mpris-service 类型声明
 │   ├── preload/
@@ -58,18 +79,27 @@
 │       ├── <a href="#c4-24">api.ts</a>                        IpcResult 解包与错误文案
 │       ├── <a href="#c4-25">router/index.ts</a>               路由表
 │       ├── <a href="#c4-26">env.d.ts</a>                      Window 类型扩展
-│       ├── <a href="#c4-27">audio/engine.ts</a>               AudioEngine 接口与 HTML5 Audio 实现
+│       ├── audio/
+│       │   ├── <a href="#c4-27">engine.ts</a>                 AudioEngine 接口与 HTML5 Audio 实现
+│       │   └── <a href="#c4-63">remote-engine.ts</a>          mpv 远程引擎
 │       ├── stores/
 │       │   ├── <a href="#c4-28">auth.ts</a>                   登录态与登录动作
 │       │   ├── <a href="#c4-29">player.ts</a>                 播放器状态与队列
 │       │   ├── <a href="#c4-30">settings.ts</a>               设置与主题
-│       │   └── <a href="#c4-31">ui.ts</a>                     歌词 / 评论、播放队列等 UI 状态
+│       │   ├── <a href="#c4-31">ui.ts</a>                     歌词 / 评论、播放队列等 UI 状态
+│       │   ├── <a href="#c4-64">playlist.ts</a>               歌单 feed
+│       │   ├── <a href="#c4-65">recommend.ts</a>              推荐 feed
+│       │   ├── <a href="#c4-66">playlist-edit.ts</a>          歌单编辑状态
+│       │   ├── <a href="#c4-73">mv.ts</a>                        MV 播放状态
+│       │   └── <a href="#c4-74">download.ts</a>                  下载中心状态
 │       ├── utils/
 │       │   ├── <a href="#c4-32">format.ts</a>                 时长、计数、封面与歌手格式化
-│       │   └── <a href="#c4-33">lrc.ts</a>                    LRC 解析与活动行查找
+│       │   ├── <a href="#c4-33">lrc.ts</a>                    LRC / QRC 解析与活动行查找
+│       │   └── <a href="#c4-67">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
-│       │   └── <a href="#c4-35">toast.ts</a>                  Toast 队列
+│       │   ├── <a href="#c4-35">toast.ts</a>                  Toast 队列
+│       │   └── <a href="#c4-68">availability.ts</a>           可用性探测调度
 │       ├── components/
 │       │   ├── <a href="#c4-36">AppIcon.vue</a>               图标集
 │       │   ├── <a href="#c4-37">CoverArt.vue</a>              封面与占位
@@ -78,23 +108,32 @@
 │       │   ├── <a href="#c4-40">PlayerBar.vue</a>             播放条
 │       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词 / 评论容器
 │       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         评论面板
-│       │   └── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
+│       │   ├── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
+│       │   ├── <a href="#c4-69">PlaylistEditDialog.vue</a>     歌单编辑对话框
+│       │   └── <a href="#c4-70">DownloadDrawer.vue</a>         下载中心抽屉
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
 │       │   ├── <a href="#c4-45">LibraryView.vue</a>           我的歌单
 │       │   ├── <a href="#c4-46">PlaylistView.vue</a>          歌单详情
 │       │   ├── <a href="#c4-47">LoginView.vue</a>             登录页
-│       │   └── <a href="#c4-48">SettingsView.vue</a>          设置页
+│       │   ├── <a href="#c4-48">SettingsView.vue</a>          设置页
+│       │   ├── <a href="#c4-71">DiscoverView.vue</a>          发现页
+│       │   └── <a href="#c4-72">MvView.vue</a>                MV 播放页
 │       ├── <a href="#c4-49">styles/main.css</a>               主题 token、布局与组件样式
 │       └── index.html                        渲染进程 HTML 入口
-├── electron.vite.config.ts                   Electron / Vite 构建配置
+├── test/
+│   ├── api/                                  api 层回放测试
+│   ├── fixtures/                             脱敏上游响应
+│   └── replay.ts                             fetch stub 与断言辅助
+├── vitest.config.ts                          Vitest 配置
+├── electron-builder.yml                      Linux dir 打包配置
+├── install.sh                                curl 安装脚本
 ├── package.json                              依赖、脚本与版本
-├── tsconfig.json / tsconfig.node.json / tsconfig.web.json  TypeScript 配置
-└── TODO.md                                   文档修改指导
+└── tsconfig.json / tsconfig.node.json / tsconfig.web.json  TypeScript 配置
 </code></pre>
 <ul class="note">
   <li><code>src/shared/</code> 是 IPC 类型契约的唯一来源，主进程、preload 与渲染进程均从这里导入。</li>
-  <li>文件树只列源码、构建配置与资源；文档与文档样式不在其中，<code>TODO.md</code> 作为文档修改跟踪的例外保留。</li>
+  <li>文件树只列源码、构建配置与资源；文档与文档样式不在其中。</li>
   <li>带链接的文件在 <a href="#c4">§4</a> 有对应的签名小节；其余条目为脚本、配置、资源或纯展示文件。</li>
 </ul>
 
@@ -136,6 +175,30 @@
     <td><code>settings.set</code> 以浅合并更新并立即写盘；加载时对未知值回退默认值。</td>
   </tr>
   <tr>
+    <td>工程常量</td>
+    <td>所有工程常量只在 <code>shared/constants.ts</code> 声明；模块只 import；派生常量使用表达式（如 <code>PROBE_MAX_SONGS = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX</code>），禁止模块内重复字面量。</td>
+  </tr>
+  <tr>
+    <td>缓存作用域</td>
+    <td>账号相关缓存键必须带 <code>musicid</code> 或 <code>anonymous</code>；退出登录清空歌单缓存与可用性缓存，音频体缓存按账号隔离保留。</td>
+  </tr>
+  <tr>
+    <td>启动参数</td>
+    <td>启动参数文件在模块加载阶段读取并应用；命令行高于文件，文件高于环境变量与内置默认；设置页只读写当前生效文件。</td>
+  </tr>
+  <tr>
+    <td>歌单分页</td>
+    <td>固定 50 首/页；页获取并发受 <code>PLAYLIST_PREFETCH_CONCURRENCY</code> 控制（默认 1）；补全不会取消；队列构建过滤已知不可播歌曲。</td>
+  </tr>
+  <tr>
+    <td>可用性探测</td>
+    <td>探测只更新歌单歌曲元数据，不修改播放队列或当前播放；队列入队时按 <code>playable !== false</code> 过滤。</td>
+  </tr>
+  <tr>
+    <td>fixture 回放</td>
+    <td>测试默认不访问真实上游；请求匹配、脱敏、录制与更新流程见 <code>test/fixtures/</code> 与 <code>scripts/record-fixtures.mjs</code>。</td>
+  </tr>
+  <tr>
     <td>单实例</td>
     <td>应用启动时请求单实例锁；第二个实例只唤醒并聚焦已有主窗口，不创建新进程。</td>
   </tr>
@@ -146,7 +209,7 @@
 </table>
 
 <ul class="note">
-  <li>工程常量在各自源文件的签名小节中声明；推荐值只以注释形式给出，不构成赋值；UI 视觉字面量见 <a href="USER.html#u5">USER §5</a>。</li>
+  <li>工程常量统一在 <a href="#c4-50">§4.50</a> 声明；推荐值只以注释形式给出，不构成赋值；UI 视觉字面量见 <a href="USER.html#u5">USER §5</a>。</li>
 </ul>
 
 <h2 id="c3">3. SBOM</h2>
@@ -156,7 +219,9 @@
   <tr><th>依赖</th><th>在本项目中的作用</th></tr>
   <tr><td><code>electron</code></td><td>桌面壳、主进程 / preload / 渲染进程运行时、<code>WebContentsView</code> 与 <code>safeStorage</code>。</td></tr>
   <tr><td><code>vue</code></td><td>渲染进程 UI 框架。</td></tr>
-  <tr><td><code>pinia</code></td><td>渲染进程状态管理（player / auth / settings / ui）。</td></tr>
+  <tr><td><code>pinia</code></td><td>渲染进程状态管理（player / auth / settings / ui / playlist / recommend / playlist-edit）。</td></tr>
+  <tr><td><code>electron-builder</code></td><td>Linux <code>dir</code> 打包与 tar.gz 产物。</td></tr>
+  <tr><td><code>vitest</code></td><td>api 层 fixture 回放测试。</td></tr>
   <tr><td><code>vue-router</code></td><td>Hash 路由与页面切换。</td></tr>
   <tr><td><code>mpris-service</code></td><td>MPRIS D-Bus 服务与属性 / 方法发布。</td></tr>
   <tr><td><code>typescript</code></td><td>主进程、preload、shared 与渲染进程类型检查。</td></tr>
@@ -168,10 +233,14 @@
 </table>
 <ul class="note">
   <li>版本与许可证以 <code>package.json</code> / <code>package-lock.json</code> 为准；本表只记录依赖在本项目中的职责。</li>
+  <li>mpv 是外部系统运行依赖，不写入 npm 清单；版本与许可证见 <a href="BUILD.html#b9">BUILD</a> 的运行依赖。</li>
 </ul>
 
 <h2 id="c4">4. Internal types &amp; method signatures</h2>
 <p><a href="#top">↑</a></p>
+<ul class="note">
+  <li>工程常量统一见 <a href="#c4-50">§4.50</a>；各模块签名不再重复声明常量。</li>
+</ul>
 
 <h3 id="c4-1">4.1 src/shared/types.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export type Quality = '128k' | '320k' | 'flac';
@@ -182,6 +251,7 @@ export type ErrorCode =
   | 'NO_STREAM'          // 各档音质均无播放链接
   | 'UPSTREAM_CHANGED'   // 上游响应结构与预期不符
   | 'QUOTA_LIMITED'      // 上游限流
+  | 'NO_PERMISSION'      // 当前账号无权执行该写操作
   | 'INTERNAL';          // 主进程内部错误
 
 export interface IpcError {
@@ -217,11 +287,15 @@ export interface Song {
   pay: PayInfo;
 }
 
+export type PlaylistKind = 'normal' | 'favorites';
+
 export interface PlaylistMeta {
   id: string;
   name: string;
   coverUrl: string;
   songCount: number;
+  kind: PlaylistKind;
+  editable: boolean;
 }
 
 export interface PlaylistDetail {
@@ -241,11 +315,13 @@ export interface SearchResult {
   singers: Singer[];
   albums: Album[];
   playlists: PlaylistMeta[];
+  mvs?: MvSummary[];
   total: number;
 }
 
 export interface Lyric {
-  lrc: string;
+  format: 'lrc' | 'qrc';
+  text: string;
   trans: string | null;
 }
 
@@ -265,6 +341,99 @@ export interface CommentPage {
   hasMore: boolean;
 }
 
+export interface SongAvailability {
+  songMid: string;
+  playable: boolean;
+  maxQuality: Quality | null;
+  checkedAtMs: number;
+}
+
+export interface ProbeOptions {
+  force?: boolean;
+}
+
+export interface PlaylistCacheEntry {
+  meta: PlaylistMeta;
+  songs: Song[];
+  total: number;
+  complete: boolean;
+  fetchedAtMs: number;
+}
+
+export interface PlaylistPage {
+  meta: PlaylistMeta;
+  songs: Song[];
+  offset: number;
+  total: number;
+  hasMore: boolean;
+}
+
+export interface PlaylistPageResult {
+  page: PlaylistPage;
+  fetchedAtMs: number;
+  stale: boolean;
+  fromCache: boolean;
+}
+
+export interface RecommendSection {
+  id: 'daily' | 'radar' | 'guess';
+  title: string;
+  songs: Song[];
+  playlists: PlaylistMeta[];
+  refreshedAtMs: number;
+}
+
+export interface RecommendFeed {
+  sections: RecommendSection[];
+}
+
+export interface FavoriteState {
+  songMid: string;
+  favorited: boolean;
+}
+
+export interface PlaylistEditResult {
+  meta: PlaylistMeta;
+  songs?: Song[];
+}
+
+export interface MvSummary {
+  mvId: string;
+  name: string;
+  singerName: string;
+  coverUrl: string;
+}
+
+export interface MvDetail extends MvSummary {
+  description: string;
+  publishDate: string;
+}
+
+export interface MvStream {
+  mvId: string;
+  quality: 'sd' | 'hd' | 'fhd';
+  url: string | null;
+}
+
+export interface DownloadTask {
+  id: string;
+  songMid: string;
+  name: string;
+  quality: Quality;
+  filePath: string;
+  coverPath: string | null;
+  status: 'pending' | 'downloading' | 'paused' | 'done' | 'failed';
+  receivedBytes: number;
+  totalBytes: number;
+  error: string;
+}
+
+export interface MpvState {
+  available: boolean;
+  version: string | null;
+  playing: boolean;
+}
+
 export interface Credential {}   //见 PROVIDER §4.3
 
 export interface UrlResult {
@@ -277,6 +446,8 @@ export interface Settings {
   defaultQuality: 'auto' | Quality;
   closeToTray: boolean;
   theme: 'dark' | 'light';
+  audioCacheEnabled: boolean;
+  shortcuts: Partial&lt;Record&lt;'toggleWindow' | 'playPause' | 'next' | 'previous', string&gt;&gt;;
 }
 
 export interface AuthStatus {
@@ -318,16 +489,35 @@ export interface EmbedRect {
   width: number;
   height: number;
 }
+
+export interface StartupFlag {
+  kind: 'switch' | 'argument';
+  name?: string;
+  value?: string;
+  raw: string;
+}
+
+export interface FlagsFile {
+  path: string;
+  content: string;
+}
 </code></pre>
 <ul class="note">
   <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；其续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态。</li>
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
   <li><code>Comment</code> / <code>CommentPage</code> 是 <code>comment.get</code> 的跨 IPC 数据模型；原始字段映射见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
-  <li><code>PlaylistDetail.songs</code> 是歌单当前已载入的歌曲；上游分页补齐后一次性返回。</li>
+  <li><code>PlaylistDetail.songs</code> 是歌单当前已载入的歌曲；对外分页接口使用 <code>PlaylistPage</code> / <code>PlaylistPageResult</code>。</li>
+  <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。</li>
+  <li><code>Lyric.format</code> 为 <code>lrc</code> / <code>qrc</code>；逐字行类型见 <a href="#c4-33">§4.33</a>。</li>
+  <li><code>ProbeOptions</code> / <code>SongAvailability</code> 是 <code>song.probe</code> 的跨 IPC 模型；探测结果只更新歌单歌曲元数据。</li>
 </ul>
 
 <h3 id="c4-2">4.2 src/shared/ipc.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export interface LycheeApi {
+  flags: {
+    get(): Promise&lt;IpcResult&lt;FlagsFile&gt;&gt;;
+    save(content: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
+  };
   login: {
     getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
@@ -341,10 +531,42 @@ export interface EmbedRect {
   };
   song: {
     getUrls(mids: string[], quality: Quality): Promise&lt;IpcResult&lt;UrlResult[]&gt;&gt;;
+    probe(mids: string[], options?: ProbeOptions): Promise&lt;IpcResult&lt;SongAvailability[]&gt;&gt;;
   };
   playlist: {
-    get(id: string): Promise&lt;IpcResult&lt;PlaylistDetail&gt;&gt;;
+    get(id: string, options?: { offset?: number; force?: boolean }): Promise&lt;IpcResult&lt;PlaylistPageResult&gt;&gt;;
     listMine(): Promise&lt;IpcResult&lt;PlaylistMeta[]&gt;&gt;;
+    prefetch(ids: string[]): void;
+    create(name: string): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
+    rename(id: string, name: string): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
+    remove(id: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
+    addSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
+    removeSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
+  };
+  favorite: {
+    get(mids: string[]): Promise&lt;IpcResult&lt;FavoriteState[]&gt;&gt;;
+    toggle(songMid: string): Promise&lt;IpcResult&lt;FavoriteState&gt;&gt;;
+  };
+  recommend: {
+    get(): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
+    refresh(): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
+  };
+  mv: {
+    search(keyword: string, pageNo: number): Promise&lt;IpcResult&lt;SearchResult&gt;&gt;;
+    getDetail(mvId: string): Promise&lt;IpcResult&lt;MvDetail&gt;&gt;;
+    getStream(mvId: string, quality: MvStream['quality']): Promise&lt;IpcResult&lt;MvStream&gt;&gt;;
+  };
+  download: {
+    list(): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
+    start(songMid: string, quality: Quality): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
+    pause(id: string): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
+    resume(id: string): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
+    remove(id: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
+    clearCompleted(): Promise&lt;IpcResult&lt;null&gt;&gt;;
+  };
+  mpv: {
+    getState(): Promise&lt;IpcResult&lt;MpvState&gt;&gt;;
+    setEnabled(enabled: boolean): Promise&lt;IpcResult&lt;MpvState&gt;&gt;;
   };
   user: {
     getProfile(): Promise&lt;IpcResult&lt;UserProfile&gt;&gt;;
@@ -376,7 +598,7 @@ export interface EmbedRect {
 </ul>
 
 <h3 id="c4-3">4.3 src/shared/xlogin.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export declare const XLOGIN_URL: string;   //见 PROVIDER §4.1
+<pre><code>export { XLOGIN_URL } from './constants';   //见 PROVIDER §4.1
 </code></pre>
 
 <h3 id="c4-4">4.4 src/main/index.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -386,10 +608,9 @@ function checkCredentialStore(): Promise&lt;void&gt;;
 function configureLinuxDisplay(): void;
 function showMainWindow(): void;
 
-declare const SESSION_REFRESH_INTERVAL_MS: number;   // 推荐值 30 × 60_000 ms；会话续期定时器间隔
 </code></pre>
 <ul class="note">
-  <li>模块加载阶段完成 Linux 显示后端与启动参数配置；<code>bootstrap()</code> 只在 <code>app.whenReady()</code> 后执行一次。</li>
+  <li>模块加载阶段完成 Linux 显示后端与启动参数配置；<code>bootstrap()</code> 只在 <code>app.whenReady()</code> 后执行一次。启动参数由 <a href="#c4-51">§4.51</a> 读取并应用。</li>
   <li>单实例锁、<code>second-instance</code>、<code>before-quit</code> 等应用事件在该文件内注册。</li>
 </ul>
 
@@ -400,10 +621,9 @@ export function sendPlayerCommand(command: MprisCommand): void;
 function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;): Promise&lt;IpcResult&lt;T&gt;&gt;;
 function handle(channel: string, fn: (...args: any[]) =&gt; Promise&lt;unknown&gt;): void;
 
-declare const IPC_SONG_MIDS_MAX: number;   // 推荐值 100；song.getUrls 单次批量上限
 </code></pre>
 <ul class="note">
-  <li><code>registerIpc</code> 注册全部请求型通道与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>。</li>
+  <li><code>registerIpc</code> 注册全部请求型通道与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>；<code>player:state</code> 同时分发到 MPRIS 与托盘。</li>
   <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程。</li>
 </ul>
 
@@ -457,11 +677,6 @@ export function musicu&lt;T&gt;(
 ): Promise&lt;T&gt;;
 export function mapUpstreamCode(code: number, context: string): UpstreamError;
 
-declare const UPSTREAM_TIMEOUT_MS: number;        // 推荐值 15_000 ms；单次上游请求超时
-declare const UPSTREAM_RETRY_ATTEMPTS: number;    // 推荐值 3；HTTP 非 2xx / 429 / 瞬时繁忙的最大尝试次数
-declare const UPSTREAM_NETWORK_BACKOFF_MS: number; // 推荐值 400 ms；HTTP 非 2xx 重试的基础退避，指数退避
-declare const UPSTREAM_QUOTA_BACKOFF_MS: number;  // 推荐值 600 ms；HTTP 限流重试的基础退避，指数退避
-declare const MUSICU_BUSY_BACKOFF_MS: number;     // 推荐值 500 ms；瞬时繁忙码（2001 / 104604）重试的基础退避，指数退避
 </code></pre>
 <ul class="note">
   <li><code>upstreamRequest</code> 负责 UA / Referer / Cookie 注入、超时、HTTP 错误与 HTTP 非 2xx 退避；<code>musicu</code> 负责组装 <code>comm</code> / <code>req_0</code> 并处理瞬时繁忙码。</li>
@@ -475,16 +690,15 @@ declare const MUSICU_BUSY_BACKOFF_MS: number;     // 推荐值 500 ms；瞬时�
 <h3 id="c4-10">4.10 src/main/api/search.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function searchByType(req: SearchRequest): Promise&lt;SearchResult&gt;;
 
-declare const SEARCH_EMPTY_RETRY_MS: number;      // 推荐值 350 ms；搜索空结果重试延迟
-declare const SEARCH_EMPTY_RETRY_COUNT: number;   // 推荐值 1；搜索空结果重试次数
-declare const SEARCH_PAGE_NO_MAX: number;         // 推荐值 100；search.byType 页码上限
-declare const SEARCH_PAGE_SIZE_DEFAULT: number;   // 推荐值 20；搜索每页默认条数
-declare const SEARCH_PAGE_SIZE_MAX: number;       // 推荐值 50；搜索每页最大条数
 </code></pre>
 
 <h3 id="c4-11">4.11 src/main/api/song.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getDetail(mids: string[]): Promise&lt;Song[]&gt;;
 export function getStreamUrls(mids: string[], quality: Quality): Promise&lt;UrlResult[]&gt;;
+export function resolveStreamUrls(
+  mids: string[],
+  requested: Quality
+): Promise&lt;Map&lt;string, { url: string; quality: Quality }&gt;&gt;;
 export function rawSongToSong(raw: unknown): Song;
 async function fetchTrack(mid: string): Promise&lt;unknown&gt;;
 function requestQuality(
@@ -500,18 +714,20 @@ function buildStreamUrl(purl: string): string;
 </ul>
 
 <h3 id="c4-12">4.12 src/main/api/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function getPlaylist(id: string): Promise&lt;PlaylistDetail&gt;;
+<pre><code>export function fetchPlaylistPage(
+  id: string,
+  offset: number,
+  force?: boolean
+): Promise&lt;PlaylistPage&gt;;
 export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
+export function prefetchPlaylists(ids: string[]): void;
 
-declare const PLAYLIST_PAGE_SIZE: number;   // 推荐值 100；歌单上游单页条数
-declare const PLAYLIST_PAGE_MAX: number;    // 推荐值 20；歌单本地最大分页数
 </code></pre>
 
 <h3 id="c4-13">4.13 src/main/api/user.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getProfile(): Promise&lt;UserProfile&gt;;
 export function isVipUser(): Promise&lt;boolean&gt;;
 
-declare const VIP_CACHE_MS: number;   // 推荐值 5 × 60_000 ms；VIP 状态缓存时长
 </code></pre>
 <ul class="note">
   <li><code>isVipUser</code> 通过 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a> 的 VIP 状态接口查询当前账号权益；未登录、接口失败均按非 VIP 处理。</li>
@@ -520,11 +736,13 @@ declare const VIP_CACHE_MS: number;   // 推荐值 5 × 60_000 ms；VIP 状态�
 <h3 id="c4-14">4.14 src/main/api/lyric.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getLyric(songMid: string): Promise&lt;Lyric&gt;;
 </code></pre>
+<ul class="note">
+  <li>请求 QRC 时只透传原始密文，解密在渲染进程 <a href="#c4-67">§4.67</a>；无法取得逐字数据时返回普通 LRC。</li>
+</ul>
 
 <h3 id="c4-15">4.15 src/main/api/comment.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getComments(songId: string): Promise&lt;CommentPage&gt;;
 
-declare const COMMENT_PAGE_SIZE: number;   // 推荐值 20；单次评论请求条数（上游上限 25）
 </code></pre>
 <ul class="note">
   <li>评论读取固定匿名发送，不携带当前登录凭证；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
@@ -539,8 +757,6 @@ export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
 async function refreshMusickey(current: Credential): Promise&lt;Credential&gt;;
 async function probeCredential(credential: Credential): Promise&lt;'ok' | 'expired'&gt;;
 
-declare const SESSION_REFRESH_AHEAD_MS: number;    // 推荐值 10 × 60_000 ms；凭证到期前提前续期的窗口
-declare const SESSION_REFRESH_FALLBACK_MS: number; // 推荐值 6 × 60 × 60_000 ms；凭证无到期时间时的续期间隔
 </code></pre>
 <ul class="note">
   <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
@@ -560,9 +776,6 @@ function onDidNavigate(event: ElectronEvent, url: string): void;
 function extractOauthCode(url: string): string | null;
 function runEmbedLogin(): Promise&lt;Credential&gt;;
 
-declare const LOGIN_EMBED_TIMEOUT_MS: number;   // 推荐值 5 × 60_000 ms；内嵌 xlogin 登录总超时
-declare const LOGIN_COOKIE_POLL_MS: number;     // 推荐值 1000 ms；内嵌登录读取 session Cookie 的轮询间隔
-declare const LOGIN_EMBED_PARTITION: string;    // 推荐值 'lychee-xlogin'；登录组件的独立 session 分区名
 </code></pre>
 <ul class="note">
   <li><code>setEmbedBounds</code> 由渲染进程上报的页面坐标驱动 <code>WebContentsView</code> 的创建、定位与首次加载；<code>null</code> 摘除视图。</li>
@@ -587,8 +800,13 @@ export function publishState(state: PlayerState | null): void;
 }
 
 export function initTray(actions: TrayActions): void;
+export function updateTray(state: PlayerState | null): void;
 export function destroyTray(): void;
 </code></pre>
+<ul class="note">
+  <li><code>updateTray</code> 同步播放 / 暂停菜单文案、上一首 / 下一首可用状态与 tooltip；无当前歌曲时禁用播放控制。</li>
+  <li>单击托盘图标只显示主窗口；GNOME 需要 AppIndicator 扩展，初始化失败静默降级。</li>
+</ul>
 
 <h3 id="c4-20">4.20 src/main/types/mpris-service.d.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>declare module 'mpris-service' {
@@ -638,11 +856,12 @@ export function destroyTray(): void;
 </code></pre>
 
 <h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、歌词 / 评论面板、播放队列面板与 Toast。
+<pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、歌词 / 评论面板、播放队列面板、下载抽屉与 Toast。
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
   <li>监听路由变化并关闭歌词 / 评论面板，规则见 <a href="USER.html#u2">USER §2</a>。</li>
+  <li>挂载下载抽屉；与歌词 / 评论、播放队列面板互斥。</li>
 </ul>
 
 <h3 id="c4-24">4.24 src/renderer/api.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -658,6 +877,9 @@ export function describeError(error: unknown): string;
 <pre><code>const router: Router = createRouter({ history: createWebHashHistory(), routes: [] });   // hash history；/ → /search
 export default router;
 </code></pre>
+<ul class="note">
+  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>。</li>
+</ul>
 
 <h3 id="c4-26">4.26 src/renderer/env.d.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>declare global {
@@ -693,6 +915,7 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine;
 <ul class="note">
   <li>渲染进程唯一直接持有 HTML5 Audio 的模块；播放器 store 只依赖 <code>AudioEngine</code> 接口。</li>
   <li><code>stop</code> 暂停并清空旧音源；切换歌曲前调用，避免旧音频的 <code>timeupdate</code> 干扰新歌状态。</li>
+  <li>播放源支持 <code>lychee-audio://</code> 本地协议 URL；缓存命中由主进程协议提供。</li>
   <li>替换为 mpv 等引擎时实现同一接口，事件回调与命令面不变。</li>
 </ul>
 
@@ -719,6 +942,11 @@ interface AuthStore {
 <h3 id="c4-29">4.29 src/renderer/stores/player.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export type PlayMode = 'sequence' | 'repeat-all' | 'repeat-one' | 'shuffle';
 
+export interface QueueSource {
+  kind: 'playlist';
+  id: string;
+}
+
 export const PLAY_MODE_LABEL: Record&lt;PlayMode, string&gt;;
 
 export function usePlayerStore(): PlayerStore;
@@ -739,14 +967,20 @@ interface PlayerStore {
   readonly loading: boolean;
   readonly canPlay: boolean;
   readonly progress: number;
+  readonly queueSource: QueueSource | null;
+  readonly queueBuilding: boolean;
+  readonly playHistory: Song[];
 
   playList(songs: Song[], startIndex?: number): void;
-  playNext(song: Song): void;
+  startPlaylistPlayback(song: Song, source: QueueSource): void;
+  appendPlaylistQueue(current: Song, fullSongs: Song[]): void;
+  addNext(song: Song): void;
+  playNext(): void;
   playAt(index: number): void;
   toggle(): void;
   pause(): void;
-  next(auto?: boolean): void;
   previous(): void;
+  clearPlayHistory(): void;
   seek(positionMs: number): void;
   setVolume(volume: number): void;
   setQuality(quality: Quality): void;
@@ -759,11 +993,11 @@ interface PlayerStore {
   clearQueue(): void;
 }
 
-declare const PLAYER_STATE_THROTTLE_MS: number;   // 推荐值 900 ms；播放状态推送的节流窗口
 </code></pre>
 <ul class="note">
-  <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，用于列表循环与随机预览，播放队列面板只绑定 <code>queue</code>。<code>playNext</code> 将歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>；已在其中则移动，<code>current</code> 本身不操作；无 <code>current</code> 时直接以该歌曲开始播放。用户可见规则见 <a href="USER.html#u1">USER §1</a> 与 <a href="USER.html#u5-2-9">USER §5.2.9</a>。</li>
-  <li><code>playOrder</code>、<code>queue</code> 与 <code>playNext</code> 按上述语义实现；<code>canPlay</code> 同时考虑 <code>current</code> 与 <code>queue</code>。当前歌曲不可播时 <code>canPlay</code> 为 <code>false</code>，<code>play</code> / <code>resume</code> 不执行；该标志不阻止显式的上一首 / 下一首切换。队列面板的移除 / 清空直接修改 <code>playOrder</code>，不改变 <code>current</code>。</li>
+  <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，播放队列面板只绑定 <code>queue</code>。<code>addNext(song)</code> 只把歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>，不切歌、不写历史；无 <code>current</code> 时直接以该歌曲开始播放。</li>
+  <li><code>playNext()</code> 负责手动下一首与自动续播：确定切换到下一首（含列表循环回绕）时，先把原 <code>current</code> 追加到 <code>playHistory</code>，再调用 <code>playAt()</code>；到队尾停止或单曲循环重播不写入历史。<code>playAt()</code> 只做低层定位与加载，不写历史。</li>
+  <li><code>startPlaylistPlayback</code> / <code>appendPlaylistQueue</code> 维护 <code>queueSource</code> 与 <code>queueBuilding</code>；队列构建时按 <code>playable !== false</code> 过滤已知不可播歌曲。当前曲不可播时由播放条自行验证并沿队列向后尝试到可播或队列空，不读取探测结果。</li>
   <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放按洗牌后的 <code>playOrder</code> 进行。</li>
   <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档。</li>
   <li><code>sendState</code> 以节流方式发布 <code>player:state</code>，包含 <code>volume</code> / <code>loopStatus</code> / <code>shuffle</code>；音量持久化在 <code>localStorage</code>。</li>
@@ -807,14 +1041,23 @@ export function playlistSubtitle(playlist: PlaylistMeta): string;
 </code></pre>
 
 <h3 id="c4-33">4.33 src/renderer/utils/lrc.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export interface LyricLine {
+<pre><code>export interface LyricWord {
+  startMs: number;
+  durationMs: number;
+  text: string;
+}
+
+export interface LyricLine {
   timeMs: number;
+  durationMs: number | null;
   text: string;
   trans: string | null;
+  words: LyricWord[] | null;
 }
 
 export function parseLyric(lrc: string, trans: string | null): LyricLine[];
 export function activeLyricIndex(lines: LyricLine[], positionMs: number): number;
+export function activeLyricWord(line: LyricLine, positionMs: number): LyricWord | null;
 </code></pre>
 
 <h3 id="c4-34">4.34 src/renderer/composables/lyrics.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -843,7 +1086,6 @@ export function useToast(): {
   dismiss(id: number): void;
 };
 
-declare const TOAST_DURATION_MS: number;   // 推荐值 3600 ms；Toast 自动消失时间
 </code></pre>
 
 <h3 id="c4-36">4.36 src/renderer/components/AppIcon.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -864,13 +1106,27 @@ declare const TOAST_DURATION_MS: number;   // 推荐值 3600 ms；Toast 自动�
 
 <h3 id="c4-39">4.39 src/renderer/components/SongTable.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const props = withDefaults(
-  defineProps&lt;{ songs: Song[]; activeMid?: string | null; showAlbum?: boolean }&gt;(),
-  { activeMid: null, showAlbum: true }
+  defineProps&lt;{
+    songs: Song[];
+    activeMid?: string | null;
+    showAlbum?: boolean;
+    availability?: Record&lt;string, SongAvailability&gt;;
+    favoriteMids?: string[];
+    downloadable?: boolean;
+  }&gt;(),
+  { activeMid: null, showAlbum: true, availability: () =&gt; ({}), favoriteMids: () =&gt; [], downloadable: true }
 );
-const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; toggle: [] }&gt;();
+const emit = defineEmits&lt;{
+  play: [index: number];
+  playNext: [index: number];
+  toggle: [];
+  favorite: [index: number];
+  download: [index: number];
+}&gt;();
 </code></pre>
 <ul class="note">
   <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由“下一首播放”按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。</li>
+  <li><code>availability</code> 提供不可播标记与最高可用音质；不可播行禁用 <code>play</code> / <code>playNext</code>。收藏与下载按钮分别发出 <code>favorite</code> / <code>download</code>；未知可用性按可播处理。</li>
 </ul>
 
 <h3 id="c4-40">4.40 src/renderer/components/PlayerBar.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -878,7 +1134,8 @@ const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; 
 </code></pre>
 <ul class="note">
   <li>点击封面切换 <code>UiStore.lyricsOpen</code>，打开歌词 / 评论面板；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
-  <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束。</li>
+  <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试到可播或队列空，不读取探测结果。</li>
+  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用。</li>
 </ul>
 
 <h3 id="c4-41">4.41 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -906,7 +1163,7 @@ const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; 
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放、暂停 / 继续与“下一首播放”。</li>
+  <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”。</li>
 </ul>
 
 <h3 id="c4-45">4.45 src/renderer/views/LibraryView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -914,13 +1171,16 @@ const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; 
 </code></pre>
 <ul class="note">
   <li>登录后加载“我的歌单”，支持刷新与退出登录；未登录显示空状态。</li>
+  <li>加载完成后只对“我喜欢”歌单调用 <code>prefetchPlaylists</code> 预热第一页；歌单卡片提供改名 / 删除 / 新建菜单。</li>
 </ul>
 
 <h3 id="c4-46">4.46 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>按路由参数加载歌单详情；支持播放全部、单曲播放、暂停 / 继续、下一首播放、失败重试与返回搜索。</li>
+  <li>按路由参数加载歌单详情；绑定 playlist feed，第一页即渲染，底部显示加载 / 重试与已载入 / 总数；离开页面不取消 feed。</li>
+  <li>支持播放全部、单曲播放、“下一首播放”与失败重试；返回入口指向“我的歌单”。</li>
+  <li>接入 <code>useAvailability</code>，按当前歌单歌曲集合触发探测；探测只更新歌单歌曲元数据。</li>
 </ul>
 
 <h3 id="c4-47">4.47 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -936,6 +1196,9 @@ const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; 
 </code></pre>
 <ul class="note">
   <li>设置项即时写盘；播放中切换默认音质会立即重载当前曲目。</li>
+  <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
+  <li>缓存区提供开关、当前占用与清理；下载区提供目录、容量与剩余空间提示；快捷键区支持录制、冲突提示与恢复默认。</li>
+  <li>音频引擎可选自动 / HTML5 / mpv；mpv 缺失时回退 HTML5 并提示；EQ / 响度归一只在 mpv 引擎下生效。</li>
   <li>账号区展示登录态、到期时间、续期与退出登录；关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
 </ul>
 
@@ -946,6 +1209,264 @@ const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; 
   <li>深色与浅色 token 定义在 <code>:root</code> / <code>[data-theme]</code>；视觉契约见 <a href="USER.html#u5">USER §5</a>。</li>
   <li>组件样式与响应式断点也在同一文件维护。</li>
 </ul>
+
+<h3 id="c4-50">4.50 src/shared/constants.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 以下名称由源码实际赋值；本节只列名称、用途与推荐值。
+export declare const UPSTREAM_TIMEOUT_MS: number;          // 推荐值 15_000 ms
+export declare const UPSTREAM_RETRY_ATTEMPTS: number;      // 推荐值 3
+export declare const UPSTREAM_NETWORK_BACKOFF_MS: number;  // 推荐值 400 ms
+export declare const UPSTREAM_QUOTA_BACKOFF_MS: number;    // 推荐值 600 ms
+export declare const MUSICU_BUSY_BACKOFF_MS: number;       // 推荐值 500 ms
+export declare const SEARCH_EMPTY_RETRY_MS: number;        // 推荐值 350 ms
+export declare const SEARCH_EMPTY_RETRY_COUNT: number;     // 推荐值 1
+export declare const SEARCH_PAGE_NO_MAX: number;           // 推荐值 100
+export declare const SEARCH_PAGE_SIZE_DEFAULT: number;     // 推荐值 20
+export declare const SEARCH_PAGE_SIZE_MAX: number;         // 推荐值 50
+export declare const PLAYLIST_PAGE_SIZE: number;           // 推荐值 50
+export declare const PLAYLIST_PAGE_MAX: number;            // 推荐值 20_000
+export declare const VIP_CACHE_MS: number;                 // 推荐值 5 × 60_000 ms
+export declare const COMMENT_PAGE_SIZE: number;            // 推荐值 20
+export declare const IPC_SONG_MIDS_MAX: number;            // 推荐值 100
+export declare const SESSION_REFRESH_INTERVAL_MS: number;  // 推荐值 30 × 60_000 ms
+export declare const SESSION_REFRESH_AHEAD_MS: number;      // 凭证到期前的续期窗口
+export declare const SESSION_REFRESH_FALLBACK_MS: number;   // 无到期时间时的续期间隔
+export declare const PLAYER_STATE_THROTTLE_MS: number;     // 推荐值 900 ms
+export declare const STARTUP_FLAGS_MAX_BYTES: number;      // 推荐值 8 × 1024
+export declare const STARTUP_FLAGS_MAX_LINES: number;      // 推荐值 64
+export declare const PLAYLIST_CACHE_TTL_MS: number;        // 推荐值 30_000 ms
+export declare const PLAYLIST_CACHE_MAX_BYTES: number;     // 推荐值 16 × 1024 × 1024
+export declare const PLAYLIST_PREFETCH_CONCURRENCY: number; // 推荐值 1；可提升到 3
+export declare const PROBE_MIDS_MAX: number;               // 推荐值 30
+export declare const PROBE_DETAIL_CONCURRENCY: number;     // 推荐值 2
+export declare const PROBE_VKEY_BATCH: number;             // 推荐值 20
+export declare const PROBE_CACHE_TTL_MS: number;           // 推荐值 10 × 60_000 ms
+export declare const PROBE_MAX_SONGS: number;              // = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX
+export declare const AUDIO_CACHE_MAX_BYTES: number;        // 推荐值 2 GiB
+export declare const XLOGIN_URL: string;                  // 官方 xlogin 组件地址
+</code></pre>
+<ul class="note">
+  <li>所有工程常量只在本文件声明；其它模块只 import。源码中是实际赋值，本签名只保留名称、用途与推荐值。</li>
+  <li><code>PROBE_MAX_SONGS</code> 使用 <code>PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX</code> 派生，当前为 1,000,000；修改页大小或页上限时自动跟随。</li>
+</ul>
+
+<h3 id="c4-51">4.51 src/main/startup-flags.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function resolveFlagsFile(argv: string[]): string;
+export function parseFlagsFile(text: string): StartupFlag[];
+export function applyStartupFlags(flags: StartupFlag[]): void;
+export function applyDefaultFlags(): void;
+export function readFlagsFile(): Promise&lt;FlagsFile&gt;;
+export function writeFlagsFile(content: string): Promise&lt;void&gt;;
+</code></pre>
+<ul class="note">
+  <li>启动参数在模块加载阶段读取并应用；<code>--flags-file</code> 由应用消费，不下发给 Chromium。</li>
+  <li>文件格式、优先级与安全边界见 <a href="USER.html#u2">USER §2</a>；设置页只读写当前生效文件。</li>
+</ul>
+
+<h3 id="c4-52">4.52 src/main/api/availability.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function probeAvailability(
+  mids: string[],
+  options?: ProbeOptions
+): Promise&lt;SongAvailability[]&gt;;
+export function clearAvailabilityCache(musicid?: string): void;
+</code></pre>
+<ul class="note">
+  <li>探测结果只更新歌单歌曲元数据；不修改播放队列、不改变当前播放。</li>
+  <li><code>PROBE_MAX_SONGS</code> 与页大小/页上限共用 <a href="#c4-50">§4.50</a> 的派生常量。</li>
+</ul>
+
+<h3 id="c4-53">4.53 src/main/api/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function fetchRecommendFeed(force?: boolean): Promise&lt;RecommendFeed&gt;;
+export function clearRecommendCache(): void;
+</code></pre>
+
+<h3 id="c4-54">4.54 src/main/api/favorite.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function getFavoriteStates(mids: string[]): Promise&lt;FavoriteState[]&gt;;
+export function toggleFavorite(songMid: string): Promise&lt;FavoriteState&gt;;
+</code></pre>
+
+<h3 id="c4-55">4.55 src/main/api/playlist-write.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function createPlaylist(name: string): Promise&lt;PlaylistMeta&gt;;
+export function renamePlaylist(id: string, name: string): Promise&lt;PlaylistMeta&gt;;
+export function removePlaylist(id: string): Promise&lt;void&gt;;
+export function addSongs(id: string, mids: string[]): Promise&lt;PlaylistMeta&gt;;
+export function removeSongs(id: string, mids: string[]): Promise&lt;PlaylistMeta&gt;;
+</code></pre>
+
+<h3 id="c4-56">4.56 src/main/api/mv.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function searchMv(keyword: string, pageNo: number): Promise&lt;SearchResult&gt;;
+export function getMvDetail(mvId: string): Promise&lt;MvDetail&gt;;
+export function getMvStream(mvId: string, quality: MvStream['quality']): Promise&lt;MvStream&gt;;
+</code></pre>
+
+<h3 id="c4-57">4.57 src/main/cache/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function readPlaylistCache(scope: string, id: string): PlaylistCacheEntry | null;
+export function writePlaylistCache(scope: string, entry: PlaylistCacheEntry): Promise&lt;void&gt;;
+export function invalidatePlaylistCache(id: string): Promise&lt;void&gt;;
+export function clearPlaylistCache(): Promise&lt;void&gt;;
+</code></pre>
+
+<h3 id="c4-58">4.58 src/main/cache/audio.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function getCachedAudio(songMid: string, quality: Quality): string | null;
+export function putCachedAudio(songMid: string, quality: Quality, filePath: string): Promise&lt;void&gt;;
+export function clearAudioCache(): Promise&lt;void&gt;;
+export function audioCacheStats(): { bytes: number; files: number };
+</code></pre>
+
+<h3 id="c4-59">4.59 src/main/media/audio-protocol.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function registerAudioProtocol(): void;
+export function audioProtocolUrl(filePath: string): string;
+</code></pre>
+
+<h3 id="c4-60">4.60 src/main/download/manager.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function listDownloads(): Promise&lt;DownloadTask[]&gt;;
+export function startDownload(songMid: string, quality: Quality): Promise&lt;DownloadTask&gt;;
+export function pauseDownload(id: string): Promise&lt;DownloadTask&gt;;
+export function resumeDownload(id: string): Promise&lt;DownloadTask&gt;;
+export function removeDownload(id: string): Promise&lt;void&gt;;
+export function clearCompletedDownloads(): Promise&lt;void&gt;;
+export function writePart(url: string, filePath: string): Promise&lt;void&gt;;
+</code></pre>
+
+<h3 id="c4-61">4.61 src/main/integration/global-shortcuts.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function registerShortcuts(bindings: Partial&lt;Record&lt;string, string&gt;&gt;): void;
+export function unregisterShortcuts(): void;
+</code></pre>
+
+<h3 id="c4-62">4.62 src/main/audio/mpv.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function isMpvAvailable(): Promise&lt;MpvState&gt;;
+export function startMpv(): Promise&lt;void&gt;;
+export function stopMpv(): Promise&lt;void&gt;;
+export function mpvCommand(command: string, args?: unknown[]): Promise&lt;unknown&gt;;
+</code></pre>
+
+<h3 id="c4-63">4.63 src/renderer/audio/remote-engine.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function createRemoteEngine(handlers: AudioEngineHandlers): AudioEngine;
+</code></pre>
+
+<h3 id="c4-64">4.64 src/renderer/stores/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function usePlaylistStore(): PlaylistStore;
+
+interface PlaylistStore {
+  readonly feed: PlaylistFeed | null;
+  load(id: string): Promise&lt;void&gt;;
+  retry(): Promise&lt;void&gt;;
+}
+
+export interface PlaylistFeed {
+  meta: PlaylistMeta | null;
+  songs: Song[];
+  total: number;
+  status: 'idle' | 'loading' | 'partial' | 'complete' | 'error';
+  stale: boolean;
+  error: string;
+  loadToken: number;
+}
+</code></pre>
+
+<h3 id="c4-65">4.65 src/renderer/stores/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function useRecommendStore(): RecommendStore;
+
+interface RecommendStore {
+  readonly feed: RecommendFeed | null;
+  readonly loading: boolean;
+  load(force?: boolean): Promise&lt;void&gt;;
+}
+</code></pre>
+
+<h3 id="c4-66">4.66 src/renderer/stores/playlist-edit.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function usePlaylistEditStore(): PlaylistEditStore;
+
+interface PlaylistEditStore {
+  readonly editing: boolean;
+  readonly busy: boolean;
+  create(name: string): Promise&lt;void&gt;;
+  rename(id: string, name: string): Promise&lt;void&gt;;
+  remove(id: string): Promise&lt;void&gt;;
+  addSongs(id: string, mids: string[]): Promise&lt;void&gt;;
+  removeSongs(id: string, mids: string[]): Promise&lt;void&gt;;
+  toggleFavorite(songMid: string): Promise&lt;void&gt;;
+}
+</code></pre>
+
+<h3 id="c4-67">4.67 src/renderer/utils/qrc.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function decryptQrc(ciphertext: string): string;
+export function parseQrcLyric(text: string, trans: string | null): LyricLine[];
+</code></pre>
+
+<h3 id="c4-68">4.68 src/renderer/composables/availability.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function useAvailability(songs: Ref&lt;Song[]&gt;): {
+  availability: Ref&lt;Record&lt;string, SongAvailability&gt;&gt;;
+  loading: Ref&lt;boolean&gt;;
+  refresh(): Promise&lt;void&gt;;
+};
+</code></pre>
+
+<h3 id="c4-69">4.69 src/renderer/components/PlaylistEditDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+const props = defineProps&lt;{ open: boolean; playlist?: PlaylistMeta | null }&gt;();
+const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
+</code></pre>
+
+<h3 id="c4-70">4.70 src/renderer/components/DownloadDrawer.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+// 无 props / emits；绑定 download IPC 与下载设置。
+</code></pre>
+
+<h3 id="c4-71">4.71 src/renderer/views/DiscoverView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+// 无 props / emits；使用 recommend store。
+</code></pre>
+
+<h3 id="c4-72">4.72 src/renderer/views/MvView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+// 无 props / emits；路由参数 mvId。
+</code></pre>
+
+<h3 id="c4-73">4.73 src/renderer/stores/mv.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function useMvStore(): MvStore;
+
+interface MvStore {
+  readonly detail: MvDetail | null;
+  readonly stream: MvStream | null;
+  readonly loading: boolean;
+  load(mvId: string): Promise&lt;void&gt;;
+  setQuality(quality: MvStream['quality']): Promise&lt;void&gt;;
+}
+</code></pre>
+
+<h3 id="c4-74">4.74 src/renderer/stores/download.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 待实现，可以根据实际情况调整
+export function useDownloadStore(): DownloadStore;
+
+interface DownloadStore {
+  readonly tasks: DownloadTask[];
+  readonly open: boolean;
+  load(): Promise&lt;void&gt;;
+  start(songMid: string, quality: Quality): Promise&lt;void&gt;;
+  pause(id: string): Promise&lt;void&gt;;
+  resume(id: string): Promise&lt;void&gt;;
+  remove(id: string): Promise&lt;void&gt;;
+}
+</code></pre>
 
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
@@ -958,6 +1479,7 @@ const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; 
 ├── ipc::registerIpc()
 ├── integration/mpris::initMpris(ipc::sendPlayerCommand)
 ├── integration/tray::initTray(actions)
+├── integration/global-shortcuts::registerShortcuts(settings.shortcuts)
 ├── index::createMainWindow()
 ├── api/login::refreshIfNeeded()
 └── setInterval(30 * 60_000)
@@ -971,7 +1493,13 @@ const emit = defineEmits&lt;{ play: [index: number]; playNext: [index: number]; 
 
 <h3 id="c5-2">5.2 启动参数与单实例</h3>
 <pre><code>app::setName('Lychee Player')
-app.commandLine.appendSwitch('password-store', 'gnome-libsecret')
+
+index::resolveFlagsFile(process.argv)
+└── startup-flags::readFlagsFile()
+    └── startup-flags::parseFlagsFile(text)
+        └── startup-flags::applyStartupFlags(flags)
+
+index::applyDefaultFlags()
 
 index::configureLinuxDisplay()
 ├── 判断 process.platform !== 'linux' → return
@@ -992,7 +1520,8 @@ app::requestSingleInstanceLock()
         └── index::bootstrap()
 </code></pre>
 <ul class="note">
-  <li>启动参数在模块加载阶段固定；显式命令行 <code>--ozone-platform</code> 优先于环境变量与会话检测。</li>
+  <li>启动参数在模块加载阶段固定；优先级为显式命令行 &gt; flags 文件 &gt; 环境变量 &gt; 内置默认。</li>
+  <li>启动参数文件格式与安全边界见 <a href="USER.html#u2">USER §2</a>；设置页保存后下次启动生效。</li>
 </ul>
 
 <h3 id="c5-3">5.3 扫码登录（内嵌 xlogin）</h3>
@@ -1070,14 +1599,15 @@ app::requestSingleInstanceLock()
             ├── audio/engine::loadAndPlay(url)
             └── window.lychee.player.sendState(state)
                 └── ipcMain.on('player:state')
-                    └── integration/mpris::publishState(state)
+                    ├── integration/mpris::publishState(state)
+                    └── integration/tray::updateState(state)
 </code></pre>
 <ul class="note">
-  <li>双击、播放全部、单曲播放都走 <code>playList</code>（替换队列）；“下一首播放”走 <code>playNext</code>，只把歌曲插入 <code>playOrder</code> 当前项之后，不改变 <code>current</code>；无 <code>current</code> 时直接以该歌曲开始播放。队列模型见 <a href="#c4-29">§4.29</a>，用户可见规则见 <a href="USER.html#u1">USER §1</a>。</li>
-  <li><code>NO_STREAM</code> 时保留 <code>current</code> / <code>index</code> 与播放条展示，<code>status = stopped</code>、<code>canPlay = false</code>；不得因再次 <code>play</code> / <code>resume</code> 或任何强制调用自动回退到上一首。</li>
+  <li>双击、播放全部、单曲播放都走 <code>playList</code>（替换队列）；“下一首播放”走 <code>addNext</code>，只把歌曲插入 <code>playOrder</code> 当前项之后，不改变 <code>current</code>；无 <code>current</code> 时直接以该歌曲开始播放。队列模型见 <a href="#c4-29">§4.29</a>，用户可见规则见 <a href="USER.html#u1">USER §1</a>。</li>
+  <li>当前曲不可播时，播放条沿队列向后尝试到可播或队列空；其他加载失败保留当前歌曲与播放条，<code>status = stopped</code>，不自动跳下一首、不自动回退上一首。</li>
   <li>切换歌曲前先 <code>audio/engine::stop()</code>，清空旧音源，避免旧音频的时间更新影响上一首 / 下一首判断。</li>
   <li>全部档位无链接时按 VIP 状态生成提示；VIP 检测见 <a href="#c4-13">§4.13</a>。</li>
-  <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；主进程只经手链接字符串。</li>
+  <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；缓存命中走本地协议，未命中由主进程取流并写缓存。</li>
   <li>音质回退在 <code>api/song.ts</code> 内部完成；实际档位随 <code>UrlResult.quality</code> 返回并写入播放状态。</li>
 </ul>
 
@@ -1086,7 +1616,7 @@ app::requestSingleInstanceLock()
 ├── 判断 mode === 'repeat-one'
 │   ├── stores/player::seek(0)
 │   └── stores/player::resume()
-└── stores/player::next(true)
+└── stores/player::playNext()
     └── stores/player::playAt(index + 1)
 </code></pre>
 
@@ -1163,6 +1693,7 @@ app::requestSingleInstanceLock()
 <h4 id="c5-8-2">5.8.2 应用退出</h4>
 <pre><code>app.on('before-quit')
 ├── index::clearInterval(refreshTimer)
+├── integration/global-shortcuts::unregisterShortcuts()
 ├── integration/mpris::publishState(null)
 ├── integration/tray::destroyTray()
 ├── api/web-login::disposeEmbedView()
@@ -1186,8 +1717,106 @@ app::requestSingleInstanceLock()
 <ul class="note">
   <li>播放条封面调用 <code>UiStore.toggleLyrics()</code> 打开歌词 / 评论组合面板；歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>。</li>
   <li>评论请求匿名发送，单页条数见 <a href="#c4-15">§4.15</a>；接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
+  <li>歌词请求可返回 QRC；解密与逐字解析在 <a href="#c4-67">§4.67</a>，无 QRC 时回退 LRC 整行高亮。</li>
   <li>路由切换时 <code>App.vue</code> 调用 <code>UiStore.closeLyrics()</code>。</li>
 </ul>
+
+<h3 id="c5-10">5.10 歌单缓存与预取</h3>
+<pre><code>views/LibraryView::load()
+└── window.lychee.playlist.listMine()
+    └── ipc::handle('playlist.listMine')
+        └── api/playlist::listMine()
+            └── 判断 kind === 'favorites' → window.lychee.playlist.prefetch([id])
+                └── ipc::handle('playlist.prefetch')
+                    └── api/playlist::prefetchPlaylists(ids)
+                        └── api/playlist::fetchPlaylistPage(id, 0)
+                            └── cache/playlist::writePlaylistCache(scope, entry)
+</code></pre>
+<ul class="note">
+  <li>只预取“我喜欢”第一页；缓存 TTL、字节上限与页获取并发见 <a href="#c4-50">§4.50</a>。</li>
+  <li>缓存过期时先返回缓存并标记 <code>stale</code>，再由 feed 从第一页重验证。</li>
+</ul>
+
+<h3 id="c5-11">5.11 歌单可用性检测</h3>
+<pre><code>composables/availability::useAvailability(songs)
+├── 判断可见行 → window.lychee.song.probe(mids)
+│   └── ipc::handle('song.probe')
+│       └── api/availability::probeAvailability(mids)
+│           ├── api/song::getDetail(mids)
+│           └── api/song::resolveStreamUrls(mids, 'flac')
+└── 判断 requestIdleCallback → window.lychee.song.probe(remaining)
+</code></pre>
+<ul class="note">
+  <li>检测只更新歌单歌曲元数据；不修改队列、不改变当前播放。队列入队时按 <code>playable !== false</code> 过滤。</li>
+</ul>
+
+<h3 id="c5-12">5.12 歌单分页加载与队列构建</h3>
+<pre><code>views/PlaylistView::onMounted()
+└── stores/playlist::load(id)
+    └── window.lychee.playlist.get(id, { offset: 0 })
+        └── ipc::handle('playlist.get')
+            └── api/playlist::fetchPlaylistPage(id, offset)
+                └── cache/playlist::readPlaylistCache(scope, id)
+                    ├── 判断命中 → 返回缓存页
+                    └── 判断未命中 → api/playlist::fetchPlaylistPage(id, offset)
+                        └── api/client::musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', ...)
+</code></pre>
+<ul class="note">
+  <li>后续页由 feed 顺序请求；失败按指数退避重试，补全不会取消。</li>
+  <li>队列在 <code>status === 'complete' && !stale</code> 后由 <code>appendPlaylistQueue</code> 增量补齐；当前曲与进度不变。</li>
+</ul>
+
+<h3 id="c5-13">5.13 推荐加载</h3>
+<pre><code>views/DiscoverView::onMounted()
+└── stores/recommend::load()
+    └── window.lychee.recommend.get()
+        └── ipc::handle('recommend.get')
+            └── api/recommend::fetchRecommendFeed()
+                └── api/client::musicu(...)
+</code></pre>
+
+<h3 id="c5-14">5.14 收藏与歌单编辑</h3>
+<pre><code>components/SongTable::emit('favorite', index)
+└── stores/playlist-edit::toggleFavorite(songMid)
+    └── window.lychee.favorite.toggle(songMid)
+        └── ipc::handle('favorite.toggle')
+            └── api/favorite::toggleFavorite(songMid)
+                └── cache/playlist::invalidatePlaylistCache(id)
+</code></pre>
+<ul class="note">
+  <li>写操作乐观更新；失败回滚并提示。权限拒绝映射为 <code>NO_PERMISSION</code>。</li>
+</ul>
+
+<h3 id="c5-15">5.15 MV 播放</h3>
+<pre><code>views/MvView::onMounted()
+└── stores/mv::load(mvId)
+    ├── window.lychee.mv.getDetail(mvId)
+    │   └── ipc::handle('mv.getDetail')
+    │       └── api/mv::getMvDetail(mvId)
+    └── window.lychee.mv.getStream(mvId, quality)
+        └── ipc::handle('mv.getStream')
+            └── api/mv::getMvStream(mvId, quality)
+</code></pre>
+
+<h3 id="c5-16">5.16 下载</h3>
+<pre><code>components/SongTable::emit('download', index)
+└── stores/download::start(songMid, quality)
+    └── window.lychee.download.start(songMid, quality)
+        └── ipc::handle('download.start')
+            └── download/manager::startDownload(songMid, quality)
+                ├── api/song::getStreamUrls([songMid], quality)
+                └── download/manager::writePart(url, filePath)
+</code></pre>
+
+<h3 id="c5-17">5.17 mpv 播放</h3>
+<pre><code>audio/remote-engine::createRemoteEngine(handlers)
+└── window.lychee.mpv.setEnabled(true)
+    └── ipc::handle('mpv.setEnabled')
+        └── main/audio/mpv::startMpv()
+            ├── child_process.spawn('mpv', ...)
+            └── net.connect(socketPath)
+                └── mpv::send('observe_property', ...)
+</code></pre>
 
 </body>
 </html>

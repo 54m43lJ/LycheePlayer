@@ -39,7 +39,7 @@ Documents per project, in HTML — the development docs split by boundary:
 [↑](#top)
 
 1. **WHAT & WHY** — IDEAL: the problem to solve · GOAL: what success looks like · non-goals (optional)
-2. **User interactions**
+2. **User interactions** — only entry points and user-observable outcomes; do not explain any mechanisms behind them. Those belong to USER/CORE.
 3. **Project map** — optional; root project of a multi-project repo only · ASCII tree of the project family
 4. **Credits** — always present, always last; list the credited projects (and stack/license where useful), not what was referenced
 
@@ -49,12 +49,14 @@ Documents per project, in HTML — the development docs split by boundary:
 
 **Rules**
 - finer requirements not expressible by a straightforward mechanism → complement at the end of the section; last resort — prefer mechanism over specific constraint
+- USER states user-visible behavior only; internal mechanism names (cache, probe, queue construction) and engineering constants belong to CORE.
 
 **Chapters**
 1. **TERMS** — domain keywords, never synonymized, full definition; when used, no further explanation
 2. **CONVENTIONS** — shared across interfaces (Global constraints #9)
 3. **DIAGRAMS** — mechanisms are the preferred documentation form
    - general architecture — how the application interacts with others (Component Diagram)
+   - page / URL navigation — Component Diagram with pages as nodes and navigation edges; do not maintain a route list in CONVENTIONS
    - workflows — business language; terms/API names only for well-known standards; Sequence Diagram / Activity Diagram with Swimlanes, form per [Diagrams](#diagrams-plantuml)
 4. **INTERFACES**
    - exposed API specifications — code, or pseudocode for multi-language support
@@ -76,7 +78,7 @@ Documents per project, in HTML — the development docs split by boundary:
 - no implementation reference → draft meaningful names/signatures marked `待实现，可以根据实际情况调整` (call-stack lines use the drafted names, no marker at the call site); a reference exists (main branch, breadpan, std / GTK APIs) → use its real names
 
 **Chapters**
-1. **File tree** — final code structure; each entry states what the module serves and links to its signatures subsection (no subsection → plain entry); lists source/build/config/assets only — documentation artifacts and their styling are out of scope, while a TODO tracking file may be kept as an exception
+1. **File tree** — final code structure; each entry states what the module serves and links to its signatures subsection (no subsection → plain entry); lists source/build/config/assets only — documentation artifacts and their styling are out of scope
 2. **CONVENTIONS** — shared across interfaces (Global constraints #9)
 3. **SBOM** — dependency libraries in one table: name · what it serves in this project; version & license stay in the package manifest
 4. **Internal types & method signatures** — one subsection per source file, in file-tree order, titled by file name, linking back to the file tree · methods: signature + at most a one-line purpose note — must cover every method involved in a core flow; non-core helper methods may be included at the author's discretion — internals (call chains, branching, fallbacks, ordering) belong to the call-stack section · data structures & messages: type definitions, the comments are the explanation — no field tables

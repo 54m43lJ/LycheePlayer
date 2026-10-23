@@ -73,6 +73,22 @@
     <td>xlogin</td>
     <td>QQ 官方扫码登录组件；登录页以独立视图加载，应用不接触用户密码。</td>
   </tr>
+  <tr>
+    <td>推荐接口（待探测）</td>
+    <td>每日推荐 / 专属雷达 / 猜你喜欢对应的上游入口；具体方法名与字段需 fixture 验证后写入。</td>
+  </tr>
+  <tr>
+    <td>写操作接口（待探测）</td>
+    <td>收藏、创建 / 改名 / 删除歌单、增删歌曲对应的上游入口；验证前不写猜测的方法名。</td>
+  </tr>
+  <tr>
+    <td>MV 接口（待探测）</td>
+    <td>MV 搜索、详情与取流的上游入口；需确认登录与 VIP 权限后写入。</td>
+  </tr>
+  <tr>
+    <td>mpv JSON IPC</td>
+    <td>应用主进程与系统 mpv 子进程之间的本地 JSON 命令 / 事件通道；socket 位于 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>。</td>
+  </tr>
 </table>
 <ul class="note">
   <li>音质档位与请求 / 实际音质的用户语义见 <a href="USER.html#u1">USER §1</a>；内部类型 <code>Quality</code> 见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
@@ -163,8 +179,23 @@
   <li>先通过 <code>get_song_detail_yqq</code> 获取 <code>media_mid</code>，再按请求音质拼出 vkey 的 <code>filename</code>。</li>
   <li>vkey 请求使用进程级稳定 <code>guid</code>、歌曲 <code>songmid</code> 数组、对应 <code>filename</code> 数组与账号 <code>uin</code>。</li>
   <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。</li>
-  <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；主进程只经手链接字符串，不代理音频流。</li>
+  <li>音频流端点与 vkey / purl 契约不变；应用侧加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</li>
   <li>vkey 失效时音频加载失败，界面提示“音频加载失败，可能链接已过期”；应用不会自动重新获取链接。</li>
+</ul>
+
+<h3 id="p3-4">3.4 mpv JSON IPC</h3>
+<div class="diagram"><img src="diagram/prov-mpv.svg" alt="mpv JSON IPC 时序图"></div>
+<ul class="note">
+  <li>应用主进程启动 mpv 子进程，并通过本地 socket 发送 <code>loadfile</code>、<code>set_property</code>、<code>seek</code>、<code>observe_property</code>。</li>
+  <li>mpv 回传 <code>property-change</code>、<code>file-loaded</code>、<code>playback-restart</code>、<code>end-file</code>；应用据此更新播放状态。</li>
+  <li>socket 位于 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>，不使用 TCP；退出时终止子进程。</li>
+</ul>
+
+<h3 id="p3-5">3.5 推荐 / 写操作 / MV（待探测）</h3>
+<div class="diagram"><img src="diagram/prov-pending.svg" alt="推荐、写操作与 MV 上游边界（待探测）"></div>
+<ul class="note">
+  <li>三类入口尚未完成 fixture 验证；图中只表达边界，不写猜测的方法名。</li>
+  <li>验证通过后，在 §4.1 / §4.3 补具体请求参数、响应模型与错误映射；在此之前 CORE 对应模块标记待实现。</li>
 </ul>
 
 <h2 id="p4">4. INTERFACES</h2>
@@ -179,15 +210,18 @@
   <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>。</td></tr>
   <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表。</td></tr>
   <tr><td>我的歌单</td><td><code>music.musicasset.PlaylistBaseRead / GetPlaylistByUin</code></td><td>当前账号创建 / 收藏的歌单列表。</td></tr>
+  <tr><td>推荐（待探测）</td><td>—</td><td>每日推荐 / 专属雷达 / 猜你喜欢；fixture 验证后补方法名与参数。</td></tr>
+  <tr><td>写操作（待探测）</td><td>—</td><td>收藏、歌单创建 / 改名 / 删除、增删歌曲；fixture 验证后补方法名与错误码。</td></tr>
+  <tr><td>MV（待探测）</td><td>—</td><td>MV 搜索 / 详情 / 取流；需确认登录与 VIP 权限。</td></tr>
   <tr><td>会话续期</td><td><code>music.login.LoginServer / Login</code></td><td>用 <code>refresh_token</code> 换新 <code>musickey</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
-  <tr><td>歌词</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回明文 LRC 与翻译。</td></tr>
+  <tr><td>歌词</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回 LRC / QRC 与翻译。</td></tr>
   <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲评论列表。</td></tr>
   <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号 VIP 权益，用于不可播提示。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方扫码组件。</td></tr>
   <tr><td>OAuth 授权</td><td><code>POST https://graph.qq.com/oauth2.0/authorize</code></td><td>用 xlogin 的 Cookie 换取 <code>code</code>。</td></tr>
-  <tr><td>音频流</td><td><code>GET https://ws.stream.qqmusic.qq.com/{purl}</code></td><td>渲染进程加载的音频流；加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</td></tr>
+  <tr><td>音频流</td><td><code>GET https://ws.stream.qqmusic.qq.com/{purl}</code></td><td>应用播放层加载的音频流；加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</td></tr>
 </table>
 <table>
   <tr><th>接口</th><th>关键请求参数</th></tr>
@@ -255,13 +289,15 @@
   <tr><td>会话续期 <code>Login</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>JSON；携带当前凭证</td></tr>
   <tr><td>OAuth authorize</td><td>桌面 Chrome 120（Windows）</td><td><code>https://xui.ptlogin2.qq.com/</code></td><td>form；Cookie 为 xlogin 会话；<code>redirect: manual</code></td></tr>
   <tr><td>官方登录组件 xlogin</td><td>Chromium 默认</td><td>—</td><td><code>WebContentsView</code> 加载，不注入自定义请求头</td></tr>
-  <tr><td>音频流 <code>ws.stream.qqmusic.qq.com</code></td><td>应用默认</td><td>—</td><td>由播放器直接加载</td></tr>
-  <tr><td>封面图 <code>y.gtimg.cn</code></td><td>应用默认</td><td>—</td><td>由播放器直接加载</td></tr>
+  <tr><td>音频流 <code>ws.stream.qqmusic.qq.com</code></td><td>应用默认</td><td>—</td><td>由应用播放层加载</td></tr>
+  <tr><td>封面图 <code>y.gtimg.cn</code></td><td>应用默认</td><td>—</td><td>由应用播放层加载</td></tr>
 </table>
 <ul class="note">
   <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
   <li>公开 CGI 目前不需要额外签名；<code>g_tk</code> 只用于 OAuth 授权、歌词与用户资料请求。</li>
   <li>歌曲评论单页最多 25 条；超过上限时上游返回业务码 <code>10000</code>，因此应用固定使用 20 条。评论请求匿名发送，不携带登录凭证。</li>
+  <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。</li>
+  <li>推荐、收藏/歌单写入、MV 接口尚未完成 fixture 验证；验证前不写入具体方法名，只在 CORE 标记待实现。</li>
 </ul>
 
 <h3 id="p4-2">4.2 消息与错误</h3>
@@ -316,6 +352,7 @@ interface QqLoginRequest {
   <tr><td><code>104604</code> / <code>2001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游瞬时繁忙；短退避重试，仍失败则提示稍后再试。</td></tr>
   <tr><td><code>100001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；不重试，直接提示稍后再试。</td></tr>
   <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>当前账号无该音质权限；播放链接流程继续回退。</td></tr>
+  <tr><td>写操作权限拒绝</td><td><code>NO_PERMISSION</code></td><td>当前账号无权编辑该歌单或收藏该内容；提示不可编辑。</td></tr>
   <tr><td><code>20261</code> / <code>20271</code> / <code>20272</code> / <code>20274</code> / <code>20277</code> / <code>20278</code> / <code>20279</code> / <code>20450</code></td><td><code>AUTH_EXPIRED</code></td><td>登录参数、验证码、账号绑定、账号受限或封禁；提示具体原因或重新登录。</td></tr>
   <tr><td>HTTP <code>429</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；退避重试。</td></tr>
   <tr><td>HTTP 非 2xx</td><td><code>UPSTREAM_NETWORK</code></td><td>网络或服务不可用；短退避重试，仍失败则提示网络异常。</td></tr>
@@ -337,7 +374,12 @@ interface QqLoginRequest {
   singer?: Array&lt;{ mid?: string; name?: string }&gt;;
   album?: { mid?: string; name?: string };
   pay?: { pay_play?: number; price_album?: number };
-  file?: { media_mid?: string };
+  file?: {
+    media_mid?: string;
+    size_128mp3?: number;
+    size_320mp3?: number;
+    size_flac?: number;
+  };
 }
 
 interface QqVkeyData {
@@ -393,6 +435,7 @@ interface QqLyricResponse {
   code?: number;
   retcode?: number;
   lyric?: string;
+  qrc?: string;
   trans?: string;
 }
 
@@ -467,8 +510,8 @@ interface QqLoginPayload {
   <tr><th>对象</th><th>消费字段</th><th>说明</th></tr>
   <tr>
     <td><code>QqSong</code></td>
-    <td><code>id</code> · <code>mid</code> · <code>name</code> / <code>title</code> · <code>interval</code> · <code>singer[]</code> · <code>album</code> · <code>pay</code> · <code>file.media_mid</code></td>
-    <td><code>interval</code> 单位为秒；<code>pay.pay_play</code> 与 <code>price_album</code> 用于权限角标。</td>
+    <td><code>id</code> · <code>mid</code> · <code>name</code> / <code>title</code> · <code>interval</code> · <code>singer[]</code> · <code>album</code> · <code>pay</code> · <code>file.media_mid</code> · <code>file.size_*</code></td>
+    <td><code>interval</code> 单位为秒；<code>pay.pay_play</code> 与 <code>price_album</code> 用于权限角标；<code>file.size_*</code> 仅在 fixture 验证后用于候选音质。</td>
   </tr>
   <tr>
     <td><code>QqVkeyData</code></td>
@@ -478,12 +521,12 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqPlaylistData</code></td>
     <td><code>dirinfo.id</code> / <code>title</code> / <code>picurl</code> / <code>songnum</code> · <code>songlist[]</code></td>
-    <td>单次最多返回 100 首；按 <code>songnum</code> 分页补齐。</td>
+    <td><code>songlist[]</code> 是单页结果；单次最多返回 100 首；总数以 <code>dirinfo.songnum</code> 为准。</td>
   </tr>
   <tr>
     <td><code>QqMineData</code></td>
     <td><code>v_playlist[]</code> 的 <code>dissid</code> / <code>disstid</code> / <code>tid</code> / <code>dirId</code> · 名称 · 封面 · 歌曲数</td>
-    <td>过滤空 ID 与 <code>0</code>。</td>
+    <td><code>dirId === 201</code>（兼容 <code>dirid</code>）识别为“我喜欢”；过滤空 ID 与 <code>0</code>。</td>
   </tr>
   <tr>
     <td><code>QqSearchData</code></td>
@@ -492,8 +535,8 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqLyricResponse</code></td>
-    <td><code>code</code> · <code>retcode</code> · <code>lyric</code> · <code>trans</code></td>
-    <td><code>-1901</code> 表示无歌词，返回空歌词而非错误。</td>
+    <td><code>code</code> · <code>retcode</code> · <code>lyric</code> · <code>qrc</code> · <code>trans</code></td>
+    <td><code>-1901</code> 表示无歌词；<code>qrc</code> 为 QRC 密文，主进程只透传。</td>
   </tr>
   <tr>
     <td><code>QqCommentList</code></td>
@@ -533,6 +576,10 @@ interface QqLoginPayload {
     <td><code>price_album &gt; 0 → album</code>；否则 <code>pay_play === 1 → vip</code>；<code>pay_play === 0 → free</code>。</td>
   </tr>
   <tr>
+    <td><code>QqSong.file.size_*</code> → 候选最高档</td>
+    <td><code>size_flac &gt; 0 → flac</code>；否则 <code>size_320mp3 &gt; 0 → 320k</code>；否则 <code>128k</code>；字段缺失时由 CORE 逐档探测。</td>
+  </tr>
+  <tr>
     <td><code>Quality</code> → vkey <code>filename</code></td>
     <td><code>128k → M500{mediaMid}.mp3</code>；<code>320k → M800{mediaMid}.mp3</code>；<code>flac → F000{mediaMid}.flac</code>。</td>
   </tr>
@@ -550,7 +597,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqMineData</code> → <code>PlaylistMeta[]</code></td>
-    <td><code>dissid ?? disstid ?? tid ?? dirId ?? id → id</code>；名称、封面与歌曲数按字段回退链取值；过滤空 ID 与 <code>0</code>。</td>
+    <td><code>dissid ?? disstid ?? tid ?? dirId ?? id → id</code>；名称、封面与歌曲数按字段回退链取值；<code>dirId === 201</code> → <code>kind='favorites'</code>、<code>id='liked'</code>；<code>listMine</code> 结果 <code>editable=true</code>，搜索/公开歌单 <code>editable=false</code>；过滤空 ID 与 <code>0</code>。</td>
   </tr>
   <tr>
     <td><code>QqSearchData</code> → <code>SearchResult</code></td>
@@ -558,7 +605,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqLyricResponse</code> → <code>Lyric</code></td>
-    <td><code>lyric → lrc</code>；<code>trans</code> 去空白后为空则 <code>null</code>；<code>-1901</code> → 空歌词。</td>
+    <td><code>qrc</code> 存在 → <code>format: 'qrc'</code>、<code>text: qrc</code>；否则 <code>format: 'lrc'</code>、<code>text: lyric</code>；<code>trans</code> 去空白后为空则 <code>null</code>；<code>-1901</code> → 空歌词。</td>
   </tr>
   <tr>
     <td><code>QqCommentList</code> → <code>CommentPage</code></td>
@@ -655,6 +702,40 @@ interface MprisMetadata {
   <li><code>LoopStatus</code> 与 <code>Shuffle</code> 的写入同步更新播放模式；<code>Volume</code> 写入同步更新播放器音量。</li>
   <li>入站命令如何转成 <code>MprisCommand</code>、播放状态如何发布，见 <a href="CORE.html#c5-6">CORE §5.6</a>；类型定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
   <li>可用 <code>playerctl -p lychee</code> 验证总线上暴露的成员。</li>
+</ul>
+
+<h3 id="p4-5">4.5 mpv JSON IPC</h3>
+<pre><code>interface MpvCommand {
+  command: string[];
+  request_id?: number;
+}
+
+interface MpvResponse {
+  request_id?: number;
+  error: 'success' | string;
+  data?: unknown;
+}
+
+interface MpvEvent {
+  event: 'property-change' | 'file-loaded' | 'playback-restart' | 'end-file';
+  name?: string;
+  data?: unknown;
+}
+</code></pre>
+<table>
+  <tr><th>命令 / 事件</th><th>用途</th></tr>
+  <tr><td><code>loadfile</code></td><td>加载音频 URL；队列追加用于 gapless。</td></tr>
+  <tr><td><code>set_property</code></td><td>设置 <code>pause</code> / <code>volume</code> / <code>af</code>（EQ、响度归一）。</td></tr>
+  <tr><td><code>seek</code></td><td>跳转播放位置。</td></tr>
+  <tr><td><code>observe_property</code></td><td>订阅播放位置、暂停、时长等属性。</td></tr>
+  <tr><td><code>property-change</code></td><td>属性变化；驱动播放状态与进度。</td></tr>
+  <tr><td><code>file-loaded</code></td><td>音频文件加载完成。</td></tr>
+  <tr><td><code>playback-restart</code></td><td>播放重新开始。</td></tr>
+  <tr><td><code>end-file</code></td><td>当前文件结束；触发下一首或停止。</td></tr>
+</table>
+<ul class="note">
+  <li>socket 位于 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>，不使用 TCP；应用退出时终止子进程。</li>
+  <li>mpv 缺失或版本不满足时回退 HTML5 Audio，并在界面提示。</li>
 </ul>
 
 </body>

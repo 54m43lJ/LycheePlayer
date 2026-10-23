@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<title>BUILD — Lychee Player</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<a id="top"></a>
+<h1>BUILD — Lychee Player</h1>
+
+<h2 id="b1">1. 环境要求</h2>
+<p><a href="#top">↑</a></p>
+<table>
+  <tr><th>项目</th><th>要求</th></tr>
+  <tr><td>发行版</td><td>Arch Linux x86_64；当前不支持其他发行版与 arm64。</td></tr>
+  <tr><td>构建工具</td><td><code>base-devel</code>、<code>nodejs</code>、<code>npm</code>。</td></tr>
+  <tr><td>运行期依赖</td><td>GTK、libsecret、NSS、ALSA、D-Bus；可选系统 <code>mpv</code>（原生播放引擎）。</td></tr>
+</table>
+
+<h2 id="b2">2. 开发运行</h2>
+<p><a href="#top">↑</a></p>
+<pre><code>npm ci
+npm run dev
+npm run typecheck
+npm test
+npm run test:watch
+node scripts/probe.mjs</code></pre>
+<ul class="note">
+  <li><code>npm test</code> 使用 fixture 回放，默认不访问真实上游；录制 fixture 需要显式开关，见 <code>scripts/record-fixtures.mjs</code>。</li>
+  <li>测试不接入 CI；在本地或离线环境执行。</li>
+</ul>
+
+<h2 id="b3">3. 构建</h2>
+<p><a href="#top">↑</a></p>
+<pre><code>npm run build</code></pre>
+<p>构建产物进入 <code>out/</code>；版本与许可证从 <code>package.json</code> 注入关于页。</p>
+
+<h2 id="b4">4. 打包</h2>
+<p><a href="#top">↑</a></p>
+<pre><code>npm run package:arch</code></pre>
+<pre><code>dist/lychee-player-&lt;version&gt;-x86_64.tar.gz
+dist/lychee-player-&lt;version&gt;-x86_64.tar.gz.sha256
+dist/lychee-player/
+├── lychee-player
+├── resources/
+├── LICENSE
+├── lychee-player.desktop
+└── lychee-player.png</code></pre>
+<ul class="note">
+  <li><code>electron-builder --linux dir</code> 生成目录后由 <code>scripts/package-arch.mjs</code> 整理、补桌面文件与校验和。</li>
+  <li>tarball 顶层固定为 <code>lychee-player/</code>，不包含源码、<code>node_modules</code>、测试或构建缓存。</li>
+  <li>文件名版本与 <code>package.json</code> 一致，不带 <code>v</code> 前缀。</li>
+</ul>
+
+<h2 id="b5">5. curl 安装</h2>
+<p><a href="#top">↑</a></p>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/&lt;owner&gt;/lychee-player/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/&lt;owner&gt;/lychee-player/main/install.sh | sh -s -- --version 0.1.0
+curl -fsSL https://raw.githubusercontent.com/&lt;owner&gt;/lychee-player/main/install.sh | sudo sh -s -- --system</code></pre>
+<table>
+  <tr><th>参数</th><th>行为</th></tr>
+  <tr><td><code>--version &lt;ver&gt;</code></td><td>选择 GitHub Release 版本；默认最新。</td></tr>
+  <tr><td><code>--prefix &lt;dir&gt;</code></td><td>用户级安装目录；默认 <code>${XDG_DATA_HOME:-$HOME/.local/share}/lychee-player</code>。</td></tr>
+  <tr><td><code>--system</code></td><td>安装到 <code>/opt/lychee-player</code>，需要 root / sudo。</td></tr>
+  <tr><td><code>--uninstall</code></td><td>删除程序、桌面文件与图标，保留设置与缓存。</td></tr>
+  <tr><td><code>--dry-run</code></td><td>只打印动作，不写盘。</td></tr>
+</table>
+<ul class="note">
+  <li>默认用户级安装：程序目录 <code>${XDG_DATA_HOME:-$HOME/.local/share}/lychee-player</code>，入口 <code>~/.local/bin/lychee-player</code>，桌面文件与图标写入用户 XDG 目录。</li>
+  <li>系统级安装：程序目录 <code>/opt/lychee-player</code>，入口 <code>/usr/bin/lychee-player</code>，桌面文件与图标写入 <code>/usr/share</code>。</li>
+  <li>安装脚本校验 <code>sha256sum</code>；校验和缺失或不匹配时拒绝安装。也可先下载脚本检查再执行。</li>
+</ul>
+
+<h2 id="b6">6. 手动运行</h2>
+<p><a href="#top">↑</a></p>
+<pre><code>tar -xzf lychee-player-&lt;version&gt;-x86_64.tar.gz
+./lychee-player/lychee-player</code></pre>
+<ul class="note">
+  <li>tarball 可解压到任意目录；未来放入 <code>/opt/lychee-player</code> 不需要改结构。</li>
+  <li>若 Chromium 沙箱因 <code>chrome-sandbox</code> 权限拒绝，优先启用用户命名空间；系统级安装或未来 AUR 包应设置 <code>4755 root:root</code>。</li>
+</ul>
+
+<h2 id="b7">7. 支持范围</h2>
+<p><a href="#top">↑</a></p>
+<p>仅 Arch Linux x86_64。其他发行版、arm64、deb / rpm / AppImage 不在当前范围。</p>
+
+<h2 id="b8">8. 后续 AUR</h2>
+<p><a href="#top">↑</a></p>
+<table>
+  <tr><th>AUR 需要</th><th>当前产物保证</th></tr>
+  <tr><td>稳定 <code>source</code> URL</td><td>GitHub Release 资产名固定 <code>lychee-player-&lt;version&gt;-x86_64.tar.gz</code>。</td></tr>
+  <tr><td>安装到 <code>/opt/lychee-player</code></td><td>tarball 顶层目录固定、内容可重定位。</td></tr>
+  <tr><td><code>.desktop</code> / 图标 / LICENSE</td><td>已包含在 tarball。</td></tr>
+  <tr><td>运行期依赖</td><td>见 §1 与 §11；未来 PKGBUILD 直接复用。</td></tr>
+  <tr><td><code>chrome-sandbox</code> 权限</td><td>由未来 PKGBUILD 设置 <code>4755 root:root</code>。</td></tr>
+</table>
+<p>当前不提供 PKGBUILD、<code>.SRCINFO</code> 或自动发布 workflow。</p>
+
+<h2 id="b9">9. 故障排查</h2>
+<p><a href="#top">↑</a></p>
+<table>
+  <tr><th>症状</th><th>处理</th></tr>
+  <tr><td>沙箱启动失败</td><td>检查 <code>chrome-sandbox</code> 权限与用户命名空间；系统级安装按 §6 处理。</td></tr>
+  <tr><td>Wayland 显示异常</td><td>在启动参数文件写 <code>--ozone-platform=wayland</code> 或 <code>--ozone-platform=x11</code>；见 §10。</td></tr>
+  <tr><td>密钥环未解锁</td><td>解锁 libsecret / gnome-keyring 后重启；密钥环不可用时登录被禁用。</td></tr>
+  <tr><td>缺库</td><td>安装 §1 运行期依赖。</td></tr>
+  <tr><td>curl / 校验和失败</td><td>检查网络、Release 资产名与 <code>sha256sum</code>。</td></tr>
+</table>
+
+<h2 id="b10">10. 启动参数</h2>
+<p><a href="#top">↑</a></p>
+<p>默认文件：<code>$XDG_CONFIG_HOME/lychee-player/flags.conf</code>；未设置 <code>XDG_CONFIG_HOME</code> 时为 <code>~/.config/lychee-player/flags.conf</code>。每行一个参数，空行与 <code>#</code> 开头行忽略；<code>--flags-file=&lt;path&gt;</code> 可指定另一份文件。</p>
+<pre><code># Lychee Player 启动参数（每行一个）
+--ozone-platform=wayland
+--enable-wayland-ime
+--password-store=gnome-libsecret
+--autoplay-policy=no-user-gesture-required</code></pre>
+<ul class="note">
+  <li>优先级：显式命令行 &gt; flags 文件 &gt; 环境变量 &gt; 内置默认。</li>
+  <li>设置页保存后下次启动生效，不热加载；不提供路径选择。</li>
+</ul>
+
+<h2 id="b11">11. 存储</h2>
+<p><a href="#top">↑</a></p>
+<table>
+  <tr><th>用途</th><th>位置 / 说明</th></tr>
+  <tr><td>歌单缓存</td><td><code>userData/cache/playlist</code>；只缓存“我喜欢”，超过字节上限不落盘。</td></tr>
+  <tr><td>音频缓存</td><td><code>userData/cache/audio/&lt;musicid&gt;/</code>；总容量上限与 LRU 清理由 CORE 常量定义。</td></tr>
+  <tr><td>下载</td><td>默认 <code>~/Music/Lychee Player</code>，可在设置页修改；仅本机个人使用。</td></tr>
+  <tr><td>mpv</td><td>系统安装的 <code>mpv</code> 可执行文件；IPC socket 在 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>。</td></tr>
+</table>
+
+</body>
+</html>

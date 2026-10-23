@@ -1,0 +1,23 @@
+@startuml page-url-architecture
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam shadowing false
+
+[根路径 /] as ROOT
+[搜索\n/search] as SEARCH
+[发现\n/discover] as DISCOVER
+[我的歌单\n/library] as LIBRARY
+[歌单详情\n/playlist/:id] as PLAYLIST
+[MV 播放\n/mv/:id] as MV
+[登录\n/login] as LOGIN
+[设置\n/settings] as SETTINGS
+
+ROOT --> SEARCH : 重定向
+SEARCH --> PLAYLIST : 点击歌单
+SEARCH --> MV : 点击 MV
+DISCOVER --> PLAYLIST : 打开歌单
+DISCOVER --> MV : 播放 MV
+LIBRARY --> PLAYLIST : 打开歌单
+PLAYLIST --> LIBRARY : 返回我的歌单
+LOGIN --> LIBRARY : 登录成功
+@enduml

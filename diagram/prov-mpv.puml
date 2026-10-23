@@ -1,0 +1,16 @@
+@startuml prov-mpv
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+participant "Lychee Player" as APP
+participant "mpv 子进程" as MPV
+
+APP -> MPV : spawn --input-ipc-server
+APP -> MPV : loadfile
+MPV --> APP : file-loaded
+APP -> MPV : observe_property
+MPV --> APP : property-change
+APP -> MPV : set_property pause / volume / af
+APP -> MPV : seek
+MPV --> APP : end-file
+@enduml
