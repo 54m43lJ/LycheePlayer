@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { SearchRequest, SearchResult } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
@@ -8,12 +8,19 @@ import SongTable from '../components/SongTable.vue'
 import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { usePlayerStore } from '../stores/player'
+import { usePlaylistEditStore } from '../stores/playlist-edit'
+import { useDownloadStore } from '../stores/download'
+import { SEARCH_PAGE_SIZE_DEFAULT } from '@shared/constants'
+import { useUiStore } from '../stores/ui'
 import { albumCover, formatCount, playlistSubtitle } from '../utils/format'
 
 type SearchType = SearchRequest['type']
 
 const router = useRouter()
 const player = usePlayerStore()
+const playlistEdit = usePlaylistEditStore()
+const download = useDownloadStore()
+const ui = useUiStore()
 const toast = useToast()
 
 const TABS: Array<{ value: SearchType; label: string }> = [
@@ -30,26 +37,36 @@ const activeTab = ref<SearchType>('song')
 const result = ref<SearchResult | null>(null)
 const loading = ref(false)
 const searched = ref(false)
+const error = ref('')
 const pageNo = ref(1)
-const pageSize = 20
+const pageSize = SEARCH_PAGE_SIZE_DEFAULT
 let requestId = 0
 
 const songs = computed(() => result.value?.songs ?? [])
 const singers = computed(() => result.value?.singers ?? [])
 const albums = computed(() => result.value?.albums ?? [])
 const playlists = computed(() => result.value?.playlists ?? [])
+const mvs = computed(() => result.value?.mvs ?? [])
 const total = computed(() => result.value?.total ?? 0)
+const favoriteMids = computed(() => [...playlistEdit.favorites])
 const totalPages = computed(() => {
   if (total.value > 0) return Math.max(1, Math.ceil(total.value / pageSize))
   return searched.value ? pageNo.value : 1
 })
 const activeLabel = computed(() => TABS.find((tab) => tab.value === activeTab.value)?.label ?? '')
 
+watch(songs, (list) => {
+  if (list.length > 0) {
+    void playlistEdit.loadFavorites(list.map((song) => song.songMid))
+  }
+})
+
 async function search(page = 1): Promise<void> {
   const term = keyword.value.trim()
   if (!term) return
   const currentRequest = ++requestId
   loading.value = true
+  error.value = ''
   try {
     const data = unwrap(
       await window.lychee.search.byType({
@@ -63,8 +80,22 @@ async function search(page = 1): Promise<void> {
     result.value = data
     pageNo.value = page
     searched.value = true
+    if (activeTab.value === 'song') {
+      void (async () => {
+        try {
+          const mvResult = unwrap(await window.lychee.mv.search(term, page))
+          if (currentRequest !== requestId || !result.value) return
+          result.value = { ...result.value, mvs: mvResult.mvs ?? [] }
+        } catch {
+          // MV 搜索待探测；失败不影响歌曲结果。
+        }
+      })()
+    }
   } catch (err) {
-    if (currentRequest === requestId) toast.error(describeError(err))
+    if (currentRequest === requestId) {
+      error.value = describeError(err)
+      toast.error(error.value)
+    }
   } finally {
     if (currentRequest === requestId) loading.value = false
   }
@@ -88,7 +119,24 @@ function playSongAt(index: number): void {
 
 function playNextAt(index: number): void {
   const song = songs.value[index]
-  if (song) player.playNext(song)
+  if (song) player.addNext(song)
+}
+
+async function toggleFavorite(index: number): Promise<void> {
+  const song = songs.value[index]
+  if (song) await playlistEdit.toggleFavorite(song.songMid)
+}
+
+async function downloadAt(index: number): Promise<void> {
+  const song = songs.value[index]
+  if (!song) return
+  try {
+    await download.start(song.songMid, player.requestedQuality)
+    if (!ui.downloadOpen) ui.toggleDownload()
+    toast.show('已加入下载任务')
+  } catch (err) {
+    toast.error(describeError(err))
+  }
 }
 
 function searchBySinger(name: string): void {
@@ -152,6 +200,13 @@ function changePage(delta: number): void {
       正在搜索「{{ keyword }}」
     </div>
 
+    <div v-else-if="error" class="empty compact">
+      <div class="empty-icon"><AppIcon name="search" :size="22" /></div>
+      <h3>搜索失败</h3>
+      <p>{{ error }}</p>
+      <button class="btn small" @click="search(pageNo)">重试</button>
+    </div>
+
     <template v-else-if="searched">
       <div v-if="activeTab === 'song'">
         <div class="section-title">
@@ -162,14 +217,33 @@ function changePage(delta: number): void {
           v-if="songs.length > 0"
           :songs="songs"
           :active-mid="player.current?.songMid"
+          :favorite-mids="favoriteMids"
           @play="playSongAt"
           @play-next="playNextAt"
           @toggle="player.toggle()"
+          @favorite="toggleFavorite"
+          @download="downloadAt"
         />
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
           <h3>没有找到单曲</h3>
         </div>
+
+        <template v-if="mvs.length > 0">
+          <div class="section-title"><span>MV</span><span class="count">{{ mvs.length }} 个</span></div>
+          <div class="card-grid">
+            <button
+              v-for="item in mvs"
+              :key="item.mvId"
+              class="card"
+              @click="router.push(`/mv/${item.mvId}`)"
+            >
+              <CoverArt :src="item.coverUrl" image-class="card-cover" :icon-size="30" />
+              <div class="card-name">{{ item.name }}</div>
+              <div class="card-sub">{{ item.singerName }}</div>
+            </button>
+          </div>
+        </template>
       </div>
 
       <div v-else-if="activeTab === 'singer'">

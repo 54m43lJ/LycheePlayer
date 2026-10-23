@@ -1,15 +1,11 @@
 import type { Credential } from '../../shared/types'
+import { OAUTH_TIMEOUT_MS, SESSION_REFRESH_AHEAD_MS, SESSION_REFRESH_FALLBACK_MS } from '../../shared/constants'
 import { getCredential, saveCredential } from '../credential'
 import { mapUpstreamCode, UpstreamError, upstreamRequest } from './client'
 import { hash33 } from './hash'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-
-// 推荐值 10 × 60_000 ms；凭证到期前提前续期的窗口。
-const SESSION_REFRESH_AHEAD_MS = 10 * 60_000
-// 推荐值 6 × 60 × 60_000 ms；凭证无到期时间时的续期间隔。
-const SESSION_REFRESH_FALLBACK_MS = 6 * 60 * 60_000
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -59,7 +55,7 @@ export async function requestOAuthCodeWithCookies(
       Cookie: cookieHeader(jar)
     },
     body: form.toString(),
-    signal: AbortSignal.timeout(15_000)
+    signal: AbortSignal.timeout(OAUTH_TIMEOUT_MS)
   })
 
   const location = authorizeResponse.headers.get('location') ?? ''

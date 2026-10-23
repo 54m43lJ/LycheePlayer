@@ -1,6 +1,8 @@
 import { computed, ref, watch } from 'vue'
+import type { Lyric } from '@shared/types'
 import { unwrap } from '../api'
 import { activeLyricIndex, parseLyric, type LyricLine } from '../utils/lrc'
+import { parseQrcLyric } from '../utils/qrc'
 import { usePlayerStore } from '../stores/player'
 
 const cache = new Map<string, LyricLine[]>()
@@ -8,6 +10,11 @@ const lines = ref<LyricLine[]>([])
 const loading = ref(false)
 const error = ref('')
 let token = 0
+
+function parse(lyric: Lyric): LyricLine[] {
+  if (lyric.format === 'qrc') return parseQrcLyric(lyric.text, lyric.trans)
+  return parseLyric(lyric.text, lyric.trans)
+}
 
 export function useLyrics() {
   const player = usePlayerStore()
@@ -25,7 +32,7 @@ export function useLyrics() {
     try {
       const lyric = unwrap(await window.lychee.lyric.get(songMid))
       if (currentToken !== token) return
-      const parsed = parseLyric(lyric.lrc, lyric.trans)
+      const parsed = parse(lyric)
       cache.set(songMid, parsed)
       lines.value = parsed
     } catch {
@@ -52,5 +59,11 @@ export function useLyrics() {
 
   const activeIndex = computed(() => activeLyricIndex(lines.value, player.positionMs))
 
-  return { lines, loading, error, activeIndex, reload: () => player.current && load(player.current.songMid) }
+  return {
+    lines,
+    loading,
+    error,
+    activeIndex,
+    reload: () => (player.current ? load(player.current.songMid) : null)
+  }
 }

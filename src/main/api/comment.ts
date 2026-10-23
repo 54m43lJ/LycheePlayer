@@ -1,4 +1,5 @@
 import type { Comment, CommentPage } from '../../shared/types'
+import { COMMENT_PAGE_SIZE } from '../../shared/constants'
 import { UpstreamError, musicu } from './client'
 
 interface RawComment {
@@ -18,9 +19,6 @@ interface CommentListData {
     HasMore?: number
   }
 }
-
-// 推荐值 20；单次评论请求条数（上游上限 25）。
-const COMMENT_PAGE_SIZE = 20
 
 function normalizeAvatar(value: string | undefined): string {
   if (!value) return ''

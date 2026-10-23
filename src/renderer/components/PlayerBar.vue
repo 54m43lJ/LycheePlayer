@@ -7,10 +7,16 @@ import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
 import { usePlayerStore, PLAY_MODE_LABEL } from '../stores/player'
 import { useUiStore } from '../stores/ui'
+import { usePlaylistEditStore } from '../stores/playlist-edit'
+import { useDownloadStore } from '../stores/download'
+import { useToast } from '../composables/toast'
 import { formatDuration, singerNames, songCover } from '../utils/format'
 
 const player = usePlayerStore()
 const ui = useUiStore()
+const playlistEdit = usePlaylistEditStore()
+const download = useDownloadStore()
+const toast = useToast()
 const { current, status, volume, mode, quality, requestedQuality, positionMs, durationMs, progress } = storeToRefs(player)
 
 const compactQuery = window.matchMedia('(max-width: 900px)')
@@ -45,6 +51,9 @@ const qualityOptions: Array<{ value: Quality; label: string }> = [
 ]
 
 const qualityLabel = computed(() => (quality.value === 'flac' ? 'FLAC' : quality.value.toUpperCase()))
+const favorited = computed(() =>
+  current.value ? playlistEdit.favorites.has(current.value.songMid) : false
+)
 const requestedQualityLabel = computed(() =>
   requestedQuality.value === 'flac' ? 'FLAC' : requestedQuality.value.toUpperCase()
 )
@@ -62,6 +71,22 @@ function closeMenus(): void {
 function chooseQuality(next: Quality): void {
   closeMenus()
   player.setQuality(next)
+}
+
+async function toggleFavorite(): Promise<void> {
+  if (!current.value) return
+  await playlistEdit.toggleFavorite(current.value.songMid)
+}
+
+async function downloadCurrent(): Promise<void> {
+  if (!current.value) return
+  try {
+    await download.start(current.value.songMid, quality.value)
+    if (!ui.downloadOpen) ui.toggleDownload()
+    toast.show('已加入下载任务')
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err))
+  }
 }
 
 function toggleVolume(): void {
@@ -82,7 +107,12 @@ function toggleMute(): void {
   }
 }
 
+function onDocumentClick(): void {
+  closeMenus()
+}
+
 onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
   mediaListener = (event) => {
     compact.value = event.matches
     if (!event.matches) volumeOpen.value = false
@@ -91,6 +121,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
   if (mediaListener) compactQuery.removeEventListener('change', mediaListener)
 })
 </script>
@@ -138,7 +169,7 @@ onBeforeUnmount(() => {
             <span v-if="player.loading" class="spinner" />
             <AppIcon v-else :name="status === 'playing' ? 'pause' : 'play'" :size="17" />
           </button>
-          <button class="icon-btn" title="下一首" @click="player.next()">
+          <button class="icon-btn" title="下一首" @click="player.playNext()">
             <AppIcon name="next" :size="17" />
           </button>
           <button
@@ -167,6 +198,17 @@ onBeforeUnmount(() => {
       </div>
 
       <div class="player-right">
+        <button
+          class="icon-btn"
+          :class="{ active: favorited }"
+          :title="favorited ? '取消收藏' : '收藏'"
+          @click.stop="toggleFavorite()"
+        >
+          <AppIcon name="heart" :size="17" />
+        </button>
+        <button class="icon-btn" title="下载" @click.stop="downloadCurrent()">
+          <AppIcon name="download" :size="17" />
+        </button>
         <div class="quality-wrap">
           <button class="quality-chip" title="音质（本次请求档位）" @click.stop="toggleQualityMenu()">
             {{ requestedQualityLabel }}

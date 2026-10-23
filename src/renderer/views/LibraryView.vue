@@ -4,18 +4,23 @@ import { useRouter } from 'vue-router'
 import type { PlaylistMeta } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import CoverArt from '../components/CoverArt.vue'
+import PlaylistEditDialog from '../components/PlaylistEditDialog.vue'
 import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
+import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { playlistSubtitle } from '../utils/format'
 
 const router = useRouter()
 const auth = useAuthStore()
+const edit = usePlaylistEditStore()
 const toast = useToast()
 
 const playlists = ref<PlaylistMeta[]>([])
 const loading = ref(false)
 const error = ref('')
+const dialogOpen = ref(false)
+const editingPlaylist = ref<PlaylistMeta | null>(null)
 
 async function load(): Promise<void> {
   if (!auth.loggedIn) return
@@ -23,6 +28,10 @@ async function load(): Promise<void> {
   error.value = ''
   try {
     playlists.value = unwrap(await window.lychee.playlist.listMine())
+    const favorites = playlists.value.find(
+      (playlist) => playlist.kind === 'favorites' || playlist.id === 'liked'
+    )
+    if (favorites) window.lychee.playlist.prefetch([favorites.id])
   } catch (err) {
     error.value = describeError(err)
   } finally {
@@ -45,6 +54,37 @@ async function logout(): Promise<void> {
   }
 }
 
+function openCreate(): void {
+  editingPlaylist.value = null
+  dialogOpen.value = true
+}
+
+function openRename(playlist: PlaylistMeta): void {
+  editingPlaylist.value = playlist
+  dialogOpen.value = true
+}
+
+async function submitDialog(name: string): Promise<void> {
+  try {
+    if (editingPlaylist.value) await edit.rename(editingPlaylist.value.id, name)
+    else await edit.create(name)
+    dialogOpen.value = false
+    await load()
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
+
+async function removePlaylist(playlist: PlaylistMeta): Promise<void> {
+  if (!window.confirm(`确定删除歌单「${playlist.name}」？`)) return
+  try {
+    await edit.remove(playlist.id)
+    await load()
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
+
 watch(
   () => auth.loggedIn,
   (loggedIn) => {
@@ -62,10 +102,16 @@ watch(
         <div class="eyebrow">Library</div>
         <h1 class="page-title">我的歌单</h1>
       </div>
-      <button class="btn small" :disabled="loading || !auth.loggedIn" @click="refreshAll()">
-        <AppIcon name="refresh" :size="14" />
-        刷新
-      </button>
+      <div class="page-head-actions">
+        <button v-if="auth.loggedIn" class="btn small" @click="openCreate()">
+          <AppIcon name="plus" :size="14" />
+          新建歌单
+        </button>
+        <button class="btn small" :disabled="loading || !auth.loggedIn" @click="refreshAll()">
+          <AppIcon name="refresh" :size="14" />
+          刷新
+        </button>
+      </div>
     </div>
 
     <div v-if="!auth.ready" class="loading-block"><span class="spinner" />正在读取登录态</div>
@@ -112,23 +158,44 @@ watch(
           <span class="count">{{ playlists.length }} 个</span>
         </div>
         <div class="card-grid">
-          <button
+          <div
             v-for="playlist in playlists"
             :key="playlist.id"
-            class="card"
+            class="card playlist-card"
+            role="button"
+            tabindex="0"
             @click="router.push(`/playlist/${playlist.id}`)"
+            @keydown.enter="router.push(`/playlist/${playlist.id}`)"
           >
             <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="30" />
-            <div class="card-name">{{ playlist.name }}</div>
+            <div class="card-name">
+              {{ playlist.kind === 'favorites' ? '我喜欢' : playlist.name }}
+            </div>
             <div class="card-sub">{{ playlistSubtitle(playlist) }}</div>
-          </button>
+            <div v-if="playlist.editable && playlist.kind !== 'favorites'" class="card-actions">
+              <button class="icon-btn" title="重命名" @click.stop="openRename(playlist)">
+                <AppIcon name="edit" :size="14" />
+              </button>
+              <button class="icon-btn" title="删除" @click.stop="removePlaylist(playlist)">
+                <AppIcon name="trash" :size="14" />
+              </button>
+            </div>
+          </div>
         </div>
       </template>
 
       <div v-else class="empty">
         <div class="empty-icon"><AppIcon name="list" :size="25" /></div>
         <h3>这个账号下还没有歌单</h3>
+        <button class="btn small" @click="openCreate()">新建歌单</button>
       </div>
     </template>
+
+    <PlaylistEditDialog
+      :open="dialogOpen"
+      :playlist="editingPlaylist"
+      @close="dialogOpen = false"
+      @submit="submitDialog"
+    />
   </div>
 </template>

@@ -1,5 +1,7 @@
 import type { Quality, Song, UrlResult } from '../../shared/types'
+import { IPC_SONG_MIDS_MAX, PROBE_DETAIL_CONCURRENCY, PROBE_VKEY_BATCH } from '../../shared/constants'
 import { getCredential } from '../credential'
+import { audioStreamUrl } from '../media/audio-protocol'
 import { UpstreamError, getGuid, musicu } from './client'
 import { isVipUser } from './user'
 
@@ -16,11 +18,16 @@ interface RawSong {
     price_album?: number
     pay_status?: number
   }
-  file?: { media_mid?: string }
+  file?: {
+    media_mid?: string
+    size_128mp3?: number
+    size_320mp3?: number
+    size_flac?: number
+  }
 }
 
 interface RawTrackInfo extends RawSong {
-  file?: { media_mid?: string }
+  file?: RawSong['file']
 }
 
 interface VkeyData {
@@ -39,7 +46,6 @@ const QUALITY_FILE: Record<Quality, { prefix: string; ext: string }> = {
 
 const QUALITY_FALLBACK_ORDER: Quality[] = ['flac', '320k', '128k']
 
-/** 先请求档位，再按 flac → 320k → 128k 兜底（跳过已尝试的请求档位）。 */
 function qualityAttempts(requested: Quality): Quality[] {
   return [requested, ...QUALITY_FALLBACK_ORDER.filter((quality) => quality !== requested)]
 }
@@ -88,7 +94,7 @@ async function mapLimit<T, R>(
 ): Promise<R[]> {
   const results = new Array<R>(items.length)
   let cursor = 0
-  const runners = Array.from({ length: Math.min(limit, items.length) }, async () => {
+  const runners = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
     while (cursor < items.length) {
       const index = cursor
       cursor += 1
@@ -102,7 +108,7 @@ async function mapLimit<T, R>(
 /** 按 songMid 批量取详情，供歌单/播放器补齐非搜索来源的歌曲。 */
 export async function getDetail(mids: string[]): Promise<Song[]> {
   const unique = [...new Set(mids.filter(Boolean))]
-  const tracks = await mapLimit(unique, 4, (mid) => fetchTrack(mid))
+  const tracks = await mapLimit(unique, PROBE_DETAIL_CONCURRENCY, (mid) => fetchTrack(mid))
   return tracks.map(toSong)
 }
 
@@ -113,9 +119,7 @@ interface PendingTrack {
 
 function buildStreamUrl(purl: string): string {
   if (/^https?:\/\//i.test(purl)) return purl
-
-  // vkey 与查询参数（尤其是 fromtag）绑定，必须整体复用上游返回的 purl；
-  // 按前缀重新拼装会导致 403。
+  // 查询参数（尤其是 fromtag）与 vkey 绑定，必须整体复用上游返回的 purl。
   return `https://ws.stream.qqmusic.qq.com/${purl}`
 }
 
@@ -124,69 +128,82 @@ async function requestQuality(
   quality: Quality
 ): Promise<Map<string, string>> {
   const { prefix, ext } = QUALITY_FILE[quality]
-  const data = await musicu<VkeyData>(
-    'vkey.GetVkeyServer',
-    'CgiGetVkey',
-    {
+  const resolved = new Map<string, string>()
+  for (let start = 0; start < tracks.length; start += PROBE_VKEY_BATCH) {
+    const batch = tracks.slice(start, start + PROBE_VKEY_BATCH)
+    const data = await musicu<VkeyData>('vkey.GetVkeyServer', 'CgiGetVkey', {
       guid: getGuid(),
-      songmid: tracks.map((track) => track.songMid),
-      songtype: tracks.map(() => 0),
-      filename: tracks.map((track) => `${prefix}${track.mediaMid}${ext}`),
+      songmid: batch.map((track) => track.songMid),
+      songtype: batch.map(() => 0),
+      filename: batch.map((track) => `${prefix}${track.mediaMid}${ext}`),
       uin: getCredential()?.musicid ?? '0',
       loginflag: 1,
       platform: '20'
-    }
-  )
-
-  const resolved = new Map<string, string>()
-  for (const info of data.midurlinfo ?? []) {
-    if (info.songmid && info.purl) {
-      resolved.set(info.songmid, info.purl)
+    })
+    for (const info of data.midurlinfo ?? []) {
+      if (info.songmid && info.purl) resolved.set(info.songmid, info.purl)
     }
   }
   return resolved
 }
 
-/**
- * 获取播放链接：先尝试请求档位，再按 flac → 320k → 128k 兜底；逐个 songMid 记录实际音质。
- * 全批量在所有档位都无链接时抛 NO_STREAM。
- */
-export async function getStreamUrls(mids: string[], quality: Quality): Promise<UrlResult[]> {
-  const unique = [...new Set(mids.filter(Boolean))]
-  if (unique.length === 0) return []
+/** 解析各档音质的上游播放地址；不生成协议 URL，也不抛 NO_STREAM。 */
+export async function resolveStreamUrls(
+  mids: string[],
+  requested: Quality
+): Promise<Map<string, { url: string; quality: Quality }>> {
+  const unique = [...new Set(mids.filter(Boolean))].slice(0, IPC_SONG_MIDS_MAX)
+  const result = new Map<string, { url: string; quality: Quality }>()
+  if (unique.length === 0) return result
 
-  const tracks: PendingTrack[] = []
-  await mapLimit(unique, 4, async (mid) => {
+  const tracks = await mapLimit(unique, PROBE_DETAIL_CONCURRENCY, async (mid) => {
     let mediaMid = mediaMidCache.get(mid)
     if (!mediaMid) {
       const track = await fetchTrack(mid)
       mediaMid = track.file?.media_mid ?? mid
       mediaMidCache.set(mid, mediaMid)
     }
-    tracks.push({ songMid: mid, mediaMid })
+    return { songMid: mid, mediaMid }
   })
 
-  const actualQuality = new Map<string, Quality>()
-  const urls = new Map<string, string>()
   let pending = tracks
-
-  for (const step of qualityAttempts(quality)) {
+  for (const quality of qualityAttempts(requested)) {
     if (pending.length === 0) break
-    const resolved = await requestQuality(pending, step)
+    let resolved: Map<string, string>
+    try {
+      resolved = await requestQuality(pending, quality)
+    } catch (err) {
+      // 104003：当前账号无该档位权限，继续尝试下一档。
+      if (err instanceof UpstreamError && err.code === 'NO_STREAM') continue
+      throw err
+    }
     for (const track of pending) {
       const purl = resolved.get(track.songMid)
       if (!purl) continue
-      urls.set(track.songMid, buildStreamUrl(purl))
-      actualQuality.set(track.songMid, step)
+      result.set(track.songMid, { url: buildStreamUrl(purl), quality })
     }
-    pending = pending.filter((track) => !urls.has(track.songMid))
+    pending = pending.filter((track) => !result.has(track.songMid))
   }
+  return result
+}
 
-  const results = unique.map<UrlResult>((mid) => ({
-    songMid: mid,
-    url: urls.get(mid) ?? null,
-    quality: actualQuality.get(mid) ?? quality
-  }))
+/**
+ * 获取播放链接：先尝试请求档位，再按 flac → 320k → 128k 兜底；逐个 songMid 记录实际音质。
+ * 返回主进程音频代理 URL；全批量在所有档位都无链接时抛 NO_STREAM。
+ */
+export async function getStreamUrls(mids: string[], quality: Quality): Promise<UrlResult[]> {
+  const unique = [...new Set(mids.filter(Boolean))].slice(0, IPC_SONG_MIDS_MAX)
+  if (unique.length === 0) return []
+
+  const resolved = await resolveStreamUrls(unique, quality)
+  const results = unique.map<UrlResult>((mid) => {
+    const item = resolved.get(mid)
+    return {
+      songMid: mid,
+      url: item ? audioStreamUrl(item.url, mid, item.quality) : null,
+      quality: item?.quality ?? quality
+    }
+  })
 
   if (results.every((result) => result.url === null)) {
     const vip = await isVipUser()

@@ -1,0 +1,6 @@
+# Lychee Player 启动参数（每行一个）
+# 空行与 # 开头行忽略；修改后下次启动生效。
+--ozone-platform=wayland
+--enable-wayland-ime
+--password-store=gnome-libsecret
+--autoplay-policy=no-user-gesture-required

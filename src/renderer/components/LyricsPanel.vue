@@ -7,6 +7,7 @@ import { useLyrics } from '../composables/lyrics'
 import { usePlayerStore } from '../stores/player'
 import { useUiStore } from '../stores/ui'
 import { singerNames } from '../utils/format'
+import type { LyricWord } from '../utils/lrc'
 
 const player = usePlayerStore()
 const ui = useUiStore()
@@ -15,6 +16,10 @@ const { lines, loading, error, activeIndex } = useLyrics()
 const listRef = ref<HTMLElement | null>(null)
 
 const subtitle = computed(() => (current.value ? `${current.value.name} · ${singerNames(current.value)}` : '暂无歌曲'))
+
+function wordActive(word: LyricWord): boolean {
+  return player.positionMs >= word.startMs && player.positionMs < word.startMs + word.durationMs
+}
 
 watch(activeIndex, async (index) => {
   if (index < 0 || !ui.lyricsOpen) return
@@ -62,7 +67,16 @@ watch(
           :class="{ active: index === activeIndex }"
           @click="player.seek(line.timeMs)"
         >
-          {{ line.text || '♪' }}
+          <template v-if="line.words">
+            <span
+              v-for="(word, wordIndex) in line.words"
+              :key="wordIndex"
+              class="lyric-word"
+              :class="{ active: wordActive(word) }"
+              >{{ word.text }}</span
+            >
+          </template>
+          <template v-else>{{ line.text || '♪' }}</template>
           <span v-if="line.trans" class="lyric-trans">{{ line.trans }}</span>
         </button>
       </div>

@@ -69,6 +69,7 @@ async function submitCookie(): Promise<void> {
 }
 
 onMounted(async () => {
+  if (auth.loggedIn) return
   await nextTick()
   sendBounds()
   void startEmbedLogin()

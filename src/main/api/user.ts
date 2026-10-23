@@ -1,4 +1,5 @@
 import type { UserProfile } from '../../shared/types'
+import { VIP_CACHE_MS } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu, upstreamRequest } from './client'
 import { hash33 } from './hash'
@@ -63,9 +64,6 @@ interface VipCache {
   expiresAt: number
   isVip: boolean
 }
-
-// 推荐值 5 × 60_000 ms；VIP 状态缓存时长。
-const VIP_CACHE_MS = 5 * 60_000
 
 let vipCache: VipCache | null = null
 

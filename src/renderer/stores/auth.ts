@@ -64,6 +64,7 @@ export const useAuthStore = defineStore('auth', () => {
     profile.value = null
     expiresAtMs.value = null
     canRefresh.value = false
+    window.dispatchEvent(new Event('lychee:logout'))
   }
 
   return {

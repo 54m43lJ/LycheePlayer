@@ -2,26 +2,20 @@ import { BrowserWindow, safeStorage, session, WebContentsView } from 'electron'
 import type { Event as ElectronEvent, WebContents } from 'electron'
 import type { Credential, EmbedRect } from '../../shared/types'
 import { XLOGIN_URL } from '../../shared/xlogin'
+import {
+  LOGIN_ALLOWED_DOMAINS,
+  LOGIN_COOKIE_POLL_MS,
+  LOGIN_EMBED_PARTITION,
+  LOGIN_EMBED_TIMEOUT_MS
+} from '../../shared/constants'
 import { UpstreamError } from './client'
 import { exchangeQqLoginCode, requestOAuthCodeWithCookies } from './login'
-
-// 推荐值 5 × 60_000 ms；内嵌 xlogin 登录总超时。
-const LOGIN_EMBED_TIMEOUT_MS = 5 * 60_000
-// 推荐值 1000 ms；内嵌登录读取 session Cookie 的轮询间隔。
-const LOGIN_COOKIE_POLL_MS = 1000
-// 推荐值 'lychee-xlogin'；登录组件的独立 session 分区名。
-const LOGIN_EMBED_PARTITION = 'lychee-xlogin'
 
 function isAllowedHost(url: string): boolean {
   try {
     const host = new URL(url).hostname
-    return (
-      host === 'qq.com' ||
-      host.endsWith('.qq.com') ||
-      host === 'gtimg.cn' ||
-      host.endsWith('.gtimg.cn') ||
-      host === 'weixin.qq.com' ||
-      host.endsWith('.weixin.qq.com')
+    return LOGIN_ALLOWED_DOMAINS.some(
+      (domain) => host === domain || host.endsWith(`.${domain}`)
     )
   } catch {
     return false
@@ -45,7 +39,7 @@ function extractOauthCode(url: string): string | null {
 
 async function clearLoginSession(target: Electron.Session): Promise<void> {
   try {
-    await target.clearStorageData({ storages: ['cookies'] })
+    await target.clearStorageData()
   } catch {
     // 清理失败不阻塞登录结果。
   }

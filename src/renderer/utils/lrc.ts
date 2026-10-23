@@ -1,7 +1,15 @@
+export interface LyricWord {
+  startMs: number
+  durationMs: number
+  text: string
+}
+
 export interface LyricLine {
   timeMs: number
+  durationMs: number | null
   text: string
   trans: string | null
+  words: LyricWord[] | null
 }
 
 const TIME_TAG = /\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\]/g
@@ -45,8 +53,10 @@ export function parseLyric(lrc: string, trans: string | null): LyricLine[] {
     })
     .map((line) => ({
       timeMs: line.timeMs,
+      durationMs: null,
       text: line.text,
-      trans: translation.get(line.timeMs) ?? null
+      trans: translation.get(line.timeMs) ?? null,
+      words: null
     }))
     .sort((a, b) => a.timeMs - b.timeMs)
 }
@@ -66,4 +76,14 @@ export function activeLyricIndex(lines: LyricLine[], positionMs: number): number
     }
   }
   return result
+}
+
+export function activeLyricWord(line: LyricLine, positionMs: number): LyricWord | null {
+  if (!line.words || line.words.length === 0) return null
+  let active: LyricWord | null = null
+  for (const word of line.words) {
+    if (word.startMs <= positionMs) active = word
+    else break
+  }
+  return active
 }

@@ -6,12 +6,13 @@
 export type Quality = '128k' | '320k' | 'flac'
 
 export type ErrorCode =
-  | 'UPSTREAM_NETWORK'
-  | 'AUTH_EXPIRED'
-  | 'NO_STREAM'
-  | 'UPSTREAM_CHANGED'
-  | 'QUOTA_LIMITED'
-  | 'INTERNAL'
+  | 'UPSTREAM_NETWORK' // 无法连接上游或请求超时
+  | 'AUTH_EXPIRED' // 凭证过期或无效
+  | 'NO_STREAM' // 各档音质均无播放链接
+  | 'UPSTREAM_CHANGED' // 上游响应结构与预期不符
+  | 'QUOTA_LIMITED' // 上游限流
+  | 'NO_PERMISSION' // 当前账号无权执行该写操作
+  | 'INTERNAL' // 主进程内部错误
 
 export interface IpcError {
   code: ErrorCode
@@ -46,11 +47,15 @@ export interface Song {
   pay: PayInfo
 }
 
+export type PlaylistKind = 'normal' | 'favorites'
+
 export interface PlaylistMeta {
   id: string
   name: string
   coverUrl: string
   songCount: number
+  kind: PlaylistKind
+  editable: boolean
 }
 
 export interface PlaylistDetail {
@@ -70,11 +75,13 @@ export interface SearchResult {
   singers: Singer[]
   albums: Album[]
   playlists: PlaylistMeta[]
+  mvs?: MvSummary[]
   total: number
 }
 
 export interface Lyric {
-  lrc: string
+  format: 'lrc' | 'qrc'
+  text: string
   trans: string | null
 }
 
@@ -94,11 +101,110 @@ export interface CommentPage {
   hasMore: boolean
 }
 
+export interface SongAvailability {
+  songMid: string
+  playable: boolean
+  maxQuality: Quality | null
+  checkedAtMs: number
+}
+
+export interface ProbeOptions {
+  force?: boolean
+}
+
+export interface PlaylistCacheEntry {
+  meta: PlaylistMeta
+  songs: Song[]
+  total: number
+  complete: boolean
+  fetchedAtMs: number
+}
+
+export interface PlaylistPage {
+  meta: PlaylistMeta
+  songs: Song[]
+  offset: number
+  total: number
+  hasMore: boolean
+}
+
+export interface PlaylistPageResult {
+  page: PlaylistPage
+  fetchedAtMs: number
+  stale: boolean
+  fromCache: boolean
+}
+
+export interface RecommendSection {
+  id: 'daily' | 'radar' | 'guess'
+  title: string
+  songs: Song[]
+  playlists: PlaylistMeta[]
+  refreshedAtMs: number
+}
+
+export interface RecommendFeed {
+  sections: RecommendSection[]
+}
+
+export interface FavoriteState {
+  songMid: string
+  favorited: boolean
+}
+
+export interface PlaylistEditResult {
+  meta: PlaylistMeta
+  songs?: Song[]
+}
+
+export interface MvSummary {
+  mvId: string
+  name: string
+  singerName: string
+  coverUrl: string
+}
+
+export interface MvDetail extends MvSummary {
+  description: string
+  publishDate: string
+}
+
+export interface MvStream {
+  mvId: string
+  quality: 'sd' | 'hd' | 'fhd'
+  url: string | null
+}
+
+export interface DownloadTask {
+  id: string
+  songMid: string
+  name: string
+  quality: Quality
+  filePath: string
+  coverPath: string | null
+  status: 'pending' | 'downloading' | 'paused' | 'done' | 'failed'
+  receivedBytes: number
+  totalBytes: number
+  error: string
+}
+
+export interface MpvState {
+  available: boolean
+  version: string | null
+  playing: boolean
+}
+
+export interface MpvEvent {
+  type: 'time' | 'duration' | 'play' | 'pause' | 'loaded' | 'ended' | 'error'
+  positionMs?: number
+  durationMs?: number
+}
+
+/** 登录凭证；完整字段与转换见 PROVIDER §4.3。仅主进程持有。 */
 export interface Credential {
   musicid: string
   musickey: string
   expiredAtMs: number | null
-  /** 以下字段仅主进程内部使用，不跨 IPC 下发。 */
   refreshKey?: string
   refreshToken?: string
   accessToken?: string
@@ -114,10 +220,15 @@ export interface UrlResult {
 }
 
 export interface Settings {
-  /** auto = 按登录态取默认：已登录 flac、未登录 320k。 */
   defaultQuality: 'auto' | Quality
   closeToTray: boolean
   theme: 'dark' | 'light'
+  audioCacheEnabled: boolean
+  shortcuts: Partial<Record<'toggleWindow' | 'playPause' | 'next' | 'previous', string>>
+  /** 音频引擎选择；mpv 缺失时回退 HTML5。 */
+  audioEngine?: 'auto' | 'html5' | 'mpv'
+  /** 下载目录；缺省为 ~/Music/Lychee Player。 */
+  downloadDir?: string
 }
 
 export interface AuthStatus {
@@ -153,10 +264,34 @@ export interface UserProfile {
   avatarUrl: string
 }
 
-/** 登录组件占位区域（页面 CSS 坐标），驱动主进程 WebContentsView 定位。 */
 export interface EmbedRect {
   x: number
   y: number
   width: number
   height: number
+}
+
+export interface StartupFlag {
+  kind: 'switch' | 'argument'
+  name?: string
+  value?: string
+  raw: string
+}
+
+export interface FlagsFile {
+  path: string
+  content: string
+}
+
+export interface AudioCacheStats {
+  bytes: number
+  files: number
+}
+
+export interface DownloadStorageInfo {
+  directory: string
+  bytes: number
+  freeBytes: number
+  cacheBytes?: number
+  cacheFiles?: number
 }

@@ -1,4 +1,11 @@
 import type { Credential, ErrorCode, IpcError } from '../../shared/types'
+import {
+  MUSICU_BUSY_BACKOFF_MS,
+  UPSTREAM_NETWORK_BACKOFF_MS,
+  UPSTREAM_QUOTA_BACKOFF_MS,
+  UPSTREAM_RETRY_ATTEMPTS,
+  UPSTREAM_TIMEOUT_MS
+} from '../../shared/constants'
 import { getCredential } from '../credential'
 
 const USER_AGENT =
@@ -7,24 +14,15 @@ const USER_AGENT =
 /** 进程级稳定 GUID，播放链接请求使用。 */
 const GUID = String(Math.floor(1_000_000_000 + Math.random() * 8_000_000_000))
 
-// 推荐值 15_000 ms；单次上游请求超时。
-const UPSTREAM_TIMEOUT_MS = 15_000
-// 推荐值 3；HTTP 非 2xx / 429 / 瞬时繁忙的最大尝试次数。
-const UPSTREAM_RETRY_ATTEMPTS = 3
-// 推荐值 400 ms；HTTP 非 2xx 重试的基础退避，指数退避。
-const UPSTREAM_NETWORK_BACKOFF_MS = 400
-// 推荐值 600 ms；HTTP 限流重试的基础退避，指数退避。
-const UPSTREAM_QUOTA_BACKOFF_MS = 600
-// 推荐值 500 ms；瞬时繁忙码（2001 / 104604）重试的基础退避，指数退避。
-const MUSICU_BUSY_BACKOFF_MS = 500
-
 export class UpstreamError extends Error {
   readonly code: ErrorCode
+  readonly retryable: boolean
 
-  constructor(code: ErrorCode, message: string) {
+  constructor(code: ErrorCode, message: string, retryable = false) {
     super(message)
     this.name = 'UpstreamError'
     this.code = code
+    this.retryable = retryable
   }
 }
 
@@ -75,24 +73,34 @@ async function fetchOnce(req: UpstreamRequest): Promise<Response> {
     url.searchParams.set(key, value)
   }
 
-  const response = await fetch(url, {
-    method: req.method ?? 'GET',
-    headers: {
-      'User-Agent': USER_AGENT,
-      Referer: 'https://y.qq.com/',
-      Accept: 'application/json, text/plain, */*',
-      ...cookieHeader(credential),
-      ...req.headers
-    },
-    body: req.body,
-    signal: AbortSignal.timeout(req.timeoutMs ?? UPSTREAM_TIMEOUT_MS)
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      method: req.method ?? 'GET',
+      headers: {
+        'User-Agent': USER_AGENT,
+        Referer: 'https://y.qq.com/',
+        Accept: 'application/json, text/plain, */*',
+        ...cookieHeader(credential),
+        ...req.headers
+      },
+      body: req.body,
+      signal: AbortSignal.timeout(req.timeoutMs ?? UPSTREAM_TIMEOUT_MS)
+    })
+  } catch (error) {
+    // 连接失败 / 超时不重试。
+    const message =
+      error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
+        ? '上游请求超时'
+        : '无法连接上游'
+    throw new UpstreamError('UPSTREAM_NETWORK', message)
+  }
 
   if (response.status === 429) {
-    throw new UpstreamError('QUOTA_LIMITED', '上游限流')
+    throw new UpstreamError('QUOTA_LIMITED', '上游限流', true)
   }
   if (!response.ok) {
-    throw new UpstreamError('UPSTREAM_NETWORK', `上游返回 HTTP ${response.status}`)
+    throw new UpstreamError('UPSTREAM_NETWORK', `上游返回 HTTP ${response.status}`, true)
   }
   return response
 }
@@ -101,16 +109,18 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-/**
- * 统一上游请求入口：签名、Cookie 注入、超时与退避都在此完成。
- * 目前 QQ 音乐公开 CGI 不需要额外签名，保留该入口以隔离未来变更。
- */
+/** 统一上游请求入口：Cookie 注入、超时与退避都在此完成。 */
 export async function upstreamRequest<T>(req: UpstreamRequest): Promise<T> {
   let lastError: unknown
   for (let attempt = 0; attempt < UPSTREAM_RETRY_ATTEMPTS; attempt += 1) {
     try {
       const response = await fetchOnce(req)
-      const text = await response.text()
+      let text: string
+      try {
+        text = await response.text()
+      } catch {
+        throw new UpstreamError('UPSTREAM_NETWORK', '读取上游响应失败')
+      }
       try {
         return JSON.parse(text) as T
       } catch {
@@ -119,20 +129,12 @@ export async function upstreamRequest<T>(req: UpstreamRequest): Promise<T> {
     } catch (err) {
       lastError = err
       if (err instanceof UpstreamError && err.code === 'UPSTREAM_CHANGED') throw err
-      if (
-        err instanceof UpstreamError &&
-        err.code === 'QUOTA_LIMITED' &&
-        attempt < UPSTREAM_RETRY_ATTEMPTS - 1
-      ) {
-        await sleep(UPSTREAM_QUOTA_BACKOFF_MS * 2 ** attempt)
-        continue
-      }
-      if (
-        err instanceof UpstreamError &&
-        err.code === 'UPSTREAM_NETWORK' &&
-        attempt < UPSTREAM_RETRY_ATTEMPTS - 1
-      ) {
-        await sleep(UPSTREAM_NETWORK_BACKOFF_MS * 2 ** attempt)
+      if (err instanceof UpstreamError && err.retryable && attempt < UPSTREAM_RETRY_ATTEMPTS - 1) {
+        const delay =
+          err.code === 'QUOTA_LIMITED'
+            ? UPSTREAM_QUOTA_BACKOFF_MS
+            : UPSTREAM_NETWORK_BACKOFF_MS
+        await sleep(delay * 2 ** attempt)
         continue
       }
       throw err
@@ -150,6 +152,11 @@ interface MusicuResponse<T> {
     data?: T
     message?: string
   }
+  req?: {
+    code: number
+    data?: T
+    message?: string
+  }
 }
 
 export interface MusicuOptions {
@@ -159,17 +166,14 @@ export interface MusicuOptions {
   credential?: Credential | null
 }
 
-/**
- * 调用 musicu.fcg 的单个 req_0 请求，返回其 data。
- */
+/** 调用 musicu.fcg 的单个 req_0 请求，返回其 data。 */
 export async function musicu<T>(
   module: string,
   method: string,
   param: Record<string, unknown>,
   options: MusicuOptions = {}
 ): Promise<T> {
-  const credential =
-    options.credential === undefined ? getCredential() : options.credential
+  const credential = options.credential === undefined ? getCredential() : options.credential
   const comm =
     options.comm === false
       ? undefined
@@ -197,9 +201,9 @@ export async function musicu<T>(
     const node = response.req_0
     const code = response.code !== 0 ? response.code : (node?.code ?? 0)
     if (code !== 0) {
-      // 2001 / 104604 为上游瞬时繁忙，短退避后重试。
+      // 2001 / 104604 为上游瞬时繁忙，短退避后重试；其余错误码直接映射。
       if ((code === 2001 || code === 104604) && attempt < UPSTREAM_RETRY_ATTEMPTS - 1) {
-        await new Promise((resolve) => setTimeout(resolve, MUSICU_BUSY_BACKOFF_MS * 2 ** attempt))
+        await sleep(MUSICU_BUSY_BACKOFF_MS * 2 ** attempt)
         continue
       }
       throw mapUpstreamCode(code, `${module}.${method}`)
@@ -220,11 +224,14 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError {
   if (code === 1000 || code === 104401 || code === 104400) {
     return new UpstreamError('AUTH_EXPIRED', '登录凭证已过期')
   }
-  if (code === 104604 || code === 100001 || code === 2001) {
+  if (code === 104604 || code === 2001 || code === 100001) {
     return new UpstreamError('QUOTA_LIMITED', '上游限流或繁忙')
   }
   if (code === 104003) {
     return new UpstreamError('NO_STREAM', '当前账号无该音质权限')
+  }
+  if (code === 403) {
+    return new UpstreamError('NO_PERMISSION', '当前账号无权执行该操作')
   }
   const loginMessages: Record<number, string> = {
     20261: '登录参数错误',

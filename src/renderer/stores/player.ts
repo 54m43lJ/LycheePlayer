@@ -1,13 +1,24 @@
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw } from 'vue'
 import type { MprisCommand, PlayerState, Quality, Song } from '@shared/types'
+import {
+  PLAYER_STATE_THROTTLE_MS,
+  PLAY_HISTORY_MAX,
+  PREVIOUS_RESTART_THRESHOLD_MS
+} from '@shared/constants'
 import { IpcCallError, describeError, unwrap } from '../api'
-import { createAudioEngine } from '../audio/engine'
+import { createAudioEngine, type AudioEngine, type AudioEngineHandlers } from '../audio/engine'
+import { createRemoteEngine } from '../audio/remote-engine'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from './auth'
 import { useSettingsStore } from './settings'
 
 export type PlayMode = 'sequence' | 'repeat-all' | 'repeat-one' | 'shuffle'
+
+export interface QueueSource {
+  kind: 'playlist'
+  id: string
+}
 
 export const PLAY_MODE_LABEL: Record<PlayMode, string> = {
   sequence: '顺序播放',
@@ -17,9 +28,6 @@ export const PLAY_MODE_LABEL: Record<PlayMode, string> = {
 }
 
 const MODES: PlayMode[] = ['sequence', 'repeat-all', 'repeat-one', 'shuffle']
-
-// 推荐值 900 ms；播放状态推送的节流窗口。
-const PLAYER_STATE_THROTTLE_MS = 900
 
 export const usePlayerStore = defineStore('player', () => {
   const settings = useSettingsStore()
@@ -38,18 +46,21 @@ export const usePlayerStore = defineStore('player', () => {
   const quality = ref<Quality>('320k')
   const requestedQuality = ref<Quality>('320k')
   const loading = ref(false)
-  /** 当前歌曲是否拿到过播放链接；NO_STREAM 时置为 false，阻止 play / resume。 */
   const playable = ref(false)
+  const queueSource = ref<QueueSource | null>(null)
+  const queueBuilding = ref(false)
+  const playHistory = ref<Song[]>([])
 
   let loadToken = 0
   let lastSentAt = 0
+  let engine: AudioEngine
+  let engineKind: 'html5' | 'mpv' = 'html5'
 
   function clampVolume(value: number): number {
     if (!Number.isFinite(value)) return 0.8
     return Math.min(1, Math.max(0, value))
   }
 
-  /** 默认音质：auto 时按登录态取档——已登录默认无损（降档链兜底），未登录 320k。 */
   const defaultQuality = computed<Quality>(() => {
     const pref = settings.settings.defaultQuality
     if (pref !== 'auto') return pref
@@ -102,7 +113,7 @@ export const usePlayerStore = defineStore('player', () => {
     if (Date.now() - lastSentAt >= PLAYER_STATE_THROTTLE_MS) sendState()
   }
 
-  const engine = createAudioEngine({
+  const handlers: AudioEngineHandlers = {
     onTimeUpdate(position) {
       if (loading.value) return
       positionMs.value = position
@@ -129,7 +140,7 @@ export const usePlayerStore = defineStore('player', () => {
         void resume()
         return
       }
-      next(true)
+      playNext()
     },
     onError() {
       if (!current.value || !engine.sourceUrl) return
@@ -137,8 +148,47 @@ export const usePlayerStore = defineStore('player', () => {
       status.value = 'paused'
       sendState()
     }
-  })
+  }
+
+  function createEngine(kind: 'html5' | 'mpv'): AudioEngine {
+    engineKind = kind
+    return kind === 'mpv' ? createRemoteEngine(handlers) : createAudioEngine(handlers)
+  }
+
+  engine = createEngine('html5')
   engine.setVolume(volume.value)
+
+  function switchEngine(kind: 'html5' | 'mpv'): void {
+    if (kind === engineKind) return
+    const resumeSong = current.value
+    engine.stop()
+    engine = createEngine(kind)
+    engine.setVolume(volume.value)
+    if (resumeSong) void loadAndPlay(resumeSong, requestedQuality.value)
+  }
+
+  function applyEngine(): void {
+    const preference = settings.settings.audioEngine ?? 'auto'
+    if (preference === 'html5') {
+      switchEngine('html5')
+      return
+    }
+    void window.lychee.mpv
+      .getState()
+      .then((state) => {
+        if (!state.ok) {
+          switchEngine('html5')
+          return
+        }
+        if (!state.data.available) {
+          if (preference === 'mpv') toast.error('未检测到 mpv，已回退 HTML5 Audio')
+          switchEngine('html5')
+          return
+        }
+        switchEngine('mpv')
+      })
+      .catch(() => switchEngine('html5'))
+  }
 
   function shuffleUpcoming(): void {
     const start = index.value + 1
@@ -151,6 +201,14 @@ export const usePlayerStore = defineStore('player', () => {
       tail[swap] = value
     }
     playOrder.value = [...playOrder.value.slice(0, start), ...tail]
+  }
+
+  function pushHistory(song: Song): void {
+    if (playHistory.value.length > 0 && playHistory.value[playHistory.value.length - 1].songMid === song.songMid) {
+      return
+    }
+    playHistory.value.push(song)
+    if (playHistory.value.length > PLAY_HISTORY_MAX) playHistory.value.shift()
   }
 
   async function loadAndPlay(song: Song, forcedQuality?: Quality): Promise<void> {
@@ -181,15 +239,25 @@ export const usePlayerStore = defineStore('player', () => {
       sendState()
     } catch (err) {
       if (token !== loadToken) return
-      playable.value = !(err instanceof IpcCallError && err.code === 'NO_STREAM')
+      if (err instanceof IpcCallError && err.code === 'NO_STREAM') {
+        playable.value = false
+        toast.error(describeError(err))
+        if (queue.value.length > 0) {
+          loading.value = false
+          advance(false, false)
+          return
+        }
+      } else {
+        toast.error(describeError(err))
+      }
       status.value = 'stopped'
-      toast.error(describeError(err))
       sendState()
     } finally {
       if (token === loadToken) loading.value = false
     }
   }
 
+  /** 低层定位与加载；不写播放历史。 */
   function playAt(target: number): void {
     if (target < 0 || target >= playOrder.value.length) return
     index.value = target
@@ -202,18 +270,51 @@ export const usePlayerStore = defineStore('player', () => {
     const start = Math.min(Math.max(0, startIndex), songs.length - 1)
     playOrder.value = songs.slice()
     index.value = start
+    playHistory.value = []
+    queueSource.value = null
+    queueBuilding.value = false
     if (mode.value === 'shuffle') shuffleUpcoming()
     playAt(index.value)
   }
 
-  /** 下一首播放：插入当前歌曲之后；已在队列中则移动，当前歌曲本身不操作。 */
-  function playNext(song: Song): void {
+  /** 从歌单开始播放：记录队列来源，歌单完整加载后增量补齐队列。 */
+  function startPlaylistPlayback(song: Song, source: QueueSource): void {
+    playOrder.value = [song]
+    index.value = 0
+    playHistory.value = []
+    queueSource.value = source
+    queueBuilding.value = true
+    void loadAndPlay(song)
+  }
+
+  /** 歌单完整加载后按当前歌曲位置补齐队列；不改变当前曲与进度。 */
+  function appendPlaylistQueue(currentSong: Song, fullSongs: Song[]): void {
+    if (!queueSource.value || currentSong.songMid !== current.value?.songMid) return
+    const position = fullSongs.findIndex((song) => song.songMid === currentSong.songMid)
+    if (position < 0) return
+    const tail = fullSongs
+      .slice(position + 1)
+      .filter((song) => song.songMid && song.songMid !== currentSong.songMid)
+    const head = playOrder.value.slice(0, index.value + 1)
+    const merged: Song[] = []
+    const seen = new Set<string>()
+    for (const song of [...head, ...tail]) {
+      if (seen.has(song.songMid)) continue
+      seen.add(song.songMid)
+      merged.push(song)
+    }
+    playOrder.value = merged
+    if (mode.value === 'shuffle') shuffleUpcoming()
+    queueBuilding.value = false
+  }
+
+  /** 下一首播放：插入当前歌曲之后；不切歌、不写历史。无当前歌曲时直接播放。 */
+  function addNext(song: Song): void {
     if (!current.value) {
       playList([song])
       return
     }
     if (song.songMid === current.value.songMid) return
-
     const existing = playOrder.value.findIndex((item) => item.songMid === song.songMid)
     if (existing >= 0) {
       playOrder.value.splice(existing, 1)
@@ -233,6 +334,10 @@ export const usePlayerStore = defineStore('player', () => {
       return
     }
     playOrder.value.splice(index.value + 1)
+  }
+
+  function clearPlayHistory(): void {
+    playHistory.value = []
   }
 
   async function resume(): Promise<void> {
@@ -271,22 +376,47 @@ export const usePlayerStore = defineStore('player', () => {
     sendState()
   }
 
-  function next(_auto = false): void {
+  function advance(recordHistory: boolean, allowWrap = true): void {
     if (playOrder.value.length === 0) return
+    if (recordHistory && current.value) pushHistory(current.value)
     if (index.value < playOrder.value.length - 1) {
       playAt(index.value + 1)
       return
     }
-    if (mode.value === 'repeat-all') {
+    if (allowWrap && (mode.value === 'repeat-all' || mode.value === 'shuffle')) {
       playAt(0)
       return
     }
     stopAtEnd()
   }
 
-  function previous(): void {
-    if (positionMs.value > 3000) {
+  /** 手动 / 自动续播到下一首；列表循环回绕，队尾停止。 */
+  function playNext(): void {
+    if (mode.value === 'repeat-one') {
       seek(0)
+      void resume()
+      return
+    }
+    advance(true)
+  }
+
+  function previous(): void {
+    if (!current.value) return
+    if (positionMs.value > PREVIOUS_RESTART_THRESHOLD_MS) {
+      seek(0)
+      return
+    }
+    const historySong = playHistory.value.pop()
+    if (historySong) {
+      const position = playOrder.value.findIndex((song) => song.songMid === historySong.songMid)
+      if (position >= 0) {
+        index.value = position
+        void loadAndPlay(historySong)
+      } else {
+        playOrder.value.splice(Math.max(0, index.value), 0, historySong)
+        index.value = Math.max(0, index.value)
+        void loadAndPlay(historySong)
+      }
       return
     }
     if (index.value > 0) {
@@ -356,6 +486,7 @@ export const usePlayerStore = defineStore('player', () => {
   function applySettings(): void {
     requestedQuality.value = defaultQuality.value
     if (!current.value) quality.value = requestedQuality.value
+    applyEngine()
   }
 
   function handleCommand(command: MprisCommand): void {
@@ -366,7 +497,7 @@ export const usePlayerStore = defineStore('player', () => {
     } else if (command === 'toggle') {
       toggle()
     } else if (command === 'next') {
-      next()
+      playNext()
     } else if (command === 'previous') {
       previous()
     } else if ('seekTo' in command) {
@@ -396,13 +527,19 @@ export const usePlayerStore = defineStore('player', () => {
     loading,
     canPlay,
     progress,
+    queueSource,
+    queueBuilding,
+    playHistory,
     playList,
+    startPlaylistPlayback,
+    appendPlaylistQueue,
+    addNext,
     playNext,
     playAt,
     toggle,
     pause,
-    next,
     previous,
+    clearPlayHistory,
     seek,
     setVolume,
     setQuality,

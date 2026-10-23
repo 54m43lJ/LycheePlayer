@@ -3,8 +3,19 @@ import { ref } from 'vue'
 import type { Settings } from '@shared/types'
 import { unwrap } from '../api'
 
+export function defaultSettings(): Settings {
+  return {
+    defaultQuality: 'auto',
+    closeToTray: true,
+    theme: 'dark',
+    audioCacheEnabled: true,
+    shortcuts: { playPause: 'Ctrl+Alt+Space' },
+    audioEngine: 'auto'
+  }
+}
+
 export const useSettingsStore = defineStore('settings', () => {
-  const settings = ref<Settings>({ defaultQuality: 'auto', closeToTray: true, theme: 'dark' })
+  const settings = ref<Settings>(defaultSettings())
   const loaded = ref(false)
 
   function applyTheme(): void {
@@ -19,7 +30,7 @@ export const useSettingsStore = defineStore('settings', () => {
 
   async function load(): Promise<void> {
     try {
-      settings.value = unwrap(await window.lychee.settings.get())
+      settings.value = { ...defaultSettings(), ...unwrap(await window.lychee.settings.get()) }
     } finally {
       applyTheme()
       loaded.value = true

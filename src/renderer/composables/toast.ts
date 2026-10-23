@@ -1,4 +1,5 @@
 import { reactive } from 'vue'
+import { TOAST_DURATION_MS } from '@shared/constants'
 
 export type ToastKind = 'info' | 'error'
 
@@ -10,9 +11,6 @@ export interface ToastItem {
 
 const state = reactive<{ items: ToastItem[] }>({ items: [] })
 let sequence = 0
-
-// 推荐值 3600 ms；Toast 自动消失时间。
-const TOAST_DURATION_MS = 3600
 
 function dismiss(id: number): void {
   const index = state.items.findIndex((item) => item.id === id)

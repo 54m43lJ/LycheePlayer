@@ -23,6 +23,7 @@ export function describeError(error: unknown): string {
       NO_STREAM: '当前内容不可播放（可能需要 VIP 或已下架）',
       UPSTREAM_CHANGED: '上游接口发生变化',
       QUOTA_LIMITED: '请求过于频繁，请稍后重试',
+      NO_PERMISSION: '当前账号无权执行该操作',
       INTERNAL: '主进程内部错误'
     }
     if (error.code === 'NO_STREAM' && error.message) return error.message

@@ -1,4 +1,11 @@
 import type { PlaylistMeta, SearchRequest, SearchResult, Singer } from '../../shared/types'
+import {
+  SEARCH_EMPTY_RETRY_COUNT,
+  SEARCH_EMPTY_RETRY_MS,
+  SEARCH_PAGE_NO_MAX,
+  SEARCH_PAGE_SIZE_DEFAULT,
+  SEARCH_PAGE_SIZE_MAX
+} from '../../shared/constants'
 import { UpstreamError, musicu } from './client'
 import { rawSongToSong } from './song'
 
@@ -46,17 +53,6 @@ const SEARCH_TYPE = {
   playlist: 3
 } as const
 
-// 推荐值 350 ms；搜索空结果重试延迟。
-const SEARCH_EMPTY_RETRY_MS = 350
-// 推荐值 1；搜索空结果重试次数。
-const SEARCH_EMPTY_RETRY_COUNT = 1
-// 推荐值 100；search.byType 页码上限。
-const SEARCH_PAGE_NO_MAX = 100
-// 推荐值 20；搜索每页默认条数。
-const SEARCH_PAGE_SIZE_DEFAULT = 20
-// 推荐值 50；搜索每页最大条数。
-const SEARCH_PAGE_SIZE_MAX = 50
-
 function coverUrl(value: string | undefined): string {
   if (!value) return ''
   return value.startsWith('http://') ? `https://${value.slice(7)}` : value
@@ -74,7 +70,9 @@ function toPlaylist(raw: RawPlaylist): PlaylistMeta {
     id: String(raw.dissid ?? raw.disstid ?? raw.id ?? ''),
     name: raw.dissname ?? raw.name ?? '',
     coverUrl: coverUrl(raw.imgurl ?? raw.picurl ?? raw.cover),
-    songCount: Number(raw.song_count ?? raw.songnum ?? 0)
+    songCount: Number(raw.song_count ?? raw.songnum ?? 0),
+    kind: 'normal',
+    editable: false
   }
 }
 

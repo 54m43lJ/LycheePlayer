@@ -3,17 +3,24 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
+import DownloadDrawer from './components/DownloadDrawer.vue'
 import LyricsPanel from './components/LyricsPanel.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ToastStack from './components/ToastStack.vue'
 import { useAuthStore } from './stores/auth'
 import { usePlayerStore } from './stores/player'
+import { usePlaylistEditStore } from './stores/playlist-edit'
+import { usePlaylistStore } from './stores/playlist'
+import { useRecommendStore } from './stores/recommend'
 import { useSettingsStore } from './stores/settings'
 import { useUiStore } from './stores/ui'
 import { singerNames, songCover } from './utils/format'
 
 const auth = useAuthStore()
 const player = usePlayerStore()
+const playlistEdit = usePlaylistEditStore()
+const playlistStore = usePlaylistStore()
+const recommend = useRecommendStore()
 const settings = useSettingsStore()
 const ui = useUiStore()
 const route = useRoute()
@@ -25,11 +32,20 @@ const avatarLetter = computed(() => {
 
 let offCommand: (() => void) | null = null
 
+function onLogout(): void {
+  playlistStore.reset()
+  recommend.reset()
+}
+
 onMounted(() => {
+  window.addEventListener('lychee:logout', onLogout)
   void (async () => {
     await Promise.allSettled([auth.refresh(), settings.load()])
     settings.applyTheme()
     player.applySettings()
+    if (player.current) {
+      void playlistEdit.loadFavorites([player.current.songMid])
+    }
   })()
 
   offCommand = window.lychee.player.onCommand((command) => player.handleCommand(command))
@@ -37,11 +53,26 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   offCommand?.()
+  window.removeEventListener('lychee:logout', onLogout)
 })
 
 watch(
   () => route.fullPath,
   () => ui.closeLyrics()
+)
+
+watch(
+  () => player.current?.songMid ?? null,
+  (songMid) => {
+    if (songMid) void playlistEdit.loadFavorites([songMid])
+  }
+)
+
+watch(
+  () => auth.loggedIn,
+  (loggedIn) => {
+    if (!loggedIn) playlistEdit.favorites = new Set()
+  }
 )
 </script>
 
@@ -50,7 +81,7 @@ watch(
     <aside class="sidebar">
       <div class="brand">
         <div class="brand-mark"><AppIcon name="music" :size="20" /></div>
-        <div>
+        <div class="brand-text">
           <div class="brand-name">Lychee Player</div>
           <div class="brand-sub">QQ Music · Linux</div>
         </div>
@@ -60,16 +91,29 @@ watch(
         <div class="nav-label">浏览</div>
         <RouterLink class="nav-item" active-class="active" to="/search">
           <AppIcon name="search" :size="18" />
-          搜索
+          <span class="nav-text">搜索</span>
+        </RouterLink>
+        <RouterLink class="nav-item" active-class="active" to="/discover">
+          <AppIcon name="compass" :size="18" />
+          <span class="nav-text">发现</span>
         </RouterLink>
         <RouterLink class="nav-item" active-class="active" to="/library">
           <AppIcon name="library" :size="18" />
-          我的歌单
+          <span class="nav-text">我的歌单</span>
         </RouterLink>
         <div class="nav-label" style="margin-top: 14px">应用</div>
+        <button
+          class="nav-item"
+          :class="{ active: ui.downloadOpen }"
+          type="button"
+          @click="ui.toggleDownload()"
+        >
+          <AppIcon name="download" :size="18" />
+          <span class="nav-text">下载</span>
+        </button>
         <RouterLink class="nav-item" active-class="active" to="/settings">
           <AppIcon name="settings" :size="18" />
-          设置
+          <span class="nav-text">设置</span>
         </RouterLink>
       </nav>
 
@@ -107,7 +151,10 @@ watch(
       <div class="lyrics-head">
         <div>
           <h2>播放队列</h2>
-          <p>接下来 {{ player.queue.length }} 首</p>
+          <p>
+            接下来 {{ player.queue.length }} 首
+            <template v-if="player.queueBuilding"> · 正在补齐</template>
+          </p>
         </div>
         <button class="icon-btn" title="关闭播放队列" @click="ui.closeQueue()">
           <AppIcon name="close" :size="18" />
@@ -151,6 +198,7 @@ watch(
       </div>
     </aside>
 
+    <DownloadDrawer />
     <ToastStack />
   </div>
 </template>

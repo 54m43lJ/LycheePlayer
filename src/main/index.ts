@@ -1,35 +1,33 @@
-import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron'
+import { app, BrowserWindow, dialog, Menu, safeStorage, shell } from 'electron'
 import { join } from 'node:path'
+import { SESSION_REFRESH_INTERVAL_MS } from '../shared/constants'
 import { loadCredential } from './credential'
 import { refreshIfNeeded } from './api/login'
 import { registerIpc, sendPlayerCommand } from './ipc'
 import { initMpris, publishState } from './integration/mpris'
 import { destroyTray, initTray } from './integration/tray'
+import { registerShortcuts, unregisterShortcuts } from './integration/global-shortcuts'
 import { getSettings, loadSettings, saveSettings } from './settings'
 import { disposeEmbedView, isAllowedHost } from './api/web-login'
+import { registerAudioProtocol } from './media/audio-protocol'
+import { applyFlagsFromDisk } from './startup-flags'
+import { stopMpv } from './audio/mpv'
 
 let mainWindow: BrowserWindow | null = null
 let quitting = false
 let refreshTimer: NodeJS.Timeout | null = null
 
-// 推荐值 30 × 60_000 ms；会话续期定时器间隔。
-const SESSION_REFRESH_INTERVAL_MS = 30 * 60_000
-
 app.setName('Lychee Player')
+Menu.setApplicationMenu(null)
 
-// Hyprland 等非 GNOME/KDE 桌面下 Chromium 的后端自动探测会落到 basic_text，显式固定 libsecret 后端。
-// 后续由外部 flags 文件覆盖（TODO）。
-app.commandLine.appendSwitch('password-store', 'gnome-libsecret')
+// 模块加载阶段：先应用内置默认，再叠加 flags 文件；显式命令行在 configureLinuxDisplay 中优先。
+applyFlagsFromDisk()
 
-
-/**
- * Linux 默认 Wayland：检测到 WAYLAND_DISPLAY 时强制使用 Ozone Wayland，
- * 并启用 Wayland IME；无 Wayland 会话时保持 Electron 默认（通常为 X11）。
- * 可用 LYCHEE_OZONE_PLATFORM=x11/wayland 或命令行 --ozone-platform 覆盖。
- */
+/** Linux 默认 Wayland：检测到 WAYLAND_DISPLAY 时强制使用 Ozone Wayland 并启用 IME。 */
 function configureLinuxDisplay(): void {
   if (process.platform !== 'linux') return
   if (process.argv.some((arg) => arg.startsWith('--ozone-platform'))) return
+  if (app.commandLine.hasSwitch('ozone-platform')) return
 
   const override = process.env.LYCHEE_OZONE_PLATFORM
   if (override === 'x11') {
@@ -39,12 +37,10 @@ function configureLinuxDisplay(): void {
   if (override === 'wayland' || process.env.WAYLAND_DISPLAY) {
     app.commandLine.appendSwitch('ozone-platform', 'wayland')
     app.commandLine.appendSwitch('enable-wayland-ime')
-    console.info('[startup] Ozone Wayland enabled')
   }
 }
 
 configureLinuxDisplay()
-app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
 
 function iconPath(): string {
   return app.isPackaged
@@ -133,6 +129,7 @@ export async function bootstrap(): Promise<void> {
   await checkCredentialStore()
   loadSettings()
   await loadCredential()
+  registerAudioProtocol()
   registerIpc()
 
   initMpris(sendPlayerCommand)
@@ -143,14 +140,14 @@ export async function bootstrap(): Promise<void> {
     onPrevious: () => sendPlayerCommand('previous'),
     onQuit: () => app.quit()
   })
+  registerShortcuts(getSettings().shortcuts)
 
   createMainWindow()
 
-  // 登录态续期：启动后检查一次，此后每 30 分钟检查，到期前 10 分钟自动换新 musickey。
+  // 登录态续期：启动后检查一次，此后定时检查；密钥环晚解锁时重试解密。
   void refreshIfNeeded()
   refreshTimer = setInterval(() => {
     void (async () => {
-      // 密钥环晚解锁时，借定时检查重试解密后再续期。
       await loadCredential()
       await refreshIfNeeded()
     })()
@@ -179,9 +176,11 @@ if (!hasLock) {
   app.on('before-quit', () => {
     quitting = true
     if (refreshTimer) clearInterval(refreshTimer)
+    unregisterShortcuts()
     publishState(null)
     destroyTray()
     disposeEmbedView()
+    void stopMpv()
     void saveSettings(getSettings())
   })
 }
