@@ -39,7 +39,7 @@ Documents per project, in HTML — the development docs split by boundary:
 [↑](#top)
 
 1. **WHAT & WHY** — IDEAL: the problem to solve · GOAL: what success looks like · non-goals (optional)
-2. **User interactions**
+2. **User interactions** — only entry points and user-observable outcomes; do not explain any mechanisms behind them. Those belong to USER/CORE.
 3. **Project map** — optional; root project of a multi-project repo only · ASCII tree of the project family
 4. **Credits** — always present, always last; list the credited projects (and stack/license where useful), not what was referenced
 
