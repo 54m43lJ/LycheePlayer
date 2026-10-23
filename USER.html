@@ -39,7 +39,7 @@
   </tr>
   <tr>
     <td>播放队列（Queue）</td>
-    <td>排在当前播放歌曲之后、按播放顺序等待播放的歌曲序列；当前歌曲不属于队列。双击歌曲、“播放全部”与单曲播放都会替换队列；“下一首播放”把歌曲插入队列头。</td>
+    <td>排在当前播放歌曲之后、按播放顺序等待播放的歌曲序列；当前歌曲不属于队列。播放开始时队列为空，当前歌曲单独显示；歌单完整加载后按当前歌曲位置自动补齐。“下一首播放”是手动加入队列的唯一入口。</td>
   </tr>
   <tr>
     <td>单曲播放（Single play）</td>
@@ -47,7 +47,7 @@
   </tr>
   <tr>
     <td>下一首播放（Play next）</td>
-    <td>把对应歌曲插入播放队列头；当前歌曲与队列其余顺序不变。歌曲已在队列中时移动到队列头；歌曲是当前歌曲时不操作；无当前歌曲时直接开始播放该歌曲。队列只支持头部插入，不提供队尾插入。</td>
+    <td>把对应歌曲插入播放队列头；当前歌曲与队列其余顺序不变。歌曲已在队列中时移动到队列头；歌曲是当前歌曲时不操作；无当前歌曲时直接开始播放该歌曲。队列只支持头部插入，不提供队尾插入；这是手动加入队列的唯一入口。</td>
   </tr>
   <tr>
     <td>播放模式（PlayMode）</td>
@@ -75,7 +75,51 @@
   </tr>
   <tr>
     <td>歌词（Lyric）</td>
-    <td>LRC 原文与可选的翻译文本；界面按时间戳合并展示。</td>
+    <td>LRC 原文与可选的翻译文本；支持逐字歌词时按逐字时间轴高亮，界面按时间戳合并翻译。</td>
+  </tr>
+  <tr>
+    <td>我喜欢（收藏歌单）</td>
+    <td>当前账号固定的收藏歌单，不依赖列表位置；详情页统一显示名称“我喜欢”。</td>
+  </tr>
+  <tr>
+    <td>不可播标记 / 最高可用音质</td>
+    <td>歌单中每首歌的可用性标记：不可播，或当前账号可用的最高音质档位；未知状态按可播处理。</td>
+  </tr>
+  <tr>
+    <td>渐进加载（Progressive loading）</td>
+    <td>歌单先显示第一页，后续歌曲自动补齐；加载期间队列可以为空，当前歌曲单独显示。</td>
+  </tr>
+  <tr>
+    <td>播放缓存</td>
+    <td>已播放音频在本机保存的副本，用于再次播放时减少下载；按账号隔离，可清空。</td>
+  </tr>
+  <tr>
+    <td>每日推荐 / 专属雷达 / 猜你喜欢</td>
+    <td>“发现”页的三类推荐内容；按账号与日期展示，可手动刷新。</td>
+  </tr>
+  <tr>
+    <td>逐字歌词</td>
+    <td>按字 / 词时间轴高亮的歌词；没有逐字数据时回退为整行高亮。</td>
+  </tr>
+  <tr>
+    <td>收藏 / 歌单管理 / 可编辑歌单</td>
+    <td>收藏歌曲与对当前账号可编辑歌单执行创建、改名、删除、增删歌曲；公开歌单只读。</td>
+  </tr>
+  <tr>
+    <td>MV / MV 清晰度</td>
+    <td>可搜索、播放并选择清晰度的音乐视频；MV 播放与音频播放状态相互独立。</td>
+  </tr>
+  <tr>
+    <td>下载任务 / 下载中心</td>
+    <td>下载当前账号可播歌曲到本机的任务，以及管理进度、暂停 / 继续、删除的侧栏抽屉。</td>
+  </tr>
+  <tr>
+    <td>全局快捷键</td>
+    <td>应用在后台时仍可触发的键盘快捷键，用于播放控制或显示窗口。</td>
+  </tr>
+  <tr>
+    <td>播放引擎 / gapless / EQ / 响度归一</td>
+    <td>实际输出音频的引擎；可选 HTML5 Audio 或系统 mpv，后者支持无缝播放、均衡器与响度归一。</td>
   </tr>
   <tr>
     <td>评论（Comment）</td>
@@ -105,8 +149,36 @@
     <td>按 <code>sequence → repeat-all → repeat-one → shuffle</code> 循环切换，并通过 Toast 显示当前模式。</td>
   </tr>
   <tr>
+    <td>歌单加载与后台刷新</td>
+    <td>再次进入已打开歌单时先显示上次内容；第一页成功即显示；刷新失败保留已显示内容并提示；只后台准备“我喜欢”第一页；退出登录清空本机歌单数据。</td>
+  </tr>
+  <tr>
+    <td>启动参数文件</td>
+    <td>默认路径为 <code>$XDG_CONFIG_HOME/lychee-player/flags.conf</code>（未设置时 <code>~/.config/lychee-player/flags.conf</code>）；每行一个参数，空行与 <code>#</code> 开头行忽略；命令行 &gt; 文件 &gt; 内置默认；保存后下次启动生效。</td>
+  </tr>
+  <tr>
+    <td>不可播标记与最高可用音质</td>
+    <td>歌单加载后逐步显示每首歌的不可播标记与最高可用音质；标记出现不阻塞列表；未知状态按可播处理。</td>
+  </tr>
+  <tr>
+    <td>渐进加载</td>
+    <td>第一页成功即显示；后续页自动补齐；歌单完整加载后，播放队列按当前歌曲位置自动补齐；已知不可播歌曲不入队。</td>
+  </tr>
+  <tr>
+    <td>播放缓存</td>
+    <td>按账号隔离；有容量上限、可手动清空；退出登录不清空；缓存内容仅本机播放；不做下一首预解析。</td>
+  </tr>
+  <tr>
     <td>播放失败</td>
-    <td>单曲加载失败时停止当前加载并提示错误，不自动跳到下一首；不可播歌曲仍显示在播放条，但播放按钮置灰不可点击，且不得自动回退上一首；上一首 / 下一首切换正常。顺序播放到队尾时停止。</td>
+    <td>不可播（无可用流）时播放条沿队列向后尝试到可播或队列空；其他加载失败仍停止当前加载并提示错误，不自动跳下一首、不自动回退上一首。顺序播放到队尾时停止。</td>
+  </tr>
+  <tr>
+    <td>乐观更新与回滚</td>
+    <td>收藏、歌单编辑等写操作先更新界面；失败时回滚并提示。</td>
+  </tr>
+  <tr>
+    <td>下载限制</td>
+    <td>仅下载当前账号可播内容；失败不自动无限重试；下载文件仅供本机个人使用。</td>
   </tr>
   <tr>
     <td>登录凭证边界</td>
@@ -121,8 +193,8 @@
     <td><code>Settings.closeToTray</code> 默认开启：关闭主窗口时隐藏到托盘；仅在托盘菜单选择“退出”时结束进程。</td>
   </tr>
   <tr>
-    <td>路由</td>
-    <td>Hash 路由；页面为 <code>/search</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/login</code>、<code>/settings</code>，根路径重定向到 <code>/search</code>。切换路由自动关闭歌词 / 评论面板。</td>
+    <td>页面 / URL 跳转</td>
+    <td>页面与跳转关系见 <a href="#u3-4">§3.4</a>；Hash 路由，切换路由自动关闭歌词 / 评论面板。</td>
   </tr>
 </table>
 
@@ -132,7 +204,7 @@
 <h3 id="u3-1">3.1 总体架构</h3>
 <div class="diagram"><img src="diagram/general-architecture.svg" alt="总体架构组件图"></div>
 <ul class="note">
-  <li>音频流由渲染进程直接从流服务器加载，不经过主进程转发。</li>
+  <li>音频流由应用主进程统一代理：缓存命中走本地协议，未命中由主进程取流并写入缓存；渲染进程不直接访问上游流。</li>
   <li>凭证与密钥环边界见 <a href="#u2">§2</a>。</li>
   <li>MPRIS 协议见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>；命令接收后的内部调用路径见 <a href="CORE.html#c5-6">CORE §5.6</a>。</li>
 </ul>
@@ -150,9 +222,18 @@
 <div class="diagram"><img src="diagram/seq-play.svg" alt="播放单曲时序图"></div>
 <ul class="note">
   <li>双击歌曲、“播放全部”与单曲播放都会替换播放队列；“下一首播放”只把歌曲插入队列头，不改变当前歌曲。</li>
-  <li>播放队列入口与面板见 <a href="#u5-2-9">§5.2.9</a>；无可播链接时提示不可播，不自动跳过，具体文案见 <a href="#u5-3">§5.3</a>。</li>
+  <li>播放队列入口与面板见 <a href="#u5-2-9">§5.2.9</a>；不可播处理见该节，其他加载失败不自动跳过，文案见 <a href="#u5-3">§5.3</a>。</li>
   <li>实际音质可能与请求音质不同；播放条以标记展示实际档位。</li>
   <li>上游链接获取协议见 <a href="PROVIDER.html#p3-3">PROVIDER §3.3</a>。</li>
+</ul>
+
+<h3 id="u3-4">3.4 页面 / URL 架构图</h3>
+<div class="diagram"><img src="diagram/page-url-architecture.svg" alt="页面与 URL 跳转关系图"></div>
+<ul class="note">
+  <li>节点为页面，边为跳转关系；根路径 <code>/</code> 重定向到 <code>/search</code>。</li>
+  <li>歌单详情的返回入口指向 <code>/library</code>；登录成功后进入 <code>/library</code>。</li>
+  <li>“发现”为 <code>/discover</code>，MV 播放页为 <code>/mv/:id</code>；下载中心为侧栏抽屉，不占独立路由。</li>
+  <li>页面结构与视觉契约见 <a href="#u5-2-8">§5.2.8</a>。</li>
 </ul>
 
 <h2 id="u4">4. INTERFACES</h2>
@@ -267,8 +348,10 @@
     <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>QQ Music · Linux</small></span></div>
     <div class="u-nav-label">浏览</div>
     <div class="u-nav-item active">搜索</div>
+    <div class="u-nav-item">发现</div>
     <div class="u-nav-item">我的歌单</div>
     <div class="u-nav-label">应用</div>
+    <div class="u-nav-item">下载</div>
     <div class="u-nav-item">设置</div>
     <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>已登录 · 0123456789</small></span></div>
   </div>
@@ -282,7 +365,8 @@
 </div>
 </div>
 <ul class="note">
-  <li>宽态：品牌区、分组导航（浏览 / 应用）与底部账号 pill；账号 pill 未登录时进入登录页，已登录时进入设置页。</li>
+  <li>宽态：品牌区、分组导航（浏览：“搜索 / 发现 / 我的歌单”；应用：“下载 / 设置”）与底部账号 pill；账号 pill 未登录时进入登录页，已登录时进入设置页。</li>
+  <li>“下载”打开右侧下载中心抽屉，不跳转页面；抽屉与歌词 / 评论、播放队列面板互斥。</li>
   <li>≤900px：收为 64px 图标栏，仅保留图标与头像；≤560px 收为 56px。</li>
   <li>导航项激活态使用 accent 软填充与强调文字；悬停态只改变背景与文字颜色。</li>
 </ul>
@@ -295,13 +379,14 @@
     <div class="u-controls" style="justify-content: center"><span class="u-ctl">≡</span><span class="u-ctl">◀</span><span class="u-ctl play">▶</span><span class="u-ctl">▶</span><span class="u-ctl" title="播放队列">☰</span></div>
     <div class="u-progress" style="margin-top: 6px"><span class="u-time">0:42</span><span class="u-bar"><i></i></span><span class="u-time">4:29</span></div>
   </div>
-  <div class="u-right"><span class="u-chip">FLAC</span><span class="u-ctl">♪</span><span class="u-bar vol"><i></i></span></div>
+  <div class="u-right"><span class="u-ctl" title="收藏">♥</span><span class="u-ctl" title="下载">⭳</span><span class="u-chip">FLAC</span><span class="u-ctl">♪</span><span class="u-bar vol"><i></i></span></div>
 </div>
 </div>
 <ul class="note">
   <li>左：封面 54px + 标题 + 实际音质标记（金色小标签）+「歌手 · 专辑」行；点击封面打开歌词 / 评论面板。标题与歌手行超宽时跑马灯滚动，音质标记固定最右。</li>
   <li>中：播放模式、上一首、播放 / 暂停（38px 圆形主按钮）、下一首、播放队列入口；下方进度条（gold 填充）与时间。播放队列入口打开 <a href="#u5-2-9">§5.2.9</a> 面板。</li>
-  <li>右：请求音质芯片（点击弹出 128k / 320k / flac 菜单，选择后立即重载当前曲目）+ 音量；≤900px 音量改为点击弹出竖直滑块。</li>
+  <li>右：收藏、下载、请求音质芯片（点击弹出 128k / 320k / flac 菜单，选择后立即重载当前曲目）+ 音量；≤900px 音量改为点击弹出竖直滑块。</li>
+  <li>播放条只对当前歌曲与队列负责；不可播处理见 <a href="#u5-2-9">§5.2.9</a>，其他加载失败按现有规则停止。</li>
   <li>无歌曲时播放条显示“还没有播放中的歌曲”；不可播歌曲仍显示在播放条，播放按钮置灰不可点击。</li>
 </ul>
 
@@ -321,7 +406,8 @@
   <li>列：# / 标题 / 专辑 / 时长 / 操作；标题单元格含 38px 封面、歌名与下一行的歌手，专辑为独立列。序号与播放按钮共用 26px 居中槽，中心对齐。</li>
   <li>双击行播放并替换队列；悬停或当前播放行在 # 列显示播放 / 暂停按钮，其余显示从 1 开始的序号文本；当前播放行以 accent 底色标记。</li>
   <li>点击非当前行的播放按钮即单曲播放，与双击一样替换播放队列；当前行的按钮切换暂停 / 继续。操作列的“下一首”按钮执行“下一首播放”，只把歌曲插入队列头，不改变当前歌曲。</li>
-  <li>权限角标：VIP / 数字专辑 / 付费；能否播放最终以播放链接结果为准。≤900px 隐藏专辑列，操作列保留。</li>
+  <li>权限角标：VIP / 数字专辑 / 付费；歌单加载后会追加不可播标记与最高可用音质标签（如 FLAC / 320K / 128K），不可播行禁用播放与“下一首播放”入口；未知状态按可播处理。≤900px 隐藏专辑列，操作列保留。</li>
+  <li>操作列增加收藏与下载按钮；收藏状态按当前账号展示，下载只对当前账号可播内容可用。</li>
 </ul>
 
 <h4 id="u5-2-5">5.2.5 歌词与评论</h4>
@@ -351,7 +437,8 @@
 </div>
 <ul class="note">
   <li>入口为播放条封面；再次点击封面或点击面板关闭按钮收起。面板覆盖侧栏与播放条以外的主区域，左右两列各占 50%：左歌词，右评论；路由切换时关闭，规则见 <a href="#u2">§2</a>。</li>
-  <li>歌词：当前行只改变字重、颜色、左侧强调线与背景，字号与行高固定（14px / 1.7）；已有翻译时按相同时间戳合并显示在原文下一行；面板打开时自动滚到活动行，点击行跳转播放进度。</li>
+  <li>歌词：当前行只改变字重、颜色、左侧强调线与背景，字号与行高固定（14px / 1.7）；有逐字歌词数据时按字 / 词时间轴高亮，没有时回退整行高亮；已有翻译时按相同时间戳合并显示在原文下一行；面板打开时自动滚到活动行，点击行跳转播放进度。</li>
+  <li>本应用不提供桌面歌词窗口、桌面歌词设置或相关入口。</li>
   <li>歌词无内容或加载失败时显示空状态，加载中显示 spinner。</li>
   <li>评论：顶部显示评论总数与刷新按钮；列表展示头像、昵称、正文与点赞数。加载中显示 spinner；无评论显示空状态；加载失败显示错误与重试。</li>
   <li>没有当前歌曲时不展示评论列表。</li>
@@ -395,6 +482,19 @@
       <h5>窗口</h5>
       <div class="u-rowline"><span>关闭到托盘</span><span class="u-switch on"></span></div>
     </div>
+    <div class="u-panel">
+      <h5>启动参数</h5>
+      <div class="u-rowline"><span>flags.conf</span><span class="u-tab">编辑</span></div>
+    </div>
+    <div class="u-panel">
+      <h5>缓存与下载</h5>
+      <div class="u-rowline"><span>播放缓存</span><span class="u-switch on"></span></div>
+      <div class="u-rowline"><span>下载目录</span><span class="u-tab">选择</span></div>
+    </div>
+    <div class="u-panel">
+      <h5>快捷键</h5>
+      <div class="u-rowline"><span>播放 / 暂停</span><span class="u-tab">Ctrl+Alt+Space</span></div>
+    </div>
   </div>
   <div class="u-col">
     <div class="u-panel">
@@ -409,11 +509,25 @@
       <div class="u-rowline"><span>音频引擎</span><span>HTML5 Audio</span></div>
       <div class="u-rowline"><span>许可证</span><span>GPL-3.0-only</span></div>
     </div>
+    <div class="u-panel">
+      <h5>音频引擎</h5>
+      <div class="u-opts">
+        <div class="u-opt active"><b>自动</b></div>
+        <div class="u-opt"><b>HTML5</b></div>
+        <div class="u-opt"><b>mpv</b></div>
+      </div>
+      <div class="u-rowline"><span>EQ</span><span class="u-switch"></span></div>
+      <div class="u-rowline"><span>响度归一</span><span class="u-switch"></span></div>
+    </div>
   </div>
 </div>
 </div>
 <ul class="note">
-  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口，右列账号与关于信息。</li>
+  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口 / 启动参数 / 缓存与下载 / 快捷键，右列账号 / 关于 / 音频引擎。</li>
+  <li>启动参数展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
+  <li>缓存与下载区展示缓存开关、当前占用、清理；下载目录、容量与剩余空间提示。</li>
+  <li>快捷键区支持录制、冲突提示与恢复默认；默认不占用系统媒体键。</li>
+  <li>音频引擎可选自动 / HTML5 / mpv；mpv 缺失时回退 HTML5 并提示；EQ / 响度归一只在 mpv 引擎下生效。</li>
   <li>关于区展示版本、音频引擎与许可证；版本与许可证以构建配置为准。</li>
   <li>音质四档，默认“自动”；回退静默，不弹提示。</li>
   <li>关闭到托盘默认开启；账号区展示到期时间，手动 Cookie 凭证禁用“立即续期”。</li>
@@ -425,7 +539,7 @@
   <tr><th>页面</th><th>结构</th></tr>
   <tr>
     <td>搜索</td>
-    <td>页头（标题）+ 搜索框 + 四类标签（单曲 / 歌手 / 专辑 / 歌单）+ 热门关键词 chips + 结果区（歌曲表、歌手卡片、专辑卡片、歌单卡片）+ 分页。</td>
+    <td>页头（标题）+ 搜索框 + 四类标签（单曲 / 歌手 / 专辑 / 歌单）+ 热门关键词 chips + 结果区（歌曲表、歌手 / 专辑 / 歌单卡片、MV 卡片）+ 分页；MV 卡片可进入 MV 播放页。</td>
   </tr>
   <tr>
     <td>我的歌单</td>
@@ -433,7 +547,19 @@
   </tr>
   <tr>
     <td>歌单详情</td>
-    <td>歌单头图（封面 180px、名称、歌曲数 / 歌单 ID / 已载入数、播放全部）+ 歌曲表；加载失败显示重试与返回搜索。</td>
+    <td>歌单头图（封面 180px、名称、歌曲数 / 歌单 ID / 已载入数、播放全部）+ 歌曲表；再次进入先显示上次内容，第一页渲染后底部显示加载 / 重试与已载入 / 总数；加载失败显示重试与返回我的歌单；队列为空，当前歌曲在播放条单独显示。</td>
+  </tr>
+  <tr>
+    <td>发现</td>
+    <td>“每日推荐 / 专属雷达 / 猜你喜欢”三个分区；卡片可播放全部或打开歌单；未登录显示登录引导；支持手动刷新。</td>
+  </tr>
+  <tr>
+    <td>MV 播放</td>
+    <td>视频播放器 + 标题 / 歌手 / 清晰度选择；支持全屏与退出恢复；取流失败复用 <code>NO_STREAM</code> / <code>AUTH_EXPIRED</code> 提示。</td>
+  </tr>
+  <tr>
+    <td>下载中心</td>
+    <td>右侧抽屉；展示任务进度、失败原因、存储占用，提供打开目录、暂停 / 继续 / 删除；不新增路由。</td>
   </tr>
   <tr>
     <td>Toast</td>
@@ -457,8 +583,10 @@
 </div>
 <ul class="note">
   <li>入口为播放条上的“播放队列”按钮；面板固定于内容区右侧，与歌词 / 评论面板互斥，同时只打开一个。</li>
-  <li>当前歌曲单独显示在面板顶部并标注“正在播放”，不计入队列；下方只列当前歌曲之后的待播放歌曲，顺序即实际播放顺序。</li>
-  <li>队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲。“下一首播放”把歌曲插入队列头，当前歌曲不变。</li>
+  <li>当前歌曲单独显示在面板顶部并标注“正在播放”，不计入队列；播放开始时队列为空，下方只列当前歌曲之后的待播放歌曲，顺序即实际播放顺序。</li>
+  <li>队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲。“下一首播放”是手动加入队列的唯一入口，把歌曲插入队列头，当前歌曲不变；歌单完整加载后队列按当前位置自动补齐。</li>
+  <li>当前歌曲不可播时，播放条沿队列向后尝试到可播或队列空；探测结果不直接改变播放条。其他加载失败仍按“播放失败”规则停止。</li>
+  <li>上一首按播放历史回退；播放历史只记录本次播放开始后实际播放过的歌曲，重建队列时清空。</li>
   <li>随机播放下队列展示实际随机顺序，切换随机模式时重排队列，预览顺序与真实播放一致；顺序播放到队尾停止，列表循环回到本次播放顺序头部，单曲循环重播当前歌曲。</li>
 </ul>
 
@@ -467,15 +595,17 @@
   <tr><th>ErrorCode</th><th>界面提示</th><th>行为</th></tr>
   <tr><td><code>UPSTREAM_NETWORK</code></td><td>网络异常，请稍后重试</td><td>保留当前状态，允许用户重试。</td></tr>
   <tr><td><code>AUTH_EXPIRED</code></td><td>登录已失效，请重新登录</td><td>提示用户前往登录页；不自动清除凭证。</td></tr>
-  <tr><td><code>NO_STREAM</code></td><td>VIP 账号：“当前内容已下架”；其余情况：“当前内容不可播放（可能需要 VIP 或已下架）”</td><td>停止当前加载，不自动跳下一首。</td></tr>
+  <tr><td><code>NO_STREAM</code></td><td>VIP 账号：“当前内容已下架”；其余情况：“当前内容不可播放（可能需要 VIP 或已下架）”</td><td>播放条沿队列向后尝试到可播或队列空；队列为空时停止。</td></tr>
   <tr><td><code>UPSTREAM_CHANGED</code></td><td>上游接口发生变化</td><td>提示稍后再试；保留当前状态。</td></tr>
   <tr><td><code>QUOTA_LIMITED</code></td><td>请求过于频繁，请稍后重试</td><td>提示稍后再试；用户可手动重试。</td></tr>
+  <tr><td><code>NO_PERMISSION</code></td><td>当前账号无权执行该操作</td><td>保留原状态；不可编辑的歌单不显示编辑入口。</td></tr>
   <tr><td><code>INTERNAL</code></td><td>主进程内部错误</td><td>提示主进程内部错误，详情只写入主进程日志。</td></tr>
 </table>
 <ul class="note">
   <li>展示方式：页面级数据加载失败使用页面内联错误区并提供重试；用户操作失败使用 Toast。错误码文案与行为见上表。</li>
   <li>错误码的完整定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；上游错误码到内部错误码的映射见 <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。</li>
-  <li><code>NO_STREAM</code> 的文案按当前账号 VIP 状态选择；VIP 检测失败时回退到通用提示。</li>
+  <li><code>NO_STREAM</code> 的文案按当前账号 VIP 状态选择；VIP 检测失败时回退到通用提示。“不可播”只影响当前曲的播放尝试，不改变已有队列。</li>
+  <li>歌单可用性标记获取失败时静默保留未知状态，不弹错误；播放失败仍按本表提示。</li>
   <li>登录流程中的具体失败原因（验证码、设备限制等）由上游返回；界面是否展示原始原因取决于错误映射策略。</li>
 </ul>
 
@@ -488,7 +618,9 @@
   <tr><td>退出 Lychee Player</td><td>结束应用进程，不受“关闭到托盘”影响。</td></tr>
 </table>
 <ul class="note">
-  <li>托盘初始化失败时静默降级，应用内播放与窗口行为不受影响。</li>
+  <li>托盘菜单、tooltip 与图标随播放状态更新；无当前歌曲时播放控制项禁用。</li>
+  <li>单击托盘图标只显示主窗口，不切换隐藏；关闭窗口行为沿用“关闭到托盘”设置。</li>
+  <li>GNOME 需要 AppIndicator 扩展，托盘图标可能被桌面隐藏；扩展不随应用打包。托盘初始化失败时静默降级。</li>
 </ul>
 
 </body>

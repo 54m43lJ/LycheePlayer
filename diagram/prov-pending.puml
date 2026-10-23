@@ -1,0 +1,15 @@
+@startuml prov-pending
+skinparam componentStyle rectangle
+skinparam defaultTextAlignment center
+skinparam shadowing false
+
+component "Lychee Player" as APP
+cloud "QQ 音乐（待探测）" {
+  [推荐接口\n（待 fixture 验证）] as REC
+  [收藏 / 歌单写入接口\n（待 fixture 验证）] as WRITE
+  [MV 搜索 / 详情 / 取流\n（待 fixture 验证）] as MV
+}
+APP --> REC : 读取推荐
+APP --> WRITE : 收藏 / 歌单编辑
+APP --> MV : MV 搜索 / 播放
+@enduml

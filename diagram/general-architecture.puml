@@ -18,7 +18,7 @@ component "桌面环境\n(MPRIS / 托盘)" as DESKTOP
 U --> APP : 搜索 · 播放 · 登录
 APP --> API : 内容与链接请求
 APP --> LOGIN : 扫码登录
-APP --> STREAM : 音频流
+APP --> STREAM : 音频流（主进程代理，缓存命中走本地）
 APP <--> KEYRING : 加密凭证
 APP <--> DESKTOP : MPRIS · 托盘
 @enduml
