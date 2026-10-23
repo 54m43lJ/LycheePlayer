@@ -129,12 +129,11 @@
 ├── electron-builder.yml                      Linux dir 打包配置
 ├── install.sh                                curl 安装脚本
 ├── package.json                              依赖、脚本与版本
-├── tsconfig.json / tsconfig.node.json / tsconfig.web.json  TypeScript 配置
-└── TODO.md                                   文档修改指导
+└── tsconfig.json / tsconfig.node.json / tsconfig.web.json  TypeScript 配置
 </code></pre>
 <ul class="note">
   <li><code>src/shared/</code> 是 IPC 类型契约的唯一来源，主进程、preload 与渲染进程均从这里导入。</li>
-  <li>文件树只列源码、构建配置与资源；文档与文档样式不在其中，<code>TODO.md</code> 作为文档修改跟踪的例外保留。</li>
+  <li>文件树只列源码、构建配置与资源；文档与文档样式不在其中。</li>
   <li>带链接的文件在 <a href="#c4">§4</a> 有对应的签名小节；其余条目为脚本、配置、资源或纯展示文件。</li>
 </ul>
 
