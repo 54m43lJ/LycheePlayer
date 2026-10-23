@@ -136,7 +136,6 @@ declare const PLAYLIST_PREFETCH_CONCURRENCY: number; // 推荐值 1；限制同�
 
 | 文档 | 位置 | 动作 | 内容 |
 |---|---|---|---|
-| README | §2 用户交互 · 歌单 | 修订 | 再次进入已打开歌单时先显示上次内容并在后台刷新；只后台准备“我喜欢”第一页，不阻塞列表。 |
 | USER | §1 TERMS | 新增 | “我喜欢（收藏歌单）”：固定收藏歌单，不依赖列表位置。 |
 | USER | §2 CONVENTIONS | 新增 | 歌单加载与后台刷新：再次进入先显示上次内容；第一页成功即显示；刷新失败保留已显示内容并提示；只后台准备“我喜欢”第一页；退出登录清空本机歌单数据。 |
 | USER | §5.2.8 页面结构 | 修订 | 歌单详情：再次进入先显示上次内容；错误态只用于第一页无内容可显示；收藏歌单展示名称“我喜欢”；不新增刷新按钮。 |
@@ -147,11 +146,8 @@ declare const PLAYLIST_PREFETCH_CONCURRENCY: number; // 推荐值 1；限制同�
 | CORE | §4.45 LibraryView.vue | 修订 | “我的歌单”加载完成后调用 `prefetchPlaylists`，只准备“我喜欢”第一页。 |
 | CORE | 新增 §4.x cache/playlist.ts | 新增 | 缓存读写、失效、清理；TTL / 字节上限 / 并发常量在 `shared/constants.ts` 声明，本模块只引用。 |
 | CORE | 新增 §5.10 歌单缓存与预取 | 新增 | 预取“我喜欢”第一页、缓存命中 / 过期 / 未命中路径。 |
-| CORE | §4.2 ipc.ts | 不新增 | 分页 IPC 类型由 A7 统一定义，A1 不重复声明。 |
-| PROVIDER | §2 CONVENTIONS | 不动 | 内部缓存策略见 CORE §2/§4.x；上游契约不变。 |
 | PROVIDER | §4.1 接口表 | 修订 | “我喜欢”读取使用 `CgiGetDiss` 的 `disstid:0` + `dirid:201`；普通歌单仍用 `disstid`。 |
 | PROVIDER | §4.3 QqMineData / 转换 | 修订 | `dirId=201` / 名称“我喜欢”识别为收藏歌单；输出 `kind=favorites`、`id=liked`。 |
-| BUILD | — | 不动 | 缓存目录由应用自动创建。 |
 
 **实现步骤**
 
@@ -201,10 +197,10 @@ declare const PLAYLIST_PREFETCH_CONCURRENCY: number; // 推荐值 1；限制同�
 
 | 文档 | 位置 | 动作 | 内容 |
 |---|---|---|---|
+| USER | §2 CONVENTIONS 路由 | 修订 | 删除路由清单，改为“页面/URL 跳转关系见 §3.4”。 |
+| USER | §3.4 页面/URL 架构图 | 新增 | 新建 PlantUML 组件图：页面节点标注 URL，边表示跳转关系；含现有页面，并将 `/playlist/:id` 的返回边改为 `/library`；同时提交 `diagram/page-url-architecture.puml` 与 `.svg`。 |
 | USER | §5.2.8 页面结构 | 修订 | 歌单详情：“加载失败显示重试与返回我的歌单”；头部返回目标为我的歌单。 |
 | CORE | §4.46 PlaylistView.vue | 修订 | 删除“返回搜索”描述；组件只保留职责一行，返回目标与按钮文案见 USER §5.2.8。 |
-| README | — | 不动 | 不新增返回说明。 |
-| PROVIDER | — | 不动 | 不涉及上游。 |
 
 **实现步骤**
 
@@ -337,7 +333,6 @@ flags: {
 | CORE | §4.48 SettingsView.vue | 修订 | “启动参数”区块的展示、编辑、保存与“下次启动生效”提示；不提供路径选择。 |
 | CORE | 新增 §4.x startup-flags.ts | 新增 | 解析、应用、默认值、`readFlagsFile` / `writeFlagsFile`；声明大小 / 行数常量（名称 + 用途，推荐值见注释）。 |
 | CORE | §5.2 启动参数与单实例 | 重写 | 文件读取 → 文件参数应用 → 默认补齐 → 单实例锁；设置页保存不热加载。 |
-| PROVIDER | — | 不动 | Electron / Chromium 属于运行时依赖，不进入上游边界文档。 |
 | BUILD | 第 10 章（A4 创建后补） | 新增 | flags 文件路径、示例、打包后覆盖方式。 |
 
 **实现步骤**
@@ -474,8 +469,6 @@ curl -fsSL https://raw.githubusercontent.com/<owner>/lychee-player/main/install.
 | README | §1.2 GOAL / §2 用户交互 | 修订 / 新增 | 明确当前仅支持 Arch Linux x86_64；新增“curl 一行安装 / 下载 tar.gz 手动运行”行并链接 BUILD。 |
 | CORE | §1 File tree | 修订 | 增加 `electron-builder.yml`、`build/`、`scripts/package-arch.mjs`、`packaging/arch/lychee-player.desktop`、`install.sh`。 |
 | CORE | §3 SBOM | 修订 | 增加 `electron-builder`（构建期依赖）；不新增运行期依赖。 |
-| CORE | §5 Call stack | 不动 | 打包是构建期行为，不进入运行时调用栈。 |
-| USER / PROVIDER | — | 不动 | 安装与运行细节归 BUILD，不重复。 |
 
 **实现步骤**
 
@@ -591,8 +584,6 @@ vitest.config.ts
 | CORE | §2 CONVENTIONS | 新增 | “fixture 回放”：请求匹配、脱敏、录制与更新流程、禁止真实网络。 |
 | CORE | §3 SBOM | 修订 | 增加 `vitest`（开发期依赖）。 |
 | BUILD | 第 2 章测试小节（A4 创建 BUILD 后补） | 新增 | `npm test`、`npm run test:watch`、`scripts/record-fixtures.mjs` 用法。 |
-| PROVIDER | §2 CONVENTIONS | 不动 | fixture 属于 CORE 测试约定，不改变上游契约；不复制完整上游文档。 |
-| USER | — | 不动 | 测试对用户不可见。 |
 
 **实现步骤**
 
@@ -715,28 +706,22 @@ export function getStreamUrls(mids: string[], quality: Quality): Promise<UrlResu
 
 | 文档 | 位置 | 动作 | 内容 |
 |---|---|---|---|
-| README | §2 用户交互 · 歌单 | 修订 | 歌单列表逐步标记不可播与最高可用音质。 |
+| README | §2 用户交互 · 歌单 | 修订 | 歌单会标记不可播与最高可用音质。 |
 | USER | §1 TERMS | 新增 | “不可播标记”“最高可用音质”。 |
 | USER | §2 CONVENTIONS | 新增 | 不可播标记与最高可用音质逐步出现、不阻塞列表；不改变播放失败规则。 |
 | USER | §5.2.4 歌曲列表 | 修订 | 不可播行样式、最高可用音质标签、播放入口禁用；≤900px 布局不新增列。 |
 | USER | §5.2.8 歌单详情 | 修订 | 不显示检测进度 / “检测中”；显示未知 / 不可播状态；刷新时重新检测。 |
-| USER | §5.2.9 播放队列 | 不动 | 队列规则由 A7 定义；A6 只更新歌单歌曲元数据，不改变队列。 |
 | USER | §5.3 错误与通知 | 注 | 不可播标记获取失败静默；播放失败仍按现有提示。 |
 | CORE | §1 File tree | 修订 | 新增 `src/main/api/availability.ts`、`src/renderer/composables/availability.ts`。 |
 | CORE | §2 CONVENTIONS | 新增 | 渐进探测、批次上限、账号作用域、网络失败语义；具体值见 §4.x 常量。 |
 | CORE | §4.1 types.ts | 修订 | `SongAvailability`、`ProbeOptions`。 |
 | CORE | §4.2 ipc.ts | 修订 | `song.probe` 通道。 |
 | CORE | §4.11 song.ts | 修订 | `resolveStreamUrls` 抽取；探测复用。 |
-| CORE | §4.29 player.ts | 不动 | 队列由 A7 负责；A6 不修改队列、不因检测结果移除歌曲或改变当前播放。 |
 | CORE | §4.39 SongTable.vue | 修订 | `availability` prop 与不可播状态；禁用播放 / 下一首按钮。 |
 | CORE | §4.46 PlaylistView.vue | 修订 | 接入 `useAvailability`，按当前歌单歌曲集合触发探测。 |
 | CORE | 新增 §4.x availability.ts | 新增 | 探测、缓存、清理；声明批次 / 并发 / TTL 常量；`PROBE_MAX_SONGS = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX`，直接写入 A8 的 `shared/constants.ts`。 |
 | CORE | 新增 §5.11 歌单可用性检测 | 新增 | 可见行 → `song.probe` → `availability::probeAvailability` → `get_song_detail_yqq` / `CgiGetVkey` → 缓存；UI 状态由返回结果驱动。 |
-| PROVIDER | §2 CONVENTIONS | 不动 | 内部探测策略见 CORE §2/§4.x；上游契约不变。 |
-| PROVIDER | §3.3 播放链接协议 | 不动 | 复用现有播放链接协议；音质回退已由 §2 定义，不重复。 |
-| PROVIDER | §4.1 接口表 | 不动 | 不新增接口；仍为 `get_song_detail_yqq` + `CgiGetVkey`。 |
 | PROVIDER | §4.3 QqSong / 转换 | 修订 | 在 fixture 验证通过后补 `file.size_128mp3` / `size_320mp3` / `size_flac`；只记录字段与尺寸 → 候选档位映射，探测策略见 CORE §4.x。 |
-| BUILD | — | 不动 | 无新增运行期依赖。 |
 
 **实现步骤**
 
@@ -933,7 +918,6 @@ previous(): void;
 
 | 文档 | 位置 | 动作 | 内容 |
 |---|---|---|---|
-| README | §2 用户交互 · 歌单 | 修订 | 第一页即显示；队列从播放起为空，当前歌曲单独显示；歌单完整加载后自动补齐。 |
 | USER | §1 TERMS | 新增 | “渐进加载”：第一页先显示，后续歌曲自动补齐；播放队列补齐规则见 §5.2.9。 |
 | USER | §2 CONVENTIONS | 新增 | 第一页成功即显示；后续页自动补齐；歌单完整加载后，播放队列按当前歌曲位置自动补齐；已知不可播不入队。 |
 | USER | §2 CONVENTIONS 播放失败 | 修订 | 区分“不可播（无可用流）沿队列向后尝试到可播或队列空”和“其他加载失败不自动跳下一首 / 不自动回退”。 |
@@ -949,10 +933,8 @@ previous(): void;
 | CORE | §4.46 PlaylistView.vue | 修订 | 改用 feed；组件职责一行；第一页渲染、底部状态、startPlaylistPlayback 传 source、离开页面不取消 feed 等流程见 §5.12。 |
 | CORE | 新增 §4.x stores/playlist.ts | 新增 | `PlaylistFeed` 状态、`load` / `retry`、`loadToken`、后台补全与缓存续传。 |
 | CORE | 新增 §5.12 歌单分页加载与队列构建 | 新增 | 第一页请求 → 后续页请求 → 失败重试 → complete → `appendPlaylistQueue`；`playNext` / `previous` 历史；含缓存续传。 |
-| PROVIDER | §2 CONVENTIONS | 不动 | 应用分页策略见 CORE §4.12；PROVIDER 只保留上游 `song_begin` / `song_num` 与单页上限。 |
 | PROVIDER | §4.1 接口表 | 修订 | 注明分页偏移语义与 `dirinfo.songnum` 总数；收藏歌单 `dirid:201`。 |
 | PROVIDER | §4.3 QqPlaylistData | 修订 | 明确 `songlist[]` 是单页结果；总数以 `dirinfo.songnum` 为准。 |
-| BUILD | — | 不动 | 无新增运行期依赖。 |
 
 **实现步骤**
 
@@ -1036,8 +1018,6 @@ export const PLAYER_STATE_THROTTLE_MS = 900;
 | CORE | §4.x（按文件树顺序插入） | 新增 | 新增 `shared/constants.ts` 签名小节：列出全部常量名称、用途与推荐值注释；后续 §4.x 顺延，A8 提交统一更新交叉链接。 |
 | CORE | 现有模块签名小节 | 修订 | `client.ts`、`search.ts`、`playlist.ts`、`user.ts`、`comment.ts`、`ipc.ts`、`index.ts`、`player.ts`、`startup-flags.ts` 删除局部常量声明，改为引用 `shared/constants.ts`；A1/A6/B2 后续新增模块按 §2 约定直接引用，不再建立局部常量。 |
 | CORE | §4.x availability.ts（A6 落地时） | 约定 | `PROBE_MAX_SONGS` 直接写入 `shared/constants.ts`，使用 `PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX` 派生，不写固定值。 |
-| USER / PROVIDER | — | 不动 | 常量是实现细节，不进入用户 / 上游契约。 |
-| BUILD | — | 不动 | 无构建变化。 |
 
 **实现步骤**
 
@@ -1082,7 +1062,6 @@ export const PLAYER_STATE_THROTTLE_MS = 900;
 | CORE | §4.19 tray.ts | 修订 | `TrayActions` 增加状态输入 / `updateTray`；菜单重建。 |
 | CORE | §4.5 ipc.ts | 修订 | `player:state` 同时分发到 MPRIS 与托盘。 |
 | CORE | §5.5 播放单曲 | 修订 | `sendState` 分支增加 `integration/tray::updateState(state)`。 |
-| PROVIDER | — | 不动 | 托盘是桌面壳能力，不是上游数据源。 |
 
 **验收**：播放 / 暂停菜单文案即时变化；切歌后 tooltip 更新；无歌曲时控制项禁用；托盘初始化失败仍静默降级。
 
@@ -1163,7 +1142,7 @@ export interface RecommendFeed {
 |---|---|---|---|
 | README | §2 用户交互 | 新增 | “发现”入口与三类推荐。 |
 | USER | §1 TERMS | 新增 | 每日推荐 / 专属雷达 / 猜你喜欢。 |
-| USER | §2 CONVENTIONS 路由 | 修订 | 增加 `/discover` 路由。 |
+| USER | §3.4 页面/URL 架构图 | 修订 | 增加 `/discover` 页面节点及与侧栏、搜索结果等页面的跳转边。 |
 | USER | §5.2.2 侧栏与导航 | 修订 | “浏览”组增加“发现”。 |
 | USER | §5.2.8 页面结构 | 新增 | “发现”页：分区、卡片、空态、未登录态、刷新。 |
 | CORE | §1 File tree | 修订 | 新增 `api/recommend.ts`、`views/DiscoverView.vue`、`stores/recommend.ts`。 |
@@ -1175,7 +1154,6 @@ export interface RecommendFeed {
 | CORE | 新增 §5.x 推荐加载 | 新增 | `/discover` 加载 → `recommend` → 上游接口 → 缓存 → 渲染调用栈。 |
 | PROVIDER | §1 TERMS | 新增 | 每日推荐 / 专属雷达 / 猜你喜欢的上游名称与字段。 |
 | PROVIDER | §3 / §4.1 / §4.3 | 新增 | 三个入口、请求参数、响应模型、转换；先 fixture 验证。 |
-| BUILD | — | 不动 | 无构建变化。 |
 
 **验收**：登录后三类内容可见；未登录有引导；刷新与按日缓存正确；上游失败有页面内错误与重试；fixture 覆盖字段映射。
 
@@ -1235,7 +1213,6 @@ export interface Lyric {
 | PROVIDER | §1 TERMS | 新增 | QRC / 逐字歌词格式。 |
 | PROVIDER | §4.1 歌词接口 | 修订 | `format` 参数、`qrc` 字段、加密格式说明（不复制算法实现）。 |
 | PROVIDER | §4.3 QqLyricResponse | 修订 | 增加 `qrc` 字段与转换规则。 |
-| BUILD | — | 不动 | 无新增依赖。 |
 
 **验收**：QRC 行内高亮与时间轴一致；翻译仍可合并；没有桌面歌词窗口、设置项或入口；无 QRC 时整行高亮。
 
@@ -1331,7 +1308,7 @@ playlist: {
 |---|---|---|---|
 | README | §2 用户交互 | 新增 | MV 搜索与播放入口。 |
 | USER | §1 TERMS | 新增 | MV / MV 清晰度。 |
-| USER | §2 CONVENTIONS 路由 | 修订 | 增加 MV 播放页路由。 |
+| USER | §3.4 页面/URL 架构图 | 修订 | 增加 MV 播放页节点及从搜索页进入的跳转边。 |
 | USER | §5.2.8 页面结构 | 修订 | 搜索页增加 MV 卡片；新增 MV 播放页。 |
 | CORE | §1 File tree | 修订 | `api/mv.ts`、`views/MvView.vue`。 |
 | CORE | §4.1 types.ts | 修订 | MV 搜索结果、MV 清晰度与播放信息。 |
@@ -1341,7 +1318,6 @@ playlist: {
 | CORE | 新增 §4.x api/mv.ts | 新增 | MV 接口签名与转换。 |
 | CORE | 新增 §5.x MV 播放 | 新增 | 搜索 → 详情 → 取流 → 播放调用栈。 |
 | PROVIDER | §1 TERMS / §3 / §4.1 / §4.3 | 新增 | MV 术语、接口、参数、响应模型、取流字段。 |
-| BUILD | — | 不动 | 使用 HTML5 video，无新增依赖。 |
 
 **验收**：搜索 / 打开 / 播放 / 全屏 / 退出完整；无权限有明确提示；音频与 MV 切换时状态不互相污染。
 
@@ -1426,7 +1402,6 @@ export interface Settings {
 | CORE | §4.1 Settings | 修订 | `shortcuts` 字段与默认值。 |
 | CORE | §4.48 SettingsView.vue | 修订 | 快捷键录制、冲突提示、恢复默认。 |
 | CORE | §5.1 / §5.8 | 修订 | 启动注册、退出注销。 |
-| BUILD | — | 不动 | 无新增依赖。 |
 
 **验收**：绑定后窗口隐藏时仍生效；冲突有提示；修改 / 清除即时生效；退出后不残留；Wayland 不可用时有说明。
 
@@ -1480,3 +1455,92 @@ export interface Settings {
 **验收**：mpv 缺失自动回退；gapless 无缝；EQ / loudnorm 生效；MPRIS 状态仍正确；退出无残留进程 / socket。
 
 ---
+
+---
+
+## 文档改动清单
+
+以下按目标文档与章节列出动作，只列增 / 改 / 删，不列不动项。计划文档本身（A8、C/D、CI、顶部互链等）不在此表。
+
+### README
+
+| 章节 | 动作 | 内容 |
+|---|---|---|
+| §1.2 GOAL | 改 | 明确当前仅支持 Arch Linux x86_64。 |
+| §1.3 非目标 | 改 | 音频缓存、下载仅限本机个人使用，不构成内容分发、不提供分享/镜像。 |
+| §2 用户交互 · 歌单 | 改 | 歌单会标记不可播与最高可用音质（只写用户体验，不写缓存、分页、队列机制）。 |
+| §2 用户交互 · 新增行 | 增 | 启动参数编辑、curl 安装/tar.gz 手动运行、发现入口、收藏/歌单管理、MV、下载入口。 |
+| §2 用户交互 · 系统集成 | 改 | 托盘菜单/tooltip/图标随播放状态同步；补充播放引擎与 mpv 依赖说明。 |
+
+### USER
+
+| 章节 | 动作 | 内容 |
+|---|---|---|
+| §1 TERMS | 增 | “我喜欢（收藏歌单）”“不可播标记”“最高可用音质”“渐进加载”“播放缓存”“每日推荐/专属雷达/猜你喜欢”“逐字歌词”“收藏/歌单管理/可编辑歌单”“MV/MV 清晰度”“下载任务/下载中心”“全局快捷键”“播放引擎/gapless/EQ/响度归一”。 |
+| §1 TERMS | 删 | 删除“QRC”用户术语；QRC 归 PROVIDER。 |
+| §2 CONVENTIONS | 增 | 歌单加载与后台刷新、启动参数文件、不可播标记与最高音质、渐进加载、播放缓存、乐观更新与回滚、下载限制。 |
+| §2 CONVENTIONS · 播放失败 | 改 | 区分“不可播（无可用流）沿队列向后尝试到可播或队列空”和“其他加载失败不自动跳下一首/不自动回退”。 |
+| §2 CONVENTIONS · 路由 | 删 | 删除路由清单，改为“页面/URL 跳转关系见 §3.4”。 |
+| §3.1 总体架构 | 改 | 音频流边界改为主进程本地协议/代理；同步更新 `diagram/general-architecture.puml` 与 `.svg`。 |
+| §3.4 页面/URL 架构图 | 增 | 新建 PlantUML 组件图：页面节点标注 URL，边表示跳转关系；含现有页面和 `/playlist/:id` 返回 `/library` 边；同时提交 `diagram/page-url-architecture.puml` 与 `.svg`。 |
+| §3.4 页面/URL 架构图 | 改 | 增加 `/discover` 节点及侧栏/搜索结果跳转边；增加 MV 播放页节点及搜索页跳转边。 |
+| §5.2.2 侧栏与导航 | 改 | “浏览”组增加“发现”；增加下载抽屉入口。 |
+| §5.2.3 播放条 | 改 | 增加收藏按钮、下载按钮；明确播放条自行验证不可播并沿队列向后尝试。 |
+| §5.2.4 歌曲列表 | 改 | 不可播行样式、最高可用音质标签、播放入口禁用；增加收藏与下载按钮；≤900px 不新增列。 |
+| §5.2.5 歌词与评论 | 改 | 增加逐字高亮；无 QRC 时整行回退；明确没有桌面歌词。 |
+| §5.2.7 设置页 | 增 | 启动参数区块、缓存开关/占用/清理、下载目录与容量、快捷键录制、引擎选择/EQ/响度开关。 |
+| §5.2.8 页面结构 | 改 | 歌单详情：再次进入先显示上次内容、错误态只用于第一页无内容、第一页渲染、底部加载/重试、已载入/总数；队列为空，当前歌曲单独显示；增加发现页、MV 搜索卡片与 MV 播放页。 |
+| §5.2.9 播放队列 | 改 | 播放开始后队列为空，当前歌曲单独显示；“下一首播放”是手动入队唯一入口；完整加载后自动补齐；未加载完整的歌单不进入队列；当前曲不可播时沿队列向后尝试；上一首按播放历史回退。 |
+| §5.2.x 歌单编辑 / 下载中心 | 增 | 新建/改名/删除/增删歌曲对话框；下载中心侧栏抽屉。 |
+| §5.3 错误与通知 | 改 | 不可播标记获取失败静默；播放失败仍按现有提示。 |
+| §5.4 托盘 | 改 | 动态菜单、tooltip、图标状态、GNOME 限制；单击只显示，不做隐藏切换。 |
+
+### CORE
+
+| 章节 | 动作 | 内容 |
+|---|---|---|
+| §1 File tree | 增 | `cache/playlist.ts`、`startup-flags.ts`、`resources/flags.conf.example`、`electron-builder.yml`、`build/`、`package-arch.mjs`、`lychee-player.desktop`、`install.sh`、`test/`、`vitest.config.ts`、`record-fixtures.mjs`、`api/availability.ts`、`composables/availability.ts`、`stores/playlist.ts`、`shared/constants.ts`、`cache/audio.ts`、`media/audio-protocol.ts`、`api/recommend.ts`、`DiscoverView.vue`、`stores/recommend.ts`、`utils/qrc.ts`、`api/favorite.ts`、`api/playlist-write.ts`、`stores/playlist-edit.ts`、`PlaylistEditDialog.vue`、`api/mv.ts`、`MvView.vue`、`download/manager.ts`、`DownloadDrawer.vue`、`integration/global-shortcuts.ts`、`audio/mpv.ts`、`audio/remote-engine.ts`。 |
+| §2 CONVENTIONS | 增 | 歌单缓存键/账号作用域/过期与字节上限/页获取并发/失效；启动参数内部解析与应用时机；fixture 回放；渐进探测与批次/账号/失败语义；页获取并发与补全不取消；工程常量集中管理。 |
+| §3 SBOM | 增 | `electron-builder`（构建期）、`vitest`（开发期）、外部 mpv 依赖注（版本/许可证见 BUILD）。 |
+| §4.1 types.ts | 增/改 | `PlaylistKind`、`PlaylistMeta.kind`、`SongAvailability`、`ProbeOptions`、`PlaylistPage`、`PlaylistPageResult`、推荐数据模型、`Lyric.format`、`FavoriteState`、`PlaylistEditResult`、`PlaylistMeta.editable`、MV 类型、下载任务类型、`Settings.shortcuts`、mpv 类型。 |
+| §4.2 ipc.ts | 增/改 | `flags.get/save`、`song.probe`、`playlist.get/prefetch`、推荐通道、收藏/歌单写操作、MV 通道、下载 IPC、远程引擎通道。 |
+| §4.4 / §4.5 | 改 | 启动阶段调用 flags 解析与应用；`player:state` 同步分发到 MPRIS 与托盘。 |
+| §4.11 song.ts | 改 | 抽取 `resolveStreamUrls`，供探测复用。 |
+| §4.12 playlist.ts | 改 | 拆出 `fetchPlaylistPage`；单页抓取 + 缓存读写；不再内部循环拉全量；复用页获取并发；页大小/页上限改为引用 `shared/constants.ts`。 |
+| §4.14 lyric.ts | 改 | QRC 请求参数与原始返回。 |
+| §4.19 tray.ts | 改 | `TrayActions` 增加状态输入与 `updateTray`，菜单重建。 |
+| §4.23 App.vue | 改 | 挂载下载抽屉；与歌词/播放队列面板互斥。 |
+| §4.25 router | 改 | `/discover` 与 MV 播放页路由。 |
+| §4.27 engine.ts | 改 | 支持 `lychee-audio://` 本地协议；mpv 接口职责与 fallback。 |
+| §4.29 player.ts | 改 | `QueueSource`、`queueBuilding`、`startPlaylistPlayback`、`appendPlaylistQueue`、`playHistory`；`playNext(song)` 改名 `addNext(song)`（只插队）；`next()` 改名 `playNext()`（手动/自动切歌，切歌前写历史）；`playAt` 只定位不写历史；队列构建过滤不可播；当前曲不可播时播放条自行向后尝试，不读取探测结果。 |
+| §4.33 / §4.34 / §4.41 | 改 | `LyricLine`/`LyricWord` 只在 §4.33 定义；`useLyrics` 支持 QRC；`LyricsPanel` 逐字高亮与整行回退。 |
+| §4.39 / §4.40 | 改 | SongTable/PlayerBar 增加可用性、收藏、下载按钮与状态。 |
+| §4.44 SearchView | 改 | MV 搜索入口与结果卡片。 |
+| §4.45 LibraryView | 改 | 加载完成后预取“我喜欢”第一页；歌单卡片菜单。 |
+| §4.46 PlaylistView | 改 | 删除“返回搜索”描述；改用 playlist feed；接入 `useAvailability`。 |
+| §4.48 SettingsView | 改 | 启动参数、缓存、下载目录、快捷键、引擎/EQ/响度设置。 |
+| 新增 §4.x 模块 | 增 | `cache/playlist`、`startup-flags`、`availability`、`stores/playlist`、`shared/constants`、`cache/audio`、`audio-protocol`、`api/recommend`、`stores/recommend`、`qrc`、`favorite`、`playlist-write`、`playlist-edit`、`api/mv`、`download/manager`、`global-shortcuts`、`mpv`。 |
+| §5 Call stack | 增/改 | §5.2 启动参数重写；§5.5 缓存命中/未命中、托盘状态、当前曲不可播向后尝试；§5.9 QRC；新增 §5.10 歌单缓存预取、§5.11 可用性检测、§5.12 分页加载与队列构建；新增推荐、收藏/歌单编辑、MV、下载、mpv 调用栈。 |
+| 删除项 | 删 | 删除各模块签名中的局部常量声明（迁入 `shared/constants.ts`）；删除 §4.46 的“返回搜索”描述；删除 §5.5 中“主进程只经手链接字符串”的旧边界。 |
+
+### PROVIDER
+
+| 章节 | 动作 | 内容 |
+|---|---|---|
+| §1 TERMS | 增 | 推荐三类、QRC/逐字歌词、收藏/歌单写入、MV/清晰度、mpv/JSON IPC/socket/property/event。 |
+| §3 DIAGRAMS | 增/改 | 推荐、写入、MV、mpv IPC 边界流程图；更新 §3.3 音频流边界说明，去掉“主进程只经手链接字符串”。 |
+| §4.1 接口表 | 改/增 | “我喜欢”使用 `disstid:0 + dirid:201`；歌单分页偏移与 `songnum`；推荐入口；歌词 `format/qrc`；收藏/歌单写接口；MV 接口；音频流 Range/vkey；新增 §4.5 mpv JSON IPC。 |
+| §4.2 消息与错误 | 改 | 写操作的权限/频率错误映射。 |
+| §4.3 数据模型/转换 | 改/增 | `QqMineData` 收藏歌单识别；`QqSong.file.size_*` 在 fixture 验证后补；`QqPlaylistData` 单页语义；推荐模型；`QqLyricResponse.qrc`；写操作模型；MV 模型；音频流说明。 |
+
+### BUILD
+
+| 章节 | 动作 | 内容 |
+|---|---|---|
+| 新文件 | 增 | 新建 `BUILD.html`。 |
+| 第 1 章 环境要求 | 增 | Arch Linux x86_64、base-devel/nodejs/npm、GTK/libsecret/NSS/ALSA/D-Bus。 |
+| 第 2 章 开发运行 | 增 | `npm ci`、`npm run dev`、类型检查、`npm test`、`npm run test:watch`、探针；A5 测试小节。 |
+| 第 3–7 章 | 增 | 构建、`package:arch`、tar.gz 结构、校验和、curl 安装、用户级/系统级布局、手动运行、支持范围。 |
+| 第 8–9 章 | 增 | 未来 AUR 映射；沙箱/chrome-sandbox、Wayland、密钥环、缺库、curl/校验和排障。 |
+| 第 10 章 启动参数 | 增 | flags 文件位置、示例、打包后覆盖方式（A3）。 |
+| 存储相关 | 增 | 音频缓存目录/容量/清理（B2）；下载默认目录/权限/磁盘要求（B7）；mpv 安装/版本/socket 权限（B9）。 |
