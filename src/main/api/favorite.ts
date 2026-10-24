@@ -26,7 +26,8 @@ interface PlaylistEnvelope<T> {
   code?: number
   playlist?: {
     code?: number
-    data?: T & { code?: number; subcode?: number; retCode?: number }
+    message?: string
+    data?: T & { code?: number; subcode?: number; retCode?: number; msg?: string }
   }
 }
 
@@ -49,16 +50,35 @@ interface StatusCache {
 let statusCache: StatusCache | null = null
 
 function cookieHeader(credential: Credential): string {
-  return [
-    `uin=${credential.musicid}`,
-    `qqmusic_uin=${credential.musicid}`,
-    `qm_keyst=${credential.musickey}`,
-    `qqmusic_key=${credential.musickey}`
-  ].join('; ')
+  const merged: Record<string, string> = {
+    ...(credential.webCookies ?? {}),
+    uin: credential.musicid,
+    qqmusic_uin: credential.musicid,
+    qm_keyst: credential.musickey,
+    qqmusic_key: credential.musickey
+  }
+  return Object.entries(merged)
+    .filter(([name, value]) => name && value !== '')
+    .map(([name, value]) => `${name}=${value}`)
+    .join('; ')
 }
 
 function commBlock(credential: Credential): Record<string, unknown> {
-  const gtk = hash33(credential.musickey, 5381)
+  const cookies = credential.webCookies ?? {}
+  const gtk = hash33(
+    cookies.skey || cookies.qqmusic_key || cookies.qm_keyst || credential.musickey,
+    5381
+  )
+  const gtkNew = hash33(
+    cookies.qqmusic_key ||
+      cookies.p_skey ||
+      cookies.skey ||
+      cookies.p_lskey ||
+      cookies.lskey ||
+      cookies.qm_keyst ||
+      credential.musickey,
+    5381
+  )
   return {
     uin: credential.musicid,
     format: 'json',
@@ -67,7 +87,7 @@ function commBlock(credential: Credential): Record<string, unknown> {
     authst: credential.musickey,
     platform: 'yqq.json',
     g_tk: gtk,
-    g_tk_new_20200303: gtk,
+    g_tk_new_20200303: gtkNew,
     inCharset: 'utf-8',
     outCharset: 'utf-8',
     notice: 0,
@@ -88,7 +108,14 @@ function assertEnvelope<T>(response: PlaylistEnvelope<T>, action: string, write:
   if (Number(failed) === 1000 || Number(failed) === 301) {
     throw new UpstreamError('AUTH_EXPIRED', '登录已失效，请重新登录')
   }
-  throw new UpstreamError('UPSTREAM_CHANGED', `${action}：上游返回错误码 ${failed}`)
+  if (Number(failed) === 80105 || Number(failed) === 1101) {
+    throw new UpstreamError('UPSTREAM_CHANGED', `该歌曲暂不支持收藏（上游 ${failed}）`)
+  }
+  const detail = block?.message || data?.msg
+  throw new UpstreamError(
+    'UPSTREAM_CHANGED',
+    `${action}：上游返回错误码 ${failed}${detail ? `（${detail}）` : ''}`
+  )
 }
 
 function webSign(body: string): string {
@@ -131,47 +158,58 @@ async function signedPlaylistWrite(
     }
   }
   const body = JSON.stringify(payload)
-  const iv = randomBytes(12)
-  const cipher = createCipheriv('aes-128-gcm', REQUEST_KEY, iv)
-  const encrypted = Buffer.concat([
-    iv,
-    cipher.update(body, 'utf8'),
-    cipher.final(),
-    cipher.getAuthTag()
-  ]).toString('base64')
 
-  const url = new URL('https://u6.y.qq.com/cgi-bin/musics.fcg')
-  url.searchParams.set('_', String(Date.now()))
-  url.searchParams.set('encoding', 'ag-1')
-  url.searchParams.set('sign', webSign(body))
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const iv = randomBytes(12)
+    const cipher = createCipheriv('aes-128-gcm', REQUEST_KEY, iv)
+    const encrypted = Buffer.concat([
+      iv,
+      cipher.update(body, 'utf8'),
+      cipher.final(),
+      cipher.getAuthTag()
+    ]).toString('base64')
 
-  let response: Response
-  try {
-    response = await fetch(url, {
-      method: 'POST',
-      redirect: 'error',
-      signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
-      headers: {
-        Referer: 'https://y.qq.com/',
-        'User-Agent': WEB_USER_AGENT,
-        Cookie: cookieHeader(credential),
-        'Content-Type': 'text/plain',
-        Accept: 'application/octet-stream'
-      },
-      body: encrypted
-    })
-  } catch {
-    throw new UpstreamError('UPSTREAM_NETWORK', '收藏请求失败，请检查网络')
+    const url = new URL('https://u6.y.qq.com/cgi-bin/musics.fcg')
+    url.searchParams.set('_', String(Date.now()))
+    url.searchParams.set('encoding', 'ag-1')
+    url.searchParams.set('sign', webSign(body))
+
+    let response: Response
+    try {
+      response = await fetch(url, {
+        method: 'POST',
+        redirect: 'error',
+        signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        headers: {
+          Referer: 'https://y.qq.com/',
+          'User-Agent': WEB_USER_AGENT,
+          Cookie: cookieHeader(credential),
+          'Content-Type': 'text/plain',
+          Accept: 'application/octet-stream'
+        },
+        body: encrypted
+      })
+    } catch {
+      throw new UpstreamError('UPSTREAM_NETWORK', '收藏请求失败，请检查网络')
+    }
+    if (!response.ok) {
+      throw new UpstreamError('UPSTREAM_NETWORK', `收藏请求失败（HTTP ${response.status}）`)
+    }
+    const data = decodeWebResponse(new Uint8Array(await response.arrayBuffer())) as PlaylistEnvelope<
+      Record<string, unknown>
+    >
+    const code = data.playlist?.code ?? data.code
+    if ((code === 2001 || code === 104604) && attempt < 2) {
+      await new Promise((resolve) => setTimeout(resolve, 600 * 2 ** attempt))
+      continue
+    }
+    assertEnvelope(
+      data,
+      method === 'AddSonglist' ? '收藏' : '取消收藏',
+      true
+    )
+    return
   }
-  if (!response.ok) {
-    throw new UpstreamError('UPSTREAM_NETWORK', `收藏请求失败（HTTP ${response.status}）`)
-  }
-  const data = decodeWebResponse(new Uint8Array(await response.arrayBuffer()))
-  assertEnvelope(
-    (data ?? {}) as PlaylistEnvelope<Record<string, unknown>>,
-    method === 'AddSonglist' ? '收藏' : '取消收藏',
-    true
-  )
 }
 
 async function playlistRead<T>(
@@ -276,9 +314,11 @@ export async function toggleFavorite(songMid: string): Promise<FavoriteState> {
   const target = !before
   const identity = await fetchTrackIdentity(songMid)
 
+  // 201 目录的 songType 与详情里的 type 不完全一致：普通歌曲传 0 会被拒绝，使用 1 兼容。
+  const songType = identity.songType > 0 ? identity.songType : 1
   await signedPlaylistWrite(credential, target ? 'AddSonglist' : 'DelSonglist', {
     dirId: 201,
-    v_songInfo: [{ songId: Number(identity.songId), songType: identity.songType }]
+    v_songInfo: [{ songId: Number(identity.songId), songType }]
   })
 
   const after = (await readStatuses(credential, [songMid])).get(songMid) ?? false

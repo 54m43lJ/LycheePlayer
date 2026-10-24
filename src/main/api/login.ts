@@ -302,7 +302,7 @@ export function refreshIfNeeded(force = false): Promise<void> {
     })
 }
 
-function parseCookieString(cookie: string): { uin: string; key: string } {
+function parseCookieString(cookie: string): { uin: string; key: string; jar: Record<string, string> } {
   const jar: Record<string, string> = {}
   for (const chunk of cookie.split(/[\n;]+/)) {
     const pair = chunk.trim()
@@ -321,7 +321,7 @@ function parseCookieString(cookie: string): { uin: string; key: string } {
   const rawUin = jar.uin ?? jar.qqmusic_uin ?? jar.wxuin ?? jar.p_uin ?? ''
   const uin = rawUin.replace(/^o/, '').replace(/^0+(?=\d)/, '')
   const key = jar.qm_keyst ?? jar.qqmusic_key ?? jar.musickey ?? jar.music_key ?? ''
-  return { uin, key }
+  return { uin, key, jar }
 }
 
 interface ProfileProbe {
@@ -354,11 +354,16 @@ async function probeCredential(credential: Credential): Promise<'ok' | 'expired'
 
 /** Cookie 兜底登录：解析 uin / qm_keyst 并向资料接口验证。 */
 export async function loginWithCookie(cookie: string): Promise<Credential> {
-  const { uin, key } = parseCookieString(cookie)
+  const { uin, key, jar } = parseCookieString(cookie)
   if (!/^\d+$/.test(uin) || !key) {
     throw new UpstreamError('AUTH_EXPIRED', 'Cookie 缺少有效的 uin 或 qm_keyst')
   }
-  const credential: Credential = { musicid: uin, musickey: key, expiredAtMs: null }
+  const credential: Credential = {
+    musicid: uin,
+    musickey: key,
+    expiredAtMs: null,
+    webCookies: jar
+  }
   const probe = await probeCredential(credential)
   if (probe !== 'ok') {
     throw new UpstreamError('AUTH_EXPIRED', 'Cookie 已失效，请重新获取')

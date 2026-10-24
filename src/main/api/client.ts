@@ -56,13 +56,18 @@ export interface UpstreamRequest {
 
 function cookieHeader(credential: Credential | null): Record<string, string> {
   if (!credential?.musicid || !credential.musickey) return {}
+  const merged: Record<string, string> = {
+    ...(credential.webCookies ?? {}),
+    uin: credential.musicid,
+    qqmusic_uin: credential.musicid,
+    qm_keyst: credential.musickey,
+    qqmusic_key: credential.musickey
+  }
   return {
-    Cookie: [
-      `uin=${credential.musicid}`,
-      `qqmusic_uin=${credential.musicid}`,
-      `qm_keyst=${credential.musickey}`,
-      `qqmusic_key=${credential.musickey}`
-    ].join('; ')
+    Cookie: Object.entries(merged)
+      .filter(([name, value]) => name && value !== '')
+      .map(([name, value]) => `${name}=${value}`)
+      .join('; ')
   }
 }
 

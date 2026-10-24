@@ -346,7 +346,7 @@ a {
 
 .page {
   padding: 28px 34px 40px;
-  max-width: 1240px;
+  max-width: none;
   margin: 0 auto;
   animation: page-in 0.24s ease;
 }

@@ -168,12 +168,23 @@ function runEmbedLogin(): Promise<Credential> {
 
     emitCode = (code) => void succeed(code)
 
+    const readCookieJar = async (): Promise<Record<string, string>> => {
+      const cookies = await partitionSession.cookies.get({})
+      const jar: Record<string, string> = {}
+      for (const cookie of cookies) {
+        if (cookie.domain?.endsWith('qq.com')) jar[cookie.name] = cookie.value
+      }
+      return jar
+    }
+
     const succeed = async (code: string): Promise<void> => {
       if (settled) return
       settled = true
       try {
+        const jar = await readCookieJar()
         await cleanup()
         const credential = await exchangeQqLoginCode(code)
+        credential.webCookies = jar
         resolve(credential)
       } catch (error) {
         reject(error)
@@ -191,11 +202,7 @@ function runEmbedLogin(): Promise<Credential> {
       if (settled || finishing) return
       finishing = true
       try {
-        const cookies = await partitionSession.cookies.get({})
-        const jar: Record<string, string> = {}
-        for (const cookie of cookies) {
-          if (cookie.domain?.endsWith('qq.com')) jar[cookie.name] = cookie.value
-        }
+        const jar = await readCookieJar()
         if (!jar.p_skey) {
           finishing = false
           return
@@ -209,6 +216,7 @@ function runEmbedLogin(): Promise<Credential> {
         await cleanup()
         const code = await requestOAuthCodeWithCookies(jar)
         const credential = await exchangeQqLoginCode(code)
+        credential.webCookies = jar
         resolve(credential)
       } catch (error) {
         reject(error)

@@ -164,14 +164,12 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
   }
 
   const rangeHeader = request.headers.get('range')
-  const rangeStart = rangeHeader ? /^bytes=(\d+)-/.exec(rangeHeader)?.[1] : null
-  const upstreamRange = rangeStart && Number(rangeStart) > 0 ? rangeHeader : null
 
   try {
     const response = await net.fetch(source.url, {
       headers: {
         Referer: 'https://y.qq.com/',
-        ...(upstreamRange ? { Range: upstreamRange } : {})
+        ...(rangeHeader ? { Range: rangeHeader } : {})
       }
     })
     if (!response.ok && response.status !== 206) {
@@ -182,32 +180,35 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
     const acceptRanges = response.headers.get('accept-ranges') ?? 'bytes'
     const contentRange = response.headers.get('content-range')
     const contentLength = response.headers.get('content-length')
+    const fullRange = contentRange ? /^bytes 0-(\d+)\/(\d+)$/.exec(contentRange) : null
+    const complete =
+      response.status === 200 ||
+      Boolean(fullRange && Number(fullRange[1]) + 1 === Number(fullRange[2]))
+    const baseHeaders = {
+      'Content-Type': contentType,
+      'Accept-Ranges': acceptRanges,
+      ...(contentRange ? { 'Content-Range': contentRange } : {}),
+      ...(contentLength ? { 'Content-Length': contentLength } : {}),
+      'Cache-Control': 'no-store'
+    }
     const body = response.body
     if (!body) {
       const buffer = await response.arrayBuffer()
-      if (response.status === 200) await cacheChunks(source, [new Uint8Array(buffer)])
+      if (complete) await cacheChunks(source, [new Uint8Array(buffer)])
       return new Response(request.method === 'HEAD' ? null : buffer, {
         status: response.status,
         headers: {
-          'Content-Type': contentType,
-          'Accept-Ranges': acceptRanges,
-          ...(contentRange ? { 'Content-Range': contentRange } : {}),
-          'Content-Length': contentLength ?? String(buffer.byteLength),
-          'Cache-Control': 'no-store'
+          ...baseHeaders,
+          'Content-Length': contentLength ?? String(buffer.byteLength)
         }
       })
     }
 
-    if (response.status === 206) {
+    // 局部 Range 直接透传，保证未命中缓存时也能立即 seek。
+    if (!complete) {
       return new Response(request.method === 'HEAD' ? null : body, {
-        status: 206,
-        headers: {
-          'Content-Type': contentType,
-          'Accept-Ranges': acceptRanges,
-          ...(contentRange ? { 'Content-Range': contentRange } : {}),
-          ...(contentLength ? { 'Content-Length': contentLength } : {}),
-          'Cache-Control': 'no-store'
-        }
+        status: response.status,
+        headers: baseHeaders
       })
     }
 
@@ -235,13 +236,8 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
       }
     })
     return new Response(request.method === 'HEAD' ? null : stream, {
-      status: 200,
-      headers: {
-        'Content-Type': contentType,
-        'Accept-Ranges': acceptRanges,
-        ...(contentLength ? { 'Content-Length': contentLength } : {}),
-        'Cache-Control': 'no-store'
-      }
+      status: response.status,
+      headers: baseHeaders
     })
   } catch {
     const cached = getCachedAudio(source.songMid, source.quality)

@@ -211,6 +211,8 @@ export interface Credential {
   openid?: string
   unionid?: string
   loginType?: number
+  /** 登录网页会话 Cookie（p_skey / skey 等），仅主进程使用。 */
+  webCookies?: Record<string, string>
 }
 
 export interface UrlResult {
