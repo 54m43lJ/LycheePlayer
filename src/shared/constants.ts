@@ -35,10 +35,6 @@ export const SEARCH_PAGE_SIZE_MAX = 50
 export const PLAYLIST_PAGE_SIZE = 50
 /** 歌单本地最大分页数。推荐值 20_000。 */
 export const PLAYLIST_PAGE_MAX = 20_000
-/** 歌单页获取并发。推荐值 1；可提升到 3。 */
-export const PLAYLIST_PREFETCH_CONCURRENCY = 1
-/** 歌单缓存 TTL。推荐值 5_000 ms。 */
-export const PLAYLIST_CACHE_TTL_MS = 5_000
 /** 歌单界面变化轮询间隔。推荐值 15_000 ms。 */
 export const PLAYLIST_POLL_INTERVAL_MS = 15_000
 /** 歌单缓存字节上限。推荐值 16 × 1024 × 1024。 */

@@ -9,7 +9,6 @@ export function defaultSettings(): Settings {
     closeToTray: true,
     theme: 'dark',
     audioCacheEnabled: true,
-    shortcuts: { playPause: 'Ctrl+Alt+Space' },
     audioEngine: 'auto'
   }
 }

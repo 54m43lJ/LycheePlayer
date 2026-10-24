@@ -112,10 +112,13 @@ export interface ProbeOptions {
   force?: boolean
 }
 
-export interface PlaylistCacheEntry {
+export interface PlaylistSnapshot {
   meta: PlaylistMeta
   songs: Song[]
   total: number
+}
+
+export interface PlaylistCacheEntry extends PlaylistSnapshot {
   complete: boolean
   fetchedAtMs: number
 }
@@ -126,13 +129,6 @@ export interface PlaylistPage {
   offset: number
   total: number
   hasMore: boolean
-}
-
-export interface PlaylistPageResult {
-  page: PlaylistPage
-  fetchedAtMs: number
-  stale: boolean
-  fromCache: boolean
 }
 
 export interface RecommendSection {
@@ -226,7 +222,6 @@ export interface Settings {
   closeToTray: boolean
   theme: 'dark' | 'light'
   audioCacheEnabled: boolean
-  shortcuts: Partial<Record<'toggleWindow' | 'playPause' | 'next' | 'previous', string>>
   /** 音频引擎选择；mpv 缺失时回退 HTML5。 */
   audioEngine?: 'auto' | 'html5' | 'mpv'
   /** 下载目录；缺省为 ~/Music/Lychee Player。 */

@@ -29,7 +29,7 @@ function isEntry(value: unknown): value is PlaylistCacheEntry {
   )
 }
 
-/** 同步读取缓存页；调用方根据 fetchedAtMs 判定是否 stale。 */
+/** 同步读取整份歌单缓存；调用方根据 fetchedAtMs 判定是否 stale。 */
 export function readPlaylistCache(scope: string, id: string): PlaylistCacheEntry | null {
   try {
     const text = readFileSync(cachePath(scope, id), 'utf8')

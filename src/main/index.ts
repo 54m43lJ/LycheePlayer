@@ -6,7 +6,6 @@ import { refreshIfNeeded } from './api/login'
 import { registerIpc, sendPlayerCommand } from './ipc'
 import { initMpris, publishState } from './integration/mpris'
 import { destroyTray, initTray } from './integration/tray'
-import { registerShortcuts, unregisterShortcuts } from './integration/global-shortcuts'
 import { getSettings, loadSettings, saveSettings } from './settings'
 import { disposeEmbedView, isAllowedHost } from './api/web-login'
 import { registerAudioProtocol } from './media/audio-protocol'
@@ -139,7 +138,6 @@ export async function bootstrap(): Promise<void> {
     onPrevious: () => sendPlayerCommand('previous'),
     onQuit: () => app.quit()
   })
-  registerShortcuts(getSettings().shortcuts)
 
   createMainWindow()
 
@@ -175,7 +173,6 @@ if (!hasLock) {
   app.on('before-quit', () => {
     quitting = true
     if (refreshTimer) clearInterval(refreshTimer)
-    unregisterShortcuts()
     publishState(null)
     destroyTray()
     disposeEmbedView()

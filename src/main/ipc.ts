@@ -6,6 +6,7 @@ import type {
   IpcResult,
   MprisCommand,
   PlayerState,
+  PlaylistSnapshot,
   ProbeOptions,
   Quality,
   SearchRequest,
@@ -16,7 +17,12 @@ import { loginWithCookie, refreshSession } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
 import { getComments } from './api/comment'
-import { fetchPlaylistPage, listMine, prefetchPlaylists } from './api/playlist'
+import {
+  fetchPlaylistPage,
+  getCachedPlaylist,
+  listMine,
+  savePlaylistSnapshot
+} from './api/playlist'
 import {
   addSongs,
   createPlaylist,
@@ -36,7 +42,6 @@ import { clearCredential, getCredential, loadCredential, saveCredential } from '
 import { getSettings, saveSettings } from './settings'
 import { publishState } from './integration/mpris'
 import { updateTray } from './integration/tray'
-import { registerShortcuts } from './integration/global-shortcuts'
 import { clearPlaylistCache, invalidatePlaylistCache } from './cache/playlist'
 import { audioCacheStats, clearAudioCache } from './cache/audio'
 import { readFlagsFile, writeFlagsFile } from './startup-flags'
@@ -187,14 +192,22 @@ export function registerIpc(): void {
   })
 
   handle('playlist.get', async (id: unknown, options: unknown) => {
-    const value = (options ?? {}) as { offset?: number; force?: boolean }
+    const value = (options ?? {}) as { offset?: number }
     const offset = Number.isFinite(value.offset) ? Number(value.offset) : 0
-    return fetchPlaylistPage(stringArg(id, '歌单 ID'), offset, Boolean(value.force))
+    return fetchPlaylistPage(stringArg(id, '歌单 ID'), offset)
+  })
+  handle('playlist.getCached', async (id: unknown) =>
+    getCachedPlaylist(stringArg(id, '歌单 ID'))
+  )
+  handle('playlist.saveCache', async (id: unknown, snapshot: unknown, complete: unknown) => {
+    await savePlaylistSnapshot(
+      stringArg(id, '歌单 ID'),
+      snapshot as PlaylistSnapshot,
+      Boolean(complete)
+    )
+    return null
   })
   handle('playlist.listMine', async () => listMine())
-  ipcMain.on('playlist.prefetch', (_event, ids: unknown) => {
-    if (Array.isArray(ids)) prefetchPlaylists(ids.map((id) => String(id)))
-  })
   handle('playlist.create', async (name: unknown) => createPlaylist(stringArg(name, '歌单名', 128)))
   handle('playlist.rename', async (id: unknown, name: unknown) => {
     const result = await renamePlaylist(stringArg(id, '歌单 ID'), stringArg(name, '歌单名', 128))
@@ -319,7 +332,6 @@ export function registerIpc(): void {
     const previous = getSettings()
     const next: Settings = { ...previous, ...patch }
     await saveSettings(next)
-    if (patch.shortcuts) registerShortcuts(next.shortcuts)
     if (previous.audioCacheEnabled && !next.audioCacheEnabled) await clearAudioCache()
     return next
   })

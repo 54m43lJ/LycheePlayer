@@ -1948,7 +1948,18 @@ a {
   font-size: 11px;
 }
 
+.feed-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 2px 2px;
+  color: var(--faint);
+  font-size: 12px;
+}
+
 .spinner {
+  display: inline-block;
+  flex: none;
   width: 18px;
   height: 18px;
   border: 2px solid var(--subtle-bg-strong);
@@ -2711,22 +2722,6 @@ a {
 
 .flags-editor {
   min-height: 150px;
-}
-
-.shortcut-input {
-  min-width: 150px;
-  height: 32px;
-  padding: 0 10px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  background: var(--input-bg);
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.shortcut-input.recording {
-  border-color: var(--accent-line);
-  color: var(--accent-strong);
 }
 
 .lyric-word.active {

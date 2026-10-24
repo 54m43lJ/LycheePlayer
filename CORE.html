@@ -65,10 +65,9 @@
 │   │   │   └── <a href="#c4-60">manager.ts</a>               下载管理器
 │   │   ├── integration/                      桌面集成
 │   │   │   ├── <a href="#c4-18">mpris.ts</a>                 MPRIS 服务
-│   │   │   ├── <a href="#c4-19">tray.ts</a>                  系统托盘
-│   │   │   └── <a href="#c4-61">global-shortcuts.ts</a>      全局快捷键
+│   │   │   └── <a href="#c4-19">tray.ts</a>                  系统托盘
 │   │   ├── audio/
-│   │   │   └── <a href="#c4-62">mpv.ts</a>                   mpv 子进程与 JSON IPC
+│   │   │   └── <a href="#c4-61">mpv.ts</a>                   mpv 子进程与 JSON IPC
 │   │   └── types/
 │   │       └── <a href="#c4-20">mpris-service.d.ts</a>       mpris-service 类型声明
 │   ├── preload/
@@ -81,25 +80,25 @@
 │       ├── <a href="#c4-26">env.d.ts</a>                      Window 类型扩展
 │       ├── audio/
 │       │   ├── <a href="#c4-27">engine.ts</a>                 AudioEngine 接口与 HTML5 Audio 实现
-│       │   └── <a href="#c4-63">remote-engine.ts</a>          mpv 远程引擎
+│       │   └── <a href="#c4-62">remote-engine.ts</a>          mpv 远程引擎
 │       ├── stores/
 │       │   ├── <a href="#c4-28">auth.ts</a>                   登录态与登录动作
 │       │   ├── <a href="#c4-29">player.ts</a>                 播放器状态与队列
 │       │   ├── <a href="#c4-30">settings.ts</a>               设置与主题
 │       │   ├── <a href="#c4-31">ui.ts</a>                     歌词 / 评论、播放队列等 UI 状态
-│       │   ├── <a href="#c4-64">playlist.ts</a>               歌单 feed
-│       │   ├── <a href="#c4-65">recommend.ts</a>              推荐 feed
-│       │   ├── <a href="#c4-66">playlist-edit.ts</a>          歌单编辑状态
-│       │   ├── <a href="#c4-73">mv.ts</a>                        MV 播放状态
-│       │   └── <a href="#c4-74">download.ts</a>                  下载中心状态
+│       │   ├── <a href="#c4-63">playlist.ts</a>               歌单 feed
+│       │   ├── <a href="#c4-64">recommend.ts</a>              推荐 feed
+│       │   ├── <a href="#c4-65">playlist-edit.ts</a>          歌单编辑状态
+│       │   ├── <a href="#c4-72">mv.ts</a>                        MV 播放状态
+│       │   └── <a href="#c4-73">download.ts</a>                  下载中心状态
 │       ├── utils/
 │       │   ├── <a href="#c4-32">format.ts</a>                 时长、计数、封面与歌手格式化
 │       │   ├── <a href="#c4-33">lrc.ts</a>                    LRC / QRC 解析与活动行查找
-│       │   └── <a href="#c4-67">qrc.ts</a>                    QRC 解密与逐字解析
+│       │   └── <a href="#c4-66">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
 │       │   ├── <a href="#c4-35">toast.ts</a>                  Toast 队列
-│       │   └── <a href="#c4-68">availability.ts</a>           可用性探测调度
+│       │   └── <a href="#c4-67">availability.ts</a>           可用性探测调度
 │       ├── components/
 │       │   ├── <a href="#c4-36">AppIcon.vue</a>               图标集
 │       │   ├── <a href="#c4-37">CoverArt.vue</a>              封面与占位
@@ -109,16 +108,16 @@
 │       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词 / 评论容器
 │       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         评论面板
 │       │   ├── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
-│       │   ├── <a href="#c4-69">PlaylistEditDialog.vue</a>     歌单编辑对话框
-│       │   └── <a href="#c4-70">DownloadDrawer.vue</a>         下载中心抽屉
+│       │   ├── <a href="#c4-68">PlaylistEditDialog.vue</a>     歌单编辑对话框
+│       │   └── <a href="#c4-69">DownloadDrawer.vue</a>         下载中心抽屉
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
 │       │   ├── <a href="#c4-45">LibraryView.vue</a>           我的歌单
 │       │   ├── <a href="#c4-46">PlaylistView.vue</a>          歌单详情
 │       │   ├── <a href="#c4-47">LoginView.vue</a>             登录页
 │       │   ├── <a href="#c4-48">SettingsView.vue</a>          设置页
-│       │   ├── <a href="#c4-71">DiscoverView.vue</a>          发现页
-│       │   └── <a href="#c4-72">MvView.vue</a>                MV 播放页
+│       │   ├── <a href="#c4-70">DiscoverView.vue</a>          发现页
+│       │   └── <a href="#c4-71">MvView.vue</a>                MV 播放页
 │       ├── <a href="#c4-49">styles/main.css</a>               主题 token、布局与组件样式
 │       └── index.html                        渲染进程 HTML 入口
 ├── test/
@@ -447,7 +446,6 @@ export interface Settings {
   closeToTray: boolean;
   theme: 'dark' | 'light';
   audioCacheEnabled: boolean;
-  shortcuts: Partial&lt;Record&lt;'toggleWindow' | 'playPause' | 'next' | 'previous', string&gt;&gt;;
 }
 
 export interface AuthStatus {
@@ -737,7 +735,7 @@ export function isVipUser(): Promise&lt;boolean&gt;;
 <pre><code>export function getLyric(songMid: string): Promise&lt;Lyric&gt;;
 </code></pre>
 <ul class="note">
-  <li>请求 QRC 时只透传原始密文，解密在渲染进程 <a href="#c4-67">§4.67</a>；无法取得逐字数据时返回普通 LRC。</li>
+  <li>请求 QRC 时只透传原始密文，解密在渲染进程 <a href="#c4-66">§4.66</a>；无法取得逐字数据时返回普通 LRC。</li>
 </ul>
 
 <h3 id="c4-15">4.15 src/main/api/comment.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1197,7 +1195,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>设置项即时写盘；播放中切换默认音质会立即重载当前曲目。</li>
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
-  <li>缓存区提供开关、当前占用与清理；下载区提供目录、容量与剩余空间提示；快捷键区支持录制、冲突提示与恢复默认。</li>
+  <li>缓存区提供开关、当前占用与清理；下载区提供目录、容量与剩余空间提示。</li>
   <li>音频引擎可选自动 / HTML5 / mpv；mpv 缺失时回退 HTML5 并提示；EQ / 响度归一只在 mpv 引擎下生效。</li>
   <li>账号区展示登录态、到期时间、续期与退出登录；关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
 </ul>
@@ -1337,13 +1335,7 @@ export function clearCompletedDownloads(): Promise&lt;void&gt;;
 export function writePart(url: string, filePath: string): Promise&lt;void&gt;;
 </code></pre>
 
-<h3 id="c4-61">4.61 src/main/integration/global-shortcuts.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 待实现，可以根据实际情况调整
-export function registerShortcuts(bindings: Partial&lt;Record&lt;string, string&gt;&gt;): void;
-export function unregisterShortcuts(): void;
-</code></pre>
-
-<h3 id="c4-62">4.62 src/main/audio/mpv.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-61">4.61 src/main/audio/mpv.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function isMpvAvailable(): Promise&lt;MpvState&gt;;
 export function startMpv(): Promise&lt;void&gt;;
@@ -1351,12 +1343,12 @@ export function stopMpv(): Promise&lt;void&gt;;
 export function mpvCommand(command: string, args?: unknown[]): Promise&lt;unknown&gt;;
 </code></pre>
 
-<h3 id="c4-63">4.63 src/renderer/audio/remote-engine.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-62">4.62 src/renderer/audio/remote-engine.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function createRemoteEngine(handlers: AudioEngineHandlers): AudioEngine;
 </code></pre>
 
-<h3 id="c4-64">4.64 src/renderer/stores/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-63">4.63 src/renderer/stores/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function usePlaylistStore(): PlaylistStore;
 
@@ -1377,7 +1369,7 @@ export interface PlaylistFeed {
 }
 </code></pre>
 
-<h3 id="c4-65">4.65 src/renderer/stores/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-64">4.64 src/renderer/stores/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function useRecommendStore(): RecommendStore;
 
@@ -1388,7 +1380,7 @@ interface RecommendStore {
 }
 </code></pre>
 
-<h3 id="c4-66">4.66 src/renderer/stores/playlist-edit.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-65">4.65 src/renderer/stores/playlist-edit.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function usePlaylistEditStore(): PlaylistEditStore;
 
@@ -1404,13 +1396,13 @@ interface PlaylistEditStore {
 }
 </code></pre>
 
-<h3 id="c4-67">4.67 src/renderer/utils/qrc.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-66">4.66 src/renderer/utils/qrc.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function decryptQrc(ciphertext: string): string;
 export function parseQrcLyric(text: string, trans: string | null): LyricLine[];
 </code></pre>
 
-<h3 id="c4-68">4.68 src/renderer/composables/availability.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-67">4.67 src/renderer/composables/availability.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function useAvailability(songs: Ref&lt;Song[]&gt;): {
   availability: Ref&lt;Record&lt;string, SongAvailability&gt;&gt;;
@@ -1419,28 +1411,28 @@ export function useAvailability(songs: Ref&lt;Song[]&gt;): {
 };
 </code></pre>
 
-<h3 id="c4-69">4.69 src/renderer/components/PlaylistEditDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-68">4.68 src/renderer/components/PlaylistEditDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 const props = defineProps&lt;{ open: boolean; playlist?: PlaylistMeta | null }&gt;();
 const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 </code></pre>
 
-<h3 id="c4-70">4.70 src/renderer/components/DownloadDrawer.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-69">4.69 src/renderer/components/DownloadDrawer.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 // 无 props / emits；绑定 download IPC 与下载设置。
 </code></pre>
 
-<h3 id="c4-71">4.71 src/renderer/views/DiscoverView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-70">4.70 src/renderer/views/DiscoverView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 // 无 props / emits；使用 recommend store。
 </code></pre>
 
-<h3 id="c4-72">4.72 src/renderer/views/MvView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-71">4.71 src/renderer/views/MvView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 // 无 props / emits；路由参数 mvId。
 </code></pre>
 
-<h3 id="c4-73">4.73 src/renderer/stores/mv.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-72">4.72 src/renderer/stores/mv.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function useMvStore(): MvStore;
 
@@ -1453,7 +1445,7 @@ interface MvStore {
 }
 </code></pre>
 
-<h3 id="c4-74">4.74 src/renderer/stores/download.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-73">4.73 src/renderer/stores/download.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 待实现，可以根据实际情况调整
 export function useDownloadStore(): DownloadStore;
 
@@ -1479,7 +1471,6 @@ interface DownloadStore {
 ├── ipc::registerIpc()
 ├── integration/mpris::initMpris(ipc::sendPlayerCommand)
 ├── integration/tray::initTray(actions)
-├── integration/global-shortcuts::registerShortcuts(settings.shortcuts)
 ├── index::createMainWindow()
 ├── api/login::refreshIfNeeded()
 └── setInterval(30 * 60_000)
@@ -1693,7 +1684,6 @@ app::requestSingleInstanceLock()
 <h4 id="c5-8-2">5.8.2 应用退出</h4>
 <pre><code>app.on('before-quit')
 ├── index::clearInterval(refreshTimer)
-├── integration/global-shortcuts::unregisterShortcuts()
 ├── integration/mpris::publishState(null)
 ├── integration/tray::destroyTray()
 ├── api/web-login::disposeEmbedView()
@@ -1717,7 +1707,7 @@ app::requestSingleInstanceLock()
 <ul class="note">
   <li>播放条封面调用 <code>UiStore.toggleLyrics()</code> 打开歌词 / 评论组合面板；歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>。</li>
   <li>评论请求匿名发送，单页条数见 <a href="#c4-15">§4.15</a>；接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
-  <li>歌词请求可返回 QRC；解密与逐字解析在 <a href="#c4-67">§4.67</a>，无 QRC 时回退 LRC 整行高亮。</li>
+  <li>歌词请求可返回 QRC；解密与逐字解析在 <a href="#c4-66">§4.66</a>，无 QRC 时回退 LRC 整行高亮。</li>
   <li>路由切换时 <code>App.vue</code> 调用 <code>UiStore.closeLyrics()</code>。</li>
 </ul>
 

@@ -5,7 +5,6 @@ import { dirname, join } from 'node:path'
 import type { Quality, Settings } from '../shared/types'
 
 const QUALITIES: Quality[] = ['128k', '320k', 'flac']
-const SHORTCUT_KEYS = ['toggleWindow', 'playPause', 'next', 'previous'] as const
 
 function defaultDownloadDir(): string {
   return join(app.getPath('music'), 'Lychee Player')
@@ -17,7 +16,6 @@ export function createDefaultSettings(): Settings {
     closeToTray: true,
     theme: 'dark',
     audioCacheEnabled: true,
-    shortcuts: { playPause: 'Ctrl+Alt+Space' },
     audioEngine: 'auto',
     downloadDir: defaultDownloadDir()
   }
@@ -27,17 +25,6 @@ let current: Settings | null = null
 
 function settingsFile(): string {
   return join(app.getPath('userData'), 'settings.json')
-}
-
-function sanitizeShortcuts(value: unknown): Settings['shortcuts'] {
-  if (!value || typeof value !== 'object') return {}
-  const raw = value as Record<string, unknown>
-  const shortcuts: Settings['shortcuts'] = {}
-  for (const key of SHORTCUT_KEYS) {
-    const binding = raw[key]
-    if (typeof binding === 'string' && binding.trim()) shortcuts[key] = binding.trim()
-  }
-  return shortcuts
 }
 
 function sanitize(value: unknown): Settings {
@@ -56,8 +43,6 @@ function sanitize(value: unknown): Settings {
       typeof raw.audioCacheEnabled === 'boolean'
         ? raw.audioCacheEnabled
         : defaults.audioCacheEnabled,
-    shortcuts:
-      raw.shortcuts === undefined ? defaults.shortcuts : sanitizeShortcuts(raw.shortcuts),
     audioEngine:
       raw.audioEngine === 'html5' || raw.audioEngine === 'mpv'
         ? raw.audioEngine

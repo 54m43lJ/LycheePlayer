@@ -114,10 +114,6 @@
     <td>下载当前账号可播歌曲到本机的任务，以及管理进度、暂停 / 继续、删除的侧栏抽屉。</td>
   </tr>
   <tr>
-    <td>全局快捷键</td>
-    <td>应用在后台时仍可触发的键盘快捷键，用于播放控制或显示窗口。</td>
-  </tr>
-  <tr>
     <td>播放引擎 / gapless / EQ / 响度归一</td>
     <td>实际输出音频的引擎；可选 HTML5 Audio 或系统 mpv，后者支持无缝播放、均衡器与响度归一。</td>
   </tr>
@@ -491,10 +487,6 @@
       <div class="u-rowline"><span>播放缓存</span><span class="u-switch on"></span></div>
       <div class="u-rowline"><span>下载目录</span><span class="u-tab">选择</span></div>
     </div>
-    <div class="u-panel">
-      <h5>快捷键</h5>
-      <div class="u-rowline"><span>播放 / 暂停</span><span class="u-tab">Ctrl+Alt+Space</span></div>
-    </div>
   </div>
   <div class="u-col">
     <div class="u-panel">
@@ -523,10 +515,9 @@
 </div>
 </div>
 <ul class="note">
-  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口 / 启动参数 / 缓存与下载 / 快捷键，右列账号 / 关于 / 音频引擎。</li>
+  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口 / 启动参数 / 缓存与下载，右列账号 / 关于 / 音频引擎。</li>
   <li>启动参数展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
   <li>缓存与下载区展示缓存开关、当前占用、清理；下载目录、容量与剩余空间提示。</li>
-  <li>快捷键区支持录制、冲突提示与恢复默认；默认不占用系统媒体键。</li>
   <li>音频引擎可选自动 / HTML5 / mpv；mpv 缺失时回退 HTML5 并提示；EQ / 响度归一只在 mpv 引擎下生效。</li>
   <li>关于区展示版本、音频引擎与许可证；版本与许可证以构建配置为准。</li>
   <li>音质四档，默认“自动”；回退静默，不弹提示。</li>

@@ -296,7 +296,7 @@ export const usePlayerStore = defineStore('player', () => {
     playAt(index.value)
   }
 
-  /** 从歌单开始播放：记录队列来源，歌单完整加载后增量补齐队列。 */
+  /** 从歌单开始播放：记录队列来源，后续由视图用可用性快照补齐队列。 */
   function startPlaylistPlayback(song: Song, source: QueueSource): void {
     playOrder.value = [song]
     index.value = 0
@@ -306,17 +306,48 @@ export const usePlayerStore = defineStore('player', () => {
     void loadAndPlay(song)
   }
 
-  /** 歌单完整加载后按当前歌曲位置补齐队列；不改变当前曲与进度。 */
+  /** 用调用方给出的已过滤快照增量补齐队列；不做可用性检测或清理。 */
   function appendPlaylistQueue(currentSong: Song, fullSongs: Song[]): void {
     if (!queueSource.value || currentSong.songMid !== current.value?.songMid) return
     const position = fullSongs.findIndex((song) => song.songMid === currentSong.songMid)
+    if (position < 0) return
+    const tail = fullSongs
+      .slice(position + 1)
+      .filter((song) => song.songMid && song.songMid !== currentSong.songMid)
+    const queued = new Set(playOrder.value.map((song) => song.songMid))
+    const additions = tail.filter((song) => !queued.has(song.songMid))
+    if (additions.length > 0) {
+      playOrder.value = [...playOrder.value, ...additions]
+      if (mode.value === 'shuffle') shuffleUpcoming()
+    }
+    queueBuilding.value = false
+  }
+
+  /** 用最终快照替换当前曲之后的队列；当前曲与进度不变。 */
+  function replacePlaylistQueue(
+    currentSong: Song,
+    fullSongs: Song[],
+    previousMids?: Set<string>
+  ): void {
+    if (!queueSource.value || currentSong.songMid !== current.value?.songMid) return
+    const head = playOrder.value.slice(0, index.value + 1)
+    const upcoming = playOrder.value.slice(index.value + 1)
+    const manual = previousMids
+      ? upcoming.filter((song) => !previousMids.has(song.songMid))
+      : []
+    const position = fullSongs.findIndex((song) => song.songMid === currentSong.songMid)
+    if (position >= 0) {
+      const nextCurrent = fullSongs[position]
+      current.value = nextCurrent
+      if (index.value >= 0 && index.value < head.length) head[index.value] = nextCurrent
+      sendState()
+    }
     const tail = (position >= 0 ? fullSongs.slice(position + 1) : fullSongs).filter(
       (song) => song.songMid && song.songMid !== currentSong.songMid
     )
-    const head = playOrder.value.slice(0, index.value + 1)
-    const merged: Song[] = []
-    const seen = new Set<string>()
-    for (const song of [...head, ...tail]) {
+    const merged: Song[] = [...head]
+    const seen = new Set(head.map((song) => song.songMid))
+    for (const song of [...manual, ...tail]) {
       if (seen.has(song.songMid)) continue
       seen.add(song.songMid)
       merged.push(song)
@@ -563,6 +594,7 @@ export const usePlayerStore = defineStore('player', () => {
     playList,
     startPlaylistPlayback,
     appendPlaylistQueue,
+    replacePlaylistQueue,
     addNext,
     playNext,
     playAt,

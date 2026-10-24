@@ -14,8 +14,10 @@ import type {
   MvDetail,
   MvStream,
   PlayerState,
+  PlaylistCacheEntry,
   PlaylistMeta,
-  PlaylistPageResult,
+  PlaylistPage,
+  PlaylistSnapshot,
   ProbeOptions,
   Quality,
   RecommendFeed,
@@ -49,12 +51,14 @@ export interface LycheeApi {
     probe(mids: string[], options?: ProbeOptions): Promise<IpcResult<SongAvailability[]>>
   }
   playlist: {
-    get(
+    get(id: string, options?: { offset?: number }): Promise<IpcResult<PlaylistPage>>
+    getCached(id: string): Promise<IpcResult<PlaylistCacheEntry | null>>
+    saveCache(
       id: string,
-      options?: { offset?: number; force?: boolean }
-    ): Promise<IpcResult<PlaylistPageResult>>
+      snapshot: PlaylistSnapshot,
+      complete: boolean
+    ): Promise<IpcResult<null>>
     listMine(): Promise<IpcResult<PlaylistMeta[]>>
-    prefetch(ids: string[]): void
     create(name: string): Promise<IpcResult<PlaylistMeta>>
     rename(id: string, name: string): Promise<IpcResult<PlaylistMeta>>
     remove(id: string): Promise<IpcResult<null>>

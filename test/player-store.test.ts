@@ -86,4 +86,27 @@ describe('player queue', () => {
     player.appendPlaylistQueue(songs[0], songs)
     expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
   })
+
+  it('keeps already queued songs when the playlist snapshot grows', async () => {
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    const songs = [song('1', 'a'), song('2', 'b'), song('3', 'c')]
+    player.startPlaylistPlayback(songs[0], { kind: 'playlist', id: 'p1' })
+    player.appendPlaylistQueue(songs[0], songs.slice(0, 2))
+    player.addNext(song('x', 'next'))
+    player.appendPlaylistQueue(songs[0], songs)
+
+    expect(player.queue.map((item) => item.songMid)).toEqual(['x', '2', '3'])
+  })
+
+  it('does not remove queued songs when a later snapshot omits them', async () => {
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    const songs = [song('1', 'a'), song('2', 'b'), song('3', 'c')]
+    player.startPlaylistPlayback(songs[0], { kind: 'playlist', id: 'p1' })
+    player.appendPlaylistQueue(songs[0], songs)
+    player.appendPlaylistQueue(songs[0], [songs[0], songs[2]])
+
+    expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
+  })
 })

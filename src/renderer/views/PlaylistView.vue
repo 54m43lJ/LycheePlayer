@@ -27,7 +27,12 @@ const id = computed(() => String(route.params.id ?? ''))
 const feed = computed(() => playlist.feed)
 const meta = computed(() => feed.value?.meta ?? null)
 const songs = computed(() => feed.value?.songs ?? [])
-const { availability } = useAvailability(songs)
+const { availability, loading: availabilityLoading } = useAvailability(songs)
+watch(
+  [availability, availabilityLoading],
+  ([value, loading]) => playlist.setProbeState(value, loading),
+  { immediate: true, flush: 'sync' }
+)
 const favoriteMids = computed(() => [...playlistEdit.favorites])
 
 const loading = computed(
@@ -45,7 +50,7 @@ function startAt(index: number): void {
   const song = songs.value[index]
   if (!song) return
   player.startPlaylistPlayback(song, source())
-  syncQueue()
+  playlist.beginQueueBuild()
 }
 
 function playAll(): void {
@@ -58,13 +63,6 @@ function playAll(): void {
 function addNextAt(index: number): void {
   const song = songs.value[index]
   if (song) player.addNext(song)
-}
-
-function syncQueue(): void {
-  const current = player.current
-  if (!current || !feed.value || songs.value.length === 0) return
-  if (player.queueSource?.id !== id.value) return
-  player.appendPlaylistQueue(current, songs.value)
 }
 
 async function toggleFavorite(index: number): Promise<void> {
@@ -113,7 +111,6 @@ onBeforeUnmount(() => {
 watch(
   [() => feed.value?.status, () => feed.value?.songs.length],
   () => {
-    syncQueue()
     if (songs.value.length > 0) {
       void playlistEdit.loadFavorites(songs.value.map((song) => song.songMid))
     }

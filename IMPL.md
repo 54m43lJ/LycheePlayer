@@ -2,7 +2,7 @@
 
 > 来源：本轮文档合并、全量重构、`ISSUES.md` 验收修复，以及实际 Electron 运行验证。
 >
-> 勾选框表示“建议的文档操作”尚未执行；对应代码修复均已完成。`ISSUES.md` 未修改。
+> 勾选框表示“建议的文档操作”尚未执行；对应代码修复均已完成。`ISSUES.md` 由用户手动验收，本文不代勾选。
 
 ## 1. 开发中碰到的技术坑
 
@@ -12,7 +12,7 @@
   - **建议的文档操作**：在 `GUIDELINES.md` 增加“文档分支同步流程”，明确文档分支不得删除代码文件，或在同步时按目录白名单合并；`BUILD.html` 可补一段开发者同步说明。
 
 - [ ] **T02 文档描述的模块远多于实际代码，重构等于补齐半个项目**
-  - **问题描述**：`CORE.html` 文件树列出了缓存、下载、mpv、MV、推荐、收藏、歌单编辑、启动参数、全局快捷键、打包与测试等大量尚不存在的模块；`USER`/`README` 也描述了对应界面。
+  - **问题描述**：`CORE.html` 文件树列出了缓存、下载、mpv、MV、推荐、收藏、歌单编辑、启动参数、打包与测试等大量尚不存在的模块；`USER`/`README` 也描述了对应界面。
   - **解决方法**：按文件树补齐模块与签名，渲染层补齐路由、store、组件和页面；上游未验证功能（推荐、MV、歌单写入）保留明确占位和错误提示。提交 `58ba726`。
   - **建议的文档操作**：`CORE §1` 为每个条目增加状态标记（已实现/待探测）；`GUIDELINES.md` 增加“文档可以描述目标结构，但必须有状态标记”的规则，避免把目标结构误读为现状。
 
@@ -57,9 +57,9 @@
   - **建议的文档操作**：`PROVIDER §4.3` 的 `Credential` 增加 `webCookies`（仅主进程）；`CORE §4.1/4.7` 同步；`USER §2` 说明重新登录可刷新网页会话，但凭证仍不会跨 IPC。
 
 - [ ] **T11 QRC 解密在渲染层缺少同步 crypto/zlib**
-  - **问题描述**：`CORE §4.67` 要求渲染进程同步解密 QRC；QRC 实际是 hex → 3DES-ECB → zlib；浏览器既无同步 DES，也无同步 zlib，Node crypto 不在渲染上下文。
+  - **问题描述**：`CORE §4.66` 要求渲染进程同步解密 QRC；QRC 实际是 hex → 3DES-ECB → zlib；浏览器既无同步 DES，也无同步 zlib，Node crypto 不在渲染上下文。
   - **解决方法**：preload（仍属渲染进程）通过 contextBridge 暴露同步 `lyric.decryptQrc`，使用 Node `createDecipheriv` + `inflateSync`；`qrc.ts` 再做 XML/逐字解析，无法解密时保留 LRC 回退。
-  - **建议的文档操作**：`CORE §4.67` 明确“解密在 preload 桥接内完成”；`CORE §4.2` 补 `lyric.decryptQrc`；`PROVIDER §4.3` 补 QRC 格式说明。
+  - **建议的文档操作**：`CORE §4.66` 明确“解密在 preload 桥接内完成”；`CORE §4.2` 补 `lyric.decryptQrc`；`PROVIDER §4.3` 补 QRC 格式说明。
 
 - [ ] **T12 Electron 打包与原生依赖细节未在文档中体现**
   - **问题描述**：打包后图标/托盘路径需要 `process.resourcesPath`，而 `electron-builder` 的 `linux.desktop` 自定义字段在 26.x 会校验失败；`mpris-service` 的 `abstract-socket` 原生模块需要 rebuild。
@@ -116,7 +116,7 @@
 - [ ] **D07 `CORE §4.2` 的 `LycheeApi` 缺少实际使用的接口**
   - **问题描述**：实现需要 `flags.get/save`、`download.storage/openFolder/chooseFolder/clearCache`、`mpv.loadAndPlay/play/pause/stop/seek/setVolume/onEvent`、`lyric.decryptQrc`，文档接口没有。
   - **解决方法**：在 preload 与 `LycheeApi` 扩展这些方法；主进程注册对应 IPC。
-  - **建议的文档操作**：更新 `CORE §4.2`；`CORE §4.62/4.63` 补 mpv 控制面；`CORE §4.67` 补 QRC 桥接。
+  - **建议的文档操作**：更新 `CORE §4.2`；`CORE §4.61/4.62` 补 mpv 控制面；`CORE §4.66` 补 QRC 桥接。
 
 - [ ] **D08 `PROVIDER` 把收藏/歌单写入标为“待探测”，`USER` 却承诺可收藏/可编辑**
   - **问题描述**：文档一边说接口未验证，一边在 README/USER 描述完整功能；实现时只能先做 UI 或做未验证协议。
@@ -143,15 +143,10 @@
   - **解决方法**：代码统一使用 `updateTray(state)`。
   - **建议的文档操作**：修正 `CORE §5.5` 的调用栈名称；检查其他 `updateState` 引用。
 
-- [ ] **D13 `USER §5.2.7` 展示默认快捷键 Ctrl+Alt+Space，但 `Settings.shortcuts` 默认是空对象**
-  - **问题描述**：界面原型有默认播放快捷键，类型和主进程默认值没有；用户无法判断默认是否注册。
-  - **解决方法**：默认 `shortcuts: { playPause: 'Ctrl+Alt+Space' }`；主进程启动注册；设置页恢复默认写回该值；冲突仅检测应用内绑定。
-  - **建议的文档操作**：`CORE §4.1` 的 `Settings` 注释默认值；`USER §5.2.7` 说明“默认仅播放/暂停占用 Ctrl+Alt+Space，其余为空；系统级冲突会静默跳过”。
-
 - [ ] **D14 文档写歌单缓存 TTL 30 秒，验收要求 5 秒并增加 15 秒轮询**
   - **问题描述**：30 秒 stale 会让“我喜欢”收藏后在应用内长时间不更新；文档没有主动轮询机制。
   - **解决方法**：`PLAYLIST_CACHE_TTL_MS=5000`；新增 `PLAYLIST_POLL_INTERVAL_MS=15000`；PlaylistView 可见时轮询首页，store 比较总数/首页顺序，变化则重建列表与队列。
-  - **建议的文档操作**：更新 `CORE §4.50` 常量推荐值和 `§4.64` store 方法（`poll`/`invalidate`）；`USER §2/§5.2.8` 补 15 秒轮询与自动刷新行为。
+  - **建议的文档操作**：更新 `CORE §4.50` 常量推荐值和 `§4.63` store 方法（`poll`/`invalidate`）；`USER §2/§5.2.8` 补 15 秒轮询与自动刷新行为。
 
 - [ ] **D15 `CORE §1` 的测试树只写 `test/api`，实际还有 `test/player-store.test.ts`**
   - **问题描述**：文件树不完整，新测试没有归属说明；`vitest.config.ts` 也存在 CJS 告警。
@@ -168,10 +163,10 @@
   - **解决方法**：支持 `LYCHEE_REPO` 覆盖；sha256 校验强制；dry-run 保留网络探测。当前脚本可用，但默认仓库需按实际仓库替换。
   - **建议的文档操作**：`BUILD §5` 写明 `LYCHEE_REPO` 环境变量和实际仓库地址；注明 dry-run 仍可能访问 GitHub API。
 
-- [ ] **D18 `CORE §4.67` 把 QRC 解密放在 qrc.ts，但实际必须经 preload**
+- [ ] **D18 `CORE §4.66` 把 QRC 解密放在 qrc.ts，但实际必须经 preload**
   - **问题描述**：渲染层无法同步调用 Node crypto/zlib，文档给出的函数边界不可直接实现。
   - **解决方法**：`qrc.ts` 保留 `decryptQrc`/`parseQrcLyric` 入口，解密原语经 preload 同步桥接；无法解密时回退 LRC。
-  - **建议的文档操作**：`CORE §4.67` 改为“qrc.ts 解析，preload 解密”；`CORE §4.2` 增加 `lyric.decryptQrc`。
+  - **建议的文档操作**：`CORE §4.66` 改为“qrc.ts 解析，preload 解密”；`CORE §4.2` 增加 `lyric.decryptQrc`。
 
 ## 3. 文档没有提及、只能自行探索的细节
 
@@ -208,7 +203,7 @@
 - [ ] **E07 自定义协议注册时机与 token 设计**
   - **问题描述**：文档的 `audioProtocolUrl(filePath)` 只覆盖缓存文件，未说明未缓存流如何通过本地协议代理。
   - **解决方法**：使用 `lychee-audio://stream/<token>` 与 `lychee-audio://file/<base64>`；stream token 映射上游 URL；scheme 在模块加载时注册 privileges，ready 后 handle；mpv 通过 `resolveProtocolSource` 解析 token。
-  - **建议的文档操作**：`CORE §4.59` 增加 URL 形式、token 生命周期、缓存/流分支；`§4.63` 说明 mpv 如何复用。
+  - **建议的文档操作**：`CORE §4.59` 增加 URL 形式、token 生命周期、缓存/流分支；`§4.62` 说明 mpv 如何复用。
 
 - [ ] **E08 启动参数文件必须在 ready 前同步读取**
   - **问题描述**：文档要求模块加载阶段读取并应用，但 `readFlagsFile()` 是异步签名；同步等待不可行。
@@ -233,12 +228,12 @@
 - [ ] **E12 轮询必须考虑页面可见性和并发**
   - **问题描述**：文档没有 15 秒轮询；直接实现会产生后台请求、重入和与分页补全冲突。
   - **解决方法**：`document.visibilityState === 'visible'` 才轮询；store 内 `polling` 防重入；比较 total/meta/首页顺序；变化才重置列表并继续补页；队列同步在同一流程中完成。
-  - **建议的文档操作**：`CORE §4.64` 补 `poll` 状态机；`USER §2` 补可见性与 15 秒行为。
+  - **建议的文档操作**：`CORE §4.63` 补 `poll` 状态机；`USER §2` 补可见性与 15 秒行为。
 
 - [ ] **E13 QRC 文件格式**
   - **问题描述**：文档只说 QRC 密文，没有说明 hex、3DES-ECB、无填充和 zlib 压缩。
   - **解决方法**：按 hex → 3DES-ECB（`!@#)(*$%123ZXC!@!@#)(NHL`，无自动填充）→ inflate → `LyricContent` XML 解析；无有效数据回退 LRC。
-  - **建议的文档操作**：`PROVIDER §4.3` 增补 QRC 编码链；`CORE §4.67` 引用。
+  - **建议的文档操作**：`PROVIDER §4.3` 增补 QRC 编码链；`CORE §4.66` 引用。
 
 - [ ] **E14 下载暂停/继续与封面细节**
   - **问题描述**：文档只给 `writePart(url, filePath)`，未说明 Range 续传、`.part`、临时文件、封面本地化、下载目录和失败重试。
@@ -329,21 +324,36 @@
 
 - [ ] **I16 歌单 stale 5 秒 + 15 秒轮询**
   - **问题描述**：30 秒 TTL 让收藏/外部修改长时间不同步；没有主动检查机制。
-  - **解决方法**：`PLAYLIST_CACHE_TTL_MS=5_000`；`PLAYLIST_POLL_INTERVAL_MS=15_000`；PlaylistView 可见时轮询；store 比较总数/meta/首页顺序；变化后重建列表与队列。
-  - **建议的文档操作**：`CORE §4.50/4.64`、`USER §2/§5.2.8` 同步常量和轮询行为。
+  - **解决方法**：`PLAYLIST_CACHE_TTL_MS=5_000`；`PLAYLIST_POLL_INTERVAL_MS=15_000`；PlaylistView 可见时轮询；store 比较总数/meta/首页顺序；变化后重建列表与队列。I20 已改为整份歌单缓存并删除该 TTL 常量。
+  - **建议的文档操作**：`CORE §4.50/4.63`、`USER §2/§5.2.8` 同步轮询行为；缓存 TTL 相关描述以 I20 为准。
 
 - [ ] **I17 收藏/取消收藏后主动刷新歌单**
   - **问题描述**：收藏成功后“我喜欢”歌单和“我的歌单”卡片仍显示旧数据，需要等轮询或重进页面。
   - **解决方法**：`favoriteVersion` 版本号；成功后 `playlist.invalidate('liked')`；已打开的 liked feed 立即 `poll`；LibraryView 监听版本重新拉取歌单列表；失败不刷新。
-  - **建议的文档操作**：`USER §2/§5.2.4` 补“收藏后立即刷新我喜欢与歌单卡片”；`CORE §4.66` 补 `favoriteVersion`、`invalidate` 调用关系；`CORE §4.64` 补 `poll/invalidate`。
+  - **建议的文档操作**：`USER §2/§5.2.4` 补“收藏后立即刷新我喜欢与歌单卡片”；`CORE §4.65` 补 `favoriteVersion`、`invalidate` 调用关系；`CORE §4.63` 补 `poll/invalidate`。
+
+- [x] **I18 移除全局快捷键模块**
+  - **问题描述**：用户明确要求不做全局快捷键；代码仍有 `integration/global-shortcuts.ts`，启动时按 `Settings.shortcuts` 注册 `Ctrl+Alt+Space` 等全局快捷键，设置页也提供录制入口，文档同步描述了该模块。
+  - **解决方法**：删除主进程模块与启动/退出注册；移除 `Settings.shortcuts`、默认值、sanitize 与设置 IPC 重注册；删除设置页快捷键面板及样式；同步清理 `CORE` 文件树/类型/签名/调用栈、`USER` 术语与原型、`README` 设置项，并重排 `CORE §4` 后续编号。
+  - **建议的文档操作**：已同步完成：`CORE §1/4.1/4.48/5.1/5.8.2`、`USER §1/5.2.7`、`README §1.1/2` 不再包含全局快捷键；后续文档保持不新增该模块。
+
+- [ ] **I19 “我喜欢”歌单加载中断后重试无效、轮询不恢复**
+  - **问题描述**：预取/首屏只缓存 50 首；补全请求 `offset=50` 时主进程仍直接返回缓存切片，得到空页，store 以“歌单加载停滞”中断，重试重复同一路径；15 秒轮询在首页未变化时只清除 `error`，不重启补全；底部“已载入 50 / 667 首”左侧的 spinner 因缺少布局样式显示成异常元素。
+  - **解决方法**：store 增加 `completingToken` 单实例补全，`retry` 支持无 `meta` 时从头加载，`poll` 在 `error`/`partial` 时恢复补全；`.feed-footer` 改为 flex，`.spinner` 增加 `inline-block`/`flex:none`；缓存分页命中/回源的临时修复已由 I20 的整份歌单缓存取代；新增 store 恢复与整份缓存测试。
+  - **建议的文档操作**：`CORE §4.63` 补 `completingToken` 与 `retry`/`poll` 恢复逻辑；`CORE §4.49` 补 `.feed-footer`/`.spinner` 布局；`USER §5.2.8` 补“加载中断可重试恢复、轮询自动续传、底部 spinner 正常显示”；缓存相关回灌以 I20 为准。
+
+- [ ] **I20 队列快照时机、缓存临时顶替与整份歌单缓存**
+  - **问题描述**：不可播歌曲先入队、播放时再逐个跳过；队列构建只按当时已知可用性过滤。歌单缓存按页读写，存在 partial/complete、页覆盖/合并、prefetch 第一页与 TTL 等状态；中断或缺页时缓存不落盘，无法区分完整与不完整快照。
+  - **解决方法**：队列只在“歌单快照 → 队列”边界过滤；最终快照要求分页全部加载完成、非 stale、所有歌曲的 VIP/最高音质/可用性探测完成。未完成前只允许一次临时快照顶替（优先整份缓存；无缓存时用当前已载入快照）；最新快照就绪后按签名比较，有变化则替换，当前曲、进度与历史不变；播放器只负责追加/替换，不做检测/清理，播放时仍独立校验取流。缓存改为整份歌单快照：`playlist.get` 仅分页加载，`playlist.getCached` 读整份，`playlist.saveCache` 写整份；每页成功即落盘，`complete` 标记完整/不完整；网络中断、空页停滞、`hasMore=false` 但 `songs.length < total` 均置 error/`complete=false`；不完整缓存仅作临时快照并触发重载；删除页级缓存、prefetch、TTL/并发常量。
+  - **建议的文档操作**：`CORE §4.12/4.50/4.57/5.10/5.12` 更新为“分页加载、整份歌单缓存、`complete` 标记、逐页落盘”；`CORE §4.29/4.46/4.63` 更新队列快照时机、临时顶替与最终替换；`USER §2/§5.2.8/§5.2.9` 说明缓存临时顶替、重试/自动刷新、不完整缓存提示；删除 `PLAYLIST_CACHE_TTL_MS`、`PLAYLIST_PREFETCH_CONCURRENCY` 与 prefetch 描述。
 
 ## 5. 建议回灌优先级
 
 | 优先级 | 文档 | 需要先处理的条目 |
 |---|---|---|
 | P0 | `PROVIDER.html` | E01–E04、I12/I13（收藏签名、webCookies、songType、80105/1101） |
-| P0 | `CORE.html` | D06/D07/D14/D18、E05/E07、I09/I16/I17（Settings、LycheeApi、Range、轮询、收藏刷新） |
-| P1 | `USER.html` | D01–D05、D11、D13、I02–I06、I11、I15（布局、队列、seek、徽标、收藏图标） |
+| P0 | `CORE.html` | D06/D07/D14/D18、E05/E07、I09/I16/I17/I19/I20（Settings、LycheeApi、Range、轮询、收藏刷新、歌单补全、快照时机与整份缓存） |
+| P1 | `USER.html` | D01–D05、D11、I02–I06、I11、I15、I19/I20（布局、队列、seek、徽标、收藏图标、歌单加载与缓存临时顶替） |
 | P1 | `BUILD.html` | D10/D17、E08–E10（缓存路径、安装脚本、packaging、调试） |
 | P2 | `GUIDELINES.md` | T01/T02（文档分支同步、状态标记） |
 

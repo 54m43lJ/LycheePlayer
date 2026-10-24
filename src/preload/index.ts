@@ -17,8 +17,10 @@ import type {
   MvDetail,
   MvStream,
   PlayerState,
+  PlaylistCacheEntry,
   PlaylistMeta,
-  PlaylistPageResult,
+  PlaylistPage,
+  PlaylistSnapshot,
   Quality,
   RecommendFeed,
   SearchRequest,
@@ -68,11 +70,11 @@ const api: LycheeApi = {
       invoke<SongAvailability[]>('song.probe', mids, options)
   },
   playlist: {
-    get: (id: string, options) => invoke<PlaylistPageResult>('playlist.get', id, options),
+    get: (id: string, options) => invoke<PlaylistPage>('playlist.get', id, options),
+    getCached: (id: string) => invoke<PlaylistCacheEntry | null>('playlist.getCached', id),
+    saveCache: (id: string, snapshot: PlaylistSnapshot, complete: boolean) =>
+      invoke<null>('playlist.saveCache', id, snapshot, complete),
     listMine: () => invoke<PlaylistMeta[]>('playlist.listMine'),
-    prefetch: (ids: string[]) => {
-      ipcRenderer.send('playlist.prefetch', ids)
-    },
     create: (name: string) => invoke<PlaylistMeta>('playlist.create', name),
     rename: (id: string, name: string) => invoke<PlaylistMeta>('playlist.rename', id, name),
     remove: (id: string) => invoke<null>('playlist.remove', id),

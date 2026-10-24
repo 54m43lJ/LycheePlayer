@@ -2,14 +2,9 @@ import type {
   PlaylistCacheEntry,
   PlaylistMeta,
   PlaylistPage,
-  PlaylistPageResult
+  PlaylistSnapshot
 } from '../../shared/types'
-import {
-  PLAYLIST_CACHE_TTL_MS,
-  PLAYLIST_PAGE_MAX,
-  PLAYLIST_PAGE_SIZE,
-  PLAYLIST_PREFETCH_CONCURRENCY
-} from '../../shared/constants'
+import { PLAYLIST_PAGE_MAX, PLAYLIST_PAGE_SIZE } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { readPlaylistCache, writePlaylistCache } from '../cache/playlist'
 import { UpstreamError, musicu } from './client'
@@ -86,22 +81,6 @@ function validId(id: string): boolean {
   return Number.isFinite(playlistId) && playlistId > 0
 }
 
-function pageFromCache(entry: PlaylistCacheEntry, offset: number): PlaylistPageResult {
-  const songs = entry.songs.slice(offset, offset + PLAYLIST_PAGE_SIZE)
-  return {
-    page: {
-      meta: entry.meta,
-      songs,
-      offset,
-      total: entry.total,
-      hasMore: offset + songs.length < entry.total
-    },
-    fetchedAtMs: entry.fetchedAtMs,
-    stale: Date.now() - entry.fetchedAtMs > PLAYLIST_CACHE_TTL_MS,
-    fromCache: true
-  }
-}
-
 async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
   const favorites = isFavoritesId(id)
   const data = await musicu<PlaylistData>('music.srfDissInfo.DissInfo', 'CgiGetDiss', {
@@ -148,12 +127,8 @@ async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
   }
 }
 
-/** 拉取歌单分页；“我喜欢”优先返回缓存，过期时标记 stale。 */
-export async function fetchPlaylistPage(
-  id: string,
-  offset: number,
-  force?: boolean
-): Promise<PlaylistPageResult> {
+/** 拉取歌单分页；分页只服务加载，缓存始终是整份歌单。 */
+export async function fetchPlaylistPage(id: string, offset: number): Promise<PlaylistPage> {
   if (!validId(id)) {
     throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
   }
@@ -161,35 +136,41 @@ export async function fetchPlaylistPage(
   if (start > PLAYLIST_PAGE_MAX * PLAYLIST_PAGE_SIZE) {
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单分页超出上限')
   }
+  return requestPage(id, start)
+}
 
-  const favorites = isFavoritesId(id)
-  const scope = cacheScope()
-  if (favorites && !force) {
-    const cached = readPlaylistCache(scope, id)
-    if (cached) return pageFromCache(cached, start)
+/** 读取整份歌单缓存；不完整快照通过 complete=false 标记。 */
+export function getCachedPlaylist(id: string): PlaylistCacheEntry | null {
+  if (!validId(id)) return null
+  return readPlaylistCache(cacheScope(), id)
+}
+
+/** 整份歌单加载完成后写缓存；分页状态不落盘。 */
+export async function savePlaylistSnapshot(
+  id: string,
+  snapshot: PlaylistSnapshot,
+  complete: boolean
+): Promise<void> {
+  if (!validId(id)) {
+    throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
   }
-
-  const page = await requestPage(id, start)
-  if (favorites) {
-    const previous = force || start === 0 ? null : readPlaylistCache(scope, id)
-    const merged = previous
-      ? [
-          ...previous.songs.slice(0, start),
-          ...page.songs,
-          ...previous.songs.slice(start + page.songs.length)
-        ]
-      : page.songs
-    const entry: PlaylistCacheEntry = {
-      meta: page.meta,
-      songs: merged,
-      total: page.total,
-      complete: !page.hasMore,
-      fetchedAtMs: Date.now()
-    }
-    await writePlaylistCache(scope, entry)
+  if (
+    !snapshot ||
+    !snapshot.meta ||
+    !Array.isArray(snapshot.songs) ||
+    !Number.isFinite(snapshot.total)
+  ) {
+    throw new UpstreamError('INTERNAL', '歌单缓存快照格式错误')
   }
-
-  return { page, fetchedAtMs: Date.now(), stale: false, fromCache: false }
+  const meta =
+    snapshot.meta.id === id ? snapshot.meta : { ...snapshot.meta, id }
+  await writePlaylistCache(cacheScope(), {
+    meta,
+    songs: snapshot.songs,
+    total: snapshot.total,
+    complete,
+    fetchedAtMs: Date.now()
+  })
 }
 
 /** 当前账号创建/收藏的歌单列表；未登录返回 AUTH_EXPIRED。 */
@@ -210,28 +191,4 @@ export async function listMine(): Promise<PlaylistMeta[]> {
   return data.v_playlist
     .map((item) => toMeta(item, true))
     .filter((playlist) => playlist.id.length > 0 && playlist.id !== '0')
-}
-
-/** 只预热“我喜欢”第一页；不取消已开始的补全。 */
-export function prefetchPlaylists(ids: string[]): void {
-  const favorites = [...new Set(ids)].filter(isFavoritesId)
-  if (favorites.length === 0) return
-  void (async () => {
-    let cursor = 0
-    const runners = Array.from(
-      { length: Math.min(PLAYLIST_PREFETCH_CONCURRENCY, favorites.length) },
-      async () => {
-        while (cursor < favorites.length) {
-          const index = cursor
-          cursor += 1
-          try {
-            await fetchPlaylistPage(favorites[index], 0)
-          } catch {
-            // 预取失败不影响列表展示。
-          }
-        }
-      }
-    )
-    await Promise.all(runners)
-  })()
 }

@@ -28,10 +28,6 @@ async function load(): Promise<void> {
   error.value = ''
   try {
     playlists.value = unwrap(await window.lychee.playlist.listMine())
-    const favorites = playlists.value.find(
-      (playlist) => playlist.kind === 'favorites' || playlist.id === 'liked'
-    )
-    if (favorites) window.lychee.playlist.prefetch([favorites.id])
   } catch (err) {
     error.value = describeError(err)
   } finally {

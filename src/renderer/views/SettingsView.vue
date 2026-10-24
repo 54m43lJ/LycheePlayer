@@ -23,7 +23,6 @@ const flags = ref<FlagsFile | null>(null)
 const flagsDraft = ref('')
 const flagsSaving = ref(false)
 const storage = ref<{ directory: string; bytes: number; freeBytes: number; cacheBytes?: number; cacheFiles?: number } | null>(null)
-const recording = ref<keyof Settings['shortcuts'] | null>(null)
 
 const expiryText = computed(() => {
   if (!auth.loggedIn) return '未登录'
@@ -53,13 +52,6 @@ const ENGINES: Array<{ value: 'auto' | 'html5' | 'mpv'; label: string }> = [
   { value: 'auto', label: '自动' },
   { value: 'html5', label: 'HTML5' },
   { value: 'mpv', label: 'mpv' }
-]
-
-const SHORTCUTS: Array<{ key: keyof Settings['shortcuts']; label: string; fallback: string }> = [
-  { key: 'toggleWindow', label: '显示窗口', fallback: '未设置' },
-  { key: 'playPause', label: '播放 / 暂停', fallback: 'Ctrl+Alt+Space' },
-  { key: 'next', label: '下一首', fallback: '未设置' },
-  { key: 'previous', label: '上一首', fallback: '未设置' }
 ]
 
 const engineLabel = computed(() => {
@@ -178,56 +170,6 @@ async function chooseDownloadDir(): Promise<void> {
     await settings.update({ downloadDir: path })
     await loadStorage()
     toast.show('下载目录已更新')
-  } catch (err) {
-    toast.error(describeError(err))
-  }
-}
-
-function startRecord(key: keyof Settings['shortcuts']): void {
-  recording.value = key
-}
-
-function formatAccelerator(event: KeyboardEvent): string | null {
-  const parts: string[] = []
-  if (event.ctrlKey) parts.push('Ctrl')
-  if (event.altKey) parts.push('Alt')
-  if (event.shiftKey) parts.push('Shift')
-  const key = event.key
-  if (['Control', 'Alt', 'Shift', 'Meta'].includes(key)) return null
-  const normalized =
-    key === ' ' ? 'Space' : key.length === 1 ? key.toUpperCase() : key
-  parts.push(normalized)
-  return parts.join('+')
-}
-
-async function recordShortcut(event: KeyboardEvent): Promise<void> {
-  if (!recording.value) return
-  event.preventDefault()
-  const accelerator = formatAccelerator(event)
-  if (!accelerator) return
-  const conflicts = Object.entries(settings.settings.shortcuts).filter(
-    ([key, value]) => key !== recording.value && value === accelerator
-  )
-  if (conflicts.length > 0) {
-    toast.error('该快捷键已被其他操作占用')
-    return
-  }
-  try {
-    await settings.update({
-      shortcuts: { ...settings.settings.shortcuts, [recording.value]: accelerator }
-    })
-    toast.show('快捷键已保存')
-  } catch (err) {
-    toast.error(describeError(err))
-  } finally {
-    recording.value = null
-  }
-}
-
-async function resetShortcuts(): Promise<void> {
-  try {
-    await settings.update({ shortcuts: { playPause: 'Ctrl+Alt+Space' } })
-    toast.show('快捷键已恢复默认')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -372,27 +314,6 @@ onMounted(() => {
               </div>
               <button class="btn small" @click="chooseDownloadDir()">选择</button>
             </div>
-          </div>
-        </section>
-
-        <section class="panel">
-          <div class="panel-head">
-            <h2>快捷键</h2>
-            <button class="btn ghost small" @click="resetShortcuts()">恢复默认</button>
-          </div>
-          <div class="panel-body">
-            <div v-for="item in SHORTCUTS" :key="item.key" class="setting-row">
-              <span class="setting-name">{{ item.label }}</span>
-              <button
-                class="shortcut-input"
-                :class="{ recording: recording === item.key }"
-                @click="startRecord(item.key)"
-                @keydown="recordShortcut"
-              >
-                {{ recording === item.key ? '按下快捷键…' : (settings.settings.shortcuts[item.key] || item.fallback) }}
-              </button>
-            </div>
-            <p class="faint">默认不占用系统媒体键；点击后按组合键录制。</p>
           </div>
         </section>
       </div>
