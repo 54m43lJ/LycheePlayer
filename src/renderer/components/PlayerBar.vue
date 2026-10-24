@@ -23,6 +23,8 @@ const compactQuery = window.matchMedia('(max-width: 900px)')
 const compact = ref(compactQuery.matches)
 const qualityMenu = ref(false)
 const volumeOpen = ref(false)
+const qualityWrap = ref<HTMLElement | null>(null)
+const volumeWrap = ref<HTMLElement | null>(null)
 const lastVolume = ref(0.8)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 
@@ -107,12 +109,19 @@ function toggleMute(): void {
   }
 }
 
-function onDocumentClick(): void {
-  closeMenus()
+function onDocumentClick(event: MouseEvent): void {
+  const target = event.target as Node | null
+  if (!target) return
+  if (qualityMenu.value && qualityWrap.value && !qualityWrap.value.contains(target)) {
+    qualityMenu.value = false
+  }
+  if (volumeOpen.value && volumeWrap.value && !volumeWrap.value.contains(target)) {
+    volumeOpen.value = false
+  }
 }
 
 onMounted(() => {
-  document.addEventListener('click', onDocumentClick)
+  document.addEventListener('click', onDocumentClick, true)
   mediaListener = (event) => {
     compact.value = event.matches
     if (!event.matches) volumeOpen.value = false
@@ -121,7 +130,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('click', onDocumentClick, true)
   if (mediaListener) compactQuery.removeEventListener('change', mediaListener)
 })
 </script>
@@ -209,7 +218,7 @@ onBeforeUnmount(() => {
         <button class="icon-btn" title="下载" @click.stop="downloadCurrent()">
           <AppIcon name="download" :size="17" />
         </button>
-        <div class="quality-wrap">
+        <div ref="qualityWrap" class="quality-wrap">
           <button class="quality-chip" title="音质（本次请求档位）" @click.stop="toggleQualityMenu()">
             {{ requestedQualityLabel }}
           </button>
@@ -224,7 +233,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
         </div>
-        <div class="volume-wrap">
+        <div ref="volumeWrap" class="volume-wrap">
           <button
             class="icon-btn"
             :title="compact ? '音量' : volume > 0 ? '静音' : '恢复音量'"
@@ -268,5 +277,4 @@ onBeforeUnmount(() => {
     </template>
   </footer>
 
-  <div v-if="qualityMenu || volumeOpen" class="menu-backdrop" @click="closeMenus()" />
 </template>

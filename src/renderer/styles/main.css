@@ -1517,11 +1517,6 @@ a {
   box-shadow: var(--shadow);
 }
 
-.menu-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 25;
-}
 
 .volume-wrap {
   position: relative;
@@ -2149,8 +2144,8 @@ a {
     display: none;
   }
 
-  .song-table th:nth-child(4),
-  .song-table td:nth-child(4) {
+  .song-table .song-duration-col,
+  .song-table .song-duration {
     width: 56px !important;
   }
 
@@ -2246,8 +2241,8 @@ a {
     gap: 10px;
   }
 
-  .song-table th:nth-child(4),
-  .song-table td:nth-child(4) {
+  .song-table .song-duration-col,
+  .song-table .song-duration {
     width: 48px !important;
   }
 
@@ -2727,4 +2722,41 @@ a {
   .theme-options {
     grid-template-columns: minmax(0, 1fr);
   }
+}
+
+/* 歌曲信息右侧固定“下一首播放”占位：位于时长列左侧 */
+.song-add-col {
+  width: 32px;
+  padding-right: 4px !important;
+  padding-left: 4px !important;
+  text-align: center;
+}
+
+.song-add-next {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  color: var(--muted);
+  opacity: 0.55;
+  transition:
+    opacity 0.16s ease,
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.song-row:hover .song-add-next,
+.song-add-next:focus-visible {
+  opacity: 1;
+}
+
+.song-add-next:hover:not(:disabled) {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.song-add-next:disabled {
+  opacity: 0.25;
+  cursor: default;
 }
