@@ -61,12 +61,9 @@ function addNextAt(index: number): void {
 
 function syncQueue(): void {
   const current = player.current
-  if (!current || !feed.value || feed.value.status !== 'complete' || feed.value.stale) return
+  if (!current || !feed.value || songs.value.length === 0) return
   if (player.queueSource?.id !== id.value) return
-  const playableSongs = songs.value.filter(
-    (song) => availability.value[song.songMid]?.playable !== false
-  )
-  player.appendPlaylistQueue(current, playableSongs)
+  player.appendPlaylistQueue(current, songs.value)
 }
 
 async function toggleFavorite(index: number): Promise<void> {

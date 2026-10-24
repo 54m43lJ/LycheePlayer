@@ -213,7 +213,7 @@ onBeforeUnmount(() => {
           :title="favorited ? '取消收藏' : '收藏'"
           @click.stop="toggleFavorite()"
         >
-          <AppIcon name="heart" :size="17" />
+          <AppIcon :name="favorited ? 'heart-filled' : 'heart'" :size="17" />
         </button>
         <button class="icon-btn" title="下载" @click.stop="downloadCurrent()">
           <AppIcon name="download" :size="17" />

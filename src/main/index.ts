@@ -53,7 +53,6 @@ export function createMainWindow(): BrowserWindow {
     width: 1280,
     height: 820,
     minWidth: 280,
-    minHeight: 440,
     show: false,
     autoHideMenuBar: true,
     backgroundColor: '#231F1F',

@@ -61,8 +61,12 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine {
       audio.load()
     },
     seek(positionMs) {
-      if (Number.isFinite(audio.duration) && audio.duration > 0) {
-        audio.currentTime = Math.max(0, positionMs) / 1000
+      const target = Math.max(0, positionMs) / 1000
+      try {
+        const duration = audio.duration
+        audio.currentTime = Number.isFinite(duration) && duration > 0 ? Math.min(target, duration) : target
+      } catch {
+        // 元数据尚未就绪时忽略本次定位；下一次播放会从当前位置继续。
       }
     },
     setVolume(volume) {

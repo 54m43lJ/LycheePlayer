@@ -117,7 +117,8 @@ body,
 }
 
 body {
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     radial-gradient(1200px 700px at 78% -20%, var(--hero-glow), transparent 60%),
     radial-gradient(900px 600px at 0% 100%, var(--gold-glow), transparent 55%),
@@ -163,7 +164,8 @@ a {
   display: grid;
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) var(--player-height);
-  height: 100vh;
+  height: 100dvh;
+  min-height: calc(var(--player-height) + 170px);
 }
 
 /* ---------- Sidebar ---------- */
@@ -173,6 +175,8 @@ a {
   display: flex;
   flex-direction: column;
   gap: 22px;
+  min-height: 0;
+  overflow: hidden;
   padding: 22px 16px 18px;
   border-right: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 78%, transparent);
@@ -181,6 +185,7 @@ a {
 
 .brand {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 12px;
   padding: 4px 8px;
@@ -213,8 +218,13 @@ a {
 
 .nav {
   display: flex;
+  flex: 1 1 auto;
   flex-direction: column;
   gap: 4px;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding-right: 2px;
 }
 
 .nav-label {
@@ -253,6 +263,7 @@ a {
 }
 
 .sidebar-foot {
+  flex: 0 0 auto;
   margin-top: auto;
   border-top: 1px solid var(--border);
   padding-top: 14px;
@@ -747,12 +758,12 @@ a {
 
 .song-duration-col {
   width: 70px;
-  text-align: right !important;
+  text-align: left !important;
 }
 
 .song-action {
   width: 128px;
-  text-align: right !important;
+  text-align: left !important;
 }
 
 .song-next {
@@ -830,7 +841,7 @@ a {
   color: var(--faint);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: left;
 }
 
 .pay-badge {
@@ -2533,11 +2544,15 @@ a {
   opacity: 0.55;
 }
 
-.song-action {
+.song-action-inner {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 4px;
+}
+
+.song-table th {
+  text-align: left !important;
 }
 
 .playlist-card {

@@ -62,6 +62,9 @@ const ICONS: Record<string, string[]> = {
   compass: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5z'],
   download: ['M12 4v11', 'M8 11l4 4 4-4', 'M5 19h14'],
   heart: ['M12 20s-7-4.3-7-9.5A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 7 3.5C19 15.7 12 20 12 20z'],
+  'heart-filled': [
+    'M12 20s-7-4.3-7-9.5A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 7 3.5C19 15.7 12 20 12 20z'
+  ],
   plus: ['M12 5v14', 'M5 12h14'],
   trash: ['M5 7h14', 'M9 7V5h6v2', 'M7 7l1 13h8l1-13', 'M10 11v5', 'M14 11v5'],
   folder: ['M4 6h6l2 2h8v10H4z'],
@@ -71,7 +74,7 @@ const ICONS: Record<string, string[]> = {
   speed: ['M12 20a8 8 0 1 1 8-8', 'M12 12l4-4', 'M4 20h16']
 }
 
-const FILLED = new Set(['play', 'pause', 'previous', 'next', 'music'])
+const FILLED = new Set(['play', 'pause', 'previous', 'next', 'music', 'heart-filled'])
 
 const paths = computed(() => ICONS[props.name] ?? [])
 const filled = computed(() => FILLED.has(props.name))

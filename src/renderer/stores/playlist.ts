@@ -30,11 +30,11 @@ export const usePlaylistStore = defineStore('playlist', () => {
     generation += 1
   }
 
-  /** 歌单完整加载后，若当前播放来自该歌单，则自动补齐队列。 */
+  /** 已载入歌曲变化时，若当前播放来自该歌单，则自动补齐/更新队列。 */
   function syncQueue(): void {
     const current = feed.value
     const player = usePlayerStore()
-    if (!current || !current.meta || current.status !== 'complete' || current.stale) return
+    if (!current || !current.meta || current.songs.length === 0) return
     if (!player.current || player.queueSource?.id !== current.meta.id) return
     player.appendPlaylistQueue(player.current, current.songs)
   }

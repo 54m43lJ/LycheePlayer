@@ -64,22 +64,73 @@ function contentType(path: string): string {
   return 'application/octet-stream'
 }
 
-async function fileResponse(path: string): Promise<Response> {
+interface ByteRange {
+  start: number
+  end: number
+}
+
+function parseRange(header: string | null, size: number): ByteRange | null | 'invalid' {
+  if (!header) return null
+  const match = /^bytes=(\d*)-(\d*)$/.exec(header.trim())
+  if (!match) return 'invalid'
+  const startRaw = match[1]
+  const endRaw = match[2]
+  if (!startRaw && !endRaw) return 'invalid'
+  if (!startRaw) {
+    const suffix = Number(endRaw)
+    if (!Number.isFinite(suffix) || suffix <= 0) return 'invalid'
+    return { start: Math.max(0, size - suffix), end: size - 1 }
+  }
+  const start = Number(startRaw)
+  const end = endRaw ? Math.min(Number(endRaw), size - 1) : size - 1
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start > end || start >= size) {
+    return 'invalid'
+  }
+  return { start, end }
+}
+
+function rangeUnavailable(size: number): Response {
+  return new Response(null, {
+    status: 416,
+    headers: { 'Content-Range': `bytes */${size}` }
+  })
+}
+
+async function fileResponse(path: string, request?: Request): Promise<Response> {
   try {
     const body = await readFile(path)
-    return new Response(body, {
+    const size = body.byteLength
+    const range = parseRange(request?.headers.get('range') ?? null, size)
+    if (range === 'invalid') return rangeUnavailable(size)
+    const commonHeaders = {
+      'Content-Type': contentType(path),
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'no-store'
+    }
+    if (range) {
+      const chunk = body.subarray(range.start, range.end + 1)
+      return new Response(request?.method === 'HEAD' ? null : chunk, {
+        status: 206,
+        headers: {
+          ...commonHeaders,
+          'Content-Length': String(chunk.byteLength),
+          'Content-Range': `bytes ${range.start}-${range.end}/${size}`
+        }
+      })
+    }
+    return new Response(request?.method === 'HEAD' ? null : body, {
       status: 200,
-      headers: { 'Content-Type': contentType(path), 'Cache-Control': 'no-store' }
+      headers: { ...commonHeaders, 'Content-Length': String(size) }
     })
   } catch {
     return new Response('音频缓存不可用', { status: 404 })
   }
 }
 
-async function handleFile(url: URL): Promise<Response> {
+async function handleFile(url: URL, request: Request): Promise<Response> {
   const encoded = url.pathname.replace(/^\/+/, '')
   const filePath = Buffer.from(encoded, 'base64url').toString('utf8')
-  return fileResponse(filePath)
+  return fileResponse(filePath, request)
 }
 
 /** 把主进程音频协议 URL 解析为 mpv 可加载的本地路径或上游地址。 */
@@ -102,27 +153,62 @@ export function resolveProtocolSource(protocolUrl: string): string | null {
   }
 }
 
-async function handleStream(url: URL, _request: Request): Promise<Response> {
+async function handleStream(url: URL, request: Request): Promise<Response> {
   const token = url.pathname.replace(/^\/+/, '')
   const source = streams.get(token)
   if (!source) return new Response('音频流不存在', { status: 404 })
 
   if (getSettings().audioCacheEnabled) {
     const cached = getCachedAudio(source.songMid, source.quality)
-    if (cached) return fileResponse(cached)
+    if (cached) return fileResponse(cached, request)
   }
 
+  const rangeHeader = request.headers.get('range')
+  const rangeStart = rangeHeader ? /^bytes=(\d+)-/.exec(rangeHeader)?.[1] : null
+  const upstreamRange = rangeStart && Number(rangeStart) > 0 ? rangeHeader : null
+
   try {
-    const response = await net.fetch(source.url)
-    if (!response.ok) {
+    const response = await net.fetch(source.url, {
+      headers: {
+        Referer: 'https://y.qq.com/',
+        ...(upstreamRange ? { Range: upstreamRange } : {})
+      }
+    })
+    if (!response.ok && response.status !== 206) {
       return new Response('音频加载失败', { status: response.status })
     }
-    const contentType = response.headers.get('content-type') ?? 'audio/mpeg'
+    const contentType =
+      response.headers.get('content-type') ?? (source.quality === 'flac' ? 'audio/flac' : 'audio/mpeg')
+    const acceptRanges = response.headers.get('accept-ranges') ?? 'bytes'
+    const contentRange = response.headers.get('content-range')
+    const contentLength = response.headers.get('content-length')
     const body = response.body
     if (!body) {
       const buffer = await response.arrayBuffer()
-      await cacheChunks(source, [new Uint8Array(buffer)])
-      return new Response(buffer, { status: 200, headers: { 'Content-Type': contentType } })
+      if (response.status === 200) await cacheChunks(source, [new Uint8Array(buffer)])
+      return new Response(request.method === 'HEAD' ? null : buffer, {
+        status: response.status,
+        headers: {
+          'Content-Type': contentType,
+          'Accept-Ranges': acceptRanges,
+          ...(contentRange ? { 'Content-Range': contentRange } : {}),
+          'Content-Length': contentLength ?? String(buffer.byteLength),
+          'Cache-Control': 'no-store'
+        }
+      })
+    }
+
+    if (response.status === 206) {
+      return new Response(request.method === 'HEAD' ? null : body, {
+        status: 206,
+        headers: {
+          'Content-Type': contentType,
+          'Accept-Ranges': acceptRanges,
+          ...(contentRange ? { 'Content-Range': contentRange } : {}),
+          ...(contentLength ? { 'Content-Length': contentLength } : {}),
+          'Cache-Control': 'no-store'
+        }
+      })
     }
 
     const chunks: Uint8Array[] = []
@@ -148,16 +234,18 @@ async function handleStream(url: URL, _request: Request): Promise<Response> {
         void reader.cancel(reason)
       }
     })
-    return new Response(stream, {
+    return new Response(request.method === 'HEAD' ? null : stream, {
       status: 200,
       headers: {
         'Content-Type': contentType,
+        'Accept-Ranges': acceptRanges,
+        ...(contentLength ? { 'Content-Length': contentLength } : {}),
         'Cache-Control': 'no-store'
       }
     })
   } catch {
     const cached = getCachedAudio(source.songMid, source.quality)
-    if (cached) return fileResponse(cached)
+    if (cached) return fileResponse(cached, request)
     return new Response('音频加载失败', { status: 502 })
   }
 }
@@ -165,7 +253,7 @@ async function handleStream(url: URL, _request: Request): Promise<Response> {
 export function registerAudioProtocol(): void {
   protocol.handle(AUDIO_PROTOCOL_SCHEME, (request) => {
     const url = new URL(request.url)
-    if (url.hostname === 'file') return handleFile(url)
+    if (url.hostname === 'file') return handleFile(url, request)
     if (url.hostname === 'stream') return handleStream(url, request)
     return new Response('未知音频地址', { status: 400 })
   })

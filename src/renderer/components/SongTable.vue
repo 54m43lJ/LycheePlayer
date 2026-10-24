@@ -61,8 +61,8 @@ function isFavorite(song: Song): boolean {
         <th class="song-index">#</th>
         <th>标题</th>
         <th v-if="showAlbum">专辑</th>
-        <th class="song-duration-col">时长</th>
         <th class="song-action">操作</th>
+        <th class="song-duration-col">时长</th>
       </tr>
     </thead>
     <tbody>
@@ -112,33 +112,35 @@ function isFavorite(song: Song): boolean {
         <td v-if="showAlbum">
           <div class="song-album" :title="song.album.name">{{ song.album.name || '—' }}</div>
         </td>
-        <td class="song-duration">{{ formatDuration(song.durationMs) }}</td>
         <td class="song-action">
-          <button
-            class="song-icon"
-            :class="{ active: isFavorite(song) }"
-            :title="isFavorite(song) ? '取消收藏' : '收藏'"
-            @click.stop="emit('favorite', index)"
-          >
-            <AppIcon name="heart" :size="15" />
-          </button>
-          <button
-            class="song-icon"
-            title="下载"
-            :disabled="!downloadable || availability[song.songMid]?.playable === false"
-            @click.stop="emit('download', index)"
-          >
-            <AppIcon name="download" :size="15" />
-          </button>
-          <button
-            class="song-next"
-            title="下一首播放"
-            :disabled="!isPlayable(song, index)"
-            @click.stop="emit('playNext', index)"
-          >
-            下一首
-          </button>
+          <div class="song-action-inner">
+            <button
+              class="song-icon"
+              :class="{ active: isFavorite(song) }"
+              :title="isFavorite(song) ? '取消收藏' : '收藏'"
+              @click.stop="emit('favorite', index)"
+            >
+              <AppIcon :name="isFavorite(song) ? 'heart-filled' : 'heart'" :size="15" />
+            </button>
+            <button
+              class="song-icon"
+              title="下载"
+              :disabled="!downloadable || availability[song.songMid]?.playable === false"
+              @click.stop="emit('download', index)"
+            >
+              <AppIcon name="download" :size="15" />
+            </button>
+            <button
+              class="song-next"
+              title="下一首播放"
+              :disabled="!isPlayable(song, index)"
+              @click.stop="emit('playNext', index)"
+            >
+              下一首
+            </button>
+          </div>
         </td>
+        <td class="song-duration">{{ formatDuration(song.durationMs) }}</td>
       </tr>
     </tbody>
   </table>

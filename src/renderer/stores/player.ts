@@ -53,6 +53,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   let loadToken = 0
   let lastSentAt = 0
+  let lastErrorRetry = { songMid: '', at: 0 }
   let engine: AudioEngine
   let engineKind: 'html5' | 'mpv' = 'html5'
 
@@ -143,7 +144,15 @@ export const usePlayerStore = defineStore('player', () => {
       playNext()
     },
     onError() {
-      if (!current.value || !engine.sourceUrl) return
+      const song = current.value
+      if (!song || !engine.sourceUrl) return
+      const now = Date.now()
+      // 链接过期或代理流断开时，刷新一次播放链接并从原位置继续。
+      if (lastErrorRetry.songMid !== song.songMid || now - lastErrorRetry.at > 30_000) {
+        lastErrorRetry = { songMid: song.songMid, at: now }
+        void loadAndPlay(song, requestedQuality.value, positionMs.value)
+        return
+      }
       toast.error('音频加载失败，可能链接已过期')
       status.value = 'paused'
       sendState()
@@ -211,7 +220,11 @@ export const usePlayerStore = defineStore('player', () => {
     if (playHistory.value.length > PLAY_HISTORY_MAX) playHistory.value.shift()
   }
 
-  async function loadAndPlay(song: Song, forcedQuality?: Quality): Promise<void> {
+  async function loadAndPlay(
+    song: Song,
+    forcedQuality?: Quality,
+    resumeAtMs = 0
+  ): Promise<void> {
     const token = ++loadToken
     status.value = 'stopped'
     engine.stop()
@@ -235,6 +248,7 @@ export const usePlayerStore = defineStore('player', () => {
       quality.value = result.quality
       await engine.loadAndPlay(result.url)
       if (token !== loadToken) return
+      if (resumeAtMs > 0) seek(resumeAtMs)
       status.value = 'playing'
       sendState()
     } catch (err) {
@@ -291,10 +305,9 @@ export const usePlayerStore = defineStore('player', () => {
   function appendPlaylistQueue(currentSong: Song, fullSongs: Song[]): void {
     if (!queueSource.value || currentSong.songMid !== current.value?.songMid) return
     const position = fullSongs.findIndex((song) => song.songMid === currentSong.songMid)
-    if (position < 0) return
-    const tail = fullSongs
-      .slice(position + 1)
-      .filter((song) => song.songMid && song.songMid !== currentSong.songMid)
+    const tail = (position >= 0 ? fullSongs.slice(position + 1) : fullSongs).filter(
+      (song) => song.songMid && song.songMid !== currentSong.songMid
+    )
     const head = playOrder.value.slice(0, index.value + 1)
     const merged: Song[] = []
     const seen = new Set<string>()
