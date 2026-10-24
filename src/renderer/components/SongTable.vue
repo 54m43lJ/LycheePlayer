@@ -99,7 +99,7 @@ function isFavorite(song: Song): boolean {
                 <span v-else-if="song.pay.vip" class="pay-badge">VIP</span>
                 <span v-else-if="!song.pay.free" class="pay-badge">付费</span>
                 <span
-                  v-if="availability[song.songMid]"
+                  v-if="availability[song.songMid] && availabilityLabel(song)"
                   class="quality-badge"
                   :class="{ unavailable: availability[song.songMid]?.playable === false }"
                   >{{ availabilityLabel(song) }}</span
@@ -131,12 +131,13 @@ function isFavorite(song: Song): boolean {
               <AppIcon name="download" :size="15" />
             </button>
             <button
-              class="song-next"
+              class="song-icon"
               title="下一首播放"
+              aria-label="下一首播放"
               :disabled="!isPlayable(song, index)"
               @click.stop="emit('playNext', index)"
             >
-              下一首
+              <AppIcon name="plus" :size="16" />
             </button>
           </div>
         </td>

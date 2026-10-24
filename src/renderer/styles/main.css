@@ -686,13 +686,13 @@ a {
 
 .song-table td {
   padding: 9px 10px;
-  border-bottom: 1px solid var(--subtle-bg);
   font-size: 13px;
   vertical-align: middle;
 }
 
 .song-row {
   cursor: default;
+  border-bottom: 1px solid var(--subtle-bg);
   transition: background 0.12s ease;
 }
 
@@ -2255,6 +2255,14 @@ a {
   .song-table .song-duration-col,
   .song-table .song-duration {
     width: 48px !important;
+  }
+
+  .song-table .song-action {
+    width: 96px !important;
+  }
+
+  .song-action-inner {
+    gap: 2px;
   }
 
   .song-index {
