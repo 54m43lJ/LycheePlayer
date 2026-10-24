@@ -93,6 +93,13 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => edit.favoriteVersion,
+  () => {
+    if (auth.loggedIn) void load()
+  }
+)
 </script>
 
 <template>

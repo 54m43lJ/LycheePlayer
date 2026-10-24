@@ -90,10 +90,15 @@ export const usePlaylistStore = defineStore('playlist', () => {
     }
   }
 
+  /** 收藏等外部写操作后，让已打开的歌单在下次进入时重新验证。 */
+  function invalidate(id: string): void {
+    if (feed.value?.meta?.id === id) feed.value.stale = true
+  }
+
   async function load(id: string): Promise<void> {
     if (!id) return
     const same = feed.value?.meta?.id === id
-    if (same && feed.value?.status === 'complete') return
+    if (same && feed.value?.status === 'complete' && !feed.value.stale) return
     if (!same) {
       generation += 1
       requestedId = id
@@ -182,5 +187,5 @@ export const usePlaylistStore = defineStore('playlist', () => {
     await load(id)
   }
 
-  return { feed, load, retry, poll, reset, requestedId }
+  return { feed, load, retry, poll, invalidate, reset, requestedId }
 })

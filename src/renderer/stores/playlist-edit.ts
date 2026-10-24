@@ -10,6 +10,7 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
   const editing = ref(false)
   const busy = ref(false)
   const favorites = ref<Set<string>>(new Set())
+  const favoriteVersion = ref(0)
   const auth = useAuthStore()
   const playlist = usePlaylistStore()
   const toast = useToast()
@@ -95,6 +96,11 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
       if (state.favorited) favorites.value.add(songMid)
       else favorites.value.delete(songMid)
       favorites.value = new Set(favorites.value)
+      favoriteVersion.value += 1
+      playlist.invalidate('liked')
+      if (playlist.feed?.meta?.id === 'liked') {
+        void playlist.poll('liked')
+      }
     } catch (err) {
       favorites.value = before
       toast.error(err instanceof Error ? err.message : String(err))
@@ -105,6 +111,7 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
     editing,
     busy,
     favorites,
+    favoriteVersion,
     create,
     rename,
     remove,
