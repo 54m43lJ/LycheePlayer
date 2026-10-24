@@ -1,6 +1,6 @@
 import { createCipheriv, createHash, randomBytes } from 'node:crypto'
 import type { Credential, FavoriteState } from '../../shared/types'
-import { PLAYLIST_CACHE_TTL_MS, UPSTREAM_TIMEOUT_MS } from '../../shared/constants'
+import { FAVORITE_STATUS_CACHE_MS, UPSTREAM_TIMEOUT_MS } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { invalidatePlaylistCache } from '../cache/playlist'
 import { UpstreamError, musicu, upstreamRequest } from './client'
@@ -108,8 +108,14 @@ function assertEnvelope<T>(response: PlaylistEnvelope<T>, action: string, write:
   if (Number(failed) === 1000 || Number(failed) === 301) {
     throw new UpstreamError('AUTH_EXPIRED', '登录已失效，请重新登录')
   }
-  if (Number(failed) === 80105 || Number(failed) === 1101) {
-    throw new UpstreamError('UPSTREAM_CHANGED', `该歌曲暂不支持收藏（上游 ${failed}）`)
+  if (Number(failed) === 80105) {
+    throw new UpstreamError(
+      'UPSTREAM_CHANGED',
+      '收藏失败：请退出后重新登录（扫码或 Cookie），以同步网页会话'
+    )
+  }
+  if (Number(failed) === 1101) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '该歌曲暂不支持收藏（上游 1101）')
   }
   const detail = block?.message || data?.msg
   throw new UpstreamError(
@@ -292,7 +298,7 @@ export async function getFavoriteStates(mids: string[]): Promise<FavoriteState[]
       for (const [songMid, favorited] of fetched) cached.set(songMid, favorited)
       statusCache = {
         musicid: credential.musicid,
-        expiresAtMs: Date.now() + PLAYLIST_CACHE_TTL_MS,
+        expiresAtMs: Date.now() + FAVORITE_STATUS_CACHE_MS,
         statuses: cached
       }
     }
@@ -314,11 +320,9 @@ export async function toggleFavorite(songMid: string): Promise<FavoriteState> {
   const target = !before
   const identity = await fetchTrackIdentity(songMid)
 
-  // 201 目录的 songType 与详情里的 type 不完全一致：普通歌曲传 0 会被拒绝，使用 1 兼容。
-  const songType = identity.songType > 0 ? identity.songType : 1
   await signedPlaylistWrite(credential, target ? 'AddSonglist' : 'DelSonglist', {
     dirId: 201,
-    v_songInfo: [{ songId: Number(identity.songId), songType }]
+    v_songInfo: [{ songId: Number(identity.songId), songType: identity.songType }]
   })
 
   const after = (await readStatuses(credential, [songMid])).get(songMid) ?? false
@@ -333,7 +337,7 @@ export async function toggleFavorite(songMid: string): Promise<FavoriteState> {
   statuses.set(songMid, target)
   statusCache = {
     musicid: credential.musicid,
-    expiresAtMs: Date.now() + PLAYLIST_CACHE_TTL_MS,
+    expiresAtMs: Date.now() + FAVORITE_STATUS_CACHE_MS,
     statuses
   }
   await invalidatePlaylistCache('liked')

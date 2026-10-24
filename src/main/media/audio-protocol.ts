@@ -164,7 +164,6 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
   }
 
   const rangeHeader = request.headers.get('range')
-
   try {
     const response = await net.fetch(source.url, {
       headers: {

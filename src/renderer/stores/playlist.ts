@@ -1,7 +1,10 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { PlaylistMeta, Song } from '@shared/types'
-import { PLAYLIST_PAGE_RETRY_ATTEMPTS, PLAYLIST_PAGE_RETRY_BACKOFF_MS } from '@shared/constants'
+import {
+  PLAYLIST_PAGE_RETRY_ATTEMPTS,
+  PLAYLIST_PAGE_RETRY_BACKOFF_MS
+} from '@shared/constants'
 import { unwrap } from '../api'
 import { usePlayerStore } from './player'
 
@@ -127,6 +130,45 @@ export const usePlaylistStore = defineStore('playlist', () => {
     }
   }
 
+  let polling = false
+
+  /** 每 15 秒轮询一次首页，检测歌单名称 / 数量 / 顺序是否变化。 */
+  async function poll(id: string): Promise<void> {
+    const before = feed.value
+    if (polling || !before?.meta || before.meta.id !== id) return
+    polling = true
+    const token = generation
+    try {
+      const result = unwrap(await window.lychee.playlist.get(id, { offset: 0, force: true }))
+      if (token !== generation) return
+      const current = feed.value
+      if (!current || current.meta?.id !== id) return
+      const changed =
+        result.page.total !== current.total ||
+        result.page.meta.songCount !== current.meta.songCount ||
+        result.page.songs.some(
+          (song, index) => song.songMid !== current.songs[index]?.songMid
+        )
+      current.meta = result.page.meta
+      current.total = result.page.total
+      current.stale = result.stale
+      if (changed) {
+        current.songs = result.page.songs.slice()
+        current.status = result.page.hasMore ? 'partial' : 'complete'
+        current.error = ''
+        if (result.page.hasMore) void complete(id, current.songs.length, generation)
+      } else if (current.status === 'error') {
+        current.status = current.songs.length >= current.total ? 'complete' : 'partial'
+        current.error = ''
+      }
+      syncQueue()
+    } catch {
+      // 轮询失败保持当前内容，等下一次。
+    } finally {
+      polling = false
+    }
+  }
+
   async function retry(): Promise<void> {
     const current = feed.value
     if (!current?.meta) return
@@ -140,5 +182,5 @@ export const usePlaylistStore = defineStore('playlist', () => {
     await load(id)
   }
 
-  return { feed, load, retry, reset, requestedId }
+  return { feed, load, retry, poll, reset, requestedId }
 })

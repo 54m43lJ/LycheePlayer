@@ -812,12 +812,27 @@ a {
 }
 
 .song-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: visible;
   white-space: nowrap;
   font-size: 13px;
   font-weight: 600;
   color: var(--text);
+}
+
+.song-title-text {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pay-badge,
+.quality-badge {
+  flex: 0 0 auto;
 }
 
 .song-artist {

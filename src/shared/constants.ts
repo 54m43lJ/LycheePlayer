@@ -37,8 +37,10 @@ export const PLAYLIST_PAGE_SIZE = 50
 export const PLAYLIST_PAGE_MAX = 20_000
 /** 歌单页获取并发。推荐值 1；可提升到 3。 */
 export const PLAYLIST_PREFETCH_CONCURRENCY = 1
-/** 歌单缓存 TTL。推荐值 30_000 ms。 */
-export const PLAYLIST_CACHE_TTL_MS = 30_000
+/** 歌单缓存 TTL。推荐值 5_000 ms。 */
+export const PLAYLIST_CACHE_TTL_MS = 5_000
+/** 歌单界面变化轮询间隔。推荐值 15_000 ms。 */
+export const PLAYLIST_POLL_INTERVAL_MS = 15_000
 /** 歌单缓存字节上限。推荐值 16 × 1024 × 1024。 */
 export const PLAYLIST_CACHE_MAX_BYTES = 16 * 1024 * 1024
 /** 自动补全时单页失败的最大重试次数。 */
@@ -106,6 +108,8 @@ export const LOGIN_ALLOWED_DOMAINS = ['qq.com', 'gtimg.cn', 'weixin.qq.com'] as 
 
 // ---------- 缓存与下载 ----------
 
+/** 收藏状态缓存时长。推荐值 30_000 ms。 */
+export const FAVORITE_STATUS_CACHE_MS = 30_000
 /** VIP 状态缓存时长。推荐值 5 × 60_000 ms。 */
 export const VIP_CACHE_MS = 5 * 60_000
 /** 评论单页条数；上游上限 25。 */

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import CoverArt from '../components/CoverArt.vue'
@@ -11,6 +11,7 @@ import { useDownloadStore } from '../stores/download'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { usePlaylistStore } from '../stores/playlist'
+import { PLAYLIST_POLL_INTERVAL_MS } from '@shared/constants'
 import { useUiStore } from '../stores/ui'
 
 const route = useRoute()
@@ -94,6 +95,20 @@ watch(
   },
   { immediate: true }
 )
+
+let pollTimer: number | null = null
+
+onMounted(() => {
+  pollTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible' && id.value) {
+      void playlist.poll(id.value)
+    }
+  }, PLAYLIST_POLL_INTERVAL_MS)
+})
+
+onBeforeUnmount(() => {
+  if (pollTimer !== null) window.clearInterval(pollTimer)
+})
 
 watch(
   [() => feed.value?.status, () => feed.value?.songs.length],

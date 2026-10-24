@@ -94,7 +94,7 @@ function isFavorite(song: Song): boolean {
             <CoverArt :src="songCover(song, 300)" image-class="cover-thumb" :icon-size="16" />
             <div class="song-text">
               <div class="song-title">
-                {{ song.name }}
+                <span class="song-title-text">{{ song.name }}</span>
                 <span v-if="song.pay.album" class="pay-badge album">数字专辑</span>
                 <span v-else-if="song.pay.vip" class="pay-badge">VIP</span>
                 <span v-else-if="!song.pay.free" class="pay-badge">付费</span>

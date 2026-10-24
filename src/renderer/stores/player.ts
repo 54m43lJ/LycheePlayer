@@ -54,6 +54,7 @@ export const usePlayerStore = defineStore('player', () => {
   let loadToken = 0
   let lastSentAt = 0
   let lastErrorRetry = { songMid: '', at: 0 }
+  let seekWatch: number | null = null
   let engine: AudioEngine
   let engineKind: 'html5' | 'mpv' = 'html5'
 
@@ -226,6 +227,10 @@ export const usePlayerStore = defineStore('player', () => {
     resumeAtMs = 0
   ): Promise<void> {
     const token = ++loadToken
+    if (seekWatch !== null) {
+      window.clearTimeout(seekWatch)
+      seekWatch = null
+    }
     status.value = 'stopped'
     engine.stop()
     loading.value = true
@@ -450,6 +455,18 @@ export const usePlayerStore = defineStore('player', () => {
     engine.seek(nextPosition)
     positionMs.value = nextPosition
     sendState()
+
+    // 少量流在连续 Range 定位时会保持旧连接；1.2 秒后仍未到达目标则再触发一次 seek。
+    if (seekWatch !== null) window.clearTimeout(seekWatch)
+    if (status.value === 'playing') {
+      seekWatch = window.setTimeout(() => {
+        seekWatch = null
+        if (!current.value || status.value !== 'playing') return
+        if (Math.abs(engine.positionMs - nextPosition) > 2500) {
+          engine.seek(nextPosition)
+        }
+      }, 1200)
+    }
   }
 
   function setVolume(value: number): void {
