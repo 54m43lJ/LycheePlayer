@@ -61,7 +61,6 @@ function isFavorite(song: Song): boolean {
         <th class="song-index">#</th>
         <th>标题</th>
         <th v-if="showAlbum">专辑</th>
-        <th class="song-add-col"></th>
         <th class="song-duration-col">时长</th>
         <th class="song-action">操作</th>
       </tr>
@@ -113,17 +112,6 @@ function isFavorite(song: Song): boolean {
         <td v-if="showAlbum">
           <div class="song-album" :title="song.album.name">{{ song.album.name || '—' }}</div>
         </td>
-        <td class="song-add-col">
-          <button
-            class="song-add-next"
-            title="下一首播放"
-            aria-label="下一首播放"
-            :disabled="!isPlayable(song, index)"
-            @click.stop="emit('playNext', index)"
-          >
-            <AppIcon name="plus" :size="16" />
-          </button>
-        </td>
         <td class="song-duration">{{ formatDuration(song.durationMs) }}</td>
         <td class="song-action">
           <button
@@ -141,6 +129,14 @@ function isFavorite(song: Song): boolean {
             @click.stop="emit('download', index)"
           >
             <AppIcon name="download" :size="15" />
+          </button>
+          <button
+            class="song-next"
+            title="下一首播放"
+            :disabled="!isPlayable(song, index)"
+            @click.stop="emit('playNext', index)"
+          >
+            下一首
           </button>
         </td>
       </tr>
