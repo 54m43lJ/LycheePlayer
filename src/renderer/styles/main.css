@@ -1917,7 +1917,7 @@ a {
 
 .queue-row {
   display: grid;
-  grid-template-columns: 20px 38px minmax(0, 1fr) 90px 40px;
+  grid-template-columns: 20px 38px minmax(0, 1fr) 40px;
   align-items: center;
   gap: 9px;
   padding: 8px 2px;
@@ -1931,12 +1931,14 @@ a {
   text-align: right;
 }
 
-.queue-album {
+.queue-row .song-text {
   overflow: hidden;
-  color: var(--faint);
-  font-size: 11px;
+}
+
+.queue-row .song-title {
+  display: block;
+  overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .queue-footer {

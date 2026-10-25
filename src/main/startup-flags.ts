@@ -48,12 +48,18 @@ export function parseFlagsFile(text: string): StartupFlag[] {
   return flags
 }
 
+/** 显式命令行中的同名 switch 优先级高于 flags 文件。 */
+function isExplicitSwitch(name: string): boolean {
+  return process.argv.some((arg) => arg === name || arg.startsWith(`${name}=`))
+}
+
 /** 将 flags 应用到 Chromium 命令行；--flags-file 由应用消费，不下发。 */
 export function applyStartupFlags(flags: StartupFlag[]): void {
   const seen = new Set<string>()
   for (const flag of flags) {
     if (!flag.name || flag.name === FLAGS_FILE_SWITCH) continue
     if (!/^--[A-Za-z0-9][A-Za-z0-9-]*$/.test(flag.name)) continue
+    if (isExplicitSwitch(flag.name)) continue
     if (seen.has(flag.name)) continue
     seen.add(flag.name)
     if (flag.kind === 'argument' && flag.value !== undefined) {
@@ -64,10 +70,16 @@ export function applyStartupFlags(flags: StartupFlag[]): void {
   }
 }
 
-/** 内置默认：密钥环后端与自动播放策略。 */
+/** 内置默认：密钥环后端与自动播放策略；不覆盖命令行或 flags 文件已设置的同名 switch。 */
 export function applyDefaultFlags(): void {
-  app.commandLine.appendSwitch('password-store', 'gnome-libsecret')
-  app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required')
+  const defaults: Array<[string, string]> = [
+    ['password-store', 'gnome-libsecret'],
+    ['autoplay-policy', 'no-user-gesture-required']
+  ]
+  for (const [name, value] of defaults) {
+    if (app.commandLine.hasSwitch(name)) continue
+    app.commandLine.appendSwitch(name, value)
+  }
 }
 
 export async function readFlagsFile(): Promise<FlagsFile> {
@@ -91,11 +103,14 @@ export async function writeFlagsFile(content: string): Promise<void> {
 
 /** 模块加载阶段同步读取并应用 flags 文件；读取失败时只保留默认值。 */
 export function applyFlagsFromDisk(): void {
-  applyDefaultFlags()
+  let flags: StartupFlag[] = []
   try {
-    const content = readFileSync(resolveFlagsFile(process.argv), 'utf8')
-    applyStartupFlags(parseFlagsFile(content))
+    flags = parseFlagsFile(readFileSync(resolveFlagsFile(process.argv), 'utf8'))
   } catch {
     // 文件不可读时只保留内置默认；应用继续启动。
   }
+  // 先文件、后默认；文件入口跳过显式命令行，默认入口跳过已有 switch，
+  // 保证显式命令行 > 文件 > 默认。
+  applyStartupFlags(flags)
+  applyDefaultFlags()
 }

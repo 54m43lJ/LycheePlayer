@@ -189,7 +189,6 @@ watch(
             <div class="song-title">{{ song.name }}</div>
             <div class="song-artist">{{ singerNames(song) }}</div>
           </div>
-          <div class="queue-album" :title="song.album.name">{{ song.album.name || '—' }}</div>
           <button class="song-next" @click="player.removeFromQueue(queueIndex)">移除</button>
         </div>
         <div class="queue-footer">

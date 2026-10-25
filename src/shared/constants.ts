@@ -46,15 +46,21 @@ export const PLAYLIST_PAGE_RETRY_BACKOFF_MS = 500
 
 // ---------- 可用性探测 ----------
 
-/** 单次探测的歌曲上限。推荐值 30。 */
-export const PROBE_MIDS_MAX = 30
+/**
+ * 单次探测的歌曲上限。推荐值 50。
+ * 约束：与 PLAYLIST_PAGE_SIZE 对齐（一个 50 首歌单页一次探测），且不超过 IPC_SONG_MIDS_MAX。
+ */
+export const PROBE_MIDS_MAX = 50
 /** 歌曲详情并发。推荐值 2。 */
 export const PROBE_DETAIL_CONCURRENCY = 2
-/** vkey 批量大小。推荐值 20。 */
-export const PROBE_VKEY_BATCH = 20
+/**
+ * vkey 批量大小。推荐值 50。
+ * 约束：与 PROBE_MIDS_MAX 对齐（一批探测一次 vkey），且不超过 IPC_SONG_MIDS_MAX。
+ */
+export const PROBE_VKEY_BATCH = 50
 /** 可用性缓存 TTL。推荐值 10 × 60_000 ms。 */
 export const PROBE_CACHE_TTL_MS = 10 * 60_000
-/** 可用性缓存的最大歌曲数。 */
+/** 可用性缓存的最大歌曲数；由 PLAYLIST_PAGE_SIZE × PLAYLIST_PAGE_MAX 派生。 */
 export const PROBE_MAX_SONGS = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX
 /** 可用性探测空闲调度超时。推荐值 2000 ms。 */
 export const PROBE_IDLE_TIMEOUT_MS = 2000
