@@ -1,15 +1,20 @@
-name: Release
+name: Preview
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: write
 
+concurrency:
+  group: preview-release
+  cancel-in-progress: true
+
 jobs:
-  release:
+  preview:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout
@@ -21,42 +26,61 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Verify tag matches package version
-        run: |
-          version="$(node -p "require('./package.json').version")"
-          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
-            echo "标签 $GITHUB_REF_NAME 与 package.json 版本 v$version 不一致" >&2
-            exit 1
-          fi
-
       - name: Install dependencies
         run: npm ci
 
       - name: Build package
         run: npm run package:arch
 
+      - name: Prepare preview assets
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          cp "dist/lychee-player-${version}-x86_64.tar.gz" "dist/lychee-player-preview-x86_64.tar.gz"
+          (
+            cd dist
+            sha256sum lychee-player-preview-x86_64.tar.gz > lychee-player-preview-x86_64.tar.gz.sha256
+          )
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: lychee-player-${{ github.ref_name }}
+          name: lychee-player-preview
           path: |
-            dist/lychee-player-*.tar.gz
-            dist/lychee-player-*.tar.gz.sha256
+            dist/lychee-player-preview-x86_64.tar.gz
+            dist/lychee-player-preview-x86_64.tar.gz.sha256
 
-      - name: Publish release
+      - name: Publish preview release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="$GITHUB_REF_NAME"
-          version="${tag#v}"
+          set -euo pipefail
+          tag="preview"
+          notes="自动构建自 main@${GITHUB_SHA:0:7}（$(date -u +%Y-%m-%dT%H:%M:%SZ)）"
           assets=(
-            "dist/lychee-player-${version}-x86_64.tar.gz"
-            "dist/lychee-player-${version}-x86_64.tar.gz.sha256"
+            "dist/lychee-player-preview-x86_64.tar.gz"
+            "dist/lychee-player-preview-x86_64.tar.gz.sha256"
           )
+
+          # 一次性清理此前按版本号创建的 Release；失败不阻塞预览发布。
+          if gh release view v0.1.0 >/dev/null 2>&1; then
+            gh release delete v0.1.0 --yes --cleanup-tag || true
+          fi
+
+          # 让 preview tag 始终指向当前 main 提交。
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" \
+              -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+
           if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --prerelease --title "Preview" --notes "$notes"
             gh release upload "$tag" "${assets[@]}" --clobber
           else
             gh release create "$tag" "${assets[@]}" \
-              --title "$tag" \
-              --generate-notes
+              --prerelease \
+              --title "Preview" \
+              --notes "$notes"
           fi

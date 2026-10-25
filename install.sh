@@ -8,7 +8,7 @@
 set -eu
 
 REPO="${LYCHEE_REPO:-54m43lJ/LycheePlayer}"
-VERSION="latest"
+VERSION="preview"
 PREFIX=""
 SYSTEM=0
 UNINSTALL=0
@@ -20,7 +20,7 @@ usage() {
   cat <<'EOF'
 Lychee Player 安装脚本
 
-  --version <ver>   选择 GitHub Release 版本；默认最新
+  --version <ver>   选择 Release；默认 preview（预览版），稳定版传 v0.1.0
   --local <tarball> 从本地打包产物安装（需要同目录 .sha256；用于开发测试）
   --prefix <dir>    用户级安装目录
   --system          安装到 /opt/lychee-player（需要 root / sudo）
@@ -95,23 +95,29 @@ if [ -n "$LOCAL_TARBALL" ]; then
   run cp "$LOCAL_TARBALL" "$TMP/$ASSET"
   run cp "$LOCAL_TARBALL.sha256" "$TMP/$ASSET.sha256"
 else
-  if [ "$VERSION" = "latest" ]; then
-    # latest/download 不解析资产名，使用 GitHub API 定位实际版本。
+  if [ "$VERSION" = "preview" ]; then
+    TAG="preview"
+    ASSET="lychee-player-preview-$ARCH.tar.gz"
+    INSTALL_VERSION="预览版"
+  elif [ "$VERSION" = "latest" ]; then
+    # latest/download 不解析资产名，使用 GitHub API 定位实际稳定版。
     VERSION="$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -n1)"
     if [ -z "$VERSION" ]; then
-      echo "无法确定最新版本，请使用 --version 指定。" >&2
+      echo "无法确定最新稳定版；当前默认安装 preview，或使用 --version 指定。" >&2
       exit 1
     fi
     TAG="$VERSION"
+    ASSET="lychee-player-${TAG#v}-$ARCH.tar.gz"
+    INSTALL_VERSION="$TAG"
   else
     case "$VERSION" in
       v*) TAG="$VERSION" ;;
       *) TAG="v$VERSION" ;;
     esac
+    ASSET="lychee-player-${TAG#v}-$ARCH.tar.gz"
+    INSTALL_VERSION="$TAG"
   fi
   BASE="https://github.com/$REPO/releases/download/$TAG"
-  ASSET="lychee-player-${TAG#v}-$ARCH.tar.gz"
-  INSTALL_VERSION="$TAG"
   echo "下载 $ASSET"
   run curl -fL --proto '=https' --tlsv1.2 -o "$TMP/$ASSET" "$BASE/$ASSET"
   run curl -fL --proto '=https' --tlsv1.2 -o "$TMP/$ASSET.sha256" "$BASE/$ASSET.sha256"

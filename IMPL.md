@@ -196,7 +196,7 @@
 - 默认仓库改为实际仓库 `54m43lJ/LycheePlayer`，继续支持 `LYCHEE_REPO` 覆盖。
 - sha256 校验强制。
 - 新增 `--local <tarball>`，开发测试时可直接安装本地构建产物，不再依赖 GitHub Release。
-- 新增 `.github/workflows/release.yml`：推送 `v<version>` tag 后自动构建并创建 Release，`install.sh` 的下载路径因此闭环。
+- 新增 `.github/workflows/release.yml`：push `main` 后自动构建并覆盖 `preview` prerelease，不做版本管理；`install.sh` 默认下载该预览产物，下载路径因此闭环。
 - 安装时把桌面项 `Exec` / `TryExec` 改写为实际入口绝对路径，避免 GUI 会话 PATH 缺少 `~/.local/bin` 时无法启动。
 - dry-run 保留网络探测；文档已注明不是纯离线模式。
 
@@ -205,7 +205,7 @@
 | 文档 | 小节号 | 操作 | 内容 |
 |---|---|---|---|
 | `BUILD.html` | §5 | 修改 | 写明实际仓库地址、`LYCHEE_REPO`、`--local`、桌面项绝对路径与 dry-run 行为 |
-| `BUILD.html` | §5.1 | 新增 | tag 驱动的自动发布流程、手动补发与本地安装方式 |
+| `BUILD.html` | §5.1 | 新增 | Preview Release 自动发布流程、手动重跑与本地安装方式 |
 
 ## 3. 文档没有提及、只能自行探索的细节
 
