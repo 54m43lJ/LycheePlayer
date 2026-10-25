@@ -5,6 +5,7 @@ Name[zh_CN]=Lychee Player
 Comment=第三方 QQ 音乐 Linux 客户端
 Comment[zh_CN]=第三方 QQ 音乐 Linux 客户端
 Exec=lychee-player %U
+TryExec=lychee-player
 Icon=lychee-player
 Terminal=false
 Categories=AudioVideo;Audio;Player;

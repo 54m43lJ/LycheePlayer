@@ -1,0 +1,62 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Verify tag matches package version
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          if [ "v$version" != "$GITHUB_REF_NAME" ]; then
+            echo "标签 $GITHUB_REF_NAME 与 package.json 版本 v$version 不一致" >&2
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run package:arch
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: lychee-player-${{ github.ref_name }}
+          path: |
+            dist/lychee-player-*.tar.gz
+            dist/lychee-player-*.tar.gz.sha256
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="$GITHUB_REF_NAME"
+          version="${tag#v}"
+          assets=(
+            "dist/lychee-player-${version}-x86_64.tar.gz"
+            "dist/lychee-player-${version}-x86_64.tar.gz.sha256"
+          )
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --title "$tag" \
+              --generate-notes
+          fi
