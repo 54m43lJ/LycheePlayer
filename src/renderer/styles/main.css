@@ -45,6 +45,9 @@
   --radius-lg: 18px;
   --player-height: 92px;
   --sidebar-width: 224px;
+  /* 布局最小阈值：低于该尺寸时停止压缩，由 body 提供整窗双向滚动。 */
+  --layout-min-width: 420px;
+  --layout-min-height: calc(var(--player-height) + 170px);
   font-family:
     'Noto Sans SC',
     'PingFang SC',
@@ -117,7 +120,7 @@ body,
 }
 
 body {
-  overflow-x: hidden;
+  overflow-x: auto;
   overflow-y: auto;
   background:
     radial-gradient(1200px 700px at 78% -20%, var(--hero-glow), transparent 60%),
@@ -165,7 +168,8 @@ a {
   grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr) var(--player-height);
   height: 100dvh;
-  min-height: calc(var(--player-height) + 170px);
+  min-width: var(--layout-min-width);
+  min-height: var(--layout-min-height);
 }
 
 /* ---------- Sidebar ---------- */
