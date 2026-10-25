@@ -29,13 +29,18 @@ npm run test:watch
 node scripts/probe.mjs</code></pre>
 <ul class="note">
   <li><code>npm test</code> 使用 fixture 回放，默认不访问真实上游；录制 fixture 需要显式开关，见 <code>scripts/record-fixtures.mjs</code>。</li>
-  <li>测试不接入 CI；在本地或离线环境执行。</li>
+  <li>Vitest 运行在 Node 环境；导入链会经过 <code>credential</code>、<code>audio-protocol</code> 等主进程模块，因此测试用 <code>vi.mock('electron')</code> 提供最小 <code>app</code> / <code>safeStorage</code> / <code>protocol</code> / <code>net</code>。player / playlist 测试 mock <code>AudioEngine</code>、<code>localStorage</code> 与 <code>window.lychee</code>；<code>test/replay.ts</code> 用 <code>Response</code> 替换 <code>fetch</code>。</li>
+  <li>测试不接入 CI；在本地或离线环境执行。测试文件树与覆盖范围见 <a href="CORE.html#c1">CORE §1</a>。</li>
 </ul>
 
 <h2 id="b3">3. 构建</h2>
 <p><a href="#top">↑</a></p>
 <pre><code>npm run build</code></pre>
 <p>构建产物进入 <code>out/</code>；版本与许可证从 <code>package.json</code> 注入关于页。</p>
+<ul class="note">
+  <li><code>electron-builder.yml</code> 的关键字段：<code>appId=io.github.lycheeplayer</code>、<code>productName=Lychee Player</code>、<code>directories.output=dist</code>、<code>directories.buildResources=build</code>、<code>linux.target=dir</code>、<code>linux.executableName=lychee-player</code>、<code>linux.icon=build/icon.png</code>。</li>
+  <li><code>files</code> 只包含 <code>out/**/*</code>、<code>package.json</code> 与 <code>LICENSE</code>；<code>extraResources</code> 把 <code>resources/</code> 下的 <code>icon.png</code> / <code>tray.png</code> 复制到 <code>process.resourcesPath</code>，运行时图标读取该路径。</li>
+</ul>
 
 <h2 id="b4">4. 打包</h2>
 <p><a href="#top">↑</a></p>
@@ -46,31 +51,36 @@ dist/lychee-player/
 ├── lychee-player
 ├── resources/
 ├── LICENSE
+├── flags.conf.example
 ├── lychee-player.desktop
 └── lychee-player.png</code></pre>
 <ul class="note">
-  <li><code>electron-builder --linux dir</code> 生成目录后由 <code>scripts/package-arch.mjs</code> 整理、补桌面文件与校验和。</li>
+  <li><code>electron-builder --linux dir</code> 生成 <code>dist/linux-unpacked</code> 后由 <code>scripts/package-arch.mjs</code> 复制为 <code>dist/lychee-player</code>、补 <code>LICENSE</code> / 桌面文件 / 图标 / flags 示例，并生成 tar.gz 与 sha256。</li>
+  <li><code>electron-builder</code> 26.x 会拒绝 <code>linux.desktop</code> 自定义字段，因此桌面文件不再写在 builder 配置里；<code>packaging/arch/lychee-player.desktop</code> 由打包脚本写入 tar 顶层。</li>
+  <li><code>mpris-service</code> 的 <code>abstract-socket</code> 是原生模块，依赖 electron-builder 自带的 rebuild 步骤；打包机需要可用的编译工具链。</li>
   <li>tarball 顶层固定为 <code>lychee-player/</code>，不包含源码、<code>node_modules</code>、测试或构建缓存。</li>
   <li>文件名版本与 <code>package.json</code> 一致，不带 <code>v</code> 前缀。</li>
 </ul>
 
 <h2 id="b5">5. curl 安装</h2>
 <p><a href="#top">↑</a></p>
-<pre><code>curl -fsSL https://raw.githubusercontent.com/&lt;owner&gt;/lychee-player/main/install.sh | sh
-curl -fsSL https://raw.githubusercontent.com/&lt;owner&gt;/lychee-player/main/install.sh | sh -s -- --version 0.1.0
-curl -fsSL https://raw.githubusercontent.com/&lt;owner&gt;/lychee-player/main/install.sh | sudo sh -s -- --system</code></pre>
+<pre><code>curl -fsSL https://raw.githubusercontent.com/lychee-player/lychee-player/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/lychee-player/lychee-player/main/install.sh | sh -s -- --version 0.1.0
+curl -fsSL https://raw.githubusercontent.com/lychee-player/lychee-player/main/install.sh | sudo sh -s -- --system
+# 覆盖仓库：LYCHEE_REPO=owner/repo curl ... | sh</code></pre>
 <table>
   <tr><th>参数</th><th>行为</th></tr>
   <tr><td><code>--version &lt;ver&gt;</code></td><td>选择 GitHub Release 版本；默认最新。</td></tr>
   <tr><td><code>--prefix &lt;dir&gt;</code></td><td>用户级安装目录；默认 <code>${XDG_DATA_HOME:-$HOME/.local/share}/lychee-player</code>。</td></tr>
   <tr><td><code>--system</code></td><td>安装到 <code>/opt/lychee-player</code>，需要 root / sudo。</td></tr>
   <tr><td><code>--uninstall</code></td><td>删除程序、桌面文件与图标，保留设置与缓存。</td></tr>
-  <tr><td><code>--dry-run</code></td><td>只打印动作，不写盘。</td></tr>
+  <tr><td><code>--dry-run</code></td><td>只打印动作，不写盘；默认版本仍会请求 <code>api.github.com</code> 解析最新 tag，因此不是纯离线模式。</td></tr>
 </table>
 <ul class="note">
+  <li>默认仓库为 <code>lychee-player/lychee-player</code>，可用环境变量 <code>LYCHEE_REPO=owner/repo</code> 覆盖；发布前应确认与实际 GitHub 仓库一致。</li>
   <li>默认用户级安装：程序目录 <code>${XDG_DATA_HOME:-$HOME/.local/share}/lychee-player</code>，入口 <code>~/.local/bin/lychee-player</code>，桌面文件与图标写入用户 XDG 目录。</li>
   <li>系统级安装：程序目录 <code>/opt/lychee-player</code>，入口 <code>/usr/bin/lychee-player</code>，桌面文件与图标写入 <code>/usr/share</code>。</li>
-  <li>安装脚本校验 <code>sha256sum</code>；校验和缺失或不匹配时拒绝安装。也可先下载脚本检查再执行。</li>
+  <li>安装脚本强制校验 <code>sha256sum</code>；校验和缺失或不匹配时拒绝安装。也可先下载脚本检查再执行。</li>
 </ul>
 
 <h2 id="b6">6. 手动运行</h2>
@@ -104,21 +114,23 @@ curl -fsSL https://raw.githubusercontent.com/&lt;owner&gt;/lychee-player/main/in
   <tr><th>症状</th><th>处理</th></tr>
   <tr><td>沙箱启动失败</td><td>检查 <code>chrome-sandbox</code> 权限与用户命名空间；系统级安装按 §6 处理。</td></tr>
   <tr><td>Wayland 显示异常</td><td>在启动参数文件写 <code>--ozone-platform=wayland</code> 或 <code>--ozone-platform=x11</code>；见 §10。</td></tr>
-  <tr><td>密钥环未解锁</td><td>解锁 libsecret / gnome-keyring 后重启；密钥环不可用时登录被禁用。</td></tr>
+  <tr><td>密钥环未解锁 / “Decryption is not available”</td><td>解锁 libsecret / gnome-keyring 后重启；密钥环不可用时登录被禁用。独立 Electron 调试脚本需显式设置 <code>app.setName()</code>、<code>app.setPath('userData')</code>，并执行 <code>app.commandLine.appendSwitch('password-store', 'gnome-libsecret')</code>，否则读不到 <code>credential.bin</code>。</td></tr>
+  <tr><td>调试端口连不上 / 第二个实例退出</td><td>应用使用单实例锁：已有实例运行时，新进程只会唤醒旧窗口并退出。调试前先结束旧 PID，再带 <code>--remote-debugging-port</code> 启动；调试脚本固定读取 <code>/json/list</code>。</td></tr>
   <tr><td>缺库</td><td>安装 §1 运行期依赖。</td></tr>
   <tr><td>curl / 校验和失败</td><td>检查网络、Release 资产名与 <code>sha256sum</code>。</td></tr>
 </table>
 
 <h2 id="b10">10. 启动参数</h2>
 <p><a href="#top">↑</a></p>
-<p>默认文件：<code>$XDG_CONFIG_HOME/lychee-player/flags.conf</code>；未设置 <code>XDG_CONFIG_HOME</code> 时为 <code>~/.config/lychee-player/flags.conf</code>。每行一个参数，空行与 <code>#</code> 开头行忽略；<code>--flags-file=&lt;path&gt;</code> 可指定另一份文件。</p>
+<p>默认文件：<code>$XDG_CONFIG_HOME/lychee-player/flags.conf</code>；未设置 <code>XDG_CONFIG_HOME</code> 时为 <code>~/.config/lychee-player/flags.conf</code>。每行一个参数，空行与 <code>#</code> 开头行忽略；<code>--flags-file=&lt;path&gt;</code> 可指定另一份文件。文件上限 <code>STARTUP_FLAGS_MAX_BYTES = 8 KiB</code>、<code>STARTUP_FLAGS_MAX_LINES = 64</code>，非 <code>--name[=value]</code> 形式的行会被过滤。</p>
 <pre><code># Lychee Player 启动参数（每行一个）
 --ozone-platform=wayland
 --enable-wayland-ime
 --password-store=gnome-libsecret
 --autoplay-policy=no-user-gesture-required</code></pre>
 <ul class="note">
-  <li>优先级：显式命令行 &gt; flags 文件 &gt; 环境变量 &gt; 内置默认。</li>
+  <li>优先级：显式命令行 &gt; flags 文件 &gt; 环境变量 &gt; 内置默认。文件在模块加载阶段同步读取并先应用，随后才补内置默认；<code>appendSwitch()</code> 会覆盖同名 switch，因此文件入口跳过 <code>process.argv</code> 已有的 switch，默认入口用 <code>hasSwitch()</code> 跳过已设置的 switch。</li>
+  <li>内置默认只有 <code>--password-store=gnome-libsecret</code> 与 <code>--autoplay-policy=no-user-gesture-required</code>；<code>--ozone-platform</code> 的环境变量分支仍保持命令行 / 文件优先。</li>
   <li>设置页保存后下次启动生效，不热加载；不提供路径选择。</li>
 </ul>
 
@@ -126,10 +138,11 @@ curl -fsSL https://raw.githubusercontent.com/&lt;owner&gt;/lychee-player/main/in
 <p><a href="#top">↑</a></p>
 <table>
   <tr><th>用途</th><th>位置 / 说明</th></tr>
-  <tr><td>歌单缓存</td><td><code>userData/cache/playlist</code>；只缓存“我喜欢”，超过字节上限不落盘。</td></tr>
-  <tr><td>音频缓存</td><td><code>userData/cache/audio/&lt;musicid&gt;/</code>；总容量上限与 LRU 清理由 CORE 常量定义。</td></tr>
-  <tr><td>下载</td><td>默认 <code>~/Music/Lychee Player</code>，可在设置页修改；仅本机个人使用。</td></tr>
-  <tr><td>mpv</td><td>系统安装的 <code>mpv</code> 可执行文件；IPC socket 在 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>。</td></tr>
+  <tr><td>歌单缓存</td><td><code>userData/cache/playlist</code>；每份歌单一个整份快照 JSON，<code>complete</code> 标记是否完整；超过 <code>PLAYLIST_CACHE_MAX_BYTES</code> 时按 mtime LRU 清理。</td></tr>
+  <tr><td>音频缓存</td><td><code>userData/cache/audio/&lt;musicid|anonymous&gt;/&lt;quality&gt;/&lt;songMid&gt;.&lt;mp3|flac&gt;</code>；总容量上限与 LRU 清理由 CORE 常量定义；退出登录不清空。</td></tr>
+  <tr><td>下载</td><td>默认 <code>~/Music/Lychee Player</code>（<code>Settings.downloadDir</code> 可改）；下载任务只保存在内存，应用重启后不恢复。<code>.part</code> 文件用于暂停 / 续传；仅本机个人使用。</td></tr>
+  <tr><td>mpv</td><td>系统安装的 <code>mpv</code> 可执行文件；IPC socket 在 <code>XDG_RUNTIME_DIR</code>（缺失时用临时目录），权限 <code>0600</code>。</td></tr>
+  <tr><td>凭证 / 设置</td><td><code>userData/credential.bin</code> 由 <code>safeStorage</code> 加密，权限 <code>0600</code>；<code>userData/settings.json</code> 同样即时写盘。</td></tr>
 </table>
 
 </body>
