@@ -1,0 +1,83 @@
+name: Convert README
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - README.html
+      - .github/workflows/convert-readme.yml
+  workflow_dispatch:
+
+# 连续文档变更时只保留最新一次运行，避免两个 run 同时 push 互相踩
+concurrency:
+  group: convert-readme-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  convert:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.0
+
+      - name: Convert HTML to GFM
+        run: |
+          # 固定转换器版本，避免上游输出格式变化导致 README 抖动
+          uvx docs2markdown@0.5.0 README.html README.md
+
+      - name: Normalize links without Markdown targets
+        run: |
+          # docs2markdown 会把所有 .html 链接改写成 .md；当前只有 README.md，
+          # 其余文档仍是 .html。这里把没有 Markdown 对应文件的链接还原为 .html，避免 404。
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path("README.md")
+          text = path.read_text(encoding="utf-8")
+
+          def rewrite(match):
+              target = match.group(1)
+              if not Path(target).exists():
+                  html = Path(target).with_suffix(".html")
+                  if html.exists():
+                      return f']({html.name}{match.group(2) or ""})'
+              return match.group(0)
+
+          text = re.sub(r"\]\(([^)#]+\.md)(#[^)]*)?\)", rewrite, text)
+          path.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Verify only README.md is modified
+        run: |
+          set -euo pipefail
+          CHANGED_FILES=$(git status --porcelain | awk '{print $2}')
+
+          if [ -z "$CHANGED_FILES" ]; then
+            echo "No changes detected. Nothing to commit."
+            exit 0
+          fi
+
+          if [ "$CHANGED_FILES" != "README.md" ]; then
+            echo "::error::Unexpected files modified:"
+            echo "$CHANGED_FILES"
+            echo "Only README.md is allowed to change."
+            exit 1
+          fi
+
+          echo "✓ Validation passed: only README.md is modified."
+
+      - name: Commit and push
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          # GITHUB_TOKEN 的推送不会再次触发工作流（GitHub 防递归机制），无死循环风险
+          commit_message: "docs: 由 README.html 自动生成 README.md [skip ci]"
+          file_pattern: README.md
