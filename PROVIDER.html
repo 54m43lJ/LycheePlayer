@@ -62,12 +62,20 @@
     <td>QQ 登录成功后写入 xlogin 会话的 Cookie，用于计算 OAuth <code>g_tk</code> 并完成 OAuth 授权。</td>
   </tr>
   <tr>
+    <td><code>webCookies</code></td>
+    <td>登录网页会话 Cookie 集合（<code>p_skey</code> / <code>skey</code> / <code>qqmusic_key</code> 等）。收藏签名写入需要它与 <code>musickey</code> 合并为请求 Cookie；只保存于主进程 <code>Credential.webCookies</code>，加密落盘，不跨 IPC。</td>
+  </tr>
+  <tr>
     <td><code>g_tk</code>（OAuth）</td>
     <td>由 <code>p_skey</code> 经 <code>hash33(p_skey, 5381)</code> 计算的 CSRF 令牌，用于 OAuth authorize。</td>
   </tr>
   <tr>
     <td><code>g_tk</code>（资料）</td>
     <td>由 <code>musickey</code> 经 <code>hash33(musickey, 5381)</code> 计算的 CSRF 令牌，用于用户资料请求。</td>
+  </tr>
+  <tr>
+    <td><code>g_tk</code>（签名写入）</td>
+    <td><code>g_tk</code> 优先取 <code>webCookies.skey → qqmusic_key → qm_keyst → musickey</code>；<code>g_tk_new_20200303</code> 优先取 <code>qqmusic_key → p_skey → skey → p_lskey → lskey → qm_keyst → musickey</code>。全部经 <code>hash33(value, 5381)</code>。</td>
   </tr>
   <tr>
     <td>xlogin</td>
@@ -78,8 +86,16 @@
     <td>每日推荐 / 专属雷达 / 猜你喜欢对应的上游入口；具体方法名与字段需 fixture 验证后写入。</td>
   </tr>
   <tr>
-    <td>写操作接口（待探测）</td>
-    <td>收藏、创建 / 改名 / 删除歌单、增删歌曲对应的上游入口；验证前不写猜测的方法名。</td>
+    <td>收藏接口</td>
+    <td><code>SongFavRead / IsSongFanByMid</code> 读取红心状态；<code>PlaylistDetailWrite / AddSonglist | DelSonglist</code> 经 zzc 签名 + <code>ag-1</code> 加密通道写入 201 目录。</td>
+  </tr>
+  <tr>
+    <td>歌单写入接口（待探测）</td>
+    <td>创建 / 改名 / 删除歌单、增删歌曲对应的上游入口；验证前不写猜测的方法名。</td>
+  </tr>
+  <tr>
+    <td><code>201</code> 目录 / <code>songType</code></td>
+    <td><code>dirId: 201</code> 是“我喜欢”歌单的固定目录；写入时必须使用歌曲详情的真实 <code>songType</code>，不能用 <code>0</code> 或类型 <code>1</code> 兜底，否则可能返回 80105 或写入用户不可见的隐藏记录。</td>
   </tr>
   <tr>
     <td>MV 接口（待探测）</td>
@@ -110,7 +126,11 @@
   </tr>
   <tr>
     <td>凭证注入</td>
-    <td>请求携带 Cookie：<code>uin</code>、<code>qqmusic_uin</code>、<code>qm_keyst</code>、<code>qqmusic_key</code>。凭证、Cookie 与完整播放链接不写入日志。</td>
+    <td>请求携带 Cookie：<code>uin</code>、<code>qqmusic_uin</code>、<code>qm_keyst</code>、<code>qqmusic_key</code>；收藏签名写入前先合并 <code>Credential.webCookies</code>（如 <code>p_skey</code> / <code>skey</code>），同名时以凭证字段为准。凭证、Cookie 与完整播放链接不写入日志。</td>
+  </tr>
+  <tr>
+    <td>收藏写入</td>
+    <td>201 目录的 <code>AddSonglist</code> / <code>DelSonglist</code> 必须走 <code>u6.y.qq.com/cgi-bin/musics.fcg</code> 的 zzc 签名 + AES-128-GCM <code>ag-1</code> 通道；旧 <code>fcg_music_add2songdir.fcg</code> 在最小 Cookie 下返回 <code>403 invalid request / no permit</code>，不再使用。写后必须读回状态与成员可见性。</td>
   </tr>
   <tr>
     <td>播放链接拼装</td>
@@ -159,7 +179,7 @@
   <li>xlogin 组件加载官方登录页；应用不读取或保存用户密码。</li>
   <li>Cookie 轮询路径必须同时看到 <code>p_skey</code> 与 <code>p_uin</code> / <code>pt4_token</code> / <code>uin</code> 之一，才进入 OAuth 换证，避免把未完成登录误判为成功。</li>
   <li>xlogin 直接完成 OAuth 时，应用也可从 <code>will-navigate</code> / <code>will-redirect</code> / <code>did-navigate</code> 的 URL 捕获 <code>code</code>，直接进入换证。</li>
-  <li>OAuth 授权成功后，<code>QQConnectLogin.LoginServer/QQLogin</code> 返回 <code>musickey</code> 与续期字段；应用解析为 <code>Credential</code> 并在主进程入库。</li>
+  <li>OAuth 授权成功后，<code>QQConnectLogin.LoginServer/QQLogin</code> 返回 <code>musickey</code> 与续期字段；应用解析为 <code>Credential</code> 并在主进程入库。扫码成功后会在清理 <code>lychee-xlogin</code> 分区前抓取 <code>qq.com</code> 网页 Cookie（<code>p_skey</code> / <code>skey</code> 等），写入 <code>Credential.webCookies</code>。</li>
   <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；登录视图在结束或超时后清理。</li>
   <li>扫码登录只走内嵌官方 xlogin 组件；Cookie 登录是兜底路径，见 <a href="#p3-2">§3.2</a>。</li>
 </ul>
@@ -169,8 +189,8 @@
 <ul class="note">
   <li>Cookie 至少需要有效的 <code>uin</code> 与 <code>qm_keyst</code>；缺失或格式无效直接返回 <code>AUTH_EXPIRED</code>。</li>
   <li>应用用该凭证请求用户资料接口，<code>g_tk</code> 由 <code>hash33(musickey, 5381)</code> 计算；<code>code === 0</code> 视为登录态有效。</li>
-  <li>验证成功后生成 <code>Credential</code>，保存在主进程；不保存浏览器 Cookie 原文。</li>
-  <li>验证失败返回 <code>AUTH_EXPIRED</code>，提示用户重新获取 Cookie。</li>
+  <li>验证成功后生成 <code>Credential</code>，保存在主进程；Cookie 登录会保留完整 Cookie jar，其中 <code>p_skey</code> / <code>skey</code> 等网页会话字段写入 <code>Credential.webCookies</code>，与 <code>musickey</code> 一起加密保存，仅主进程使用。</li>
+  <li>验证失败返回 <code>AUTH_EXPIRED</code>，提示用户重新获取 Cookie。普通内容请求只依赖 <code>musickey</code>；收藏签名写入还依赖 <code>webCookies</code>，缺失时可能返回 80105。</li>
 </ul>
 
 <h3 id="p3-3">3.3 播放链接协议</h3>
@@ -180,7 +200,8 @@
   <li>vkey 请求使用进程级稳定 <code>guid</code>、歌曲 <code>songmid</code> 数组、对应 <code>filename</code> 数组与账号 <code>uin</code>。</li>
   <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。</li>
   <li>音频流端点与 vkey / purl 契约不变；应用侧加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</li>
-  <li>vkey 失效时音频加载失败，界面提示“音频加载失败，可能链接已过期”；应用不会自动重新获取链接。</li>
+  <li>上游音频流必须兼容 Range：应用会把浏览器的 <code>Range</code> 原样转发，并优先使用上游返回的 <code>206</code> / <code>Content-Range</code> / <code>Accept-Ranges</code>。若上游忽略 Range 返回 200，代理按完整响应处理并缓存；局部 206 不缓存。</li>
+  <li>vkey 失效或流中断时，播放器对同一歌曲最多每 30 秒自动重新取一次链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”。<code>PROVIDER</code> 不再承诺“不会自动重新获取链接”。</li>
 </ul>
 
 <h3 id="p3-4">3.4 mpv JSON IPC</h3>
@@ -191,11 +212,44 @@
   <li>socket 位于 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>，不使用 TCP；退出时终止子进程。</li>
 </ul>
 
-<h3 id="p3-5">3.5 推荐 / 写操作 / MV（待探测）</h3>
-<div class="diagram"><img src="diagram/prov-pending.svg" alt="推荐、写操作与 MV 上游边界（待探测）"></div>
+<h3 id="p3-5">3.5 QQ Web 签名 / 加密协议（收藏写入）</h3>
+<p>
+201 目录的收藏写入使用 QQ 官网 Web 通道；算法参考 MIT 项目 <code>jixunmoe/qmweb-sign</code>，使用 Node 内置 <code>crypto</code> 实现，不新增依赖。
+</p>
+<table>
+  <tr><th>步骤</th><th>规则</th></tr>
+  <tr>
+    <td>请求体</td>
+    <td><code>JSON.stringify({ comm, playlist: { module: 'music.musicasset.PlaylistDetailWrite', method: 'AddSonglist' | 'DelSonglist', param } })</code>；签名、加密与发送使用同一份 UTF-8 字符串。</td>
+  </tr>
+  <tr>
+    <td>zzc 签名</td>
+    <td>对请求体做 SHA1，取大写十六进制 <code>hash</code>；<code>sign = 'zzc' + pick([23,14,6,36,16,7,19]) + middle + pick([16,1,32,12,19,27,8,5])</code>，最终转小写。<code>pick</code> 按索引取 <code>hash</code> 字符；<code>middle</code> 为 <code>SCRAMBLE</code> 与 <code>hash</code> 每字节 XOR 后 Base64，并删除 <code>+ / =</code>。</td>
+  </tr>
+  <tr>
+    <td>加密</td>
+    <td>AES-128-GCM，固定 16 字节请求密钥 <code>bd305f10d0ff74b6ef54dab835b5e1cf</code>，每次请求随机 12 字节 IV；发送体为 <code>base64(iv || ciphertext || authTag)</code>。</td>
+  </tr>
+  <tr>
+    <td>端点</td>
+    <td><code>POST https://u6.y.qq.com/cgi-bin/musics.fcg?encoding=ag-1&amp;sign=&lt;zzc签名&gt;&amp;_=&lt;时间戳&gt;</code></td>
+  </tr>
+  <tr>
+    <td>请求头</td>
+    <td><code>Referer: https://y.qq.com/</code>、桌面 Chrome UA、合并后的 Cookie（含 <code>webCookies</code>）、<code>Content-Type: text/plain</code>、<code>Accept: application/octet-stream</code>。</td>
+  </tr>
+  <tr>
+    <td>响应解码</td>
+    <td>对响应字节逐字节 XOR <code>RESPONSE_KEY</code>（按 21 字节循环），再按 UTF-8 解析 JSON；解析失败映射为 <code>UPSTREAM_CHANGED</code>。</td>
+  </tr>
+  <tr>
+    <td>错误</td>
+    <td>业务码 <code>2001</code> / <code>104604</code> 做短暂重试；<code>1000</code> / <code>301</code> 映射 <code>AUTH_EXPIRED</code>；<code>80105</code> 提示重新登录同步网页会话；<code>1101</code> 表示该歌曲暂不支持收藏。</td>
+  </tr>
+</table>
 <ul class="note">
-  <li>三类入口尚未完成 fixture 验证；图中只表达边界，不写猜测的方法名。</li>
-  <li>验证通过后，在 §4.1 / §4.3 补具体请求参数、响应模型与错误映射；在此之前 CORE 对应模块标记待实现。</li>
+  <li><code>comm</code> 至少包含 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>、<code>authst</code>、<code>platform</code>、<code>g_tk</code>、<code>g_tk_new_20200303</code>；Cookie 与 key 均由主进程凭证生成，不进入渲染进程。</li>
+  <li>推荐、歌单创建 / 改名 / 删除与 MV 接口仍未完成 fixture 验证；<code>diagram/prov-pending.svg</code> 只表达这些待探测入口的边界，不写猜测的方法名。CORE 对应模块保持待实现。</li>
 </ul>
 
 <h2 id="p4">4. INTERFACES</h2>
@@ -206,12 +260,14 @@
   <tr><th>接口</th><th>方法 / 路径</th><th>用途</th></tr>
   <tr><td>内容 RPC</td><td><code>https://u.y.qq.com/cgi-bin/musicu.fcg</code>（内容请求 GET；登录换证 / 续期 POST）</td><td>统一 <code>musicu</code> 请求入口；搜索、歌曲详情、vkey、歌单、资料、评论、VIP 状态、登录与续期。</td></tr>
   <tr><td>搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code></td><td>按单曲 / 歌手 / 专辑 / 歌单搜索。</td></tr>
-  <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code> 与歌曲展示字段。</td></tr>
-  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>。</td></tr>
+  <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code>、歌曲展示字段与真实 <code>songType</code>。</td></tr>
+  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。</td></tr>
+  <tr><td>收藏状态</td><td><code>music.musicasset.SongFavRead / IsSongFanByMid</code></td><td>按 <code>v_songMid</code> 批量读取 <code>m_fan</code> 红心状态。</td></tr>
+  <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-5">§3.5</a>。</td></tr>
   <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表。</td></tr>
   <tr><td>我的歌单</td><td><code>music.musicasset.PlaylistBaseRead / GetPlaylistByUin</code></td><td>当前账号创建 / 收藏的歌单列表。</td></tr>
   <tr><td>推荐（待探测）</td><td>—</td><td>每日推荐 / 专属雷达 / 猜你喜欢；fixture 验证后补方法名与参数。</td></tr>
-  <tr><td>写操作（待探测）</td><td>—</td><td>收藏、歌单创建 / 改名 / 删除、增删歌曲；fixture 验证后补方法名与错误码。</td></tr>
+  <tr><td>歌单写入（待探测）</td><td>—</td><td>歌单创建 / 改名 / 删除、增删歌曲；fixture 验证后补方法名与错误码。收藏写入已实现，见上表。</td></tr>
   <tr><td>MV（待探测）</td><td>—</td><td>MV 搜索 / 详情 / 取流；需确认登录与 VIP 权限。</td></tr>
   <tr><td>会话续期</td><td><code>music.login.LoginServer / Login</code></td><td>用 <code>refresh_token</code> 换新 <code>musickey</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
@@ -235,7 +291,15 @@
   </tr>
   <tr>
     <td>vkey</td>
-    <td><code>guid</code> · <code>songmid[]</code> · <code>songtype[]</code>（全 0） · <code>filename[]</code> · <code>uin</code> · <code>loginflag</code> · <code>platform</code></td>
+    <td><code>guid</code> · <code>songmid[]</code> · <code>songtype[]</code>（全 0） · <code>filename[]</code> · <code>uin</code> · <code>loginflag</code> · <code>platform</code>；每批最多 50 首，单次 IPC 上限 100。</td>
+  </tr>
+  <tr>
+    <td>收藏状态</td>
+    <td><code>v_songMid</code>（歌曲 mid 数组）</td>
+  </tr>
+  <tr>
+    <td>收藏写入</td>
+    <td><code>dirId</code>（201） · <code>v_songInfo[]</code>（<code>songId</code> · <code>songType</code>） · <code>comm.g_tk</code> · <code>comm.g_tk_new_20200303</code></td>
   </tr>
   <tr>
     <td>歌单详情</td>
@@ -279,6 +343,8 @@
   <tr><td>搜索 <code>DoSearchForQQMusicDesktop</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>不携带 <code>comm</code></td></tr>
   <tr><td>歌曲详情 <code>get_song_detail_yqq</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>vkey <code>CgiGetVkey</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
+  <tr><td>收藏状态 <code>IsSongFanByMid</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>u.y.qq.com</code> 明文通道</td></tr>
+  <tr><td>收藏写入 <code>AddSonglist</code> / <code>DelSonglist</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td><code>u6.y.qq.com</code>；<code>ag-1</code> + zzc 签名；<code>Content-Type: text/plain</code></td></tr>
   <tr><td>歌单详情 <code>CgiGetDiss</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>我的歌单 <code>GetPlaylistByUin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>歌词 <code>fcg_query_lyric_new.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=5381</code></td></tr>
@@ -294,10 +360,10 @@
 </table>
 <ul class="note">
   <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
-  <li>公开 CGI 目前不需要额外签名；<code>g_tk</code> 只用于 OAuth 授权、歌词与用户资料请求。</li>
+  <li>普通内容 CGI 不需要额外签名；收藏写入必须使用 <a href="#p3-5">§3.5</a> 的 zzc 签名 + <code>ag-1</code> 加密通道；<code>g_tk</code> 还用于 OAuth 授权、歌词与用户资料请求。</li>
   <li>歌曲评论单页最多 25 条；超过上限时上游返回业务码 <code>10000</code>，因此应用固定使用 20 条。评论请求匿名发送，不携带登录凭证。</li>
-  <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。</li>
-  <li>推荐、收藏/歌单写入、MV 接口尚未完成 fixture 验证；验证前不写入具体方法名，只在 CORE 标记待实现。</li>
+  <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。上游单次最多返回 100 首，应用固定 50 首/页。</li>
+  <li>推荐、歌单创建 / 改名 / 删除、MV 接口尚未完成 fixture 验证；验证前不写入具体方法名，只在 CORE 标记待实现。收藏写入与状态读取已实现。</li>
 </ul>
 
 <h3 id="p4-2">4.2 消息与错误</h3>
@@ -348,8 +414,10 @@ interface QqLoginRequest {
 
 <table>
   <tr><th>上游信号</th><th>内部 ErrorCode</th><th>含义 / 处理</th></tr>
-  <tr><td><code>1000</code> / <code>104401</code> / <code>104400</code></td><td><code>AUTH_EXPIRED</code></td><td>凭证过期或无效；提示重新登录。</td></tr>
+  <tr><td><code>1000</code> / <code>104401</code> / <code>104400</code> / <code>301</code></td><td><code>AUTH_EXPIRED</code></td><td>凭证过期、无效或未登录；提示重新登录。</td></tr>
   <tr><td><code>104604</code> / <code>2001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游瞬时繁忙；短退避重试，仍失败则提示稍后再试。</td></tr>
+  <tr><td><code>80105</code></td><td><code>UPSTREAM_CHANGED</code></td><td>收藏签名通道缺少网页会话；提示退出后重新登录（扫码或 Cookie），以同步 <code>webCookies</code>。</td></tr>
+  <tr><td><code>1101</code></td><td><code>UPSTREAM_CHANGED</code></td><td>该歌曲暂不支持收藏；保留原状态并提示。</td></tr>
   <tr><td><code>100001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；不重试，直接提示稍后再试。</td></tr>
   <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>当前账号无该音质权限；播放链接流程继续回退。</td></tr>
   <tr><td>写操作权限拒绝</td><td><code>NO_PERMISSION</code></td><td>当前账号无权编辑该歌单或收藏该内容；提示不可编辑。</td></tr>
@@ -388,6 +456,23 @@ interface QqVkeyData {
     purl?: string;
     result?: number;
   }&gt;;
+}
+
+interface QqFavoriteData {
+  m_fan?: Record&lt;string, boolean&gt;;
+}
+
+interface QqTrackIdentity {
+  track_info?: {
+    id?: number | string;
+    mid?: string;
+    type?: number;
+  };
+}
+
+interface QqSongInfoParam {
+  songId: number;
+  songType: number;
 }
 
 interface QqPlaylistData {
@@ -487,6 +572,7 @@ interface Credential {
   openid?: string;
   unionid?: string;
   loginType?: number;
+  webCookies?: Record&lt;string, string&gt;;   // 登录网页会话 Cookie；仅主进程，加密保存
 }
 
 interface QqLoginPayload {
@@ -516,12 +602,27 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqVkeyData</code></td>
     <td><code>midurlinfo[].songmid</code> · <code>purl</code> · <code>result</code></td>
-    <td><code>purl</code> 为空表示该档位无链接；当前实现不消费 <code>result</code>。</td>
+    <td><code>purl</code> 为空表示该档位无链接；当前实现不消费 <code>result</code>。vkey 请求按应用批量 50 分块。</td>
+  </tr>
+  <tr>
+    <td><code>QqFavoriteData</code></td>
+    <td><code>m_fan[songMid]</code></td>
+    <td>批量红心状态；缺少任一请求 mid 的布尔值时视为响应不完整（<code>UPSTREAM_CHANGED</code>）。</td>
+  </tr>
+  <tr>
+    <td><code>QqTrackIdentity</code></td>
+    <td><code>track_info.id</code> · <code>track_info.type</code></td>
+    <td>收藏写入前读取真实 <code>songId</code> 与 <code>songType</code>；ID 必须为非空数字字符串，<code>songType</code> 必须为非负安全整数，否则取消写入。</td>
+  </tr>
+  <tr>
+    <td><code>QqSongInfoParam</code></td>
+    <td><code>v_songInfo[].songId</code> · <code>songType</code></td>
+    <td>201 目录写入参数；<code>songType</code> 不允许用 <code>0</code> 或 <code>1</code> 兜底。</td>
   </tr>
   <tr>
     <td><code>QqPlaylistData</code></td>
     <td><code>dirinfo.id</code> / <code>title</code> / <code>picurl</code> / <code>songnum</code> · <code>songlist[]</code></td>
-    <td><code>songlist[]</code> 是单页结果；单次最多返回 100 首；总数以 <code>dirinfo.songnum</code> 为准。</td>
+    <td><code>songlist[]</code> 是单页结果；单次最多返回 100 首，应用固定 50 首/页；总数以 <code>dirinfo.songnum</code> 为准。<code>songnum</code> 与 <code>songlist</code> 成员可能短暂不一致：写入后总数可能先变化，列表成员稍后才可见；总数增加或状态读回 true 都不能单独作为收藏成功依据。</td>
   </tr>
   <tr>
     <td><code>QqMineData</code></td>
@@ -536,7 +637,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqLyricResponse</code></td>
     <td><code>code</code> · <code>retcode</code> · <code>lyric</code> · <code>qrc</code> · <code>trans</code></td>
-    <td><code>-1901</code> 表示无歌词；<code>qrc</code> 为 QRC 密文，主进程只透传。</td>
+    <td><code>-1901</code> 表示无歌词；<code>qrc</code> 为 QRC 密文，主进程只透传。QRC 编码链为 hex → 3DES-ECB（固定密钥 <code>!@#)(*$%123ZXC!@!@#)(NHL</code>，无自动填充）→ zlib → <code>LyricContent</code> XML；解密在 preload 完成，见 <a href="CORE.html#c4-66">CORE §4.66</a>。</td>
   </tr>
   <tr>
     <td><code>QqCommentList</code></td>
@@ -560,8 +661,8 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>Credential</code></td>
-    <td><code>musicid</code> · <code>musickey</code> · <code>expiredAtMs</code> · <code>refreshKey</code> · <code>refreshToken</code> · <code>accessToken</code> · <code>openid</code> · <code>unionid</code> · <code>loginType</code></td>
-    <td>项目归一化后的登录凭证；仅主进程持有，<code>Credential</code> 的续期字段不跨 IPC。</td>
+    <td><code>musicid</code> · <code>musickey</code> · <code>expiredAtMs</code> · <code>refreshKey</code> · <code>refreshToken</code> · <code>accessToken</code> · <code>openid</code> · <code>unionid</code> · <code>loginType</code> · <code>webCookies</code></td>
+    <td>项目归一化后的登录凭证；仅主进程持有，<code>Credential</code> 的续期字段与 <code>webCookies</code> 不跨 IPC。<code>webCookies</code> 缺失时收藏签名写入可能返回 80105。</td>
   </tr>
 </table>
 
@@ -589,7 +690,19 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>purl</code> → 播放链接</td>
-    <td>绝对 URL 原样使用；相对路径拼接 <code>https://ws.stream.qqmusic.qq.com/</code>，查询串保持不变。</td>
+    <td>绝对 URL 原样使用；相对路径拼接 <code>https://ws.stream.qqmusic.qq.com/</code>，查询串保持不变；随后由主进程包装为 <code>lychee-audio://stream/&lt;token&gt;</code>，不把上游链接交给渲染进程。</td>
+  </tr>
+  <tr>
+    <td><code>QqFavoriteData</code> → <code>FavoriteState[]</code></td>
+    <td>按请求 <code>v_songMid</code> 顺序读取 <code>m_fan[mid]</code>；未登录或异常按未收藏处理，缺失字段视为响应不完整。</td>
+  </tr>
+  <tr>
+    <td><code>QqTrackIdentity</code> → 写入参数</td>
+    <td><code>id</code> 转十进制字符串校验 → <code>songId</code>；<code>type</code> 原样作为 <code>songType</code>。写入体为 <code>{ dirId: 201, v_songInfo: [{ songId: Number(songId), songType }] }</code>。</td>
+  </tr>
+  <tr>
+    <td>QRC 密文 → 逐字歌词</td>
+    <td>hex → 3DES-ECB（<code>des-ede3</code>，固定密钥，<code>setAutoPadding(false)</code>）→ <code>inflateSync</code> → <code>LyricContent</code> XML → 逐字行；失败时回退 LRC。</td>
   </tr>
   <tr>
     <td><code>QqPlaylistData</code> → <code>PlaylistDetail</code></td>
@@ -628,6 +741,7 @@ interface QqLoginPayload {
   <li>内部目标模型 <code>Song</code> / <code>PlaylistMeta</code> / <code>PlaylistDetail</code> / <code>SearchResult</code> / <code>Lyric</code> / <code>Comment</code> / <code>CommentPage</code> / <code>UserProfile</code> / <code>UrlResult</code> 的定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；<code>Credential</code> 的字段定义见 <a href="#p4-3">§4.3</a>。</li>
   <li><code>mediaMid</code>、<code>guid</code> 与原始 <code>purl</code> 只在主进程 API 层内部存在，不进入 IPC 数据模型。</li>
   <li><code>PayInfo</code> 仅用于界面角标；实际可播性以 vkey 结果为准。</li>
+  <li>收藏写入的 <code>songType</code> 必须来自详情接口真实字段；<code>webCookies</code> 与签名密钥只存在于主进程，不写日志、不跨 IPC。</li>
 </ul>
 
 <h3 id="p4-4">4.4 MPRIS</h3>
