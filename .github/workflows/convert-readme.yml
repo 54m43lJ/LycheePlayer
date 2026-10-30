@@ -23,7 +23,7 @@ jobs:
       contents: write
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Install uv
         uses: astral-sh/setup-uv@v10.3.0
@@ -76,7 +76,7 @@ jobs:
           echo "✓ Validation passed: only README.md is modified."
 
       - name: Commit and push
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           # GITHUB_TOKEN 的推送不会再次触发工作流（GitHub 防递归机制），无死循环风险
           commit_message: "docs: 由 README.html 自动生成 README.md [skip ci]"
