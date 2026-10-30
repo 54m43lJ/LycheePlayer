@@ -1466,6 +1466,7 @@ export function readAudioFile(path: string): Promise&lt;Buffer&gt;;
   <li>模块加载阶段调用 <code>protocol.registerSchemesAsPrivileged()</code> 注册 <code>lychee-audio</code>（<code>standard</code> / <code>secure</code> / <code>supportFetchAPI</code> / <code>stream</code> / <code>bypassCSP</code>）；<code>app.whenReady()</code> 后由 <code>registerAudioProtocol()</code> 调用 <code>protocol.handle()</code>。</li>
   <li>URL 只有两种：缓存文件 <code>lychee-audio://file/&lt;base64url(path)&gt;</code>；未缓存流 <code>lychee-audio://stream/&lt;uuid&gt;</code>。stream token 在主进程内映射上游 URL、<code>songMid</code> 与 <code>quality</code>，渲染进程永远拿不到上游链接。</li>
   <li>token 只保存在进程内 Map，无持久化、无主动过期；应用重启后 token 失效，但缓存文件仍可通过 <code>file</code> 分支读取。</li>
+  <li>渲染层取消读取时，协议处理必须同时 abort 上游 <code>net.fetch</code>：只 cancel body 可能把未读完的连接留在 socket 池，后续音频流复用该连接时会一直等到上游超时（约 10 秒）才报错重试。</li>
 </ul>
 <table>
   <tr><th>URL 分支</th><th>条件</th><th>响应状态</th><th>必带响应头</th><th>是否缓存</th><th>回退 / 说明</th></tr>

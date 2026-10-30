@@ -164,12 +164,20 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
   }
 
   const rangeHeader = request.headers.get('range')
+  // 中止必须落到 net.fetch 本身：只 cancel body 可能把未读完的连接留在 socket 池，
+  // 后续流复用它时会一直等到上游超时（约 10 秒）才报错重试。
+  const upstreamAbort = new AbortController()
+  const abortUpstream = (): void => {
+    if (!upstreamAbort.signal.aborted) upstreamAbort.abort()
+  }
+  request.signal?.addEventListener('abort', abortUpstream, { once: true })
   try {
     const response = await net.fetch(source.url, {
       headers: {
         Referer: 'https://y.qq.com/',
         ...(rangeHeader ? { Range: rangeHeader } : {})
-      }
+      },
+      signal: upstreamAbort.signal
     })
     if (!response.ok && response.status !== 206) {
       return new Response('音频加载失败', { status: response.status })
@@ -231,6 +239,7 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
         }
       },
       cancel(reason) {
+        abortUpstream()
         void reader.cancel(reason)
       }
     })
