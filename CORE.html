@@ -560,6 +560,9 @@ export interface FlagsFile {
 
 <h3 id="c4-2">4.2 src/shared/ipc.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export interface LycheeApi {
+  system: {
+    quit(): void;
+  };
   flags: {
     get(): Promise&lt;IpcResult&lt;FlagsFile&gt;&gt;;
     save(content: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
@@ -685,8 +688,8 @@ function handle(channel: string, fn: (...args: any[]) =&gt; Promise&lt;unknown&g
 
 </code></pre>
 <ul class="note">
-  <li><code>registerIpc</code> 注册全部请求型通道与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>；<code>player:state</code> 同时分发到 MPRIS 与托盘。</li>
-  <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程。</li>
+  <li><code>registerIpc</code> 注册全部请求型通道、<code>app.quit</code> 与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>；<code>player:state</code> 同时分发到 MPRIS 与托盘。</li>
+  <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程；<code>app.quit</code> 是单向消息，直接调用 <code>app.quit()</code>，不复用 <code>handle</code>。</li>
 </ul>
 
 <h3 id="c4-6">4.6 src/main/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -715,10 +718,14 @@ export async function clearCredential(): Promise&lt;void&gt;;
 <h3 id="c4-8">4.8 src/main/api/client.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export class UpstreamError extends Error {
   readonly code: ErrorCode;
+  readonly retryable: boolean;
+  readonly upstreamCode?: number;
 }
 
 export function getGuid(): string;
 export function toIpcError(err: unknown): IpcError;
+export function throttleUpstream(): Promise&lt;void&gt;;
+function dataErrorCode(data: unknown): number | null;
 
 export interface UpstreamRequest {
   host: string;
@@ -748,6 +755,8 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
 </code></pre>
 <ul class="note">
   <li><code>upstreamRequest</code> 负责 UA / Referer / Cookie 注入、超时、HTTP 错误与 HTTP 非 2xx 退避；<code>musicu</code> 负责组装 <code>comm</code> / <code>req_0</code> 并处理瞬时繁忙码。</li>
+  <li><code>fetchOnce</code> 在真正发出请求前调用 <code>throttleUpstream()</code>：全局令牌桶按 <code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> 补充、最多积压 <code>UPSTREAM_RATE_LIMIT_BURST</code> 个令牌；OAuth authorize 与收藏签名写入等绕过 <code>upstreamRequest</code> 的请求也显式取令牌。</li>
+  <li><code>musicu</code> 在 <code>req_0.code</code> 为 1000 时优先读取 <code>data.retcode</code>，避免把 vkey 的 <code>104009 invalidq</code> 误判成登录过期；<code>mapUpstreamCode</code> 把 104009 映射为 <code>UPSTREAM_NETWORK</code> 并保留 <code>upstreamCode</code> 供 vkey 备用入口判断。</li>
   <li><code>getGuid</code> 返回进程级稳定 GUID，供 vkey 请求使用。</li>
 </ul>
 
@@ -770,16 +779,24 @@ export function resolveStreamUrls(
 export function rawSongToSong(raw: unknown): Song;
 async function fetchTrack(mid: string): Promise&lt;unknown&gt;;
 function requestQuality(
-  tracks: Array&lt;{ songMid: string; mediaMid: string }&gt;,
+  tracks: Array&lt;{ songMid: string; mediaMid: string; pay: PayInfo }&gt;,
   quality: Quality
-): Promise&lt;Map&lt;string, string&gt;&gt;;
+): Promise&lt;{ urls: Map&lt;string, string&gt;; results: Map&lt;string, number&gt; }&gt;;
+function resolveStreams(
+  mids: string[],
+  requested: Quality
+): Promise&lt;{
+  urls: Map&lt;string, { url: string; quality: Quality }&gt;;
+  failures: Map&lt;string, { result: number; quality: Quality; pay: PayInfo }&gt;;
+}&gt;;
 function buildStreamUrl(purl: string): string;
 </code></pre>
 <ul class="note">
   <li><code>getStreamUrls</code> 是全应用唯一拼装播放链接的位置；回退规则见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。返回的 <code>url</code> 是主进程 <code>lychee-audio://stream/&lt;token&gt;</code> 代理地址，不是上游原始链接。</li>
-  <li><code>requestQuality</code> 按 <code>PROBE_VKEY_BATCH = 50</code> 分块请求 vkey；单次 IPC 的歌曲上限仍为 <code>IPC_SONG_MIDS_MAX = 100</code>，因此 <code>song.getUrls</code> 单批 100 首时内部会拆成 50 + 50 两次 vkey 请求。</li>
-  <li>全部档位均无链接时，按 <a href="#c4-13">§4.13</a> 的 <code>isVipUser()</code> 生成 <code>NO_STREAM</code> 消息：VIP 账号提示“当前内容已下架”，其余情况提示可能需要 VIP 或已下架。</li>
-  <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射。</li>
+  <li><code>requestQuality</code> 按 <code>PROBE_VKEY_BATCH = 50</code> 分块请求 vkey；单次 IPC 的歌曲上限仍为 <code>IPC_SONG_MIDS_MAX = 100</code>，因此 <code>song.getUrls</code> 单批 100 首时内部会拆成 50 + 50 两次 vkey 请求。每首歌的 <code>midurlinfo[].result</code> 与音质档位一起保留，供全批量失败时判定原因。</li>
+  <li>vkey 请求先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>；若响应或 <code>data.retcode</code> 为 <code>104009</code>，再以相同 filename 尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
+  <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>isVipUser()</code> 通用文案。</li>
+  <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
 </ul>
 
 <h3 id="c4-12">4.12 src/main/api/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -835,6 +852,7 @@ async function probeCredential(credential: Credential): Promise&lt;'ok' | 'expir
 <ul class="note">
   <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
   <li><code>refreshSession</code> 用 <code>refresh_token</code> 换新 <code>musickey</code> 并写回凭证；<code>refreshIfNeeded</code> 按到期时间或时间间隔触发。</li>
+  <li><code>requestOAuthCodeWithCookies</code> 在发起 authorize 前先调用 <code>throttleUpstream()</code>，与其他上游请求共用同一限速队列。</li>
 </ul>
 
 <h3 id="c4-17">4.17 src/main/api/web-login.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -853,7 +871,7 @@ function runEmbedLogin(): Promise&lt;Credential&gt;;
 </code></pre>
 <ul class="note">
   <li><code>setEmbedBounds</code> 由渲染进程上报的页面坐标驱动 <code>WebContentsView</code> 的创建、定位与首次加载；<code>null</code> 摘除视图。</li>
-  <li><code>openWebLogin</code> 在独立 session 分区中启动登录流程：轮询 Cookie 或捕获 OAuth 回调 code，换取 <code>Credential</code>；不负责创建或定位视图。</li>
+  <li><code>openWebLogin</code> 在独立 session 分区中启动登录流程：先等待 <code>clearStorageData()</code> 完成，再轮询 Cookie 或捕获 OAuth 回调 code，换取 <code>Credential</code>；不负责创建或定位视图。先清理可避免残留 <code>p_skey</code> 在用户扫码前触发换证。</li>
 </ul>
 
 <h3 id="c4-18">4.18 src/main/integration/mpris.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -862,6 +880,7 @@ export function publishState(state: PlayerState | null): void;
 </code></pre>
 <ul class="note">
   <li>媒体控制协议定义见 <a href="PROVIDER.html#p4-4">PROVIDER §4.4</a>；<code>publishState</code> 同步 <code>PlaybackStatus</code> / <code>Metadata</code> / <code>Position</code> / <code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code>；命令接收后的分发与执行见 <a href="#c5-6">§5.6</a>。</li>
+  <li><code>PlaybackStatus</code> / <code>Volume</code> / <code>LoopStatus</code> / <code>Shuffle</code> 只在值变化时写入 MPRIS，<code>Metadata</code> 只在切歌时更新；进度推送不会触发 D-Bus 属性反复变更。</li>
 </ul>
 
 <h3 id="c4-19">4.19 src/main/integration/tray.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -878,7 +897,7 @@ export function updateTray(state: PlayerState | null): void;
 export function destroyTray(): void;
 </code></pre>
 <ul class="note">
-  <li><code>updateTray</code> 同步播放 / 暂停菜单文案、上一首 / 下一首可用状态与 tooltip；无当前歌曲时禁用播放控制。</li>
+  <li><code>updateTray</code> 同步播放 / 暂停菜单文案、上一首 / 下一首可用状态与 tooltip；无当前歌曲时禁用播放控制。菜单只在歌曲 mid 或播放状态变化时重建，tooltip 只在文案变化时写入，避免每 900 ms 的状态推送反复刷新 dbusmenu。</li>
   <li>单击托盘图标只显示主窗口；GNOME 需要 AppIndicator 扩展，初始化失败静默降级。</li>
 </ul>
 
@@ -936,6 +955,7 @@ export function destroyTray(): void;
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
   <li>监听路由变化并关闭歌词 / 评论面板，规则见 <a href="USER.html#u2">USER §2</a>。</li>
   <li>挂载下载抽屉；与歌词 / 评论、播放队列面板互斥。</li>
+  <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 40px</code>，歌名单行省略，文本容器隐藏溢出。</li>
 </ul>
@@ -1080,7 +1100,7 @@ interface PlayerStore {
   <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，播放队列面板只绑定 <code>queue</code>。<code>addNext(song)</code> 只把歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>，不切歌、不写历史；无 <code>current</code> 时直接以该歌曲开始播放。</li>
   <li><code>playNext()</code> 负责手动下一首与自动续播：确定切换到下一首（含列表循环回绕）时，先把原 <code>current</code> 追加到 <code>playHistory</code>，再调用 <code>playAt()</code>；到队尾停止或单曲循环重播不写入历史。<code>playAt()</code> 只做低层定位与加载，不写历史。</li>
   <li><code>startPlaylistPlayback</code> / <code>appendPlaylistQueue</code> / <code>replacePlaylistQueue</code> 维护 <code>queueSource</code> 与 <code>queueBuilding</code>；队列构建由 playlist store 在“歌单快照 → 队列”边界按 <code>playable !== false</code> 过滤，播放器只负责追加 / 替换，不做检测或清理。未完成快照前只允许一次临时快照；最终快照按签名比较后替换，保留手动“下一首播放”的歌曲、当前曲、进度与历史。</li>
-  <li><code>onError</code> 对同一歌曲最多每 30 秒自动刷新一次播放链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”并暂停。当前曲不可播（<code>NO_STREAM</code>）时由播放条沿队列向后尝试到可播或队列空。</li>
+  <li><code>onError</code> 对同一歌曲最多每 30 秒自动刷新一次播放链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”并暂停。当前曲不可播（<code>NO_STREAM</code>）时由播放条沿队列向后尝试，内部计数连续不可播次数；达到 <code>NO_STREAM_SKIP_LIMIT</code> 后停止并提示检查登录 / 风控，<code>playList</code> / <code>playNext</code> / <code>previous</code> / <code>setQuality</code> 与成功加载会清零计数。</li>
   <li><code>seek</code> 在 duration 未知时也直接设置位置；播放中 1.2 秒后若实际位置与目标相差超过 2.5 秒，会再触发一次定位（seek 看门狗），用于兜底连续 Range 定位。</li>
   <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放按洗牌后的 <code>playOrder</code> 进行。</li>
   <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档。</li>
@@ -1221,7 +1241,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>点击封面切换 <code>UiStore.lyricsOpen</code>，打开歌词 / 评论面板；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
-  <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试到可播或队列空，不读取探测结果。</li>
+  <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首失败后停止，不读取探测结果。</li>
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
 </ul>
@@ -1289,7 +1309,7 @@ const emit = defineEmits&lt;{
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
   <li>缓存区提供开关、当前占用与清理；下载区提供目录、容量与剩余空间提示。</li>
   <li><code>audioEngine</code> 为预留 / 未上线字段：当前只保留持久化契约，设置页的自动 / HTML5 / mpv 选项不代表已交付的引擎切换能力；EQ / 响度归一同样未上线。</li>
-  <li>账号区展示登录态、到期时间、续期与退出登录；关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>账号区展示登录态、到期时间、续期与退出登录；窗口区另提供“退出应用”，调用 <code>window.lychee.system.quit()</code>。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
 </ul>
 
 <h3 id="c4-49">4.49 src/renderer/styles/main.css <a class="backlink" href="#c1">文件树</a></h3>
@@ -1310,6 +1330,8 @@ export declare const UPSTREAM_RETRY_ATTEMPTS: number;       // 3
 export declare const UPSTREAM_NETWORK_BACKOFF_MS: number;   // 400 ms
 export declare const UPSTREAM_QUOTA_BACKOFF_MS: number;     // 600 ms
 export declare const MUSICU_BUSY_BACKOFF_MS: number;        // 500 ms
+export declare const UPSTREAM_RATE_LIMIT_PER_SECOND: number; // 4
+export declare const UPSTREAM_RATE_LIMIT_BURST: number;      // 8
 export declare const SEARCH_EMPTY_RETRY_MS: number;         // 350 ms
 export declare const SEARCH_EMPTY_RETRY_COUNT: number;      // 1
 export declare const SEARCH_PAGE_NO_MAX: number;            // 100
@@ -1328,11 +1350,13 @@ export declare const PROBE_CACHE_TTL_MS: number;            // 10 × 60_000 ms
 export declare const PROBE_MAX_SONGS: number;               // = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX
 export declare const PROBE_IDLE_TIMEOUT_MS: number;         // 2000 ms
 export declare const PROBE_IDLE_FALLBACK_MS: number;        // 300 ms
+export declare const PROBE_EMPTY_BATCH_LIMIT: number;       // 2
 export declare const DOWNLOAD_POLL_MS: number;              // 1500 ms
 export declare const PLAYER_STATE_THROTTLE_MS: number;      // 900 ms
 export declare const PLAY_HISTORY_MAX: number;              // 100
 export declare const TOAST_DURATION_MS: number;             // 3600 ms
 export declare const PREVIOUS_RESTART_THRESHOLD_MS: number; // 3000 ms
+export declare const NO_STREAM_SKIP_LIMIT: number;          // 10
 export declare const MPV_BINARY: string;                    // 'mpv'
 export declare const MPV_SOCKET_PREFIX: string;             // 'lychee-mpv'
 export declare const IPC_SONG_MIDS_MAX: number;             // 100
@@ -1358,6 +1382,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li>所有工程常量只在本文件声明；其它模块只 import。源码中是实际赋值，本签名只保留名称与取值。</li>
   <li><code>PROBE_MAX_SONGS</code> 使用 <code>PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX</code> 派生，当前为 1,000,000；修改页大小或页上限时自动跟随。</li>
   <li><code>PROBE_MIDS_MAX</code> / <code>PROBE_VKEY_BATCH</code> 不得大于 <code>IPC_SONG_MIDS_MAX</code>；推荐与页大小 50 对齐，使一个歌单页一次探测、一批 vkey。修改任一值时同步评估其余常量。</li>
+  <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
   <li>已删除 <code>PLAYLIST_CACHE_TTL_MS</code> 与 <code>PLAYLIST_PREFETCH_CONCURRENCY</code>：缓存改为整份快照，分页串行加载且不做预取。</li>
 </ul>
 
@@ -1388,6 +1413,7 @@ export function clearAvailabilityCache(musicid?: string): void;
   <li>探测结果只更新歌单歌曲元数据；不修改播放队列、不改变当前播放。</li>
   <li><code>song.probe</code> 单次上限为 <code>PROBE_MIDS_MAX = 50</code>，与一个 50 首歌单页对齐；渲染层按 50 分批，探测内部固定按 <code>flac</code> 逐档解析最高可用音质。</li>
   <li><code>PROBE_MAX_SONGS</code> 与页大小/页上限共用 <a href="#c4-50">§4.50</a> 的派生常量；缓存按账号隔离，退出登录时清空。</li>
+  <li>登录成功后主进程清空可用性缓存，避免沿用旧会话留下的“不可播”结果；探测请求与其他上游请求共享全局限速。</li>
 </ul>
 
 <h3 id="c4-53">4.53 src/main/api/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1405,7 +1431,7 @@ export function toggleFavorite(songMid: string): Promise&lt;FavoriteState&gt;;
   <li>写入用官网 Web 通道 <code>u6.y.qq.com/cgi-bin/musics.fcg?encoding=ag-1&amp;sign=...</code>，模块 <code>music.musicasset.PlaylistDetailWrite</code>，方法 <code>AddSonglist</code> / <code>DelSonglist</code>，参数为 <code>dirId:201</code> 与 <code>v_songInfo:[{ songId, songType }]</code>。签名与 AES-128-GCM 协议见 <a href="PROVIDER.html#p3-5">PROVIDER §3.5</a>。</li>
   <li><code>songType</code> 必须取歌曲详情的真实值，不能用 <code>0</code> 兜底；错误类型可能返回 80105 或生成用户不可见的隐藏记录。</li>
   <li>写后必须读回确认：业务码成功、状态接口为 true 或总数增加都不单独构成成功条件，还要确认成员可见性（例如后续 <code>CgiGetDiss</code>）；状态读回不一致时抛错并回滚 UI。</li>
-  <li>上游 80105 提示“请退出后重新登录（扫码或 Cookie），以同步网页会话”；1101 表示该歌曲暂不支持收藏；2001 / 104604 做短暂退避重试。</li>
+  <li>上游 80105 提示“请退出后重新登录（扫码或 Cookie），以同步网页会话”；1101 表示该歌曲暂不支持收藏；2001 / 104604 做短暂退避重试。收藏签名写入与普通读取一样先经过全局上游限速。</li>
   <li>成功后使 <code>liked</code> 歌单缓存失效，并通过 <code>playlist.invalidate('liked')</code> 触发已打开歌单立即轮询；失败不刷新。</li>
 </ul>
 
@@ -1665,7 +1691,8 @@ export function parseQrcLyric(text: string, trans: string | null): LyricLine[];
 </code></pre>
 <ul class="note">
   <li>监听歌曲 mid 集合，使用 <code>requestIdleCallback</code>（超时 <code>PROBE_IDLE_TIMEOUT_MS</code>）或 <code>PROBE_IDLE_FALLBACK_MS</code> 调度；按 <code>PROBE_MIDS_MAX = 50</code> 分批调用 <code>song.probe</code>。</li>
-  <li>新一批探测会递增 generation，旧响应不会覆盖新结果；读取失败静默保留未知状态。<code>refresh()</code> 强制重探。</li>
+  <li><code>covered</code> 记录已探测的 mid：歌单追加新页时只探测新增歌曲，不因集合变化重复探测已覆盖部分；探测未完成时再次调度只置 <code>rerun</code>，由当前循环续跑，避免并发探测。</li>
+  <li>连续 <code>PROBE_EMPTY_BATCH_LIMIT</code> 个整批（每批 50 首）都不可播，或探测返回 <code>QUOTA_LIMITED</code> / <code>AUTH_EXPIRED</code> 时暂停本轮探测，避免鉴权 / 风控异常时继续轰炸上游；登录账号变化时清空已探测集合、结果与暂停状态并重新调度。新一批探测会递增 generation，旧响应不会覆盖新结果；其他读取失败静默保留未知状态。<code>refresh()</code> 强制重探。</li>
 </ul>
 
 <h3 id="c4-68">4.68 src/renderer/components/PlaylistEditDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1838,13 +1865,18 @@ app::requestSingleInstanceLock()
             │           ├── api/song::fetchTrack(mid)
             │           │   └── api/client::musicu('music.pf_song_detail_svr', 'get_song_detail_yqq', ...)
             │           ├── api/song::requestQuality(tracks, quality)
-            │           │   └── api/client::musicu('vkey.GetVkeyServer', 'CgiGetVkey', ...)
+            │           │   ├── api/client::musicu('vkey.GetVkeyServer', 'CgiGetVkey', ...)
+            │           │   └── 判断 104009 → api/client::musicu('music.vkey.GetVkey', 'UrlGetVkey', ...)
             │           ├── 判断 purl 为空 → 下一档重试
-            │           ├── 判断全部档位均无 purl → api/user::isVipUser()
-            │           ├── 判断 VIP → 抛出 NO_STREAM（VIP：“当前内容已下架”）
+            │           ├── 判断 result 全为 104004 → 抛出 UPSTREAM_NETWORK
+            │           ├── 判断 result 全为 104013 → 抛出 NO_PERMISSION
+            │           ├── 判断 result 全为 104003 → 按登录态 / VIP / 数字专辑生成 NO_STREAM
+            │           ├── 判断无可用 result → api/user::isVipUser()
+            │           ├── 判断 VIP → 抛出 NO_STREAM（通用下架 / 授权提示）
             │           ├── api/song::buildStreamUrl(purl)
             │           └── media/audio-protocol::audioStreamUrl(url, mid, quality)
-            ├── 判断 result.url === null → composables/toast::useToast().error(NO_STREAM)
+            ├── 判断 result.url === null → 计数连续不可播
+            ├── 判断计数达到 NO_STREAM_SKIP_LIMIT → 停止并提示
             ├── audio/engine::loadAndPlay(lychee-audio://stream/&lt;token&gt;)
             └── window.lychee.player.sendState(state)
                 └── ipcMain.on('player:state')
@@ -1853,9 +1885,9 @@ app::requestSingleInstanceLock()
 </code></pre>
 <ul class="note">
   <li>双击、播放全部、单曲播放都走 <code>playList</code>（替换队列）；“下一首播放”走 <code>addNext</code>，只把歌曲插入 <code>playOrder</code> 当前项之后，不改变 <code>current</code>；无 <code>current</code> 时直接以该歌曲开始播放。队列模型见 <a href="#c4-29">§4.29</a>，用户可见规则见 <a href="USER.html#u1">USER §1</a>。</li>
-  <li>当前曲不可播时，播放条沿队列向后尝试到可播或队列空；其他加载失败保留当前歌曲与播放条，<code>status = stopped</code>，不自动跳下一首、不自动回退上一首。</li>
+  <li>当前曲不可播时，播放条沿队列向后尝试；连续 <code>NO_STREAM_SKIP_LIMIT</code> 首不可播后停止自动切歌并提示，其他加载失败保留当前歌曲与播放条，<code>status = stopped</code>，不自动跳下一首、不自动回退上一首。</li>
   <li>切换歌曲前先 <code>audio/engine::stop()</code>，清空旧音源，避免旧音频的时间更新影响上一首 / 下一首判断。</li>
-  <li>全部档位无链接时按 VIP 状态生成提示；VIP 检测见 <a href="#c4-13">§4.13</a>。</li>
+  <li>全部档位无链接时优先按 vkey <code>result</code> 生成提示，无法判断时再按 VIP 状态；VIP 检测见 <a href="#c4-13">§4.13</a>，分类规则见 <a href="#c4-11">§4.11</a>。</li>
   <li>音频流加载边界见 <a href="USER.html#u3-1">USER §3.1</a>；缓存命中走本地协议，未命中由主进程取流并写缓存。</li>
   <li>音质回退在 <code>api/song.ts</code> 内部完成；实际档位随 <code>UrlResult.quality</code> 返回并写入播放状态。</li>
   <li>音频元素报 <code>error</code> 时，<code>player.onError</code> 对同一歌曲最多每 30 秒重新取一次链接，并从原 <code>positionMs</code> 继续；再次失败才提示“音频加载失败，可能链接已过期”并置为暂停。该恢复路径不改变当前歌曲或队列。</li>
@@ -1942,6 +1974,11 @@ app::requestSingleInstanceLock()
 </code></pre>
 
 <h4 id="c5-8-2">5.8.2 应用退出</h4>
+<pre><code>views/SettingsView::quitApp() / views/App::quitApp() / integration/tray 菜单
+└── preload::ipcRenderer.send('app.quit')
+    └── ipc::ipcMain.on('app.quit')
+        └── app.quit()
+</code></pre>
 <pre><code>app.on('before-quit')
 ├── index::clearInterval(refreshTimer)
 ├── integration/mpris::publishState(null)
@@ -1952,7 +1989,7 @@ app::requestSingleInstanceLock()
 <ul class="note">
   <li><code>before-quit</code> 先将 <code>quitting</code> 置为 <code>true</code>，避免关闭窗口被 <code>closeToTray</code> 拦截为隐藏。</li>
   <li>退出路径不等待 <code>saveSettings</code> 完成；凭证默认保留，清除仅由 <code>login.logout()</code> 触发。</li>
-  <li><code>closeToTray</code> 生效时关闭窗口仅隐藏；<code>before-quit</code> 只在托盘退出或应用退出时触发。</li>
+  <li><code>closeToTray</code> 生效时关闭窗口仅隐藏；<code>before-quit</code> 只在托盘退出、侧栏 / 设置页退出或应用退出时触发。</li>
 </ul>
 
 <h3 id="c5-9">5.9 歌词与评论</h3>

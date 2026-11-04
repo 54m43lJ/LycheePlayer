@@ -141,6 +141,10 @@
     <td>先尝试请求档位；该档位无 <code>purl</code> 时，再按 <code>flac → 320k → 128k</code> 顺序尝试其余档位（跳过已尝试的请求档位）；全部档位无链接时返回 <code>NO_STREAM</code>。</td>
   </tr>
   <tr>
+    <td>限速</td>
+    <td>应用侧所有主动发出的上游请求共用一个全局令牌桶（持续速率与突发容量见 <a href="CORE.html#c4-50">CORE §4.50</a>），OAuth authorize 与收藏签名写入同样受控；批量探测按批串行，不并发轰炸。</td>
+  </tr>
+  <tr>
     <td>重试</td>
     <td>HTTP 429、HTTP 非 2xx 与上游瞬时繁忙码（<code>2001</code> / <code>104604</code>）做短退避重试；连接失败 / 超时不重试，直接映射为 <code>UPSTREAM_NETWORK</code>。JSON 解析失败、响应结构缺失与未知错误码不重试，直接映射为 <code>UPSTREAM_CHANGED</code>。</td>
   </tr>
@@ -198,7 +202,8 @@
 <ul class="note">
   <li>先通过 <code>get_song_detail_yqq</code> 获取 <code>media_mid</code>，再按请求音质拼出 vkey 的 <code>filename</code>。</li>
   <li>vkey 请求使用进程级稳定 <code>guid</code>、歌曲 <code>songmid</code> 数组、对应 <code>filename</code> 数组与账号 <code>uin</code>。</li>
-  <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。</li>
+  <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。<code>result</code> 同时返回授权结果码，应用会保留每个档位最后一次结果，用于全批量失败时区分权限、链路与下架。</li>
+  <li>经典入口为 <code>vkey.GetVkeyServer / CgiGetVkey</code>；该入口返回 <code>104009</code>（<code>invalidq</code>）时，应用会再尝试当前维护的 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。两个入口都返回 <code>104009</code> 时按网络 / VPN / 代理出口问题处理，不再当作接口结构变化或单曲下架。</li>
   <li>音频流端点与 vkey / purl 契约不变；应用侧加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</li>
   <li>上游音频流必须兼容 Range：应用会把浏览器的 <code>Range</code> 原样转发，并优先使用上游返回的 <code>206</code> / <code>Content-Range</code> / <code>Accept-Ranges</code>。若上游忽略 Range 返回 200，代理按完整响应处理并缓存；局部 206 不缓存。</li>
   <li>vkey 失效或流中断时，播放器对同一歌曲最多每 30 秒自动重新取一次链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”。<code>PROVIDER</code> 不再承诺“不会自动重新获取链接”。</li>
@@ -419,7 +424,10 @@ interface QqLoginRequest {
   <tr><td><code>80105</code></td><td><code>UPSTREAM_CHANGED</code></td><td>收藏签名通道缺少网页会话；提示退出后重新登录（扫码或 Cookie），以同步 <code>webCookies</code>。</td></tr>
   <tr><td><code>1101</code></td><td><code>UPSTREAM_CHANGED</code></td><td>该歌曲暂不支持收藏；保留原状态并提示。</td></tr>
   <tr><td><code>100001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；不重试，直接提示稍后再试。</td></tr>
-  <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>当前账号无该音质权限；播放链接流程继续回退。</td></tr>
+  <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>无权限（未登录、账号等级不足或播放授权异常）；播放链接流程继续回退，全部档位失败后按登录态、VIP 与数字专辑标记生成文案。</td></tr>
+  <tr><td><code>104004</code></td><td><code>UPSTREAM_NETWORK</code></td><td>vkey 获取失败；不当作下架，提示稍后重试。</td></tr>
+  <tr><td><code>104013</code></td><td><code>NO_PERMISSION</code></td><td>播放设备受限；提示当前设备无法播放。</td></tr>
+  <tr><td><code>104009</code></td><td><code>UPSTREAM_NETWORK</code></td><td><code>invalidq</code>：上游拒绝请求，常见于 IP / VPN / 代理出口或临时风控；提示检查网络 / 代理或稍后重试，不重试轰炸。</td></tr>
   <tr><td>写操作权限拒绝</td><td><code>NO_PERMISSION</code></td><td>当前账号无权编辑该歌单或收藏该内容；提示不可编辑。</td></tr>
   <tr><td><code>20261</code> / <code>20271</code> / <code>20272</code> / <code>20274</code> / <code>20277</code> / <code>20278</code> / <code>20279</code> / <code>20450</code></td><td><code>AUTH_EXPIRED</code></td><td>登录参数、验证码、账号绑定、账号受限或封禁；提示具体原因或重新登录。</td></tr>
   <tr><td>HTTP <code>429</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；退避重试。</td></tr>
@@ -602,7 +610,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqVkeyData</code></td>
     <td><code>midurlinfo[].songmid</code> · <code>purl</code> · <code>result</code></td>
-    <td><code>purl</code> 为空表示该档位无链接；当前实现不消费 <code>result</code>。vkey 请求按应用批量 50 分块。</td>
+    <td><code>purl</code> 为空表示该档位无链接；<code>result</code> 用于区分 104003 / 104004 / 104013，全部档位失败时决定内部错误码与文案。响应级 <code>retcode</code> / <code>msg</code> 也会被读取：<code>104009</code> 触发备用入口并最终按网络 / 代理问题处理。vkey 请求按应用批量 50 分块。</td>
   </tr>
   <tr>
     <td><code>QqFavoriteData</code></td>

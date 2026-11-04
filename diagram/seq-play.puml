@@ -13,8 +13,9 @@ alt 有可播链接
   QQ --> APP : 音频流地址
   APP --> U : 开始播放
   APP --> DESKTOP : 发布播放状态
-else 无可播链接
-  QQ --> APP : 无链接
-  APP --> U : 提示不可播
+else 无可播链接 / 上游拒绝
+  QQ --> APP : 无链接 / 104009
+  APP --> U : 提示不可播或检查网络
+  APP --> U : 连续 10 首不可播时停止自动切歌
 end
 @enduml
