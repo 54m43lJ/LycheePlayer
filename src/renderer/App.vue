@@ -37,6 +37,10 @@ function onLogout(): void {
   recommend.reset()
 }
 
+function quitApp(): void {
+  window.lychee.system.quit()
+}
+
 onMounted(() => {
   window.addEventListener('lychee:logout', onLogout)
   void (async () => {
@@ -115,6 +119,10 @@ watch(
           <AppIcon name="settings" :size="18" />
           <span class="nav-text">设置</span>
         </RouterLink>
+        <button class="nav-item" type="button" title="退出 Lychee Player" @click="quitApp()">
+          <AppIcon name="power" :size="18" />
+          <span class="nav-text">退出</span>
+        </button>
       </nav>
 
       <div class="sidebar-foot">

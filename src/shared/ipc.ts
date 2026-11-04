@@ -30,6 +30,10 @@ import type {
 } from './types'
 
 export interface LycheeApi {
+  system: {
+    /** 请求主进程退出应用；不受“关闭到托盘”影响。 */
+    quit(): void
+  }
   flags: {
     get(): Promise<IpcResult<FlagsFile>>
     save(content: string): Promise<IpcResult<null>>

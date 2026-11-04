@@ -15,6 +15,10 @@ export const UPSTREAM_NETWORK_BACKOFF_MS = 400
 export const UPSTREAM_QUOTA_BACKOFF_MS = 600
 /** 瞬时繁忙码（2001 / 104604）重试的基础退避。推荐值 500 ms。 */
 export const MUSICU_BUSY_BACKOFF_MS = 500
+/** 上游请求持续速率上限（每秒）。推荐值 4。 */
+export const UPSTREAM_RATE_LIMIT_PER_SECOND = 4
+/** 上游请求突发令牌容量。推荐值 8。 */
+export const UPSTREAM_RATE_LIMIT_BURST = 8
 
 // ---------- 搜索 ----------
 
@@ -66,6 +70,8 @@ export const PROBE_MAX_SONGS = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX
 export const PROBE_IDLE_TIMEOUT_MS = 2000
 /** 无 requestIdleCallback 时的探测延迟。推荐值 300 ms。 */
 export const PROBE_IDLE_FALLBACK_MS = 300
+/** 连续整批不可播的批次数上限；达到后停止本轮探测。推荐值 2。 */
+export const PROBE_EMPTY_BATCH_LIMIT = 2
 /** 下载中心进度轮询间隔。推荐值 1500 ms。 */
 export const DOWNLOAD_POLL_MS = 1500
 
@@ -79,6 +85,8 @@ export const PLAY_HISTORY_MAX = 100
 export const TOAST_DURATION_MS = 3600
 /** 判断“回到开头”而非上一首的播放位置。推荐值 3000 ms。 */
 export const PREVIOUS_RESTART_THRESHOLD_MS = 3000
+/** 连续无法获取播放链接的歌曲数上限；达到后停止自动切歌。推荐值 10。 */
+export const NO_STREAM_SKIP_LIMIT = 10
 /** mpv 可执行文件名。 */
 export const MPV_BINARY = 'mpv'
 /** mpv IPC socket 文件名前缀。 */

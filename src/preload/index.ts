@@ -46,6 +46,9 @@ function decryptQrc(ciphertext: string): string {
 }
 
 const api: LycheeApi = {
+  system: {
+    quit: () => ipcRenderer.send('app.quit')
+  },
   flags: {
     get: () => invoke<FlagsFile>('flags.get'),
     save: (content: string) => invoke<null>('flags.save', content)

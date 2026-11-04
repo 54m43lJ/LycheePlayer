@@ -3,6 +3,8 @@ import {
   MUSICU_BUSY_BACKOFF_MS,
   UPSTREAM_NETWORK_BACKOFF_MS,
   UPSTREAM_QUOTA_BACKOFF_MS,
+  UPSTREAM_RATE_LIMIT_BURST,
+  UPSTREAM_RATE_LIMIT_PER_SECOND,
   UPSTREAM_RETRY_ATTEMPTS,
   UPSTREAM_TIMEOUT_MS
 } from '../../shared/constants'
@@ -17,12 +19,14 @@ const GUID = String(Math.floor(1_000_000_000 + Math.random() * 8_000_000_000))
 export class UpstreamError extends Error {
   readonly code: ErrorCode
   readonly retryable: boolean
+  readonly upstreamCode?: number
 
-  constructor(code: ErrorCode, message: string, retryable = false) {
+  constructor(code: ErrorCode, message: string, retryable = false, upstreamCode?: number) {
     super(message)
     this.name = 'UpstreamError'
     this.code = code
     this.retryable = retryable
+    this.upstreamCode = upstreamCode
   }
 }
 
@@ -71,12 +75,41 @@ function cookieHeader(credential: Credential | null): Record<string, string> {
   }
 }
 
+// 全局令牌桶：平滑探测 / 连续失败切歌等场景的请求突发，避免触发上游风控。
+const RATE_LIMIT_INTERVAL_MS = 1000 / UPSTREAM_RATE_LIMIT_PER_SECOND
+let rateTokens = UPSTREAM_RATE_LIMIT_BURST
+let rateUpdatedAt = Date.now()
+let rateQueue: Promise<void> = Promise.resolve()
+
+/** 每个实际发往 QQ 音乐的上游请求都要先取得一个令牌。 */
+export function throttleUpstream(): Promise<void> {
+  const task = rateQueue.then(async () => {
+    for (;;) {
+      const now = Date.now()
+      rateTokens = Math.min(
+        UPSTREAM_RATE_LIMIT_BURST,
+        rateTokens + (now - rateUpdatedAt) / RATE_LIMIT_INTERVAL_MS
+      )
+      rateUpdatedAt = now
+      if (rateTokens >= 1) {
+        rateTokens -= 1
+        return
+      }
+      await sleep(Math.max(1, Math.ceil((1 - rateTokens) * RATE_LIMIT_INTERVAL_MS)))
+    }
+  })
+  rateQueue = task.catch(() => undefined)
+  return task
+}
+
 async function fetchOnce(req: UpstreamRequest): Promise<Response> {
   const credential = req.credential === undefined ? getCredential() : req.credential
   const url = new URL(req.path, req.host)
   for (const [key, value] of Object.entries(req.params)) {
     url.searchParams.set(key, value)
   }
+
+  await throttleUpstream()
 
   let response: Response
   try {
@@ -164,6 +197,13 @@ interface MusicuResponse<T> {
   }
 }
 
+/** 部分接口把具体错误放在 data.retcode，而 req_0.code 统一为 1000。 */
+function dataErrorCode(data: unknown): number | null {
+  if (!data || typeof data !== 'object') return null
+  const code = Number((data as Record<string, unknown>).retcode)
+  return Number.isFinite(code) && code !== 0 ? code : null
+}
+
 export interface MusicuOptions {
   /** 附加/覆盖 comm；传 false 表示完全不带 comm。 */
   comm?: Record<string, unknown> | false
@@ -204,7 +244,9 @@ export async function musicu<T>(
     })
 
     const node = response.req_0
-    const code = response.code !== 0 ? response.code : (node?.code ?? 0)
+    const baseCode = response.code !== 0 ? response.code : (node?.code ?? 0)
+    const specificCode = dataErrorCode(node?.data)
+    const code = baseCode === 1000 && specificCode !== null ? specificCode : baseCode
     if (code !== 0) {
       // 2001 / 104604 为上游瞬时繁忙，短退避后重试；其余错误码直接映射。
       if ((code === 2001 || code === 104604) && attempt < UPSTREAM_RETRY_ATTEMPTS - 1) {
@@ -227,13 +269,27 @@ export async function musicu<T>(
 
 export function mapUpstreamCode(code: number, context: string): UpstreamError {
   if (code === 1000 || code === 104401 || code === 104400) {
-    return new UpstreamError('AUTH_EXPIRED', '登录凭证已过期')
+    return new UpstreamError('AUTH_EXPIRED', '登录凭证已过期', false, code)
+  }
+  if (code === 104009) {
+    return new UpstreamError(
+      'UPSTREAM_NETWORK',
+      'QQ 音乐拒绝了播放链接请求（104009），请检查网络 / VPN / 代理出口后重试',
+      false,
+      code
+    )
   }
   if (code === 104604 || code === 2001 || code === 100001) {
     return new UpstreamError('QUOTA_LIMITED', '上游限流或繁忙')
   }
   if (code === 104003) {
-    return new UpstreamError('NO_STREAM', '当前账号无该音质权限')
+    return new UpstreamError('NO_STREAM', '当前账号无该音质权限', false, code)
+  }
+  if (code === 104004) {
+    return new UpstreamError('UPSTREAM_NETWORK', '播放链接获取失败（104004），请稍后重试', false, code)
+  }
+  if (code === 104013) {
+    return new UpstreamError('NO_PERMISSION', '当前设备无法播放该内容（104013）', false, code)
   }
   if (code === 403) {
     return new UpstreamError('NO_PERMISSION', '当前账号无权执行该操作')

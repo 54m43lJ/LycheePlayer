@@ -1,4 +1,4 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron'
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import type {
   AuthStatus,
@@ -124,6 +124,9 @@ export function sendPlayerCommand(command: MprisCommand): void {
 }
 
 export function registerIpc(): void {
+  // ---------- application ----------
+  ipcMain.on('app.quit', () => app.quit())
+
   // ---------- flags ----------
   handle('flags.get', async () => readFlagsFile())
   handle('flags.save', async (content: unknown) => {
@@ -144,15 +147,19 @@ export function registerIpc(): void {
     }
     const credential = await loginWithCookie(cookie)
     await saveCredential(credential)
+    // 重新登录后旧的不可播缓存可能来自失效会话，必须丢弃重探。
+    clearAvailabilityCache()
     return currentAuthStatus()
   })
   handle('login.openWebLogin', async () => {
     const credential = await openWebLogin()
     await saveCredential(credential)
+    clearAvailabilityCache()
     return currentAuthStatus()
   })
   handle('login.refreshSession', async () => {
     await refreshSession()
+    clearAvailabilityCache()
     return currentAuthStatus()
   })
   handle('login.logout', async () => {

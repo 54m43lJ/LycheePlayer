@@ -156,9 +156,10 @@ export function openWebLogin(): Promise<Credential> {
   return active
 }
 
-function runEmbedLogin(): Promise<Credential> {
+async function runEmbedLogin(): Promise<Credential> {
   const partitionSession = session.fromPartition(LOGIN_EMBED_PARTITION)
-  void clearLoginSession(partitionSession)
+  // 先清空旧 session，避免残留 p_skey 让轮询在用户扫码前就发起 OAuth 换证。
+  await clearLoginSession(partitionSession)
 
   return new Promise<Credential>((resolve, reject) => {
     let settled = false

@@ -71,7 +71,8 @@ const ICONS: Record<string, string[]> = {
   video: ['M4 6h11v12H4z', 'M15 10l5-3v10l-5-3'],
   fullscreen: ['M4 9V4h5', 'M20 9V4h-5', 'M4 15v5h5', 'M20 15v5h-5'],
   edit: ['M4 20h4l11-11-4-4L4 16v4z', 'M13.5 6.5l4 4'],
-  speed: ['M12 20a8 8 0 1 1 8-8', 'M12 12l4-4', 'M4 20h16']
+  speed: ['M12 20a8 8 0 1 1 8-8', 'M12 12l4-4', 'M4 20h16'],
+  power: ['M12 4v8', 'M7.5 6.5a7 7 0 1 0 9 0']
 }
 
 const FILLED = new Set(['play', 'pause', 'previous', 'next', 'music', 'heart-filled'])

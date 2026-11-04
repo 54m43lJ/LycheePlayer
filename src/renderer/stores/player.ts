@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { computed, ref, toRaw } from 'vue'
 import type { MprisCommand, PlayerState, Quality, Song } from '@shared/types'
 import {
+  NO_STREAM_SKIP_LIMIT,
   PLAYER_STATE_THROTTLE_MS,
   PLAY_HISTORY_MAX,
   PREVIOUS_RESTART_THRESHOLD_MS
@@ -54,6 +55,7 @@ export const usePlayerStore = defineStore('player', () => {
   let loadToken = 0
   let lastSentAt = 0
   let lastErrorRetry = { songMid: '', at: 0 }
+  let noStreamStreak = 0
   let seekWatch: number | null = null
   let engine: AudioEngine
   let engineKind: 'html5' | 'mpv' = 'html5'
@@ -253,6 +255,7 @@ export const usePlayerStore = defineStore('player', () => {
       quality.value = result.quality
       await engine.loadAndPlay(result.url)
       if (token !== loadToken) return
+      noStreamStreak = 0
       if (resumeAtMs > 0) seek(resumeAtMs)
       status.value = 'playing'
       sendState()
@@ -260,7 +263,16 @@ export const usePlayerStore = defineStore('player', () => {
       if (token !== loadToken) return
       if (err instanceof IpcCallError && err.code === 'NO_STREAM') {
         playable.value = false
-        toast.error(describeError(err))
+        noStreamStreak += 1
+        if (noStreamStreak >= NO_STREAM_SKIP_LIMIT) {
+          status.value = 'stopped'
+          toast.error(
+            `连续 ${NO_STREAM_SKIP_LIMIT} 首无法播放，已停止。可能是登录失效或触发风控，请重新登录或稍后重试。`
+          )
+          sendState()
+          return
+        }
+        if (noStreamStreak === 1) toast.error(describeError(err))
         if (queue.value.length > 0) {
           loading.value = false
           advance(false, false)
@@ -286,6 +298,7 @@ export const usePlayerStore = defineStore('player', () => {
   /** 双击、单曲播放与“播放全部”都替换播放顺序；startIndex 成为当前歌曲。 */
   function playList(songs: Song[], startIndex = 0): void {
     if (songs.length === 0) return
+    noStreamStreak = 0
     const start = Math.min(Math.max(0, startIndex), songs.length - 1)
     playOrder.value = songs.slice()
     index.value = start
@@ -298,6 +311,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 从歌单开始播放：记录队列来源，后续由视图用可用性快照补齐队列。 */
   function startPlaylistPlayback(song: Song, source: QueueSource): void {
+    noStreamStreak = 0
     playOrder.value = [song]
     index.value = 0
     playHistory.value = []
@@ -441,6 +455,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 手动 / 自动续播到下一首；列表循环回绕，队尾停止。 */
   function playNext(): void {
+    noStreamStreak = 0
     if (mode.value === 'repeat-one') {
       seek(0)
       void resume()
@@ -451,6 +466,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   function previous(): void {
     if (!current.value) return
+    noStreamStreak = 0
     if (positionMs.value > PREVIOUS_RESTART_THRESHOLD_MS) {
       seek(0)
       return
@@ -509,6 +525,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 手动切换音质：重载当前曲目，实际音质以上游回退结果为准。 */
   function setQuality(nextQuality: Quality): void {
+    noStreamStreak = 0
     requestedQuality.value = nextQuality
     if (current.value) {
       void loadAndPlay(current.value, nextQuality)

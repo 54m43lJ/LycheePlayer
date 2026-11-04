@@ -197,6 +197,10 @@ async function refreshSession(): Promise<void> {
   }
 }
 
+function quitApp(): void {
+  window.lychee.system.quit()
+}
+
 onMounted(() => {
   void loadFlags()
   void loadStorage()
@@ -259,6 +263,16 @@ onMounted(() => {
                 aria-label="切换关闭到托盘"
                 @click="toggleCloseToTray()"
               />
+            </div>
+            <div class="setting-row">
+              <div>
+                <div class="setting-name">退出应用</div>
+                <div class="setting-desc">不受“关闭到托盘”影响，直接结束进程</div>
+              </div>
+              <button class="btn ghost small" @click="quitApp()">
+                <AppIcon name="power" :size="14" />
+                退出
+              </button>
             </div>
           </div>
         </section>

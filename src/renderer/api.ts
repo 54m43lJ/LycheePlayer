@@ -26,7 +26,14 @@ export function describeError(error: unknown): string {
       NO_PERMISSION: '当前账号无权执行该操作',
       INTERNAL: '主进程内部错误'
     }
-    if (error.code === 'NO_STREAM' && error.message) return error.message
+    if (
+      error.message &&
+      (error.code === 'NO_STREAM' ||
+        error.code === 'UPSTREAM_NETWORK' ||
+        error.code === 'QUOTA_LIMITED')
+    ) {
+      return error.message
+    }
     return hints[error.code] ?? error.message
   }
   return error instanceof Error ? error.message : String(error)

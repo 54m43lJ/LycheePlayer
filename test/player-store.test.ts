@@ -109,4 +109,28 @@ describe('player queue', () => {
 
     expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
   })
+
+  it('stops skipping after ten consecutive NO_STREAM results', async () => {
+    const getUrls = vi.fn(() =>
+      Promise.resolve({
+        ok: false as const,
+        error: { code: 'NO_STREAM' as const, message: '当前内容已下架' }
+      })
+    )
+    ;(window as unknown as { lychee: { song: { getUrls: typeof getUrls } } }).lychee.song.getUrls =
+      getUrls
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    const songs = Array.from({ length: 15 }, (_, index) => song(`${index + 1}`, `s${index + 1}`))
+
+    player.playList(songs, 0)
+
+    await vi.waitFor(() => {
+      expect(player.index).toBe(9)
+      expect(player.status).toBe('stopped')
+      expect(player.loading).toBe(false)
+    })
+    expect(getUrls).toHaveBeenCalledTimes(10)
+    expect(player.playOrder.map((item) => item.songMid)).toHaveLength(15)
+  })
 })

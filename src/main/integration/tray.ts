@@ -13,6 +13,8 @@ export interface TrayActions {
 let tray: Tray | null = null
 let actions: TrayActions | null = null
 let lastState: PlayerState | null = null
+let lastTooltip = ''
+let lastMenuKey = ''
 
 function iconPath(): string {
   return app.isPackaged
@@ -38,12 +40,18 @@ function buildMenu(): Menu {
   ])
 }
 
+function menuKey(state: PlayerState | null): string {
+  return `${state?.song?.songMid ?? ''}|${state?.status ?? 'stopped'}`
+}
+
 export function initTray(handlers: TrayActions): void {
   try {
     actions = handlers
     const image = nativeImage.createFromPath(iconPath()).resize({ width: 22, height: 22 })
     tray = new Tray(image)
-    tray.setToolTip('Lychee Player')
+    lastTooltip = 'Lychee Player'
+    lastMenuKey = menuKey(null)
+    tray.setToolTip(lastTooltip)
     tray.setContextMenu(buildMenu())
     tray.on('click', () => actions?.onShow())
   } catch {
@@ -51,18 +59,22 @@ export function initTray(handlers: TrayActions): void {
   }
 }
 
-/** 同步菜单文案、可用状态与 tooltip；无当前歌曲时禁用播放控制。 */
+/** 同步菜单文案、可用状态与 tooltip；只在歌曲或播放状态变化时重建菜单。 */
 export function updateTray(state: PlayerState | null): void {
   lastState = state
   if (!tray) return
   const song = state?.song
-  if (song) {
-    const singer = song.singers.map((item) => item.name).join(' / ')
-    tray.setToolTip(`${song.name}${singer ? ` — ${singer}` : ''}`)
-  } else {
-    tray.setToolTip('Lychee Player')
+  const singer = song ? song.singers.map((item) => item.name).join(' / ') : ''
+  const tooltip = song ? `${song.name}${singer ? ` — ${singer}` : ''}` : 'Lychee Player'
+  if (tooltip !== lastTooltip) {
+    lastTooltip = tooltip
+    tray.setToolTip(tooltip)
   }
-  tray.setContextMenu(buildMenu())
+  const key = menuKey(state)
+  if (key !== lastMenuKey) {
+    lastMenuKey = key
+    tray.setContextMenu(buildMenu())
+  }
 }
 
 export function destroyTray(): void {
@@ -70,4 +82,6 @@ export function destroyTray(): void {
   tray = null
   actions = null
   lastState = null
+  lastTooltip = ''
+  lastMenuKey = ''
 }

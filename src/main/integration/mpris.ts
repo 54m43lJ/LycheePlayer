@@ -8,6 +8,10 @@ type LoopStatus = 'None' | 'Track' | 'Playlist'
 let player: MprisPlayer | null = null
 let lastState: PlayerState | null = null
 let currentTrack = ''
+let publishedStatus: ReturnType<typeof playbackStatus> | null = null
+let publishedVolume: number | null = null
+let publishedLoopStatus: LoopStatus | null = null
+let publishedShuffle: boolean | null = null
 
 function albumArt(state: PlayerState): string {
   const mid = state.song?.album.mid
@@ -103,16 +107,32 @@ export function publishState(state: PlayerState | null): void {
   lastState = state
   if (!player) return
 
-  player.playbackStatus = playbackStatus(state)
+  // 只在属性真正变化时写入，避免播放进度节流推送导致 D-Bus 菜单反复刷新。
+  const status = playbackStatus(state)
+  if (status !== publishedStatus) {
+    player.playbackStatus = status
+    publishedStatus = status
+  }
   if (!state || !state.song) {
-    currentTrack = ''
-    player.metadata = {}
+    if (currentTrack) {
+      currentTrack = ''
+      player.metadata = {}
+    }
     return
   }
 
-  player.volume = state.volume
-  player.loopStatus = state.loopStatus
-  player.shuffle = state.shuffle
+  if (state.volume !== publishedVolume) {
+    player.volume = state.volume
+    publishedVolume = state.volume
+  }
+  if (state.loopStatus !== publishedLoopStatus) {
+    player.loopStatus = state.loopStatus
+    publishedLoopStatus = state.loopStatus
+  }
+  if (state.shuffle !== publishedShuffle) {
+    player.shuffle = state.shuffle
+    publishedShuffle = state.shuffle
+  }
 
   if (currentTrack !== state.song.songMid) {
     currentTrack = state.song.songMid

@@ -1,7 +1,12 @@
 import type { Credential } from '../../shared/types'
 import { OAUTH_TIMEOUT_MS, SESSION_REFRESH_AHEAD_MS, SESSION_REFRESH_FALLBACK_MS } from '../../shared/constants'
 import { getCredential, saveCredential } from '../credential'
-import { mapUpstreamCode, UpstreamError, upstreamRequest } from './client'
+import {
+  mapUpstreamCode,
+  throttleUpstream,
+  UpstreamError,
+  upstreamRequest
+} from './client'
 import { hash33 } from './hash'
 
 const USER_AGENT =
@@ -45,6 +50,7 @@ export async function requestOAuthCodeWithCookies(
     ui: crypto.randomUUID()
   })
 
+  await throttleUpstream()
   const authorizeResponse = await fetch(authorizeUrl, {
     method: 'POST',
     redirect: 'manual',
