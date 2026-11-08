@@ -715,3 +715,35 @@
 | `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录旧详情失败返回 `null`、`fetchSingerProfile` 兜底、名称回退歌曲歌手名、头像与计数降级规则。 |
 | `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 不动 | 页面结构与交互不变，仅修复上游数据源。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 接口验证补“旧详情接口可能返回 code -1，需使用 SingerInfoInter 兜底”。 |
+
+### 4.12 歌手页空闲时连续出现 104009 播放链接错误
+
+问题描述：用户停在歌手页、没有播放任何歌曲时，控制台仍连续输出 `[ipc] UPSTREAM_NETWORK: QQ 音乐拒绝了播放链接请求（104009）…`。
+
+排查结论：该错误只可能来自“取播放链接”链路，而歌手页本身不播放、也不探测可用性。真正来源是上一个歌单页的可用性探测：
+
+- `PlaylistView` 使用 `useAvailability`，在 `requestIdleCallback` 中延迟调用 `song.probe`；
+- 跳转到歌手页时，组件卸载但没有取消已排队的 idle 回调，也没有让 `generation` 失效，导致探测在歌手页继续执行；
+- `probeAvailability` 用 `resolveStreamUrls(..., 'flac')` 取链接：`vkey.GetVkeyServer.CgiGetVkey` 返回 104009 后会回退到 `music.vkey.GetVkey.UrlGetVkey`，两个接口都拒绝时抛出 `UPSTREAM_NETWORK`；
+- 原逻辑只在 `QUOTA_LIMITED` / `AUTH_EXPIRED` 时暂停，网络类失败不会暂停；如果歌单在探测期间继续更新，`rerun` 还会让同一轮探测再跑一次，于是出现多条相同日志；
+- 主进程 `envelope()` 默认记录所有 IPC 错误，所以背景探测失败也会以 `[ipc]` 形式刷屏。
+
+解决方法：
+- `useAvailability` 注册 `onScopeDispose`：组件卸载时递增 `generation` 并取消待执行的 idle / timeout，已发出的请求结果也不再落入状态；
+- 探测遇到 `UPSTREAM_NETWORK`（含 104009）时同样置 `suspended`，停止后续批次与 `rerun`，避免继续轰炸上游；
+- 为 IPC 注册增加 `{ silent: true }` 选项，`song.probe` 使用静默模式：失败仍返回给渲染层按未知状态处理，但不再输出容易误导的 `[ipc]` 错误日志；
+- 不影响用户主动播放失败时的错误提示与日志。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 43 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.65 `composables/availability.ts` | 改 | 补 `onScopeDispose` 取消调度并使 generation 失效；`UPSTREAM_NETWORK` 与限流 / 鉴权异常一样暂停探测。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | `handle` 增加 `{ silent?: boolean }`；`song.probe` 失败不写 IPC 错误日志。 |
+| `USER.html` | §5.3 错误与通知 | 不动 | 背景探测仍静默处理，不新增用户可见提示。 |
+| `EVOLVE.md` | #5 歌词 / 评论或 #4 歌手页 | 不动 | 属于可用性探测的生命周期修复，不改变产品交互。 |
