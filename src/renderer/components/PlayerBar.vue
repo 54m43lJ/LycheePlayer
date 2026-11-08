@@ -55,7 +55,7 @@ const cover = computed(() => songCover(current.value, 300))
 const hasSong = computed(() => Boolean(current.value))
 const totalMs = computed(() => durationMs.value || current.value?.durationMs || 0)
 const MODE_ICON: Record<PlayMode, string> = {
-  sequence: 'list',
+  sequence: 'sequence',
   'repeat-all': 'repeat',
   'repeat-one': 'repeat-one',
   shuffle: 'shuffle'
@@ -192,18 +192,9 @@ function scheduleCloseModeMenu(): void {
   }, 200)
 }
 
-function toggleModeMenu(): void {
-  if (modeOpenTimer !== null) {
-    window.clearTimeout(modeOpenTimer)
-    modeOpenTimer = null
-  }
-  if (modeCloseTimer !== null) {
-    window.clearTimeout(modeCloseTimer)
-    modeCloseTimer = null
-  }
-  modeMenu.value = !modeMenu.value
-  qualityMenu.value = false
-  volumeOpen.value = false
+function cyclePlayMode(): void {
+  closeMenus()
+  player.cycleMode()
 }
 
 function chooseMode(next: PlayMode): void {
@@ -384,7 +375,7 @@ watch(
             :title="PLAY_MODE_LABEL[mode]"
             aria-haspopup="true"
             :aria-expanded="modeMenu"
-            @click="toggleModeMenu()"
+            @click="cyclePlayMode()"
           >
             <AppIcon :name="modeIcon" :size="16" />
           </button>
