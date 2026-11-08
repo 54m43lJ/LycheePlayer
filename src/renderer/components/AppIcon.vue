@@ -61,12 +61,7 @@ const ICONS: Record<string, string[]> = {
   ],
   compass: ['M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18z', 'M15.5 8.5 13.5 13.5 8.5 15.5 10.5 10.5z'],
   download: ['M12 4v11', 'M8 11l4 4 4-4', 'M5 19h14'],
-  'download-cached': [
-    'M4.5 6.5h15v13h-15z',
-    'M12 9v6',
-    'M9.5 12.5 12 15l2.5-2.5',
-    'M8 20h8'
-  ],
+  'download-cached': ['M12 4v11', 'M8 11l4 4 4-4', 'M5 19h14'],
   'download-done': [
     'M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z',
     'M9 11.5l2.5 2.5 4.5-4.5'
