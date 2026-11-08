@@ -37,3 +37,4 @@
 - 设置里的“退出应用”按钮移到右边单独开一块
 - 托盘图标有时候全黑有时候彩色。只需要保留彩色图标就行了
 - 按点赞排序评论的API有问题（[ipc] UPSTREAM_CHANGED: 上游返回错误码 10000（music.globalComment.CommentRead.GetHotCommentList））
+- 播放条的封面点击切换歌词/评论窗口开关，而不是只起打开效果
