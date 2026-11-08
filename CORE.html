@@ -44,8 +44,8 @@
 │   │   │   ├── <a href="#c4-8">client.ts</a>                 统一请求、错误与重试
 │   │   │   ├── <a href="#c4-9">hash.ts</a>                   hash33 / g_tk
 │   │   │   ├── <a href="#c4-10">search.ts</a>                搜索
-│   │   │   ├── <a href="#c4-79">artist.ts</a>                歌手详情与歌曲分页
-│   │   │   ├── <a href="#c4-80">album.ts</a>                 专辑详情与歌曲分页
+│   │   │   ├── <a href="#c4-75">artist.ts</a>                歌手详情与歌曲分页
+│   │   │   ├── <a href="#c4-76">album.ts</a>                 专辑详情与歌曲分页
 │   │   │   ├── <a href="#c4-11">song.ts</a>                  歌曲详情与播放链接
 │   │   │   ├── <a href="#c4-12">playlist.ts</a>              歌单
 │   │   │   ├── <a href="#c4-13">user.ts</a>                  用户资料
@@ -108,16 +108,16 @@
 │       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词页歌词区
 │       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         歌词页评论区
 │       │   ├── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
-│       │   ├── <a href="#c4-81">PlaylistPicker.vue</a>         添加到歌单选择器
+│       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
 │       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
 │       │   └── <a href="#c4-67">DownloadDrawer.vue</a>         下载中心抽屉
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
-│       │   ├── <a href="#c4-77">ArtistView.vue</a>            歌手页
-│       │   ├── <a href="#c4-78">AlbumView.vue</a>             专辑页
+│       │   ├── <a href="#c4-73">ArtistView.vue</a>            歌手页
+│       │   ├── <a href="#c4-74">AlbumView.vue</a>             专辑页
 │       │   ├── <a href="#c4-45">LibraryView.vue</a>           我的歌单
 │       │   ├── <a href="#c4-46">PlaylistView.vue</a>          歌单详情
-│       │   ├── <a href="#c4-76">LyricsView.vue</a>             歌词 / 评论页
+│       │   ├── <a href="#c4-72">LyricsView.vue</a>             歌词 / 评论页
 │       │   ├── <a href="#c4-47">LoginView.vue</a>             登录页
 │       │   ├── <a href="#c4-48">SettingsView.vue</a>          设置页
 │       │   ├── <a href="#c4-68">DiscoverView.vue</a>          发现页
@@ -1353,7 +1353,7 @@ const emit = defineEmits&lt;{
   <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：窄窗口优先省略歌名，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与 tooltip。</li>
   <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。</li>
   <li>操作列基础结构为收藏、下载、下一首播放（<code>play-next</code>）、添加到歌单（<code>playlist-add</code>）、从歌单删除五个图标按钮。<code>addable</code> 为真时渲染“添加到歌单”，点击发出 <code>addToPlaylist(index)</code>；删除按钮仅在 <code>removable</code> 为真时渲染，由 <code>PlaylistView</code> 按 <code>PlaylistMeta.editable</code> 且非“我喜欢”传入；点击发出 <code>remove(index)</code>，不触发行播放。</li>
-  <li><code>addable</code> 由使用歌曲表的页面按登录态传入（搜索结果、歌单详情、歌手页、专辑页）；页面监听 <code>addToPlaylist</code> 打开 <a href="#c4-81">PlaylistPicker</a>，再把选择结果交给 <code>playlist-edit.addSongs</code>。</li>
+  <li><code>addable</code> 由使用歌曲表的页面按登录态传入（搜索结果、歌单详情、歌手页、专辑页）；页面监听 <code>addToPlaylist</code> 打开 <a href="#c4-77">PlaylistPicker</a>，再把选择结果交给 <code>playlist-edit.addSongs</code>。</li>
   <li>≤900px 时五个按钮收为一个 <code>more</code> 图标按钮，弹出“图标 + 文字”菜单；菜单项顺序与宽屏一致，点击菜单不触发行播放，点击外部或按 Esc 关闭。</li>
 </ul>
 
@@ -1374,7 +1374,7 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li><a href="#c4-76">LyricsView</a> 左列的歌词区；顶部歌曲信息与返回入口由 <code>LyricsView</code> 提供，本组件不含“歌词 / 评论”标题行。</li>
+  <li><a href="#c4-72">LyricsView</a> 左列的歌词区；顶部歌曲信息与返回入口由 <code>LyricsView</code> 提供，本组件不含“歌词 / 评论”标题行。</li>
   <li>按 <code>player.positionMs</code> 计算活动行并保持其居中；滚动容器上下边缘使用渐隐遮罩。支持滚轮、左键拖拽（松手后恢复跟随）与点击行调用 <code>player.seek()</code>；有逐字数据时按词高亮。</li>
   <li>加载中、无歌词与加载失败分别渲染 spinner / 空状态 / 错误重试；无当前歌曲时不渲染歌词内容。</li>
 </ul>
@@ -1383,7 +1383,7 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li><a href="#c4-76">LyricsView</a> 右列的评论区；监听当前歌曲与路由激活状态，存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
+  <li><a href="#c4-72">LyricsView</a> 右列的评论区；监听当前歌曲与路由激活状态，存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
   <li>排序为 <code>hot</code> / <code>latest</code> / <code>oldest</code>，默认 <code>latest</code>；切换时若上游支持排序直接请求对应排序，否则在已加载评论上按 <code>createdAtMs</code> 本地重排。刷新只重载评论，不触发歌词重载。</li>
   <li>分页每页 20 条；列表滚动到底且 <code>hasMore=true</code> 时加载下一页，追加后按当前排序重新整理。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
   <li>评论行两行布局：第一行头像 + 昵称 + 正文（最多两行），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
@@ -1940,7 +1940,7 @@ interface DownloadStore {
   <li>批次操作与单任务操作共用同一状态表；删除批次需确认，<code>clearCompleted</code> 只清记录。资产状态按账号索引呈现，切换账号时重新加载。</li>
 </ul>
 
-<h3 id="c4-76">4.76 src/renderer/views/LyricsView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-72">4.72 src/renderer/views/LyricsView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。路由 /lyrics 的页面容器：顶部歌曲信息与返回，左歌词、右评论。
 </code></pre>
 <ul class="note">
@@ -1949,7 +1949,7 @@ interface DownloadStore {
   <li>布局为左右两列各 50%，中间保留分隔线；组合 <a href="#c4-41">LyricsPanel</a> 与 <a href="#c4-42">CommentsPanel</a>，不渲染独立标题行。</li>
 </ul>
 
-<h3 id="c4-77">4.77 src/renderer/views/ArtistView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-73">4.73 src/renderer/views/ArtistView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。路由 /artist/:mid 的歌手页。
 </code></pre>
 <ul class="note">
@@ -1959,7 +1959,7 @@ interface DownloadStore {
   <li>返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>；点击歌曲不改变路由。</li>
 </ul>
 
-<h3 id="c4-78">4.78 src/renderer/views/AlbumView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-74">4.74 src/renderer/views/AlbumView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。路由 /album/:mid 的专辑页。
 </code></pre>
 <ul class="note">
@@ -1968,7 +1968,7 @@ interface DownloadStore {
   <li>分页固定 50 首/页；加载中、合法空状态与失败重试各自渲染。返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
 </ul>
 
-<h3 id="c4-79">4.79 src/main/api/artist.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-75">4.75 src/main/api/artist.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getArtist(mid: string, offset: number): Promise&lt;ArtistDetail&gt;;
 </code></pre>
 <ul class="note">
@@ -1977,7 +1977,7 @@ interface DownloadStore {
   <li><code>mid</code> 为空时直接返回空歌曲与空简介，不发起请求；详情或歌曲失败映射为 <code>UPSTREAM_CHANGED</code> / 现有网络错误，不用搜索接口或当前歌单数据兜底。</li>
 </ul>
 
-<h3 id="c4-80">4.80 src/main/api/album.ts <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-76">4.76 src/main/api/album.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getAlbum(mid: string, offset: number): Promise&lt;AlbumDetail&gt;;
 </code></pre>
 <ul class="note">
@@ -1986,7 +1986,7 @@ interface DownloadStore {
   <li><code>mid</code> 为空时返回空详情；失败映射为 <code>UPSTREAM_CHANGED</code> / 现有网络错误，不使用搜索或歌单数据兜底。</li>
 </ul>
 
-<h3 id="c4-81">4.81 src/renderer/components/PlaylistPicker.vue <a class="backlink" href="#c1">文件树</a></h3>
+<h3 id="c4-77">4.77 src/renderer/components/PlaylistPicker.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const props = defineProps&lt;{ open: boolean; song: Song | null }&gt;();
 const emit = defineEmits&lt;{ close: []; picked: [playlistId: string] }&gt;();
 </code></pre>
