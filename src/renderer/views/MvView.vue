@@ -94,7 +94,8 @@ onMounted(() => void load())
         />
         <div v-else class="mv-placeholder">
           <CoverArt :src="mv.detail.coverUrl" image-class="playlist-cover" :icon-size="44" />
-          <p>MV 取流接口待探测</p>
+          <p>当前清晰度暂无可用视频流</p>
+          <button class="btn small" @click="load()">重试</button>
         </div>
       </section>
 

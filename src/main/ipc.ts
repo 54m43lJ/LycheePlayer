@@ -16,7 +16,7 @@ import { IPC_SONG_MIDS_MAX, PROBE_MIDS_MAX } from '../shared/constants'
 import { loginWithCookie, refreshSession } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
-import { getComments } from './api/comment'
+import { getComments, likeComment, unlikeComment } from './api/comment'
 import {
   fetchPlaylistPage,
   getCachedPlaylist,
@@ -34,6 +34,8 @@ import { getFavoriteStates, toggleFavorite } from './api/favorite'
 import { fetchRecommendFeed, clearRecommendCache } from './api/recommend'
 import { getMvDetail, getMvStream, searchMv } from './api/mv'
 import { searchByType } from './api/search'
+import { getArtist } from './api/artist'
+import { getAlbum } from './api/album'
 import { getStreamUrls } from './api/song'
 import { probeAvailability, clearAvailabilityCache } from './api/availability'
 import { getProfile } from './api/user'
@@ -46,12 +48,19 @@ import { clearPlaylistCache, invalidatePlaylistCache } from './cache/playlist'
 import { audioCacheStats, clearAudioCache } from './cache/audio'
 import { readFlagsFile, writeFlagsFile } from './startup-flags'
 import {
+  assetStates,
   clearCompletedDownloads,
   downloadStorage,
+  listBatches,
   listDownloads,
+  pauseBatch,
   pauseDownload,
+  removeBatch,
   removeDownload,
+  resumeBatch,
   resumeDownload,
+  retryFailed,
+  startBatch,
   startDownload
 } from './download/manager'
 
@@ -192,6 +201,12 @@ export function registerIpc(): void {
 
   // ---------- content ----------
   handle('search.byType', async (req: SearchRequest) => searchByType(req))
+  handle('artist.get', async (mid: unknown, offset: unknown) =>
+    getArtist(stringArg(mid, '歌手 mid'), Number(offset) || 0)
+  )
+  handle('album.get', async (mid: unknown, offset: unknown) =>
+    getAlbum(stringArg(mid, '专辑 mid'), Number(offset) || 0)
+  )
 
   handle('song.getUrls', async (mids: unknown, quality: unknown) =>
     getStreamUrls(midArray(mids), qualityArg(quality))
@@ -248,7 +263,9 @@ export function registerIpc(): void {
   })
 
   handle('recommend.get', async () => fetchRecommendFeed())
-  handle('recommend.refresh', async () => fetchRecommendFeed(true))
+  handle('recommend.refresh', async (sectionId: unknown) =>
+    fetchRecommendFeed(true, typeof sectionId === 'string' ? sectionId : undefined)
+  )
 
   handle('mv.search', async (keyword: unknown, pageNo: unknown) =>
     searchMv(stringArg(keyword, '关键词', 128), Number(pageNo) || 1)
@@ -261,9 +278,39 @@ export function registerIpc(): void {
 
   // ---------- download ----------
   handle('download.list', async () => listDownloads())
+  handle('download.batches', async () => listBatches())
+  handle('download.assetStates', async (mids: unknown) =>
+    assetStates(
+      Array.isArray(mids)
+        ? mids.map((item) => String(item)).filter(Boolean).slice(0, IPC_SONG_MIDS_MAX)
+        : []
+    )
+  )
   handle('download.start', async (mid: unknown, quality: unknown) =>
     startDownload(stringArg(mid, '歌曲 mid'), qualityArg(quality))
   )
+  handle('download.startBatch', async (request: unknown) => {
+    const value = request as {
+      source?: unknown
+      playlistId?: unknown
+      playlistName?: unknown
+      songMids?: unknown
+    }
+    if (value?.source !== 'playlist') throw new Error('非法下载批次来源')
+    return startBatch({
+      source: 'playlist',
+      playlistId: stringArg(value.playlistId, '歌单 ID'),
+      playlistName: typeof value.playlistName === 'string' ? value.playlistName : undefined,
+      songMids: midArray(value.songMids)
+    })
+  })
+  handle('download.pauseBatch', async (id: unknown) => pauseBatch(stringArg(id, '批次 ID')))
+  handle('download.resumeBatch', async (id: unknown) => resumeBatch(stringArg(id, '批次 ID')))
+  handle('download.removeBatch', async (id: unknown) => {
+    await removeBatch(stringArg(id, '批次 ID'))
+    return null
+  })
+  handle('download.retryFailed', async (id: unknown) => retryFailed(stringArg(id, '批次 ID')))
   handle('download.pause', async (id: unknown) => pauseDownload(stringArg(id, '任务 ID')))
   handle('download.resume', async (id: unknown) => resumeDownload(stringArg(id, '任务 ID')))
   handle('download.remove', async (id: unknown) => {
@@ -300,7 +347,17 @@ export function registerIpc(): void {
   // ---------- account / metadata ----------
   handle('user.getProfile', async () => getProfile())
   handle('lyric.get', async (songMid: unknown) => getLyric(stringArg(songMid, '歌曲 mid')))
-  handle('comment.get', async (songId: unknown) => getComments(String(songId)))
+  handle('comment.get', async (songId: unknown, sort: unknown, pageNo: unknown) => {
+    const order: 'hot' | 'latest' | 'oldest' =
+      sort === 'hot' || sort === 'oldest' ? sort : 'latest'
+    return getComments(String(songId), order, Number(pageNo) || 0)
+  })
+  handle('comment.like', async (commentId: unknown) =>
+    likeComment(stringArg(commentId, '评论 ID'))
+  )
+  handle('comment.unlike', async (commentId: unknown) =>
+    unlikeComment(stringArg(commentId, '评论 ID'))
+  )
 
   // ---------- settings ----------
   handle('settings.get', async () => getSettings())

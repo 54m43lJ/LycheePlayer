@@ -3,8 +3,14 @@ import { createDecipheriv } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
 import type { LycheeApi } from '../shared/ipc'
 import type {
+  AlbumDetail,
+  ArtistDetail,
+  AudioCacheProgress,
   AuthStatus,
+  CommentLikeResult,
   CommentPage,
+  CommentSort,
+  DownloadBatch,
   DownloadStorageInfo,
   DownloadTask,
   FavoriteState,
@@ -24,6 +30,7 @@ import type {
   SearchRequest,
   SearchResult,
   Settings,
+  SongAssetState,
   SongAvailability,
   UrlResult,
   UserProfile
@@ -64,6 +71,12 @@ const api: LycheeApi = {
   search: {
     byType: (req: SearchRequest) => invoke<SearchResult>('search.byType', req)
   },
+  artist: {
+    get: (mid: string, offset?: number) => invoke<ArtistDetail>('artist.get', mid, offset)
+  },
+  album: {
+    get: (mid: string, offset?: number) => invoke<AlbumDetail>('album.get', mid, offset)
+  },
   song: {
     getUrls: (mids: string[], quality: Quality) =>
       invoke<UrlResult[]>('song.getUrls', mids, quality),
@@ -90,7 +103,8 @@ const api: LycheeApi = {
   },
   recommend: {
     get: () => invoke<RecommendFeed>('recommend.get'),
-    refresh: () => invoke<RecommendFeed>('recommend.refresh')
+    refresh: (sectionId?: string) =>
+      invoke<RecommendFeed>('recommend.refresh', sectionId)
   },
   mv: {
     search: (keyword: string, pageNo: number) =>
@@ -101,11 +115,19 @@ const api: LycheeApi = {
   },
   download: {
     list: () => invoke<DownloadTask[]>('download.list'),
+    batches: () => invoke<DownloadBatch[]>('download.batches'),
+    assetStates: (songMids: string[]) =>
+      invoke<SongAssetState[]>('download.assetStates', songMids),
     start: (songMid: string, quality: Quality) =>
       invoke<DownloadTask>('download.start', songMid, quality),
+    startBatch: (request) => invoke<DownloadBatch>('download.startBatch', request),
     pause: (id: string) => invoke<DownloadTask>('download.pause', id),
     resume: (id: string) => invoke<DownloadTask>('download.resume', id),
     remove: (id: string) => invoke<null>('download.remove', id),
+    pauseBatch: (batchId: string) => invoke<DownloadBatch>('download.pauseBatch', batchId),
+    resumeBatch: (batchId: string) => invoke<DownloadBatch>('download.resumeBatch', batchId),
+    removeBatch: (batchId: string) => invoke<null>('download.removeBatch', batchId),
+    retryFailed: (batchId: string) => invoke<DownloadBatch>('download.retryFailed', batchId),
     clearCompleted: () => invoke<null>('download.clearCompleted'),
     storage: () => invoke<DownloadStorageInfo>('download.storage'),
     openFolder: () => invoke<null>('download.openFolder'),
@@ -120,7 +142,20 @@ const api: LycheeApi = {
     decryptQrc
   },
   comment: {
-    get: (songId: string) => invoke<CommentPage>('comment.get', songId)
+    get: (songId: string, sort?: CommentSort, pageNo?: number) =>
+      invoke<CommentPage>('comment.get', songId, sort, pageNo),
+    like: (commentId: string) => invoke<CommentLikeResult>('comment.like', commentId),
+    unlike: (commentId: string) => invoke<CommentLikeResult>('comment.unlike', commentId)
+  },
+  audioCache: {
+    onProgress: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        progress: AudioCacheProgress
+      ): void => callback(progress)
+      ipcRenderer.on('audioCache:progress', listener)
+      return () => ipcRenderer.removeListener('audioCache:progress', listener)
+    }
   },
   settings: {
     get: () => invoke<Settings>('settings.get'),

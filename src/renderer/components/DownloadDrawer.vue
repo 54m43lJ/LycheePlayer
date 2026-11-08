@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
+import type { DownloadBatch, DownloadTask } from '@shared/types'
 import AppIcon from './AppIcon.vue'
 import { useDownloadStore } from '../stores/download'
 import { useUiStore } from '../stores/ui'
@@ -18,6 +19,16 @@ const totalProgress = computed(() => {
   return total > 0 ? Math.min(100, (received / total) * 100) : 0
 })
 
+const singleTasks = computed(() => downloads.tasks.filter((task) => !task.batchId))
+const batchGroups = computed(() =>
+  downloads.batches
+    .map((batch) => ({
+      batch,
+      tasks: downloads.tasks.filter((task) => task.batchId === batch.id)
+    }))
+    .filter((group) => group.tasks.length > 0)
+)
+
 function percent(task: { receivedBytes: number; totalBytes: number }): number {
   if (!task.totalBytes) return 0
   return Math.min(100, (task.receivedBytes / task.totalBytes) * 100)
@@ -29,6 +40,16 @@ function statusLabel(status: string): string {
   if (status === 'done') return '已完成'
   if (status === 'failed') return '失败'
   return '等待中'
+}
+
+function sourceLabel(task: DownloadTask): string {
+  if (task.source === 'cache') return '缓存转移'
+  if (task.source === 'batch') return '整单下载'
+  return '网络下载'
+}
+
+function batchTitle(batch: DownloadBatch): string {
+  return batch.playlistName || `歌单 ${batch.playlistId ?? ''}` || '下载批次'
 }
 
 async function run(action: () => Promise<void>, message?: string): Promise<void> {
@@ -47,6 +68,16 @@ function openFolder(): void {
   })
 }
 
+function confirmRemoveBatch(batch: DownloadBatch): void {
+  if (!window.confirm(`删除批次「${batchTitle(batch)}」及其已下载文件？`)) return
+  void run(() => downloads.removeBatch(batch.id), '批次已删除')
+}
+
+function confirmRemoveTask(task: DownloadTask): void {
+  if (!window.confirm(`删除「${task.name}」及其下载文件？`)) return
+  void run(() => downloads.remove(task.id), '下载已删除')
+}
+
 watch(
   () => ui.downloadOpen,
   (open) => downloads.setOpen(open),
@@ -61,8 +92,10 @@ watch(
         <h2>下载中心</h2>
         <p>
           {{ downloads.tasks.length }} 个任务
-          <template v-if="downloads.storage"> · 已用 {{ formatBytes(downloads.storage.bytes) }} · 剩余
-            {{ formatBytes(downloads.storage.freeBytes) }}</template>
+          <template v-if="downloads.storage">
+            · 已用 {{ formatBytes(downloads.storage.bytes) }} · 剩余
+            {{ formatBytes(downloads.storage.freeBytes) }}
+          </template>
         </p>
       </div>
       <button class="icon-btn" title="关闭下载中心" @click="ui.closeDownload()">
@@ -80,49 +113,134 @@ watch(
     </div>
 
     <div v-else class="download-list">
-      <article v-for="task in downloads.tasks" :key="task.id" class="download-row">
-        <div class="download-main">
-          <div class="song-text">
-            <div class="song-title">{{ task.name }}</div>
+      <section v-for="group in batchGroups" :key="group.batch.id" class="download-batch">
+        <div class="download-batch-head">
+          <div>
+            <div class="song-title">{{ batchTitle(group.batch) }}</div>
             <div class="song-artist">
-              {{ task.quality.toUpperCase() }} · {{ statusLabel(task.status) }}
-              <template v-if="task.error"> · {{ task.error }}</template>
+              {{ statusLabel(group.batch.status) }} · {{ group.batch.done }} / {{ group.batch.total }}
+              <template v-if="group.batch.failed"> · 失败 {{ group.batch.failed }}</template>
             </div>
           </div>
-          <span class="download-size">
-            {{ formatBytes(task.receivedBytes) }}<template v-if="task.totalBytes"> / {{ formatBytes(task.totalBytes) }}</template>
-          </span>
+          <div class="download-actions">
+            <button
+              v-if="group.batch.status === 'downloading' || group.batch.status === 'pending'"
+              class="btn ghost small"
+              @click="run(() => downloads.pauseBatch(group.batch.id))"
+            >
+              暂停批次
+            </button>
+            <button
+              v-else-if="group.batch.status === 'paused'"
+              class="btn small"
+              @click="run(() => downloads.resumeBatch(group.batch.id))"
+            >
+              继续批次
+            </button>
+            <button
+              v-if="group.batch.failed > 0"
+              class="btn ghost small"
+              @click="run(() => downloads.retryFailed(group.batch.id))"
+            >
+              重试失败
+            </button>
+            <button class="btn ghost small" @click="confirmRemoveBatch(group.batch)">
+              删除批次
+            </button>
+          </div>
         </div>
-        <div class="download-bar">
-          <span
-            :class="{ failed: task.status === 'failed' }"
-            :style="{ width: `${percent(task)}%` }"
-          />
+        <article v-for="task in group.tasks" :key="task.id" class="download-row">
+          <div class="download-main">
+            <div class="song-text">
+              <div class="song-title">{{ task.name }}</div>
+              <div class="song-artist">
+                {{ task.quality.toUpperCase() }} · {{ sourceLabel(task) }} ·
+                {{ statusLabel(task.status) }}
+                <template v-if="task.error"> · {{ task.error }}</template>
+              </div>
+            </div>
+            <span class="download-size">
+              {{ formatBytes(task.receivedBytes)
+              }}<template v-if="task.totalBytes"> / {{ formatBytes(task.totalBytes) }}</template>
+            </span>
+          </div>
+          <div class="download-bar">
+            <span
+              :class="{ failed: task.status === 'failed' }"
+              :style="{ width: `${percent(task)}%` }"
+            />
+          </div>
+          <div class="download-actions">
+            <button
+              v-if="task.status === 'downloading'"
+              class="btn ghost small"
+              @click="run(() => downloads.pause(task.id))"
+            >
+              暂停
+            </button>
+            <button
+              v-else-if="task.status === 'paused' || task.status === 'failed'"
+              class="btn small"
+              @click="run(() => downloads.resume(task.id))"
+            >
+              继续
+            </button>
+            <button class="btn ghost small" @click="confirmRemoveTask(task)">删除</button>
+          </div>
+        </article>
+      </section>
+
+      <section v-if="singleTasks.length > 0" class="download-batch">
+        <div class="download-batch-head">
+          <div>
+            <div class="song-title">单曲下载</div>
+            <div class="song-artist">{{ singleTasks.length }} 个任务</div>
+          </div>
         </div>
-        <div class="download-actions">
-          <button
-            v-if="task.status === 'downloading'"
-            class="btn ghost small"
-            @click="run(() => downloads.pause(task.id))"
-          >
-            暂停
-          </button>
-          <button
-            v-else-if="task.status === 'paused' || task.status === 'failed'"
-            class="btn small"
-            @click="run(() => downloads.resume(task.id))"
-          >
-            继续
-          </button>
-          <button class="btn ghost small" @click="run(() => downloads.remove(task.id))">
-            删除
-          </button>
-        </div>
-      </article>
+        <article v-for="task in singleTasks" :key="task.id" class="download-row">
+          <div class="download-main">
+            <div class="song-text">
+              <div class="song-title">{{ task.name }}</div>
+              <div class="song-artist">
+                {{ task.quality.toUpperCase() }} · {{ sourceLabel(task) }} ·
+                {{ statusLabel(task.status) }}
+                <template v-if="task.error"> · {{ task.error }}</template>
+              </div>
+            </div>
+            <span class="download-size">
+              {{ formatBytes(task.receivedBytes)
+              }}<template v-if="task.totalBytes"> / {{ formatBytes(task.totalBytes) }}</template>
+            </span>
+          </div>
+          <div class="download-bar">
+            <span
+              :class="{ failed: task.status === 'failed' }"
+              :style="{ width: `${percent(task)}%` }"
+            />
+          </div>
+          <div class="download-actions">
+            <button
+              v-if="task.status === 'downloading'"
+              class="btn ghost small"
+              @click="run(() => downloads.pause(task.id))"
+            >
+              暂停
+            </button>
+            <button
+              v-else-if="task.status === 'paused' || task.status === 'failed'"
+              class="btn small"
+              @click="run(() => downloads.resume(task.id))"
+            >
+              继续
+            </button>
+            <button class="btn ghost small" @click="confirmRemoveTask(task)">删除</button>
+          </div>
+        </article>
+      </section>
 
       <div class="download-footer">
         <button class="btn ghost small" @click="run(() => downloads.clearCompleted())">
-          清除已完成
+          清除已完成记录
         </button>
         <button class="btn small" @click="openFolder()">
           <AppIcon name="folder" :size="14" />

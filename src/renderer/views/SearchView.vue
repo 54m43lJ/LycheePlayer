@@ -5,6 +5,7 @@ import type { SearchRequest, SearchResult } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import CoverArt from '../components/CoverArt.vue'
 import SongTable from '../components/SongTable.vue'
+import PlaylistPicker from '../components/PlaylistPicker.vue'
 import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { usePlayerStore } from '../stores/player'
@@ -12,6 +13,7 @@ import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
 import { SEARCH_PAGE_SIZE_DEFAULT } from '@shared/constants'
 import { useUiStore } from '../stores/ui'
+import { useAuthStore } from '../stores/auth'
 import { albumCover, formatCount, playlistSubtitle } from '../utils/format'
 
 type SearchType = SearchRequest['type']
@@ -21,6 +23,7 @@ const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const ui = useUiStore()
+const auth = useAuthStore()
 const toast = useToast()
 
 const TABS: Array<{ value: SearchType; label: string }> = [
@@ -49,6 +52,19 @@ const playlists = computed(() => result.value?.playlists ?? [])
 const mvs = computed(() => result.value?.mvs ?? [])
 const total = computed(() => result.value?.total ?? 0)
 const favoriteMids = computed(() => [...playlistEdit.favorites])
+const assetStates = computed(() => download.assets)
+const pickerOpen = ref(false)
+const pickerIndex = ref(-1)
+const pickerMids = computed(() => {
+  const song = songs.value[pickerIndex.value]
+  return song ? [song.songMid] : []
+})
+const pickerName = computed(() => songs.value[pickerIndex.value]?.name ?? '')
+
+function openPicker(index: number): void {
+  pickerIndex.value = index
+  pickerOpen.value = true
+}
 const totalPages = computed(() => {
   if (total.value > 0) return Math.max(1, Math.ceil(total.value / pageSize))
   return searched.value ? pageNo.value : 1
@@ -58,6 +74,7 @@ const activeLabel = computed(() => TABS.find((tab) => tab.value === activeTab.va
 watch(songs, (list) => {
   if (list.length > 0) {
     void playlistEdit.loadFavorites(list.map((song) => song.songMid))
+    void download.refreshAssets(list.map((song) => song.songMid))
   }
 })
 
@@ -87,7 +104,7 @@ async function search(page = 1): Promise<void> {
           if (currentRequest !== requestId || !result.value) return
           result.value = { ...result.value, mvs: mvResult.mvs ?? [] }
         } catch {
-          // MV 搜索待探测；失败不影响歌曲结果。
+          // MV 搜索失败不影响歌曲结果。
         }
       })()
     }
@@ -139,12 +156,12 @@ async function downloadAt(index: number): Promise<void> {
   }
 }
 
-function searchBySinger(name: string): void {
-  useKeyword(name)
+function openArtist(mid: string): void {
+  if (mid) void router.push(`/artist/${mid}`)
 }
 
-function searchByAlbum(name: string): void {
-  useKeyword(name)
+function openAlbum(mid: string): void {
+  if (mid) void router.push(`/album/${mid}`)
 }
 
 function openPlaylist(id: string): void {
@@ -218,11 +235,14 @@ function changePage(delta: number): void {
           :songs="songs"
           :active-mid="player.current?.songMid"
           :favorite-mids="favoriteMids"
+          :asset-states="assetStates"
+          :can-add-to-playlist="auth.loggedIn"
           @play="playSongAt"
           @play-next="playNextAt"
           @toggle="player.toggle()"
           @favorite="toggleFavorite"
           @download="downloadAt"
+          @add-to-playlist="openPicker"
         />
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
@@ -253,11 +273,11 @@ function changePage(delta: number): void {
             v-for="singer in singers"
             :key="singer.mid"
             class="card"
-            @click="searchBySinger(singer.name)"
+            @click="openArtist(singer.mid)"
           >
             <div class="avatar-circle">{{ singer.name.slice(0, 1) }}</div>
             <div class="card-name">{{ singer.name }}</div>
-            <div class="card-sub">点击搜索 TA 的单曲</div>
+            <div class="card-sub">查看歌手信息与歌曲</div>
           </button>
         </div>
         <div v-else class="empty">
@@ -269,10 +289,10 @@ function changePage(delta: number): void {
       <div v-else-if="activeTab === 'album'">
         <div class="section-title"><span>专辑</span><span class="count">{{ albums.length }} 张</span></div>
         <div v-if="albums.length > 0" class="card-grid">
-          <button v-for="album in albums" :key="album.mid" class="card" @click="searchByAlbum(album.name)">
+          <button v-for="album in albums" :key="album.mid" class="card" @click="openAlbum(album.mid)">
             <CoverArt :src="albumCover(album.mid)" image-class="card-cover" :icon-size="30" />
             <div class="card-name">{{ album.name }}</div>
-            <div class="card-sub">点击搜索专辑单曲</div>
+            <div class="card-sub">查看专辑信息与歌曲</div>
           </button>
         </div>
         <div v-else class="empty">
@@ -316,5 +336,13 @@ function changePage(delta: number): void {
       <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
       <h3>开始探索</h3>
     </div>
+
+    <PlaylistPicker
+      :open="pickerOpen"
+      :song-mids="pickerMids"
+      :song-name="pickerName"
+      @close="pickerOpen = false"
+      @added="() => undefined"
+    />
   </div>
 </template>

@@ -2,23 +2,14 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const useUiStore = defineStore('ui', () => {
-  const lyricsOpen = ref(false)
   const queueOpen = ref(false)
   const downloadOpen = ref(false)
+  const sidebarOpen = ref(false)
 
-  function closeOthers(keep: 'lyrics' | 'queue' | 'download'): void {
-    if (keep !== 'lyrics') lyricsOpen.value = false
+  function closeOthers(keep: 'queue' | 'download' | 'sidebar'): void {
     if (keep !== 'queue') queueOpen.value = false
     if (keep !== 'download') downloadOpen.value = false
-  }
-
-  function toggleLyrics(): void {
-    lyricsOpen.value = !lyricsOpen.value
-    if (lyricsOpen.value) closeOthers('lyrics')
-  }
-
-  function closeLyrics(): void {
-    lyricsOpen.value = false
+    if (keep !== 'sidebar') sidebarOpen.value = false
   }
 
   function toggleQueue(): void {
@@ -39,21 +30,30 @@ export const useUiStore = defineStore('ui', () => {
     downloadOpen.value = false
   }
 
-  function closePanels(): void {
-    lyricsOpen.value = false
-    queueOpen.value = false
+  function openSidebar(): void {
+    sidebarOpen.value = true
+    closeOthers('sidebar')
+  }
+
+  function closeSidebar(): void {
+    sidebarOpen.value = false
+  }
+
+  function toggleSidebar(): void {
+    sidebarOpen.value = !sidebarOpen.value
+    if (sidebarOpen.value) closeOthers('sidebar')
   }
 
   return {
-    lyricsOpen,
     queueOpen,
     downloadOpen,
-    toggleLyrics,
-    closeLyrics,
+    sidebarOpen,
     toggleQueue,
     closeQueue,
     toggleDownload,
     closeDownload,
-    closePanels
+    openSidebar,
+    closeSidebar,
+    toggleSidebar
   }
 })

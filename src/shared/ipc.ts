@@ -1,6 +1,12 @@
 import type {
+  AlbumDetail,
+  ArtistDetail,
+  AudioCacheProgress,
   AuthStatus,
+  CommentLikeResult,
   CommentPage,
+  CommentSort,
+  DownloadBatch,
   DownloadStorageInfo,
   DownloadTask,
   EmbedRect,
@@ -22,6 +28,7 @@ import type {
   SearchRequest,
   SearchResult,
   Settings,
+  SongAssetState,
   SongAvailability,
   UrlResult,
   UserProfile
@@ -48,6 +55,12 @@ export interface LycheeApi {
   search: {
     byType(req: SearchRequest): Promise<IpcResult<SearchResult>>
   }
+  artist: {
+    get(mid: string, offset?: number): Promise<IpcResult<ArtistDetail>>
+  }
+  album: {
+    get(mid: string, offset?: number): Promise<IpcResult<AlbumDetail>>
+  }
   song: {
     getUrls(mids: string[], quality: Quality): Promise<IpcResult<UrlResult[]>>
     probe(mids: string[], options?: ProbeOptions): Promise<IpcResult<SongAvailability[]>>
@@ -73,7 +86,7 @@ export interface LycheeApi {
   }
   recommend: {
     get(): Promise<IpcResult<RecommendFeed>>
-    refresh(): Promise<IpcResult<RecommendFeed>>
+    refresh(sectionId?: string): Promise<IpcResult<RecommendFeed>>
   }
   mv: {
     search(keyword: string, pageNo: number): Promise<IpcResult<SearchResult>>
@@ -82,10 +95,22 @@ export interface LycheeApi {
   }
   download: {
     list(): Promise<IpcResult<DownloadTask[]>>
+    batches(): Promise<IpcResult<DownloadBatch[]>>
+    assetStates(songMids: string[]): Promise<IpcResult<SongAssetState[]>>
     start(songMid: string, quality: Quality): Promise<IpcResult<DownloadTask>>
+    startBatch(request: {
+      source: 'playlist'
+      playlistId: string
+      playlistName?: string
+      songMids: string[]
+    }): Promise<IpcResult<DownloadBatch>>
     pause(id: string): Promise<IpcResult<DownloadTask>>
     resume(id: string): Promise<IpcResult<DownloadTask>>
     remove(id: string): Promise<IpcResult<null>>
+    pauseBatch(batchId: string): Promise<IpcResult<DownloadBatch>>
+    resumeBatch(batchId: string): Promise<IpcResult<DownloadBatch>>
+    removeBatch(batchId: string): Promise<IpcResult<null>>
+    retryFailed(batchId: string): Promise<IpcResult<DownloadBatch>>
     clearCompleted(): Promise<IpcResult<null>>
     storage(): Promise<IpcResult<DownloadStorageInfo>>
     openFolder(): Promise<IpcResult<null>>
@@ -101,7 +126,12 @@ export interface LycheeApi {
     decryptQrc(ciphertext: string): string
   }
   comment: {
-    get(songId: string): Promise<IpcResult<CommentPage>>
+    get(songId: string, sort?: CommentSort, pageNo?: number): Promise<IpcResult<CommentPage>>
+    like(commentId: string): Promise<IpcResult<CommentLikeResult>>
+    unlike(commentId: string): Promise<IpcResult<CommentLikeResult>>
+  }
+  audioCache: {
+    onProgress(callback: (progress: AudioCacheProgress) => void): () => void
   }
   settings: {
     get(): Promise<IpcResult<Settings>>

@@ -72,8 +72,26 @@ export const PROBE_IDLE_TIMEOUT_MS = 2000
 export const PROBE_IDLE_FALLBACK_MS = 300
 /** 连续整批不可播的批次数上限；达到后停止本轮探测。推荐值 2。 */
 export const PROBE_EMPTY_BATCH_LIMIT = 2
+/** 最近歌单数量上限。 */
+export const RECENT_PLAYLIST_LIMIT = 5
+/** 最近歌单校验节流。推荐值 5000 ms。 */
+export const RECENT_PLAYLIST_VALIDATE_MS = 5000
+
+/** 推荐分区缓存时长。推荐值 24 小时。 */
+export const RECOMMEND_CACHE_TTL_MS = 24 * 60 * 60_000
+/** 歌手 / 专辑歌曲单页条数；上游上限 100。 */
+export const CATALOG_PAGE_SIZE = 50
+
 /** 下载中心进度轮询间隔。推荐值 1500 ms。 */
 export const DOWNLOAD_POLL_MS = 1500
+/** 下载并发；固定为 1，批次按歌单顺序串行。 */
+export const DOWNLOAD_CONCURRENCY = 1
+/** 单批次歌曲上限。推荐值 2000。 */
+export const DOWNLOAD_BATCH_MAX = 2000
+/** 下载索引文件名前缀；按账号隔离并放在 downloadDir 内。 */
+export const DOWNLOAD_INDEX_PREFIX = '.lychee-downloads-'
+/** 下载索引落盘节流。推荐值 800 ms。 */
+export const DOWNLOAD_INDEX_SAVE_MS = 800
 
 // ---------- 播放 ----------
 
@@ -123,6 +141,8 @@ export const COMMENT_PAGE_SIZE = 20
 export const AUDIO_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
 /** 音频缓存目录名。 */
 export const AUDIO_CACHE_DIR = 'audio'
+/** 音频缓存进度上报节流。推荐值 300 ms。 */
+export const CACHE_PROGRESS_THROTTLE_MS = 300
 // ---------- 启动参数 ----------
 
 /** flags 文件字节上限。推荐值 8 × 1024。 */

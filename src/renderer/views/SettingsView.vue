@@ -22,7 +22,7 @@ const appLicense = __APP_LICENSE__
 const flags = ref<FlagsFile | null>(null)
 const flagsDraft = ref('')
 const flagsSaving = ref(false)
-const storage = ref<{ directory: string; bytes: number; freeBytes: number; cacheBytes?: number; cacheFiles?: number } | null>(null)
+const storage = ref<{ directory: string; bytes: number; freeBytes: number; cacheBytes?: number; cacheFiles?: number; batchCount?: number } | null>(null)
 
 const expiryText = computed(() => {
   if (!auth.loggedIn) return '未登录'
@@ -268,7 +268,7 @@ onMounted(() => {
           <div class="panel-body">
             <div class="setting-row">
               <div>
-                <div class="setting-name">播放缓存</div>
+                <div class="setting-name">播放缓存（不影响已下载）</div>
                 <div class="setting-desc">
                   {{ storage ? `${formatBytes(storage.cacheBytes ?? 0)} · ${storage.cacheFiles ?? 0} 个文件` : '统计中' }}
                 </div>
@@ -288,7 +288,8 @@ onMounted(() => {
                 <div class="setting-name">下载目录</div>
                 <div class="setting-desc mono">{{ storage?.directory ?? settings.settings.downloadDir ?? '默认目录' }}</div>
                 <div class="setting-desc" v-if="storage">
-                  已用 {{ formatBytes(storage.bytes) }} · 剩余 {{ formatBytes(storage.freeBytes) }}
+                  下载占用 {{ formatBytes(storage.bytes) }} · 剩余 {{ formatBytes(storage.freeBytes) }}
+                  <template v-if="storage.batchCount"> · {{ storage.batchCount }} 个批次</template>
                 </div>
               </div>
               <button class="btn small" @click="chooseDownloadDir()">选择</button>

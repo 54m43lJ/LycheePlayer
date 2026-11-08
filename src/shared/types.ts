@@ -60,6 +60,11 @@ export interface PlaylistMeta {
   editable: boolean
 }
 
+export interface RecentPlaylist extends PlaylistMeta {
+  visitedAtMs: number
+  stale?: boolean
+}
+
 export interface PlaylistDetail {
   meta: PlaylistMeta
   songs: Song[]
@@ -95,12 +100,23 @@ export interface Comment {
   likedCount: number
   replyCount: number
   createdAtMs: number
+  liked?: boolean
+}
+
+export type CommentSort = 'hot' | 'latest' | 'oldest'
+
+export interface CommentLikeResult {
+  commentId: string
+  liked: boolean
+  likedCount?: number
 }
 
 export interface CommentPage {
   comments: Comment[]
   total: number
   hasMore: boolean
+  pageNo?: number
+  sort?: CommentSort
 }
 
 export interface SongAvailability {
@@ -155,6 +171,30 @@ export interface PlaylistEditResult {
   songs?: Song[]
 }
 
+export interface ArtistDetail {
+  mid: string
+  name: string
+  description: string
+  coverUrl: string
+  songCount: number
+  albumCount: number
+  songs: Song[]
+  total: number
+  hasMore: boolean
+}
+
+export interface AlbumDetail {
+  mid: string
+  name: string
+  coverUrl: string
+  description: string
+  publishDate: string
+  singers: Singer[]
+  songs: Song[]
+  total: number
+  hasMore: boolean
+}
+
 export interface MvSummary {
   mvId: string
   name: string
@@ -173,6 +213,8 @@ export interface MvStream {
   url: string | null
 }
 
+export type DownloadSource = 'network' | 'cache' | 'batch'
+
 export interface DownloadTask {
   id: string
   songMid: string
@@ -184,6 +226,39 @@ export interface DownloadTask {
   receivedBytes: number
   totalBytes: number
   error: string
+  batchId?: string | null
+  playlistId?: string | null
+  source: DownloadSource
+}
+
+export interface DownloadBatch {
+  id: string
+  source: 'playlist' | 'single'
+  playlistId: string | null
+  playlistName: string | null
+  total: number
+  done: number
+  failed: number
+  status: 'pending' | 'downloading' | 'paused' | 'done' | 'failed'
+  createdAtMs: number
+}
+
+/** 每首歌的本机资产状态：缓存档位、下载档位、最高可用档与当前任务。 */
+export interface SongAssetState {
+  songMid: string
+  cachedQuality: Quality | null
+  downloadedQuality: Quality | null
+  maxQuality: Quality | null
+  taskStatus: DownloadTask['status'] | null
+}
+
+/** 主进程上报的边播边缓存进度。 */
+export interface AudioCacheProgress {
+  songMid: string
+  quality: Quality
+  receivedBytes: number
+  totalBytes: number
+  complete: boolean
 }
 
 /** 登录凭证；完整字段与转换见 PROVIDER §4.3。仅主进程持有。 */
@@ -279,4 +354,5 @@ export interface DownloadStorageInfo {
   freeBytes: number
   cacheBytes?: number
   cacheFiles?: number
+  batchCount?: number
 }

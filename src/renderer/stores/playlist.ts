@@ -5,14 +5,18 @@ import type {
   PlaylistMeta,
   PlaylistPage,
   PlaylistSnapshot,
+  RecentPlaylist,
   Song,
   SongAvailability
 } from '@shared/types'
 import {
   PLAYLIST_PAGE_RETRY_ATTEMPTS,
-  PLAYLIST_PAGE_RETRY_BACKOFF_MS
+  PLAYLIST_PAGE_RETRY_BACKOFF_MS,
+  RECENT_PLAYLIST_LIMIT,
+  RECENT_PLAYLIST_VALIDATE_MS
 } from '@shared/constants'
-import { unwrap } from '../api'
+import { IpcCallError, unwrap } from '../api'
+import { useAuthStore } from './auth'
 import { filterQueueSnapshot } from '../utils/queue'
 import { usePlayerStore } from './player'
 
@@ -32,6 +36,7 @@ function sleep(ms: number): Promise<void> {
 
 export const usePlaylistStore = defineStore('playlist', () => {
   const feed = ref<PlaylistFeed | null>(null)
+  const recent = ref<RecentPlaylist[]>([])
   const availability = ref<Record<string, SongAvailability>>({})
   const availabilityLoading = ref(false)
   let requestedId = ''
@@ -48,6 +53,93 @@ export const usePlaylistStore = defineStore('playlist', () => {
   let cacheDirty = false
   let cacheVersion = 0
   let loadingId = ''
+
+  function recentKey(): string {
+    const auth = useAuthStore()
+    return `lychee:recent-playlists:${auth.musicid ?? 'anonymous'}`
+  }
+
+  function persistRecent(): void {
+    try {
+      localStorage.setItem(recentKey(), JSON.stringify(recent.value))
+    } catch {
+      // localStorage 不可用时仅保留当前会话。
+    }
+  }
+
+  function loadRecent(): void {
+    try {
+      const raw = JSON.parse(localStorage.getItem(recentKey()) ?? '[]') as RecentPlaylist[]
+      recent.value = Array.isArray(raw)
+        ? raw
+            .filter((item) => item && typeof item.id === 'string' && item.id)
+            .slice(0, RECENT_PLAYLIST_LIMIT)
+        : []
+    } catch {
+      recent.value = []
+    }
+  }
+
+  function visit(meta: PlaylistMeta): void {
+    if (!meta.id || meta.kind === 'favorites') return
+    const next = recent.value.filter((item) => item.id !== meta.id)
+    next.unshift({ ...meta, visitedAtMs: Date.now() })
+    recent.value = next.slice(0, RECENT_PLAYLIST_LIMIT)
+    persistRecent()
+  }
+
+  let validating = false
+  let lastValidatedAt = 0
+
+  /** 登录后与每次展开侧栏校验最近歌单；节流 + 单飞，删除项不补位。 */
+  async function validateRecent(force = false): Promise<void> {
+    const now = Date.now()
+    if (validating) return
+    if (!force && now - lastValidatedAt < RECENT_PLAYLIST_VALIDATE_MS) return
+    if (recent.value.length === 0) return
+    validating = true
+    lastValidatedAt = now
+    try {
+      const kept: RecentPlaylist[] = []
+      for (const item of recent.value) {
+        let cachedMeta: PlaylistMeta | null = null
+        try {
+          cachedMeta = unwrap(await window.lychee.playlist.getCached(item.id))?.meta ?? null
+        } catch {
+          cachedMeta = null
+        }
+        try {
+          const page = unwrap(await window.lychee.playlist.get(item.id, { offset: 0 }))
+          kept.push({ ...page.meta, visitedAtMs: item.visitedAtMs, stale: false })
+        } catch (err) {
+          if (
+            err instanceof IpcCallError &&
+            (err.code === 'NO_PERMISSION' ||
+              err.code === 'AUTH_EXPIRED' ||
+              err.code === 'UPSTREAM_CHANGED')
+          ) {
+            // 歌单已删除或无权限：移除条目，不用第 6 条补位。
+            continue
+          }
+          // 网络等临时失败保留条目并标记 stale，避免误删。
+          kept.push({ ...(cachedMeta ?? item), visitedAtMs: item.visitedAtMs, stale: true })
+        }
+      }
+      recent.value = kept
+      persistRecent()
+    } finally {
+      validating = false
+    }
+  }
+
+  function clearRecent(): void {
+    recent.value = []
+    try {
+      localStorage.removeItem(recentKey())
+    } catch {
+      // 忽略。
+    }
+  }
 
   function reset(): void {
     feed.value = null
@@ -441,6 +533,30 @@ export const usePlaylistStore = defineStore('playlist', () => {
     }
   }
 
+  /** 从歌单移除成员后的本地更新：行、计数与缓存；失败由调用方回滚。 */
+  function removeMembers(id: string, mids: string[]): void {
+    const current = feed.value
+    if (!current?.meta || current.meta.id !== id) return
+    const removed = new Set(mids)
+    const before = current.songs.length
+    current.songs = current.songs.filter((song) => !removed.has(song.songMid))
+    const delta = before - current.songs.length
+    current.total = Math.max(0, current.total - delta)
+    current.meta = {
+      ...current.meta,
+      songCount: Math.max(0, current.meta.songCount - delta)
+    }
+    cacheDirty = true
+    cacheVersion += 1
+    void persistCache()
+  }
+
+  /** 写操作后回滚/重新校验。 */
+  async function refresh(id: string): Promise<void> {
+    feed.value = null
+    await load(id, { force: true })
+  }
+
   async function retry(): Promise<void> {
     const current = feed.value
     const id = current?.meta?.id ?? requestedId
@@ -457,10 +573,17 @@ export const usePlaylistStore = defineStore('playlist', () => {
 
   return {
     feed,
+    recent,
+    loadRecent,
+    visit,
+    validateRecent,
+    clearRecent,
     load,
     retry,
     poll,
     invalidate,
+    removeMembers,
+    refresh,
     reset,
     requestedId,
     beginQueueBuild,

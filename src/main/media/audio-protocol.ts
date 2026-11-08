@@ -1,9 +1,9 @@
-import { app, net, protocol } from 'electron'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { app, BrowserWindow, net, protocol } from 'electron'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { extname, join } from 'node:path'
 import type { Quality } from '../../shared/types'
-import { AUDIO_PROTOCOL_SCHEME } from '../../shared/constants'
+import { AUDIO_PROTOCOL_SCHEME, CACHE_PROGRESS_THROTTLE_MS } from '../../shared/constants'
 import { getSettings } from '../settings'
 import { getCachedAudio, putCachedAudio } from '../cache/audio'
 
@@ -42,6 +42,25 @@ export function audioStreamUrl(url: string, songMid: string, quality: Quality): 
   const token = randomUUID()
   streams.set(token, { url, songMid, quality })
   return `${AUDIO_PROTOCOL_SCHEME}://stream/${token}`
+}
+
+function reportCacheProgress(
+  source: StreamSource,
+  receivedBytes: number,
+  totalBytes: number,
+  complete: boolean
+): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send('audioCache:progress', {
+        songMid: source.songMid,
+        quality: source.quality,
+        receivedBytes,
+        totalBytes,
+        complete
+      })
+    }
+  }
 }
 
 async function cacheChunks(source: StreamSource, chunks: Uint8Array[]): Promise<void> {
@@ -140,7 +159,11 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
 
   if (getSettings().audioCacheEnabled) {
     const cached = getCachedAudio(source.songMid, source.quality)
-    if (cached) return fileResponse(cached, request)
+    if (cached) {
+      const size = await stat(cached).then((info) => info.size).catch(() => 0)
+      reportCacheProgress(source, size, size, true)
+      return fileResponse(cached, request)
+    }
   }
 
   const rangeHeader = request.headers.get('range')
@@ -201,6 +224,16 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
 
     const chunks: Uint8Array[] = []
     const reader = body.getReader()
+    const expectedTotal = Number(contentLength ?? 0)
+    let received = 0
+    let lastReportAt = 0
+    const progress = (complete: boolean): void => {
+      if (!getSettings().audioCacheEnabled) return
+      const now = Date.now()
+      if (!complete && now - lastReportAt < CACHE_PROGRESS_THROTTLE_MS) return
+      lastReportAt = now
+      reportCacheProgress(source, received, expectedTotal || received, complete)
+    }
     const stream = new ReadableStream<Uint8Array>({
       async pull(controller) {
         try {
@@ -208,10 +241,13 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
           if (done) {
             controller.close()
             await cacheChunks(source, chunks)
+            progress(true)
             return
           }
           if (value) {
             chunks.push(value)
+            received += value.byteLength
+            progress(false)
             controller.enqueue(value)
           }
         } catch (error) {

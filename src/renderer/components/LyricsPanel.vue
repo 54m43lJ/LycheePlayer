@@ -1,71 +1,107 @@
 <script setup lang="ts">
-import { computed, nextTick, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import AppIcon from './AppIcon.vue'
-import CommentsPanel from './CommentsPanel.vue'
 import { useLyrics } from '../composables/lyrics'
 import { usePlayerStore } from '../stores/player'
-import { useUiStore } from '../stores/ui'
-import { singerNames } from '../utils/format'
 import type { LyricWord } from '../utils/lrc'
 
 const player = usePlayerStore()
-const ui = useUiStore()
 const { current } = storeToRefs(player)
 const { lines, loading, error, activeIndex } = useLyrics()
 const listRef = ref<HTMLElement | null>(null)
+const dragging = ref(false)
+let dragStartY = 0
+let dragStartScroll = 0
+let moved = 0
+let suppressClick = false
 
-const subtitle = computed(() => (current.value ? `${current.value.name} · ${singerNames(current.value)}` : '暂无歌曲'))
+const hasSong = computed(() => Boolean(current.value))
 
 function wordActive(word: LyricWord): boolean {
   return player.positionMs >= word.startMs && player.positionMs < word.startMs + word.durationMs
 }
 
-watch(activeIndex, async (index) => {
-  if (index < 0 || !ui.lyricsOpen) return
+async function centerActive(): Promise<void> {
   await nextTick()
   const active = listRef.value?.querySelector<HTMLElement>('.lyric-line.active')
   active?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+watch(activeIndex, (index) => {
+  if (index >= 0 && !dragging.value) void centerActive()
 })
 
 watch(
-  () => ui.lyricsOpen,
-  async (open) => {
-    if (!open) return
-    await nextTick()
-    listRef.value?.querySelector<HTMLElement>('.lyric-line.active')?.scrollIntoView({ block: 'center' })
-  }
+  () => current.value?.songMid ?? null,
+  () => void centerActive()
 )
+
+function onPointerDown(event: PointerEvent): void {
+  if (event.button !== 0 || !listRef.value) return
+  dragging.value = true
+  moved = 0
+  dragStartY = event.clientY
+  dragStartScroll = listRef.value.scrollTop
+  listRef.value.setPointerCapture(event.pointerId)
+}
+
+function onPointerMove(event: PointerEvent): void {
+  if (!dragging.value || !listRef.value) return
+  const delta = event.clientY - dragStartY
+  moved = Math.max(moved, Math.abs(delta))
+  listRef.value.scrollTop = dragStartScroll - delta
+}
+
+function onPointerUp(event: PointerEvent): void {
+  if (!dragging.value) return
+  dragging.value = false
+  suppressClick = moved > 6
+  listRef.value?.releasePointerCapture(event.pointerId)
+  window.setTimeout(() => {
+    suppressClick = false
+  }, 0)
+}
+
+function seekLine(timeMs: number): void {
+  if (suppressClick) return
+  player.seek(timeMs)
+}
+
+onBeforeUnmount(() => {
+  dragging.value = false
+})
 </script>
 
 <template>
-  <aside class="now-playing-panel" :class="{ open: ui.lyricsOpen }">
-    <section class="now-playing-side lyrics-side">
-      <div class="lyrics-head">
-        <div>
-          <h2>歌词</h2>
-          <p>{{ subtitle }}</p>
-        </div>
-        <button class="icon-btn" title="关闭" @click="ui.closeLyrics()">
-          <AppIcon name="close" :size="18" />
-        </button>
-      </div>
-
-      <div v-if="loading" class="lyrics-empty">
-        <span class="spinner" />
-        <span>正在加载歌词</span>
-      </div>
-      <div v-else-if="lines.length === 0" class="lyrics-empty">
-        <AppIcon name="lyrics" :size="26" />
-        <span>{{ error || (current ? '这首歌还没有歌词' : '播放歌曲后显示歌词') }}</span>
-      </div>
-      <div v-else ref="listRef" class="lyrics-list">
+  <section class="lyrics-page-side lyrics-side">
+    <div v-if="!hasSong" class="lyrics-empty">
+      <AppIcon name="lyrics" :size="26" />
+      <span>播放歌曲后显示歌词</span>
+    </div>
+    <div v-else-if="loading" class="lyrics-empty">
+      <span class="spinner" />
+      <span>正在加载歌词</span>
+    </div>
+    <div v-else-if="lines.length === 0" class="lyrics-empty">
+      <AppIcon name="lyrics" :size="26" />
+      <span>{{ error || '这首歌还没有歌词' }}</span>
+    </div>
+    <div v-else class="lyrics-scroll-wrap">
+      <div
+        ref="listRef"
+        class="lyrics-list lyrics-page-list"
+        @pointerdown="onPointerDown"
+        @pointermove="onPointerMove"
+        @pointerup="onPointerUp"
+        @pointercancel="onPointerUp"
+      >
         <button
           v-for="(line, index) in lines"
           :key="`${line.timeMs}-${index}`"
           class="lyric-line"
           :class="{ active: index === activeIndex }"
-          @click="player.seek(line.timeMs)"
+          @click="seekLine(line.timeMs)"
         >
           <template v-if="line.words">
             <span
@@ -80,8 +116,6 @@ watch(
           <span v-if="line.trans" class="lyric-trans">{{ line.trans }}</span>
         </button>
       </div>
-    </section>
-
-    <CommentsPanel />
-  </aside>
+    </div>
+  </section>
 </template>

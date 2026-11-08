@@ -1,7 +1,7 @@
 import { app } from 'electron'
-import { copyFile, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises'
+import { copyFile, link, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Quality } from '../../shared/types'
 import { AUDIO_CACHE_DIR, AUDIO_CACHE_MAX_BYTES } from '../../shared/constants'
 import { getCredential } from '../credential'
@@ -30,6 +30,31 @@ function filePath(songMid: string, quality: Quality): string {
 export function getCachedAudio(songMid: string, quality: Quality): string | null {
   const path = filePath(songMid, quality)
   return existsSync(path) ? path : null
+}
+
+/** 返回该歌曲已有的最高缓存档位；无缓存返回 null。 */
+export function getCachedAudioInfo(songMid: string): Quality | null {
+  for (const quality of ['flac', '320k', '128k'] as Quality[]) {
+    if (existsSync(filePath(songMid, quality))) return quality
+  }
+  return null
+}
+
+/** 把缓存文件复制/硬链接到下载文件；返回实际使用的源文件。 */
+export async function linkCachedAudio(
+  songMid: string,
+  quality: Quality,
+  targetPath: string
+): Promise<string | null> {
+  const source = getCachedAudio(songMid, quality)
+  if (!source) return null
+  await mkdir(dirname(targetPath), { recursive: true })
+  try {
+    await link(source, targetPath)
+  } catch {
+    await copyFile(source, targetPath)
+  }
+  return source
 }
 
 async function totalBytes(): Promise<number> {
