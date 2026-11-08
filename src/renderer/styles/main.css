@@ -2913,12 +2913,14 @@ a {
   place-items: center;
   width: 32px;
   height: 32px;
+  border: 1px solid transparent;
   border-radius: 9px;
   color: var(--accent-strong);
   background: var(--accent-soft);
   transition:
     color 0.16s ease,
     background 0.16s ease,
+    border-color 0.16s ease,
     border-radius 0.16s ease;
 }
 
@@ -2926,8 +2928,9 @@ a {
   background: color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
-/* 展开时按钮作为 revealer 的底部，与弹出层无缝拼接。 */
+/* 展开时按钮作为 revealer 的底部，补齐左 / 右 / 下边框与弹出层连成一体。 */
 .mode-wrap.open .mode-button {
+  border-color: transparent var(--muted) var(--muted);
   border-radius: 0 0 9px 9px;
 }
 
