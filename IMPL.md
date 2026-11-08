@@ -867,3 +867,40 @@
 | `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 下载目录行增加“清空目录”，确认后删除目录内已下载文件、封面、分片与记录；播放缓存独立清理。 |
 | `USER.html` | §5.2.8 页面结构 · 下载中心 | 改 | 下载中心只展示单一任务列表，不再按批次分组；底部提供“清空目录”。 |
 | `EVOLVE.md` | #2 下载队列 | 改 | 删除批次模型与批次控制，补充统一入队、出队时解析歌曲信息、已下载文件本地播放与清空下载目录约束。 |
+
+### 4.17 下载按钮的缓存 / 下载状态在播放条与歌曲表统一
+
+问题描述：ISSUES 指出歌曲下载按钮在“已缓存”状态下，图标本身变成了带外框的样式，且按钮的圆角边框需要更粗；同时播放条的下载按钮与歌单 / 歌曲表内的呈现不一致，已缓存的边框与已下载的高亮在播放条上都没有生效。
+
+排查确认：
+
+- `AppIcon` 的 `download-cached` 是一个带圆角方框的下载箭头，缓存状态看起来像“图标被框住”，与需求相反；
+- 歌曲表仅有 `.song-icon.cached { outline: 1px }` 与 `.song-icon.downloaded` 两条样式，播放条的按钮虽然已经绑定 `cached` / `downloaded` class，但 CSS 中没有 `.icon-btn.cached` / `.icon-btn.downloaded`，因此播放条完全看不到缓存边框和下载高亮；
+- 两处选择图标优先级的逻辑本来一致（`downloaded → cached → normal`），差异只在样式层。
+
+解决方法：
+
+- `AppIcon` 的 `download-cached` 改为与普通下载图标一致的下载箭头 + 完整底线（`M12 4v11 / M8 11l4 4 4-4 / M5 19h14`），缓存状态不再由图标外框或断线表达；
+- 已缓存状态改由按钮自身的圆角边框表达：`.song-icon.cached` 与 `.icon-btn.cached` 共用 `box-shadow: inset 0 0 0 2px var(--border-strong)`，由原来的 1px `outline` 加粗到 2px，并使用 inset 阴影避免改变按钮尺寸、同时跟随各自圆角（歌曲表 7px / 播放条 9px）；
+- 已下载高亮同样共用：`.song-icon.downloaded` 与 `.icon-btn.downloaded` 统一使用 `var(--accent-soft)` 背景与 `var(--accent-strong)` 图标色；
+- 播放条按钮基础尺寸为 34px、图标 17px，直接铺满背景时图标四周留白约 8.5px，比歌曲表更空。仅为 `.icon-btn.downloaded` 增加 `padding: 4px` 与 `background-clip: content-box`，高亮收缩为 26px，图标四周留白降到约 4.5px（约一半），点击热区仍保持 34px；
+- 播放条与歌曲表继续共用同一套三态图标与 class 绑定，样式层改为同一组选择器，后续调整只需改一处。
+
+验证：
+
+- 本地静态页读取 computed style：播放条与歌曲表的缓存态均为 2px inset 圆角边框；两处下载态均为 `accent-soft` 背景 + `accent-strong` 图标色，播放条高亮内容盒为 26px、歌曲表为 26px；缓存图标路径不含外框且底线完整；
+- `npm run typecheck` 通过；
+- `npx vitest run` 12 个测试文件 / 47 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.36 `AppIcon.vue` | 改 | 明确 `download-cached` 与普通下载图标一致（下载箭头 + 完整底线）；缓存状态由按钮边框表达，不再使用带框或断线图标。 |
+| `CORE.html` | §4.39 `SongTable.vue` | 改 | 下载按钮三态统一为：普通 / 已缓存（2px 圆角内边框）/ 已下载（accent 高亮），与播放条使用同一组选择器。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放条下载按钮补 `cached` / `downloaded` 状态样式，与歌曲表一致；已下载高亮用 4px padding + `background-clip: content-box` 收紧到图标附近，点击热区不变；图标优先级仍为已下载 > 已缓存 > 普通。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.song-icon.cached` 的 1px `outline`，改为 `.song-icon.cached, .icon-btn.cached` 的 2px inset 圆角边框；`.downloaded` 同时覆盖两类按钮，并给 `.icon-btn.downloaded` 增加 4px padding 与 `background-clip: content-box`。 |
+| `USER.html` | §5.2.3 播放条 · 右区下载 | 改 | 三态呈现改为：普通图标 / 普通图标 + 2px 圆角边框（已缓存）/ 实心背景高亮（已下载，高亮范围收紧到图标附近）；与歌曲表一致。 |
+| `USER.html` | §5.2.4 歌曲列表 · 操作列 | 改 | 下载按钮已缓存时保留普通图标，仅按钮出现 2px 圆角边框；已下载时按钮高亮。 |
+| `EVOLVE.md` | #2 下载队列 / #9 播放条 | 不动 | 状态语义未变，仅统一图标与样式表达，由 CORE / USER 主责。 |
