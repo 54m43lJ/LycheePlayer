@@ -993,7 +993,7 @@ export function destroyTray(): void;
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
-  <li>歌词 / 评论为 <code>/lyrics</code> 路由页，不在外壳中渲染覆盖层；外壳不监听路由做面板关闭。</li>
+  <li>歌词 / 评论为 <code>/lyrics</code> 路由页，由路由渲染；外壳不监听路由做面板关闭。</li>
   <li>挂载下载抽屉；与播放队列面板互斥。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
@@ -1177,7 +1177,7 @@ interface UiStore {
 }
 </code></pre>
 <ul class="note">
-  <li>只保留播放队列面板与窄屏侧栏抽屉状态；歌词 / 评论由 <code>/lyrics</code> 路由与当前歌曲驱动，不再有打开 / 关闭状态。</li>
+  <li>只保留播放队列面板与窄屏侧栏抽屉状态；歌词 / 评论由 <code>/lyrics</code> 路由与当前歌曲驱动。</li>
   <li><code>sidebarOpen</code> 只影响 ≤900px 的抽屉；宽屏固定侧栏忽略该状态，路由切换时自动关闭抽屉。</li>
 </ul>
 
@@ -1315,7 +1315,7 @@ const emit = defineEmits&lt;{
   <li>播放进度条下方增加一条细缓存进度线，订阅 <code>audioCache.onProgress</code>，按当前 <code>songMid + quality</code> 匹配；缓存完成显示满格 / 对勾，关闭播放缓存时隐藏。缓存进度不读取下载 store，与下载进度相互独立。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
   <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭，点击 / 焦点同样打开，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
-  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染“还没有播放中的歌曲”文字。</li>
+  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染文字占位。</li>
 </ul>
 
 <h3 id="c4-41">4.41 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -2131,7 +2131,7 @@ app::requestSingleInstanceLock()
   <li>播放条封面调用 <code>router.push('/lyrics')</code> 进入页面；离开页面不改变播放状态，返回优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
   <li>歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>；歌词请求可返回 QRC，解密与逐字解析见 <a href="#c4-64">§4.64</a>，无 QRC 时回退 LRC 整行高亮。</li>
   <li>评论默认按最新排序、固定每页 20 条，匿名发送；切换排序时优先透传上游，不支持则本地重排；右上刷新只重载评论。评论读取与分页见 <a href="#c4-15">§4.15</a>，接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
-  <li>点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a> / <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。不再有歌词 / 评论覆盖面板与路由切换关闭逻辑。</li>
+  <li>点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a> / <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。歌词 / 评论随路由加载与卸载。</li>
 </ul>
 
 <h3 id="c5-10">5.10 歌单加载与整份缓存</h3>
