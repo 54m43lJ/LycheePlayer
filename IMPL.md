@@ -747,3 +747,24 @@
 | `CORE.html` | §4.2 `ipc.ts` | 改 | `handle` 增加 `{ silent?: boolean }`；`song.probe` 失败不写 IPC 错误日志。 |
 | `USER.html` | §5.3 错误与通知 | 不动 | 背景探测仍静默处理，不新增用户可见提示。 |
 | `EVOLVE.md` | #5 歌词 / 评论或 #4 歌手页 | 不动 | 属于可用性探测的生命周期修复，不改变产品交互。 |
+
+### 4.13 song.probe 请求量与 IP 104009 风控核查（未完成）
+
+问题描述：4.12 的泄漏问题修复后，用户 IP 仍被 QQ 音乐风控，播放链接请求持续返回 104009。需要确认 `song.probe` 是否绕过了限流，以及现有令牌桶是否过于宽松。
+
+核查结论（代码层面）：
+
+- **限流没有失效**。探测链路为 `song.probe → probeAvailability → resolveStreamUrls → fetchTrack / requestQuality → musicu → upstreamRequest → fetchOnce`，而 `fetchOnce` 在真正发请求前统一调用 `throttleUpstream()`；所有探测请求与播放、搜索、歌单请求共用同一个进程级令牌桶。
+- `requestQuality` 在经典 vkey 接口返回 104009 时会再请求 `music.vkey.GetVkey / UrlGetVkey`；若返回成功但没有 purl，`resolveStreams` 还会按 `flac → 320k → 128k` 继续尝试，因此最坏情况下一个探测批次会发出“50 次歌曲详情 + 3 次 vkey”。
+- 当前全局限速为 `UPSTREAM_RATE_LIMIT_PER_SECOND = 4`、`UPSTREAM_RATE_LIMIT_BURST = 8`。打开一个有 50 首歌的歌单，首次探测约需 12 秒连续请求 51 次；滚动加载下一页会再叠加同样规模，且 10 分钟后缓存过期可重来。
+- 限流器只约束“每秒请求数”，没有区分前台播放 / 搜索与后台探测，也没有单端点预算或探测冷却；对 QQ 的风控模型而言，这种“短时间集中请求同一首歌单的 50 首详情再批量取 vkey”的模式仍然很像抓取，即使瞬时速率没有超过 4 req/s。
+
+评估：限流机制本身没有失效，但对 `song.probe` 来说**过于宽松且请求形态集中**，是触发风控的高风险来源。当前尚未完成修复，待决定以下方向：
+
+1. 为后台探测增加独立的更严格限速（例如 1 req/s、burst 2），或让探测批次之间强制冷却；
+2. 避免逐首调用歌曲详情：歌曲列表响应本身已带 `file.media_mid`，可把 `mediaMid` 带到 `Song`/探测参数中，探测时直接批量取 vkey，把 50 次详情降为 1 次 vkey；
+3. 缩小探测范围：只探测首屏 / 当前可见行，而不是一次探测整页；
+4. 在 104009 / `UPSTREAM_NETWORK` 后增加全局退避与更长的冷却时间，而不只是暂停当前组件；
+5. 评估是否需要把可用性缓存 TTL 从 10 分钟延长，减少重复探测。
+
+状态：ISSUES 已新增顶层记录，未标记已解决；待完成上述策略调整后再补充验证结果。
