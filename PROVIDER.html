@@ -265,7 +265,7 @@
   <tr><td>会话续期</td><td><code>music.login.LoginServer / Login</code></td><td>用 <code>refresh_token</code> 换新 <code>musickey</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
   <tr><td>歌词</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回 LRC / QRC 与翻译。</td></tr>
-  <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲评论列表。</td></tr>
+  <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲评论列表；排序（点赞 / 最新 / 最旧）在上游支持时通过排序参数透传，不支持时按默认顺序返回并由前端本地排序；单页固定 20 条。</td></tr>
   <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号 VIP 权益，用于不可播提示。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方扫码组件。</td></tr>
@@ -316,7 +316,7 @@
   </tr>
   <tr>
     <td>歌曲评论</td>
-    <td><code>BizId</code>（数字歌曲 ID） · <code>BizType</code>（1） · <code>BizSubType</code>（2） · <code>PageSize</code>（≤25） · <code>PageNum</code> · <code>LastCommentSeqNo</code> · <code>HashTagID</code> · <code>SelfSeeEnable</code> · <code>PicEnable</code> · <code>AudioEnable</code></td>
+    <td><code>BizId</code>（数字歌曲 ID） · <code>BizType</code>（1） · <code>BizSubType</code>（2） · <code>PageSize</code>（≤25） · <code>PageNum</code> · <code>LastCommentSeqNo</code> · <code>HashTagID</code> · <code>SelfSeeEnable</code> · <code>PicEnable</code> · <code>AudioEnable</code> · 排序参数（上游支持时使用，取值对应点赞 / 最新 / 最旧）</td>
   </tr>
   <tr>
     <td>VIP 状态</td>
@@ -354,7 +354,7 @@
 <ul class="note">
   <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
   <li>普通内容 CGI 不需要额外签名；收藏写入必须使用 <a href="#p3-4">§3.4</a> 的 zzc 签名 + <code>ag-1</code> 加密通道；<code>g_tk</code> 还用于 OAuth 授权、歌词与用户资料请求。</li>
-  <li>歌曲评论单页最多 25 条；超过上限时上游返回业务码 <code>10000</code>，因此应用固定使用 20 条。评论请求匿名发送，不携带登录凭证。</li>
+  <li>歌曲评论单页最多 25 条；超过上限时上游返回业务码 <code>10000</code>，因此应用固定使用 20 条。评论请求匿名发送，不携带登录凭证。排序参数是否被上游接受以实际响应为准；不接受时应用在已加载评论上按发布时间本地排序。</li>
   <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。上游单次最多返回 100 首，应用固定 50 首/页。</li>
   <li>推荐、歌单创建 / 改名 / 删除、MV 接口尚未完成 fixture 验证；验证前不写入具体方法名，只在 CORE 标记待实现。收藏写入与状态读取已实现。</li>
 </ul>
@@ -638,7 +638,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqCommentList</code></td>
     <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
-    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。</td>
+    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>PubTime</code> 映射为 <code>createdAtMs</code>，用于本地按最新 / 最旧重排；点赞 / 最新 / 最旧排序由请求参数决定，模型不新增未验证字段。</td>
   </tr>
   <tr>
     <td><code>QqVipData</code></td>

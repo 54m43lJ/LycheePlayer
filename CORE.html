@@ -82,7 +82,7 @@
 │       │   ├── <a href="#c4-28">auth.ts</a>                   登录态与登录动作
 │       │   ├── <a href="#c4-29">player.ts</a>                 播放器状态与队列
 │       │   ├── <a href="#c4-30">settings.ts</a>               设置与主题
-│       │   ├── <a href="#c4-31">ui.ts</a>                     歌词 / 评论、播放队列等 UI 状态
+│       │   ├── <a href="#c4-31">ui.ts</a>                     播放队列等 UI 状态
 │       │   ├── <a href="#c4-61">playlist.ts</a>               歌单 feed
 │       │   ├── <a href="#c4-62">recommend.ts</a>              推荐 feed
 │       │   ├── <a href="#c4-63">playlist-edit.ts</a>          歌单编辑状态
@@ -103,8 +103,8 @@
 │       │   ├── <a href="#c4-38">MarqueeText.vue</a>           超宽文本跑马灯
 │       │   ├── <a href="#c4-39">SongTable.vue</a>             歌曲列表
 │       │   ├── <a href="#c4-40">PlayerBar.vue</a>             播放条
-│       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词 / 评论容器
-│       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         评论面板
+│       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词页歌词区
+│       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         歌词页评论区
 │       │   ├── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
 │       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
 │       │   └── <a href="#c4-67">DownloadDrawer.vue</a>         下载中心抽屉
@@ -112,6 +112,7 @@
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
 │       │   ├── <a href="#c4-45">LibraryView.vue</a>           我的歌单
 │       │   ├── <a href="#c4-46">PlaylistView.vue</a>          歌单详情
+│       │   ├── <a href="#c4-76">LyricsView.vue</a>             歌词 / 评论页
 │       │   ├── <a href="#c4-47">LoginView.vue</a>             登录页
 │       │   ├── <a href="#c4-48">SettingsView.vue</a>          设置页
 │       │   ├── <a href="#c4-68">DiscoverView.vue</a>          发现页
@@ -349,10 +350,14 @@ export interface Comment {
   createdAtMs: number;
 }
 
+export type CommentSort = 'hot' | 'latest' | 'oldest';
+
 export interface CommentPage {
   comments: Comment[];
   total: number;
   hasMore: boolean;
+  pageNo: number;
+  sort: CommentSort;
 }
 
 export interface SongAvailability {
@@ -610,7 +615,7 @@ export interface FlagsFile {
     decryptQrc(ciphertext: string): string;
   };
   comment: {
-    get(songId: string): Promise&lt;IpcResult&lt;CommentPage&gt;&gt;;
+    get(songId: string, sort?: CommentSort, pageNo?: number): Promise&lt;IpcResult&lt;CommentPage&gt;&gt;;
   };
   settings: {
     get(): Promise&lt;IpcResult&lt;Settings&gt;&gt;;
@@ -811,11 +816,16 @@ export function isVipUser(): Promise&lt;boolean&gt;;
 </ul>
 
 <h3 id="c4-15">4.15 src/main/api/comment.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function getComments(songId: string): Promise&lt;CommentPage&gt;;
+<pre><code>export function getComments(
+  songId: string,
+  sort: CommentSort,
+  pageNo: number
+): Promise&lt;CommentPage&gt;;
 
 </code></pre>
 <ul class="note">
   <li>评论读取固定匿名发送，不携带当前登录凭证；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
+  <li><code>sort</code> 默认 <code>latest</code>；上游支持排序参数时直接透传对应排序，不支持时按默认顺序取回并在 <code>CommentPage.sort</code> 标记请求排序，由渲染层在已加载评论上本地排序。分页固定每页 20 条（上游单页上限 25，超过返回业务码 10000）。</li>
 </ul>
 
 <h3 id="c4-16">4.16 src/main/api/login.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -928,15 +938,16 @@ export function destroyTray(): void;
 </code></pre>
 
 <h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、歌词 / 评论面板、播放队列面板、下载抽屉与 Toast。
+<pre><code>// 无 props / emits。应用外壳：侧栏、内容区、播放条、播放队列面板、下载抽屉与 Toast。
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
-  <li>监听路由变化并关闭歌词 / 评论面板，规则见 <a href="USER.html#u2">USER §2</a>。</li>
-  <li>挂载下载抽屉；与歌词 / 评论、播放队列面板互斥。</li>
+  <li>歌词 / 评论为 <code>/lyrics</code> 路由页，不在外壳中渲染覆盖层；外壳不监听路由做面板关闭。</li>
+  <li>挂载下载抽屉；与播放队列面板互斥。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
+  <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；展示行保留真实队列序号，移除操作使用真实队列下标。筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
 </ul>
 
 <h3 id="c4-24">4.24 src/renderer/api.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -953,7 +964,7 @@ export function describeError(error: unknown): string;
 export default router;
 </code></pre>
 <ul class="note">
-  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>。</li>
+  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/lyrics</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>。</li>
 </ul>
 
 <h3 id="c4-26">4.26 src/renderer/env.d.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1103,16 +1114,13 @@ interface SettingsStore {
 <pre><code>export function useUiStore(): UiStore;
 
 interface UiStore {
-  readonly lyricsOpen: boolean;
   readonly queueOpen: boolean;
-  toggleLyrics(): void;
-  closeLyrics(): void;
   toggleQueue(): void;
   closeQueue(): void;
 }
 </code></pre>
 <ul class="note">
-  <li>歌词 / 评论面板与播放队列面板互斥；打开一个时关闭另一个。</li>
+  <li>只保留播放队列面板状态；歌词 / 评论由 <code>/lyrics</code> 路由与当前歌曲驱动，不再有打开 / 关闭状态。</li>
 </ul>
 
 <h3 id="c4-32">4.32 src/renderer/utils/format.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1240,28 +1248,31 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>点击封面切换 <code>UiStore.lyricsOpen</code>，打开歌词 / 评论面板；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
+  <li>点击封面调用 <code>router.push('/lyrics')</code> 进入歌词 / 评论页；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首失败后停止，不读取探测结果。</li>
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
   <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭，点击 / 焦点同样打开，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
+  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染“还没有播放中的歌曲”文字。</li>
 </ul>
 
 <h3 id="c4-41">4.41 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>歌词 / 评论组合面板：左侧歌词，右侧 <a href="#c4-42">CommentsPanel</a>；覆盖侧栏与播放条以外的主区域，两列各占一半。</li>
-  <li>按 <code>player.positionMs</code> 计算活动行并自动滚动；点击歌词行调用 <code>player.seek()</code>。</li>
-  <li>面板开关由 <code>UiStore.lyricsOpen</code> 驱动；路由切换时由 <code>App.vue</code> 关闭。</li>
+  <li><a href="#c4-76">LyricsView</a> 左列的歌词区；顶部歌曲信息与返回入口由 <code>LyricsView</code> 提供，本组件不含“歌词 / 评论”标题行。</li>
+  <li>按 <code>player.positionMs</code> 计算活动行并保持其居中；滚动容器上下边缘使用渐隐遮罩。支持滚轮、左键拖拽（松手后恢复跟随）与点击行调用 <code>player.seek()</code>；有逐字数据时按词高亮。</li>
+  <li>加载中、无歌词与加载失败分别渲染 spinner / 空状态 / 错误重试；无当前歌曲时不渲染歌词内容。</li>
 </ul>
 
 <h3 id="c4-42">4.42 src/renderer/components/CommentsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>监听 <code>player.current.songId</code> 与 <code>UiStore.lyricsOpen</code>；面板打开且存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
-  <li>状态：加载中、暂无评论、加载失败；列表展示头像、昵称、正文与点赞数。</li>
+  <li><a href="#c4-76">LyricsView</a> 右列的评论区；监听当前歌曲与路由激活状态，存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
+  <li>排序为 <code>hot</code> / <code>latest</code> / <code>oldest</code>，默认 <code>latest</code>；切换时若上游支持排序直接请求对应排序，否则在已加载评论上按 <code>createdAtMs</code> 本地重排。刷新只重载评论，不触发歌词重载。</li>
+  <li>分页每页 20 条；列表滚动到底且 <code>hasMore=true</code> 时加载下一页，追加后按当前排序重新整理。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
+  <li>评论行两行布局：第一行头像 + 昵称 + 正文（最多两行），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
 </ul>
 
 <h3 id="c4-43">4.43 src/renderer/components/ToastStack.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1293,6 +1304,7 @@ const emit = defineEmits&lt;{
   <li>页面可见时每 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 调用 <code>playlist.poll(id)</code>；<code>document.visibilityState !== 'visible'</code> 时跳过。加载中断（<code>error</code> / <code>partial</code>）时由轮询恢复补全；底部 <code>.feed-footer</code> 为 flex，spinner 使用 <code>inline-block</code> / <code>flex: none</code>，避免显示为异常元素。</li>
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
   <li>处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后清除该歌单缓存并触发轮询，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
+  <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变分页、轮询与队列构建。显示匹配数 / 总数与清除按钮，无匹配时显示空结果状态。</li>
 </ul>
 
 <h3 id="c4-47">4.47 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1325,6 +1337,8 @@ const emit = defineEmits&lt;{
   <li>歌单底部 <code>.feed-footer</code> 使用 flex，<code>.spinner</code> 为 <code>inline-block</code> 且 <code>flex: none</code>；播放队列行网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，不包含专辑列，最后一列只容纳图标按钮。</li>
   <li>歌曲表操作列四个图标按钮在 <code>.song-action-inner</code> 内等距排列；≤900px 隐藏图标按钮、只显示 <code>more</code> 触发按钮。操作菜单为绝对定位浮层，项内“图标 + 文字”横排，点击外部或 Esc 关闭。</li>
   <li>播放模式菜单向上定位（<code>bottom: 100%</code>），当前模式项与菜单同圆角、与底部无空隙：高亮块由 <code>--accent-soft</code> 背景 + <code>--accent-strong</code> 文字构成，菜单项为纯图标按钮并保留 tooltip。</li>
+  <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。评论列表使用两行网格，正文限制两行。</li>
+  <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
 </ul>
 
 <h3 id="c4-50">4.50 src/shared/constants.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1720,6 +1734,15 @@ interface DownloadStore {
 }
 </code></pre>
 
+<h3 id="c4-76">4.76 src/renderer/views/LyricsView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。路由 /lyrics 的页面容器：顶部歌曲信息与返回，左歌词、右评论。
+</code></pre>
+<ul class="note">
+  <li>绑定 <code>player.current</code>：顶部展示歌名、歌手与专辑，歌手 / 专辑按 <code>mid</code> 决定链接或纯文本；无当前歌曲时展示空状态且不发起歌词 / 评论请求。</li>
+  <li>返回按钮优先 <code>router.back()</code>，无历史时 <code>router.push('/search')</code>。</li>
+  <li>布局为左右两列各 50%，中间保留分隔线；组合 <a href="#c4-41">LyricsPanel</a> 与 <a href="#c4-42">CommentsPanel</a>，不渲染独立标题行。</li>
+</ul>
+
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
 
@@ -1969,19 +1992,30 @@ app::requestSingleInstanceLock()
 </ul>
 
 <h3 id="c5-9">5.9 歌词与评论</h3>
-<pre><code>components/CommentsPanel::watch([player.current.songId, ui.lyricsOpen])
-└── components/CommentsPanel::load()
-    ├── 判断 !ui.lyricsOpen || !songId → 清空并返回
-    └── window.lychee.comment.get(songId)
-        └── ipc::handle('comment.get')
-            └── api/comment::getComments(songId)
-                └── api/client::musicu('music.globalComment.CommentRead', 'GetNewCommentList', ...)
+<pre><code>router::push('/lyrics')
+└── views/LyricsView::onMounted()
+    ├── 判断无当前歌曲 → 渲染空状态，不发请求
+    ├── composables/lyrics::useLyrics(current)
+    │   └── window.lychee.lyric.get(songMid)
+    │       └── ipc::handle('lyric.get')
+    │           └── api/lyric::getLyric(songMid)
+    │               └── GET c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg
+    ├── components/LyricsPanel::watch(player.positionMs)
+    │   ├── 查找活动行并滚动居中
+    │   └── 判断点击 / 拖拽 / 滚轮 → player.seek(positionMs)
+    └── components/CommentsPanel::watch([player.current, route])
+        ├── window.lychee.comment.get(songId, sort, pageNo)
+        │   └── ipc::handle('comment.get')
+        │       └── api/comment::getComments(songId, sort, pageNo)
+        │           └── api/client::musicu('music.globalComment.CommentRead', 'GetNewCommentList', ...)
+        ├── 判断上游不支持排序 → 本地按 createdAtMs 重排
+        └── 判断滚动到底 && hasMore → 加载下一页
 </code></pre>
 <ul class="note">
-  <li>播放条封面调用 <code>UiStore.toggleLyrics()</code> 打开歌词 / 评论组合面板；歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>。</li>
-  <li>评论请求匿名发送，单页条数见 <a href="#c4-15">§4.15</a>；接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
-  <li>歌词请求可返回 QRC；解密与逐字解析在 <a href="#c4-64">§4.64</a>，无 QRC 时回退 LRC 整行高亮。</li>
-  <li>路由切换时 <code>App.vue</code> 调用 <code>UiStore.closeLyrics()</code>。</li>
+  <li>播放条封面调用 <code>router.push('/lyrics')</code> 进入页面；离开页面不改变播放状态，返回优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
+  <li>歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>；歌词请求可返回 QRC，解密与逐字解析见 <a href="#c4-64">§4.64</a>，无 QRC 时回退 LRC 整行高亮。</li>
+  <li>评论默认按最新排序、固定每页 20 条，匿名发送；切换排序时优先透传上游，不支持则本地重排；右上刷新只重载评论。评论读取与分页见 <a href="#c4-15">§4.15</a>，接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
+  <li>点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a> / <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。不再有歌词 / 评论覆盖面板与路由切换关闭逻辑。</li>
 </ul>
 
 <h3 id="c5-10">5.10 歌单加载与整份缓存</h3>
