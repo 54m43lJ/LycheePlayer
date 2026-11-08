@@ -98,6 +98,10 @@
     <td>歌单先显示第一页，后续歌曲自动补齐；加载期间队列可以为空，当前歌曲单独显示。</td>
   </tr>
   <tr>
+    <td>最近歌单</td>
+    <td>按账号保存的最近访问歌单列表，最多 5 条，作为“我的歌单”下的快捷入口；当前正在播放的歌单在列表中高亮。</td>
+  </tr>
+  <tr>
     <td>播放缓存</td>
     <td>已播放音频在本机保存的副本，用于再次播放时减少下载；按账号隔离，可清空。</td>
   </tr>
@@ -171,6 +175,14 @@
   <tr>
     <td>渐进加载</td>
     <td>第一页成功即显示；后续页自动补齐；最终队列快照要求完整加载、非 stale 且元数据探测完成。完成前允许一次临时快照顶替；已知不可播歌曲在进入快照前剔除。</td>
+  </tr>
+  <tr>
+    <td>最近歌单</td>
+    <td>按账号保存的最近访问歌单列表，最多 5 条，作为“我的歌单”下的快捷入口；当前正在播放的歌单在列表中高亮。</td>
+  </tr>
+  <tr>
+    <td>最近歌单</td>
+    <td>最多 5 条，按账号持久化；进入歌单页时更新并置顶，超出淘汰最旧。登录后与每次展开窄屏侧栏时校验（宽屏首次渲染也校验一次），校验带 5 秒节流与单飞。已删除或无权限的歌单从列表移除且不补位；校验失败保留条目并标记失效。当前正在播放的歌单高亮，与当前路由无关。</td>
   </tr>
   <tr>
     <td>播放缓存</td>
@@ -327,14 +339,14 @@
 <table>
   <tr><th>项目</th><th>契约</th></tr>
   <tr><td>默认窗口</td><td>1280×820；不设置 <code>BrowserWindow.minWidth</code> / <code>minHeight</code>；无系统菜单栏。</td></tr>
-  <tr><td>主网格</td><td>两列：侧栏 + 内容区；底部播放条通栏；内容区独立滚动，播放条常驻贴底。布局最小阈值统一为 <code>--layout-min-width: 420px</code> 与 <code>--layout-min-height: var(--player-height) + 170px</code>。</td></tr>
+  <tr><td>主网格</td><td>宽屏两列：侧栏 + 内容区；底部播放条通栏；内容区独立滚动，播放条常驻贴底。≤900px 时侧栏脱离网格成为覆盖式抽屉，内容区占满宽度。布局最小阈值统一为 <code>--layout-min-width: 420px</code> 与 <code>--layout-min-height: var(--player-height) + 170px</code>。</td></tr>
   <tr><td>低于阈值</td><td>布局停止压缩，<code>body</code> 出现整窗纵向 / 横向滚动条；侧栏、账号入口与播放条仍可到达；导航先内部纵向滚动，内容区保持独立滚动。</td></tr>
-  <tr><td>侧栏宽度</td><td>224px；≤900px 为 64px 图标栏；≤560px 为 56px。</td></tr>
+  <tr><td>侧栏宽度</td><td>224px；≤900px 改为同宽 224px 的覆盖式抽屉，默认隐藏；不再保留 64px / 56px 常驻图标栏。</td></tr>
   <tr><td>内容区</td><td>铺满可用宽度（不设最大宽度）；页面内边距 28/34/40px（上/左右/下）。</td></tr>
   <tr><td>播放条高度</td><td>92px；≤900px 为 84px；≤560px 为 116px 双行。</td></tr>
   <tr><td>播放队列面板</td><td>右侧固定浮层，宽 390px，底部让出播放条高度；≤560px 全宽；同一时间只打开一个。</td></tr>
   <tr><td>登录组件占位</td><td>高度 332px；宽度 100%，最大宽度 800px（暂定，按实现调整）；≤560px 保持 100%；主进程 <code>WebContentsView</code> 按该矩形定位。</td></tr>
-  <tr><td>响应式断点</td><td>900px：侧栏收窄、设置页单列、歌曲列表隐藏专辑列、音量改为弹出式；560px：播放条双行、歌词 / 评论仍各占 50%、音质 / 主题选项单列。</td></tr>
+  <tr><td>响应式断点</td><td>900px：侧栏改为默认隐藏的覆盖式抽屉（左边缘 revealer / 拖拽打开）、设置页单列、歌曲列表隐藏专辑列、音量改为弹出式；560px：播放条双行、歌词 / 评论仍各占 50%、音质 / 主题选项单列。</td></tr>
 </table>
 
 <div class="ui-proto-wrap">
@@ -349,38 +361,47 @@
   <li>内容区按路由切换：搜索、我的歌单、歌单详情、歌词 / 评论、设置、登录。</li>
   <li>滚动层级：窗口低于布局阈值时由 <code>body</code> 承担整窗滚动；正常尺寸下侧栏导航在高度不足时内部滚动、账号入口固定，内容区独立滚动，播放条始终位于网格第二行。</li>
   <li>歌曲表操作单元格不得使用 <code>td display: flex</code>；按钮排列放在单元格内部容器中，行分隔线挂在 <code>tr</code>，避免行线断开与列宽异常。</li>
+  <li>窄屏抽屉层级：主界面在前、侧栏在后，抽屉左侧用少量阴影表现 revealer；主界面可向右拖动显示抽屉、向左拖动隐藏，松手按位移 / 速度吸附。抽屉打开时主内容轻微右移，关闭后复位。</li>
 </ul>
 
 <h4 id="u5-2-2">5.2.2 侧栏与导航</h4>
 <div class="ui-proto-wrap">
 <div style="display: flex; gap: 18px; align-items: flex-start">
-  <div class="ui-proto u-side" style="width: 224px; height: 400px; border-radius: 10px; border-right: 1px solid var(--p-line)">
+  <div class="ui-proto u-side" style="width: 224px; height: 470px; border-radius: 10px; border-right: 1px solid var(--p-line)">
     <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>QQ Music · Linux</small></span></div>
     <div class="u-nav-label">浏览</div>
     <div class="u-nav-item active">搜索</div>
     <div class="u-nav-item">发现</div>
     <div class="u-nav-item">我的歌单</div>
+    <div class="u-nav-item" style="padding-left: 28px; opacity: .85">我喜欢的音乐</div>
+    <div class="u-nav-item" style="padding-left: 28px; opacity: .85">华语流行</div>
+    <div class="u-nav-item" style="padding-left: 28px; opacity: .85">夜跑</div>
     <div class="u-nav-label">应用</div>
     <div class="u-nav-item">下载</div>
     <div class="u-nav-item">设置</div>
     <div class="u-nav-item">退出</div>
     <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>已登录 · 0123456789</small></span></div>
   </div>
-  <div class="ui-proto u-side narrow" style="height: 400px; border-radius: 10px">
-    <span class="u-mark">♪</span>
-    <div class="u-nav-item active" style="padding: 8px 10px">⌕</div>
-    <div class="u-nav-item" style="padding: 8px 10px">≡</div>
-    <div class="u-nav-item" style="padding: 8px 10px">⚙</div>
-    <div class="u-pill" style="margin-top: auto; padding: 6px"><span class="u-avatar" style="width: 20px; height: 20px">L</span></div>
+  <div class="ui-proto u-side" style="width: 224px; height: 470px; border-radius: 10px; box-shadow: 6px 0 18px rgba(0,0,0,.35)">
+    <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>窄屏抽屉 · 默认隐藏</small></span></div>
+    <div class="u-nav-label">浏览</div>
+    <div class="u-nav-item active">搜索</div>
+    <div class="u-nav-item">发现</div>
+    <div class="u-nav-item">我的歌单</div>
+    <div class="u-nav-item" style="padding-left: 28px; opacity: .85">华语流行 <span class="u-qmark">播放中</span></div>
+    <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>已登录 · 0123456789</small></span></div>
   </div>
 </div>
 </div>
 <ul class="note">
-  <li>宽态：品牌区、分组导航（浏览：“搜索 / 发现 / 我的歌单”；应用：“下载 / 设置 / 退出”）与底部账号 pill；账号 pill 未登录时进入登录页，已登录时进入设置页。</li>
+  <li>宽屏（&gt;900px）固定侧栏 224px：品牌、浏览组（“搜索 / 发现 / 我的歌单”）、应用组（“下载 / 设置 / 退出”）与底部账号 pill；导航项激活态使用 accent 软填充与强调文字，悬停态只改变背景与文字颜色。</li>
+  <li>“我的歌单”下最多显示 5 条最近访问歌单作为子条目；点击进入对应歌单。进入歌单页时更新该条目并置顶，超过 5 条淘汰最旧的一条；已删除或无权限的歌单在校验后移除，且不从第 6 条补位；歌单信息变化时更新名称 / 封面 / 歌曲数。</li>
+  <li>当前正在播放的歌单在最近列表中高亮，播放与暂停状态都高亮，与当前路由无关；手动队列（无歌单来源）不高亮。</li>
+  <li>≤900px：侧栏改为覆盖式抽屉，默认隐藏；主界面在前、抽屉在后，抽屉左侧带少量阴影形成 revealer 效果。左边缘把手指针可打开；主界面向右拖动显示、向左拖动隐藏，松手按位移 / 速度吸附；Esc、点击外部关闭；<code>prefers-reduced-motion</code> 时取消动画。抽屉打开时焦点进入侧栏，关闭后回到触发点。</li>
+  <li>最近列表的校验时机：登录后、窄屏每次展开侧栏时，以及宽屏首次渲染；带 5 秒节流与单飞（前一次未完成不重复触发）。优先读整份缓存，再用歌单详情刷新名称 / 封面 / 歌曲数；删除或无权限则移除条目，校验失败保留条目并标记失效，避免误删。</li>
+  <li>退出登录清空当前账号的最近列表；切换账号加载对应列表。最近列表不进入“我的歌单”主卡片。</li>
   <li>“下载”打开右侧下载中心抽屉，不跳转页面；抽屉与播放队列面板互斥。“退出”直接结束应用进程，不受“关闭到托盘”影响。</li>
-  <li>≤900px：收为 64px 图标栏，仅保留图标与头像；≤560px 收为 56px。</li>
-  <li>导航项激活态使用 accent 软填充与强调文字；悬停态只改变背景与文字颜色。</li>
-  <li>高度不足时导航区先内部纵向滚动（<code>flex: 1; min-height: 0; overflow-y: auto</code>），底部账号入口固定（<code>flex: 0 0 auto</code>）；低于整窗最小高度后按 §5.2.1 随页滚动，账号入口与播放条仍可到达。</li>
+  <li>高度不足时导航区先内部纵向滚动（<code>flex: 1; min-height: 0; overflow-y: auto</code>），底部账号入口固定（<code>flex: 0 0 auto</code>）；低于整窗最小高度后按 <a href="#u5-2-1">§5.2.1</a> 随页滚动，账号入口与播放条仍可到达。账号 pill 未登录进入登录页，已登录进入设置页。</li>
 </ul>
 
 <h4 id="u5-2-3">5.2.3 播放条</h4>
