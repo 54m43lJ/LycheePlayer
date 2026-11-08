@@ -36,3 +36,4 @@
 - 歌曲探测方案一首一首探测太笨拙。参考一下项目https://github.com/sansenjian/qq-music-api，如何实现的POST /batchGetSongInfo接口。
 - 设置里的“退出应用”按钮移到右边单独开一块
 - 托盘图标有时候全黑有时候彩色。只需要保留彩色图标就行了
+- 按点赞排序评论的API有问题（[ipc] UPSTREAM_CHANGED: 上游返回错误码 10000（music.globalComment.CommentRead.GetHotCommentList））
