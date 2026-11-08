@@ -418,3 +418,32 @@
 | `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 补 120/200ms 定时器与 document 监听的卸载清理。 |
 | `CORE.html` | §4.49 `styles/main.css` | 不动 | 菜单定位与高亮样式由 #9 维护。 |
 | `USER.html` | §5.2.3 播放模式 | 不动 | 交互契约由 #9 维护，见该节。 |
+
+## 4. ISSUES 未决项修复记录
+
+### 4.1 播放条合并为单轨进度条并补齐缓冲进度
+
+问题描述：ISSUES 第一项指出播放条实际渲染成两条：播放进度用 `<input class="range">` 的渐变背景表示，缓存进度又在其下单独渲染一条 2px 细线，视觉上分成两行。同时该细线只消费主进程 `audioCache:progress` 的完整响应进度；一旦上游对 `Range` 请求返回局部 206，协议层不会上报进度，界面就长期没有缓冲呈现。ISSUES 要求改成同一条进度条：1 个背景 + 2 个 overlay，分别是缓冲进度与播放进度。
+
+解决方法：
+- 播放条改为单条 `.progress-track`：`progress-buffer` 位于底层、`progress-played` 位于上层，范围输入框透明覆盖在轨道上，只负责拖动与点击定位；
+- 缓冲 overlay 的宽度取 `max(音频缓存进度, HTML5 Audio buffered 进度)`：缓存完整时仍显示 100%，局部 Range 或缓存关闭时则由 `audio.buffered` 保证有可视缓冲；
+- `AudioEngineHandlers` 新增可选 `onBufferChange`，`engine.ts` 在 `progress` / `loadedmetadata` / `canplay` / `seeked` / `emptied` 时读取 `audio.buffered` 的最大 end；播放器 store 新增 `bufferedMs` 并在切歌时清零，供 `PlayerBar` 计算百分比；
+- 缓存事件的匹配条件从只看 `songMid` 收紧为 `songMid + quality`，避免切歌或降档后旧事件画到新进度条上；
+- 进度条 tooltip 在缓存完整时显示“缓存完成”，否则显示“缓冲 N%”；空状态仍保留 0 进度灰轨，不渲染 overlay。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 39 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放条改为单轨背景 + 缓冲 / 播放两个 overlay；缓冲取 `max(缓存进度, audio.buffered)`，范围输入框透明覆盖。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.cache-progress` 细线，改为 `.progress-track` / `.progress-buffer` / `.progress-played` / `.progress-range` 单轨样式。 |
+| `CORE.html` | §4.27 `src/renderer/audio/engine.ts` | 改 | 补 `onBufferChange` 与 `audio.buffered` 监听事件列表。 |
+| `CORE.html` | §4.29 `src/renderer/stores/player.ts` | 改 | 补 `bufferedMs` 状态、切歌清零与暴露给播放条。 |
+| `USER.html` | §5.2.3 播放条 · 进度条 | 改 | 描述单条进度条的背景 / 缓冲 / 播放三层结构；tooltip 改为“缓冲 N% / 缓存完成”。 |
+| `EVOLVE.md` | #3 播放条可视化缓存进度 | 改 | 把“进度条下方增加细缓存进度线”改为“在单条进度条内叠加缓冲 overlay”。 |

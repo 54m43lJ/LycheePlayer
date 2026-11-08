@@ -10,7 +10,6 @@ import { usePlayerStore, PLAY_MODE_LABEL, type PlayMode } from '../stores/player
 import { useUiStore } from '../stores/ui'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
-import { useSettingsStore } from '../stores/settings'
 import { useToast } from '../composables/toast'
 import { formatDuration, songCover } from '../utils/format'
 
@@ -18,11 +17,20 @@ const player = usePlayerStore()
 const ui = useUiStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
-const settings = useSettingsStore()
 const toast = useToast()
 const router = useRouter()
-const { current, status, volume, mode, quality, requestedQuality, positionMs, durationMs, progress } =
-  storeToRefs(player)
+const {
+  current,
+  status,
+  volume,
+  mode,
+  quality,
+  requestedQuality,
+  positionMs,
+  durationMs,
+  bufferedMs,
+  progress
+} = storeToRefs(player)
 
 const compactQuery = window.matchMedia('(max-width: 900px)')
 const compact = ref(compactQuery.matches)
@@ -49,36 +57,33 @@ const modeIcon = computed(() => {
   if (mode.value === 'repeat-all') return 'repeat'
   return 'list'
 })
-const progressStyle = computed(() => ({
-  background: `linear-gradient(to right, var(--gold) ${progress.value}%, var(--track) ${progress.value}%)`
-}))
+const progressStyle = computed(() => ({ width: `${progress.value}%` }))
 const volumeStyle = computed(() => ({
   background: `linear-gradient(to right, var(--accent-strong) ${volume.value * 100}%, var(--track) ${volume.value * 100}%)`
 }))
-const cacheStyle = computed(() => {
-  const percent =
-    cache.value && cache.value.totalBytes > 0
-      ? Math.min(100, (cache.value.receivedBytes / cache.value.totalBytes) * 100)
-      : 0
-  return {
-    width: `${percent}%`
-  }
+const cacheForCurrent = computed(() => {
+  const item = cache.value
+  if (!item || item.songMid !== current.value?.songMid) return null
+  if (item.quality !== quality.value) return null
+  return item
 })
-const cacheVisible = computed(
-  () =>
-    Boolean(hasSong.value) &&
-    settings.settings.audioCacheEnabled &&
-    Boolean(cache.value) &&
-    cache.value?.songMid === current.value?.songMid
-)
-const cacheLabel = computed(() => {
-  if (!cache.value) return ''
-  if (cache.value.complete) return '缓存完成'
-  const percent =
-    cache.value.totalBytes > 0
-      ? Math.round((cache.value.receivedBytes / cache.value.totalBytes) * 100)
-      : 0
-  return `缓存 ${percent}%`
+const cachePercent = computed(() => {
+  const item = cacheForCurrent.value
+  if (!item || item.totalBytes <= 0) return 0
+  return Math.min(100, (item.receivedBytes / item.totalBytes) * 100)
+})
+const bufferedPercent = computed(() => {
+  const total = totalMs.value
+  if (total <= 0) return 0
+  return Math.min(100, (bufferedMs.value / total) * 100)
+})
+const bufferPercent = computed(() => Math.max(cachePercent.value, bufferedPercent.value))
+const bufferStyle = computed(() => ({ width: `${bufferPercent.value}%` }))
+const bufferVisible = computed(() => hasSong.value && bufferPercent.value > 0)
+const bufferLabel = computed(() => {
+  if (!bufferVisible.value) return ''
+  if (cacheForCurrent.value?.complete) return '缓存完成'
+  return `缓冲 ${Math.round(bufferPercent.value)}%`
 })
 
 const qualityOptions: Array<{ value: Quality; label: string }> = [
@@ -378,27 +383,26 @@ watch(
       </div>
       <div class="progress-row">
         <span class="time">{{ hasSong ? formatDuration(positionMs) : '0:00' }}</span>
-        <div class="progress-stack">
+        <div class="progress-stack" :title="bufferLabel">
+          <div class="progress-track" :class="{ 'progress-disabled': !hasSong }" aria-hidden="true">
+            <span
+              v-if="bufferVisible"
+              class="progress-buffer"
+              :class="{ complete: cacheForCurrent?.complete }"
+              :style="bufferStyle"
+            />
+            <span v-if="hasSong" class="progress-played" :style="progressStyle" />
+          </div>
           <input
             v-if="hasSong"
-            class="range"
+            class="range progress-range"
             type="range"
             min="0"
             :max="Math.max(1, totalMs)"
             :value="positionMs"
-            :style="progressStyle"
             aria-label="播放进度"
             @input="player.seek(Number(($event.target as HTMLInputElement).value))"
           />
-          <div v-else class="range progress-disabled" aria-hidden="true" />
-          <div
-            v-if="cacheVisible"
-            class="cache-progress"
-            :title="cacheLabel"
-            :class="{ complete: cache?.complete }"
-          >
-            <span :style="cacheStyle" />
-          </div>
         </div>
         <span class="time">{{ hasSong ? formatDuration(totalMs) : '0:00' }}</span>
       </div>
