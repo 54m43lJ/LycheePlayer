@@ -201,8 +201,12 @@ export function registerIpc(): void {
 
   // ---------- content ----------
   handle('search.byType', async (req: SearchRequest) => searchByType(req))
-  handle('artist.get', async (mid: unknown, offset: unknown) =>
-    getArtist(stringArg(mid, '歌手 mid'), Number(offset) || 0)
+  handle('artist.get', async (mid: unknown, offset: unknown, sort: unknown) =>
+    getArtist(
+      stringArg(mid, '歌手 mid'),
+      Number(offset) || 0,
+      sort === 'latest' ? 'latest' : 'hot'
+    )
   )
   handle('album.get', async (mid: unknown, offset: unknown) =>
     getAlbum(stringArg(mid, '专辑 mid'), Number(offset) || 0)

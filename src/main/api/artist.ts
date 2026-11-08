@@ -1,4 +1,4 @@
-import type { ArtistDetail, Song } from '../../shared/types'
+import type { ArtistDetail, ArtistSongSort, Song } from '../../shared/types'
 import { CATALOG_PAGE_SIZE } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu, upstreamRequest } from './client'
@@ -45,14 +45,16 @@ async function fetchArtistInfo(mid: string): Promise<ArtistInfo> {
 
 async function fetchArtistSongs(
   mid: string,
-  offset: number
+  offset: number,
+  sort: ArtistSongSort
 ): Promise<{ songs: Song[]; total: number; hasMore: boolean }> {
   const data = await musicu<ArtistSongData>(
     'musichall.song_list_server',
     'GetSingerSongList',
     {
       singerMid: mid,
-      order: 1,
+      // 实测 order=1 返回最热，0 及其它值都退回最新；这里只暴露两种排序。
+      order: sort === 'hot' ? 1 : 0,
       begin: Math.max(0, Math.floor(offset)),
       num: CATALOG_PAGE_SIZE
     }
@@ -71,10 +73,17 @@ async function fetchArtistSongs(
   }
 }
 
-export async function getArtist(mid: string, offset = 0): Promise<ArtistDetail> {
+export async function getArtist(
+  mid: string,
+  offset = 0,
+  sort: ArtistSongSort = 'hot'
+): Promise<ArtistDetail> {
   const id = mid.trim()
   if (!id) throw new UpstreamError('UPSTREAM_CHANGED', '歌手 mid 为空')
-  const [info, page] = await Promise.all([fetchArtistInfo(id), fetchArtistSongs(id, offset)])
+  const [info, page] = await Promise.all([
+    fetchArtistInfo(id),
+    fetchArtistSongs(id, offset, sort)
+  ])
   const name = info.getSingerInfo?.Fsinger_name ?? ''
   return {
     mid: info.getSingerInfo?.Fsinger_mid || id,

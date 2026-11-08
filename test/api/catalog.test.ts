@@ -27,6 +27,27 @@ describe('api/catalog', () => {
     expect(detail.publishDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })
 
+  it('passes hot / latest order to the artist song list', async () => {
+    const orders: number[] = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      if (parsed.hostname === 'c.y.qq.com') return respond(fixture('singer-detail.json'))
+      const data = parsed.searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: { order?: number } }
+      }
+      orders.push(Number(payload.req_0?.param?.order))
+      return respond(fixture('singer-songs.json'))
+    })
+
+    const { getArtist } = await import('../../src/main/api/artist')
+    const hot = await getArtist('0025NhlN2yWrP4', 0, 'hot')
+    expect(hot.name).toBe('周杰伦')
+    expect(orders.at(-1)).toBe(1)
+    await getArtist('0025NhlN2yWrP4', 0, 'latest')
+    expect(orders.at(-1)).toBe(0)
+  })
+
   it('uses detail and song-list responses for albums', async () => {
     vi.stubGlobal('fetch', async (url: string | URL) => {
       const data = new URL(String(url)).searchParams.get('data')

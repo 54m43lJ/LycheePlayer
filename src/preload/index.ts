@@ -5,6 +5,7 @@ import type { LycheeApi } from '../shared/ipc'
 import type {
   AlbumDetail,
   ArtistDetail,
+  ArtistSongSort,
   AudioCacheProgress,
   AuthStatus,
   CommentLikeResult,
@@ -72,7 +73,8 @@ const api: LycheeApi = {
     byType: (req: SearchRequest) => invoke<SearchResult>('search.byType', req)
   },
   artist: {
-    get: (mid: string, offset?: number) => invoke<ArtistDetail>('artist.get', mid, offset)
+    get: (mid: string, offset?: number, sort?: ArtistSongSort) =>
+      invoke<ArtistDetail>('artist.get', mid, offset, sort)
   },
   album: {
     get: (mid: string, offset?: number) => invoke<AlbumDetail>('album.get', mid, offset)

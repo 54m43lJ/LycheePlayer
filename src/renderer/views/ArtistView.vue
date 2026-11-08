@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { ArtistDetail } from '@shared/types'
+import type { ArtistDetail, ArtistSongSort } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
@@ -23,10 +23,16 @@ const auth = useAuthStore()
 const ui = useUiStore()
 const toast = useToast()
 
+const SONG_SORTS: Array<{ value: ArtistSongSort; label: string }> = [
+  { value: 'hot', label: '最热' },
+  { value: 'latest', label: '最新' }
+]
+
 const detail = ref<ArtistDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
 const loadingMore = ref(false)
+const songSort = ref<ArtistSongSort>('hot')
 const pickerOpen = ref(false)
 const pickerIndex = ref(-1)
 const pageRef = ref<HTMLElement | null>(null)
@@ -56,7 +62,7 @@ async function load(reset = true): Promise<void> {
   }
   try {
     const offset = reset ? 0 : songs.value.length
-    const data = unwrap(await window.lychee.artist.get(id, offset))
+    const data = unwrap(await window.lychee.artist.get(id, offset, songSort.value))
     if (request !== token) return
     if (reset) {
       detail.value = data
@@ -84,6 +90,13 @@ function maybeLoadMore(): void {
   if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_LOAD_THRESHOLD) {
     void load(false)
   }
+}
+
+function changeSort(next: ArtistSongSort): void {
+  if (songSort.value === next) return
+  songSort.value = next
+  scrollRoot?.scrollTo({ top: 0 })
+  void load(true)
 }
 
 function playAll(): void {
@@ -179,7 +192,20 @@ onBeforeUnmount(() => {
 
       <div class="section-title">
         <span>歌曲</span>
-        <span class="count">{{ songs.length }} / {{ detail.total }} 首</span>
+        <div class="section-title-right">
+          <div class="tabs song-sort-tabs">
+            <button
+              v-for="item in SONG_SORTS"
+              :key="item.value"
+              class="tab"
+              :class="{ active: songSort === item.value }"
+              @click="changeSort(item.value)"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+          <span class="count">{{ songs.length }} / {{ detail.total }} 首</span>
+        </div>
       </div>
 
       <SongTable
