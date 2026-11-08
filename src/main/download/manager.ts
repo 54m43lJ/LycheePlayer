@@ -84,6 +84,14 @@ function scheduleSave(): void {
   }, DOWNLOAD_INDEX_SAVE_MS)
 }
 
+export async function flushDownloads(): Promise<void> {
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  await saveIndex()
+}
+
 async function saveIndex(): Promise<void> {
   const directory = downloadDir()
   try {

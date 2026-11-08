@@ -130,7 +130,9 @@ export async function createPlaylist(name: string): Promise<PlaylistMeta> {
     { bFmtUtf8: 1, dirName: name },
     '新建歌单'
   )
-  const id = String(data.result?.dirId ?? data.result?.tid ?? '')
+  const dirId = Number(data.result?.dirId ?? 0)
+  const tid = Number(data.result?.tid ?? 0)
+  const id = String(dirId > 0 ? dirId : tid)
   if (!/^\d+$/.test(id) || Number(id) <= 0) {
     throw new UpstreamError('UPSTREAM_CHANGED', '新建歌单响应缺少 dirId')
   }

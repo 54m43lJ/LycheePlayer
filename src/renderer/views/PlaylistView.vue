@@ -248,7 +248,11 @@ onBeforeUnmount(() => {
             </button>
             <button
               class="btn ghost"
-              :disabled="!auth.loggedIn || playableSongs.length === 0 || batch?.status === 'downloading'"
+              :disabled="
+                !auth.loggedIn ||
+                playableSongs.length === 0 ||
+                Boolean(batch && batch.status !== 'done' && batch.status !== 'failed')
+              "
               @click="downloadAll()"
             >
               <AppIcon name="download" :size="15" />

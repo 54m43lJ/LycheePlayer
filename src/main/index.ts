@@ -4,6 +4,7 @@ import { SESSION_REFRESH_INTERVAL_MS } from '../shared/constants'
 import { loadCredential } from './credential'
 import { refreshIfNeeded } from './api/login'
 import { registerIpc, sendPlayerCommand, sendPlaybackToggle } from './ipc'
+import { flushDownloads } from './download/manager'
 import { initMpris, publishState } from './integration/mpris'
 import { destroyTray, initTray } from './integration/tray'
 import { getSettings, loadSettings, saveSettings } from './settings'
@@ -175,5 +176,6 @@ if (!hasLock) {
     destroyTray()
     disposeEmbedView()
     void saveSettings(getSettings())
+    void flushDownloads()
   })
 }
