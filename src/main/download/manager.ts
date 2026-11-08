@@ -2,6 +2,7 @@ import { app } from 'electron'
 import { createWriteStream } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
+import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type {
@@ -84,14 +85,32 @@ function scheduleSave(): void {
   }, DOWNLOAD_INDEX_SAVE_MS)
 }
 
-export async function flushDownloads(): Promise<void> {
+function indexSnapshot(): DownloadIndex {
+  return {
+    tasks: [...tasks.values()]
+      .map((item) => persistable(item.task))
+      .filter((task) => task.status === 'done' || task.status === 'paused'),
+    batches: [...batches.values()]
+  }
+}
+
+/** 退出前同步落盘，避免异步写入被进程退出截断。 */
+export function flushDownloads(): void {
   if (saveTimer) {
     clearTimeout(saveTimer)
     saveTimer = null
   }
   // 从未访问过下载模块时不要用空快照覆盖已有索引。
   if (!loadedScope) return
-  await saveIndex()
+  try {
+    const directory = downloadDir()
+    mkdirSync(directory, { recursive: true })
+    const file = indexPath()
+    writeFileSync(`${file}.part`, JSON.stringify(indexSnapshot(), null, 2), { mode: 0o600 })
+    renameSync(`${file}.part`, file)
+  } catch {
+    // 退出阶段写入失败不再阻塞。
+  }
 }
 
 async function saveIndex(): Promise<void> {
@@ -99,12 +118,7 @@ async function saveIndex(): Promise<void> {
   const directory = downloadDir()
   try {
     await mkdir(directory, { recursive: true })
-    const index: DownloadIndex = {
-      tasks: [...tasks.values()]
-        .map((item) => persistable(item.task))
-        .filter((task) => task.status === 'done' || task.status === 'paused'),
-      batches: [...batches.values()]
-    }
+    const index = indexSnapshot()
     const file = indexPath()
     await writeFile(`${file}.part`, JSON.stringify(index, null, 2), { mode: 0o600 })
     await rename(`${file}.part`, file)

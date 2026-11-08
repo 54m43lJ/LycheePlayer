@@ -176,6 +176,6 @@ if (!hasLock) {
     destroyTray()
     disposeEmbedView()
     void saveSettings(getSettings())
-    void flushDownloads()
+    flushDownloads()
   })
 }

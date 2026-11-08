@@ -12,7 +12,7 @@ import type {
   SearchRequest,
   Settings
 } from '../shared/types'
-import { IPC_SONG_MIDS_MAX, PROBE_MIDS_MAX } from '../shared/constants'
+import { DOWNLOAD_BATCH_MAX, IPC_SONG_MIDS_MAX, PROBE_MIDS_MAX } from '../shared/constants'
 import { loginWithCookie, refreshSession } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
@@ -301,7 +301,7 @@ export function registerIpc(): void {
       source: 'playlist',
       playlistId: stringArg(value.playlistId, '歌单 ID'),
       playlistName: typeof value.playlistName === 'string' ? value.playlistName : undefined,
-      songMids: midArray(value.songMids)
+      songMids: midArray(value.songMids, DOWNLOAD_BATCH_MAX)
     })
   })
   handle('download.pauseBatch', async (id: unknown) => pauseBatch(stringArg(id, '批次 ID')))
