@@ -524,3 +524,28 @@
 | `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明“播放全部 / 下载全部 / 返回”按钮文字单行，窄容器时整组换行而不是按钮内折行。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 补一句：歌单头操作按钮保持文字单行，空间不足时按钮组整体换行。 |
 | `EVOLVE.md` | — | 不动 | 按钮排版属于样式实现细节，由 CORE / USER 主责。 |
+
+### 4.5 侧栏新增“我喜欢”入口
+
+问题描述：ISSUES 要求在导航栏“我的歌单”上方增加“我喜欢”。此前“我喜欢”只能从“我的歌单”页面的卡片进入，侧栏没有快捷入口；同时渲染层没有引用固定收藏歌单 ID 的常量，若在组件里再写一份 `'liked'` 容易与主进程漂移。
+
+解决方法：
+- `src/shared/constants.ts` 新增 `FAVORITES_PLAYLIST_ID = 'liked'`；
+- `src/main/api/playlist.ts` 删除本地 `FAVORITES_ID`，改为引用共享常量，固定收藏歌单 ID 只保留一处；
+- `App.vue` 在“我的歌单”之前增加 `RouterLink`，登录后显示，图标 `heart`、文案“我喜欢”，指向 `/playlist/${FAVORITES_PLAYLIST_ID}`；
+- 复用现有 `PlaylistView` 的 favorites 分支，不新增路由或 IPC；点击后沿用 `onSidebarNavigate()` 关闭窄屏抽屉。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 39 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.23 `App.vue` | 改 | 侧栏“浏览”组顺序改为搜索 / 发现 / 我喜欢 / 我的歌单；“我喜欢”登录后显示并指向固定收藏歌单。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `FAVORITES_PLAYLIST_ID = 'liked'`。 |
+| `CORE.html` | §4.12 `main/api/playlist.ts` | 改 | 固定收藏歌单 ID 改为引用共享常量，删除模块内重复字面量。 |
+| `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序补“我喜欢”；说明登录后显示、与“我的歌单”同级。 |
+| `EVOLVE.md` | #11 优化左侧导航 | 改 | 侧栏内容补“我喜欢”快捷入口。 |
