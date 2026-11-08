@@ -1,0 +1,45 @@
+{
+  "code": 0,
+  "req_0": {
+    "code": 0,
+    "data": {
+      "v_shelf": [
+        {
+          "id": 201,
+          "v_niche": [
+            {
+              "v_card": [
+                {
+                  "id": "0",
+                  "title": "每日30首",
+                  "subtype": 510,
+                  "jumptype": 10014,
+                  "cover": "",
+                  "cnt": 0,
+                  "time": 1794000000
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "id": 202,
+          "v_niche": [
+            {
+              "v_card": [
+                {
+                  "id": "0",
+                  "title": "",
+                  "subtype": 500,
+                  "jumptype": 10014,
+                  "cover": "",
+                  "cnt": 0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

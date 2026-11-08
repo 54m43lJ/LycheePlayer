@@ -1,0 +1,38 @@
+{
+  "code": 0,
+  "req_0": {
+    "code": 0,
+    "data": {
+      "CommentList": {
+        "Comments": [
+          {
+            "CmId": "1!anonymized-1",
+            "SeqNo": "100",
+            "Nick": "user-a",
+            "Avatar": "",
+            "Content": "[anonymized]",
+            "PubTime": 1794000000,
+            "PraiseNum": 0,
+            "ReplyCnt": 0,
+            "IsPraised": 0,
+            "State": 0
+          },
+          {
+            "CmId": "1!anonymized-2",
+            "SeqNo": "99",
+            "Nick": "user-b",
+            "Avatar": "",
+            "Content": "[anonymized]",
+            "PubTime": 1793990000,
+            "PraiseNum": 3,
+            "ReplyCnt": 1,
+            "IsPraised": 0,
+            "State": 0
+          }
+        ],
+        "Total": 2,
+        "HasMore": 1
+      }
+    }
+  }
+}

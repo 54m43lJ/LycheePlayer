@@ -118,8 +118,8 @@
     <td>当前歌曲音频体写入本机缓存的完成比例，不等于下载任务进度；缓存完成后显示满格 / 对勾。</td>
   </tr>
   <tr>
-    <td>每日推荐 / 专属雷达 / 猜你喜欢（待探测）</td>
-    <td>“发现”页的三类推荐内容；上游接口尚未验证，当前页面展示空状态，验证后再补真实内容。</td>
+    <td>每日推荐 / 专属雷达 / 猜你喜欢</td>
+    <td>“发现”页的三个推荐分区：每日推荐取当天动态歌单的 30 首；专属雷达按页取个性化推荐；猜你喜欢为连续推荐流。三者各自刷新、各自缓存 24 小时；未登录显示登录引导。</td>
   </tr>
   <tr>
     <td>逐字歌词</td>
@@ -127,11 +127,11 @@
   </tr>
   <tr>
     <td>收藏 / 歌单管理 / 可编辑歌单</td>
-    <td>收藏歌曲已可用；歌单创建、改名、删除与增删歌曲的上游接口仍在探测，当前为占位并提示暂不可用。公开歌单只读。</td>
+    <td>收藏歌曲与“我喜欢”可写；当前账号创建的普通歌单可创建、改名、删除与增删歌曲；公开歌单与他人歌单只读。可编辑歌单指当前账号自建、非“我喜欢”的普通歌单。</td>
   </tr>
   <tr>
-    <td>MV / MV 清晰度（待探测）</td>
-    <td>MV 搜索 / 详情 / 取流接口尚未验证；当前搜索返回空结果，详情与播放提示待探测。MV 播放与音频播放状态相互独立。</td>
+    <td>MV / MV 清晰度</td>
+    <td>MV 可搜索、查看详情并取流播放；清晰度分 <code>sd</code> / <code>hd</code> / <code>fhd</code>，默认最高档，档位不可用时自动降档。MV 播放与音频播放状态相互独立。</td>
   </tr>
   <tr>
     <td>下载任务 / 下载中心</td>
@@ -206,7 +206,7 @@
   </tr>
   <tr>
     <td>乐观更新与回滚</td>
-    <td>收藏、歌单编辑与从歌单删除等写操作先更新界面；失败时回滚并提示。从歌单删除失败时恢复被删行与歌曲数。</td>
+    <td>收藏、歌单创建 / 改名 / 删除、添加歌曲与从歌单删除等写操作先更新界面或写后刷新；失败时回滚并提示。从歌单删除失败时恢复被删行与歌曲数；添加到歌单重复时不重复提交并提示。</td>
   </tr>
   <tr>
     <td>缓存与下载</td>
@@ -446,10 +446,10 @@
 <div class="ui-proto" style="width: 760px; padding: 14px">
   <div class="u-table">
     <div class="u-th with-action"><span>#</span><span>标题</span><span>专辑</span><span>操作</span><span>时长</span></div>
-    <div class="u-tr with-action active"><span class="u-idx">▶</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">晴天 <span class="u-badge gold">VIP</span></span><small>周杰伦</small></span></span><span>叶惠美</span><span><span class="u-tab">♥ ⊖ ＋ ✕</span></span><span class="u-muted">4:29</span></div>
-    <div class="u-tr with-action"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年 <span class="u-badge">数字专辑</span></span><small>五月天</small></span></span><span>自传</span><span><span class="u-tab">♡ ⊖ ＋ ✕</span></span><span class="u-muted">4:28</span></div>
-    <div class="u-tr with-action"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span>启示录</span><span><span class="u-tab">♡ ⊖ ＋ ✕</span></span><span class="u-muted">4:41</span></div>
-    <div class="u-tr with-action"><span class="u-idx">4</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span>孤勇者</span><span><span class="u-tab">♡ ⊖ ＋ ✕</span></span><span class="u-muted">4:16</span></div>
+    <div class="u-tr with-action active"><span class="u-idx">▶</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">晴天 <span class="u-badge gold">VIP</span></span><small>周杰伦</small></span></span><span>叶惠美</span><span><span class="u-tab">♥ ⊖ ↑ ＋ ✕</span></span><span class="u-muted">4:29</span></div>
+    <div class="u-tr with-action"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年 <span class="u-badge">数字专辑</span></span><small>五月天</small></span></span><span>自传</span><span><span class="u-tab">♡ ⊖ ↑ ＋ ✕</span></span><span class="u-muted">4:28</span></div>
+    <div class="u-tr with-action"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span>启示录</span><span><span class="u-tab">♡ ⊖ ↑ ＋ ✕</span></span><span class="u-muted">4:41</span></div>
+    <div class="u-tr with-action"><span class="u-idx">4</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span>孤勇者</span><span><span class="u-tab">♡ ⊖ ↑ ＋ ✕</span></span><span class="u-muted">4:16</span></div>
   </div>
 </div>
 </div>
@@ -457,12 +457,13 @@
   <li>列顺序固定为 # / 标题 / 专辑 / 操作 / 时长；所有表头与操作 / 时长单元格左对齐。标题单元格含 38px 封面、歌名与下一行的歌手，专辑为独立列。序号与播放按钮共用 26px 居中槽。歌手名与专辑名渲染为链接，点击进入对应信息页且不触发行播放。</li>
   <li>歌名、歌手、专辑超长时使用跑马灯压缩，只在溢出时滚动；≤900px 隐藏专辑列，操作列保留。</li>
   <li>双击行播放并替换队列；悬停或当前播放行在 # 列显示播放 / 暂停按钮，其余显示从 1 开始的序号文本；当前播放行以 accent 底色标记。</li>
-  <li>点击非当前行的播放按钮即单曲播放，与双击一样替换播放队列；当前行的按钮切换暂停 / 继续。操作列的加号图标按钮执行“下一首播放”，只把歌曲插入队列头，不改变当前歌曲。</li>
+  <li>点击非当前行的播放按钮即单曲播放，与双击一样替换播放队列；当前行的按钮切换暂停 / 继续。操作列的“横线 + 上箭头”图标执行“下一首播放”，只把歌曲插入队列头，不改变当前歌曲；简单加号图标把歌曲添加到所选歌单。</li>
   <li>权限角标：VIP / 数字专辑 / 付费；歌单加载后会追加不可播标记与最高可用音质标签（如 FLAC / 320K / 128K）。标题拆为可压缩歌名与常驻徽标：窄窗口优先省略歌名，VIP / 音质徽标不被裁掉；不可播行禁用播放与“下一首播放”入口；未知状态按可播处理。≤900px 隐藏专辑列，操作列保留。歌手单元格按 <a href="#u2">§2</a> 的“歌手名缺失”规则降级：名字为空不渲染歌手文本，有名字无 <code>mid</code> 只显示纯文本。</li>
-  <li>操作列基础结构为收藏、下载、下一首播放（加号）与从歌单删除四个图标按钮；收藏按当前账号状态显示实心 / 空心爱心与“收藏 / 取消收藏” tooltip。下载按钮按缓存 / 下载状态切换同一套三态图标（未缓存未下载 / 已缓存 / 已下载），tooltip 补充档位，只对当前账号可播内容可用。操作按钮放在单元格内部容器中，不能把 <code>td</code> 改成 flex，行线挂 <code>tr</code>。</li>
+  <li>操作列基础结构为收藏、下载、下一首播放（横线 + 上箭头）、添加到歌单（简单加号）与从歌单删除五个图标按钮；收藏按当前账号状态显示实心 / 空心爱心与“收藏 / 取消收藏” tooltip。下载按钮按缓存 / 下载状态切换同一套三态图标（未缓存未下载 / 已缓存 / 已下载），tooltip 补充档位，只对当前账号可播内容可用。操作按钮放在单元格内部容器中，不能把 <code>td</code> 改成 flex，行线挂 <code>tr</code>。</li>
+  <li>“添加到歌单”对所有登录后的歌曲表可用：点击打开选择器，列出当前账号可编辑的普通歌单（排除“我喜欢”），并提供“新建歌单”；选择后加入目标歌单，成功 Toast 并刷新目标歌单；歌曲已在歌单中时提示“已在歌单中”。</li>
   <li>“从歌单删除”只在当前账号可编辑的普通歌单显示；“我喜欢”不显示删除按钮（取消收藏继续走收藏按钮）。点击后先确认歌曲名与歌单名，确认后移除该行并更新歌曲数；失败恢复行与计数并提示。删除只改变歌单成员，不影响当前播放与播放队列。</li>
   <li>歌单详情在歌曲表上方提供筛选输入框：按歌名 / 歌手 / 专辑做本地、不区分大小写匹配；只影响展示，不改变播放队列与播放顺序；显示匹配数 / 总数与清除按钮。</li>
-  <li>≤900px 时四个基础按钮收为一个“…”按钮，弹出“图标 + 文字”菜单；菜单项按收藏、下载、下一首播放、从歌单删除排列，点击菜单不触发行播放，点击外部或按 Esc 关闭。</li>
+  <li>≤900px 时五个按钮收为一个“…”按钮，弹出“图标 + 文字”菜单；菜单项按收藏、下载、下一首播放、添加到歌单、从歌单删除排列，点击菜单不触发行播放，点击外部或按 Esc 关闭。</li>
 </ul>
 
 <h4 id="u5-2-5">5.2.5 歌词与评论</h4>
@@ -594,7 +595,7 @@
   </tr>
   <tr>
     <td>我的歌单</td>
-    <td>登录后：账号资料带 + 歌单卡片网格；未登录：空状态 + “去登录”。卡片显示封面、名称与歌曲数；收藏成功后监听收藏版本自动重新拉取，不需要手动刷新。</td>
+    <td>登录后：账号资料带 + 歌单卡片网格；未登录：空状态 + “去登录”。卡片显示封面、名称与歌曲数；收藏成功后监听收藏版本自动重新拉取，不需要手动刷新。提供新建歌单入口；当前账号自建的普通歌单卡片提供改名与删除菜单，删除需确认；公开 / 他人歌单只读。</td>
   </tr>
   <tr>
     <td>歌单详情</td>
@@ -609,12 +610,12 @@
     <td><code>/lyrics</code> 路由页：顶部返回与歌名 / 歌手 / 专辑，无独立标题行；左右各 50%，中间分隔线；左歌词当前行居中高亮、上下渐隐、支持拖拽 / 滚轮 / 点击定位；右评论默认最新排序，右上仅刷新评论，滚动分页与点赞；无当前歌曲时为空状态。</td>
   </tr>
   <tr>
-    <td>发现（待探测）</td>
-    <td>“每日推荐 / 专属雷达 / 猜你喜欢”三个分区；接口验证前三个分区为空状态；未登录显示登录引导。</td>
+    <td>发现</td>
+    <td>“每日推荐 / 专属雷达 / 猜你喜欢”三个分区，各自提供刷新入口；每区固定高度显示 3 行、上下滚动，条目固定宽度（封面图标 + 上方歌名、下方歌手，超长走马灯）。未登录显示登录引导；分区空结果显示空状态，失败显示该区错误与重试。</td>
   </tr>
   <tr>
-    <td>MV 播放（待探测）</td>
-    <td>视频播放器 + 标题 / 歌手 / 清晰度选择；接口验证前搜索为空、详情与取流提示待探测；支持全屏与退出恢复。</td>
+    <td>MV 播放</td>
+    <td>视频播放器 + 标题 / 歌手 / 清晰度选择；搜索结果中的 MV 卡片进入本页。默认最高清晰度并自动播放，档位不可用时按 <code>fhd → hd → sd</code> 降档；使用原生视频控制，支持全屏与退出全屏恢复（保持播放位置与状态，不做离开页面后的续播）。</td>
   </tr>
   <tr>
     <td>下载中心</td>
@@ -673,6 +674,7 @@
   <li>下载：本地转移失败自动回退为正常下载，不新增错误码；删除批次需确认，删除单任务 / 批次才删文件，“清除已完成”只清记录。缓存清理与下载删除互不影响。</li>
   <li>登录流程中的具体失败原因（验证码、设备限制等）由上游返回；界面是否展示原始原因取决于错误映射策略。</li>
   <li>歌词 / 评论页的数据加载失败使用页内错误区与重试；排序切换或滚动分页失败保留已加载内容并提示；右上刷新只影响评论。点赞失败回滚并 Toast；这些都不新增错误码，复用现有映射。</li>
+  <li>推荐分区失败只影响该区，保留其余分区并提示重试；MV 详情 / 取流失败显示页内错误与重试；歌单创建 / 改名 / 删除 / 添加歌曲失败保留原状态并提示，<code>AUTH_EXPIRED</code> 引导重新登录，<code>NO_PERMISSION</code> 提示不可编辑。</li>
 </ul>
 
 <h3 id="u5-4">5.4 托盘</h3>
