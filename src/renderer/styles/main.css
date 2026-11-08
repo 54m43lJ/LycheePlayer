@@ -2930,8 +2930,7 @@ a {
 
 /* 展开时按钮作为 revealer 的底部，补齐左 / 右 / 下边框与弹出层连成一体。 */
 .mode-wrap.open .mode-button {
-  border-color: transparent var(--muted) var(--muted);
-  border-radius: 0 0 9px 9px;
+  border-color: transparent var(--panel) var(--panel);
 }
 
 .mode-menu {
@@ -2944,7 +2943,7 @@ a {
   gap: 2px;
   width: 100%;
   padding: 4px 0;
-  border: 1px solid var(--muted);
+  border: 1px solid var(--panel);
   border-bottom: none;
   border-radius: 9px 9px 0 0;
   background: var(--bg);
