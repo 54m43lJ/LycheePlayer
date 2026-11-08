@@ -41,6 +41,7 @@ export const usePlayerStore = defineStore('player', () => {
   const status = ref<'stopped' | 'playing' | 'paused'>('stopped')
   const positionMs = ref(0)
   const durationMs = ref(0)
+  const bufferedMs = ref(0)
   const volume = ref(clampVolume(Number(localStorage.getItem('lychee.volume') ?? 0.8)))
   const mode = ref<PlayMode>('sequence')
   const quality = ref<Quality>('320k')
@@ -124,6 +125,9 @@ export const usePlayerStore = defineStore('player', () => {
     onDurationChange(duration) {
       durationMs.value = duration
     },
+    onBufferChange(buffered) {
+      bufferedMs.value = buffered
+    },
     onPlay() {
       if (status.value !== 'playing') {
         status.value = 'playing'
@@ -201,6 +205,7 @@ export const usePlayerStore = defineStore('player', () => {
     playable.value = true
     positionMs.value = 0
     durationMs.value = song.durationMs
+    bufferedMs.value = 0
     sendState()
 
     try {
@@ -561,6 +566,7 @@ export const usePlayerStore = defineStore('player', () => {
     status,
     positionMs,
     durationMs,
+    bufferedMs,
     volume,
     mode,
     quality,
