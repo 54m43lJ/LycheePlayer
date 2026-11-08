@@ -7,6 +7,7 @@ import DownloadDrawer from './components/DownloadDrawer.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ToastStack from './components/ToastStack.vue'
 import { useAuthStore } from './stores/auth'
+import { useDownloadStore } from './stores/download'
 import { usePlayerStore } from './stores/player'
 import { usePlaylistEditStore } from './stores/playlist-edit'
 import { usePlaylistStore } from './stores/playlist'
@@ -19,6 +20,7 @@ const auth = useAuthStore()
 const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const playlistStore = usePlaylistStore()
+const download = useDownloadStore()
 const recommend = useRecommendStore()
 const settings = useSettingsStore()
 const ui = useUiStore()
@@ -46,6 +48,7 @@ function onLogout(): void {
   playlistStore.reset()
   playlistStore.clearRecent()
   recommend.reset()
+  download.reset()
 }
 
 function quitApp(): void {
@@ -134,6 +137,7 @@ watch(
 watch(
   () => auth.musicid,
   () => {
+    download.reset()
     playlistStore.loadRecent()
     void playlistStore.validateRecent(true)
   }

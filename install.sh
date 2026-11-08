@@ -98,6 +98,7 @@ fetch_to_cache() {
   url="$1"
   target="$2"
   mkdir -p "$(dirname "$target")"
+  chmod 700 "$(dirname "$target")" 2>/dev/null || true
   if [ "$DRY_RUN" -eq 1 ]; then
     printf '[dry-run] curl -fL --proto "=https" --tlsv1.2 -o "%s.part" "%s"\n' "$target" "$url"
     printf '[dry-run] move %s.part -> %s\n' "$target" "$target"
@@ -106,6 +107,7 @@ fetch_to_cache() {
   rm -f "$target.part"
   curl -fL --proto '=https' --tlsv1.2 -o "$target.part" "$url"
   mv "$target.part" "$target"
+  chmod 600 "$target" 2>/dev/null || true
 }
 
 if [ -n "$LOCAL_TARBALL" ]; then

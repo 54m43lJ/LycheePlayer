@@ -20,7 +20,7 @@ import {
 import { getCredential } from '../credential'
 import { getSettings } from '../settings'
 import { getDetail, resolveStreamUrls } from '../api/song'
-import { probeAvailability } from '../api/availability'
+import { peekAvailability } from '../api/availability'
 import { getCachedAudio, getCachedAudioInfo, linkCachedAudio } from '../cache/audio'
 
 interface RuntimeTask {
@@ -292,16 +292,21 @@ async function pump(): Promise<void> {
           : null
         const cached = getCachedAudio(task.songMid, resolved.quality)
         if (cached) {
-          await mkdir(dirname(task.filePath), { recursive: true })
-          await linkCachedAudio(task.songMid, resolved.quality, task.filePath)
-          task.source = 'cache'
-          task.status = 'done'
-          task.receivedBytes = await stat(task.filePath)
-            .then((info) => info.size)
-            .catch(() => task.receivedBytes)
-          task.totalBytes = task.receivedBytes
-          touchTask(task)
-          continue
+          try {
+            await mkdir(dirname(task.filePath), { recursive: true })
+            await linkCachedAudio(task.songMid, resolved.quality, task.filePath)
+            task.source = 'cache'
+            task.status = 'done'
+            task.receivedBytes = await stat(task.filePath)
+              .then((info) => info.size)
+              .catch(() => task.receivedBytes)
+            task.totalBytes = task.receivedBytes
+            touchTask(task)
+            continue
+          } catch {
+            // 本地转移失败时回退为正常网络下载。
+            task.source = 'network'
+          }
         }
         await runDownload(next, resolved.url)
       } catch (error) {
@@ -339,16 +344,8 @@ export async function listBatches(): Promise<DownloadBatch[]> {
 export async function assetStates(songMids: string[]): Promise<SongAssetState[]> {
   await ensureScope()
   const unique = [...new Set(songMids.filter(Boolean))]
-  const maxQualities = new Map<string, Quality | null>()
-  for (let start = 0; start < unique.length; start += 50) {
-    const chunk = unique.slice(start, start + 50)
-    try {
-      const probe = await probeAvailability(chunk)
-      for (const item of probe) maxQualities.set(item.songMid, item.maxQuality)
-    } catch {
-      // 探测失败时 maxQuality 保持未知，不影响缓存 / 下载状态展示。
-    }
-  }
+  // 只读可用性缓存：列表探测已经填充；这里不再为上架状态额外打上游。
+  const maxQualities = peekAvailability(unique)
   return unique.map((songMid) => {
     const done = [...tasks.values()]
       .map((item) => item.task)
@@ -368,7 +365,7 @@ export async function assetStates(songMids: string[]): Promise<SongAssetState[]>
       songMid,
       cachedQuality: getCachedAudioInfo(songMid),
       downloadedQuality: done?.quality ?? null,
-      maxQuality: maxQualities.get(songMid) ?? null,
+      maxQuality: maxQualities.get(songMid)?.maxQuality ?? null,
       taskStatus: active?.status ?? null
     }
   })

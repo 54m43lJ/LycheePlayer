@@ -324,7 +324,6 @@ watch(
             class="icon-btn"
             :title="PLAY_MODE_LABEL[mode]"
             :class="{ active: mode !== 'sequence' }"
-            :disabled="!hasSong"
             @click="toggleModeMenu()"
           >
             <AppIcon :name="modeIcon" :size="16" />

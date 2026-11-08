@@ -82,6 +82,18 @@ export async function probeAvailability(
   )
 }
 
+/** 只读可用性缓存；不触发上游探测，供下载资产状态等轻量查询使用。 */
+export function peekAvailability(mids: string[]): Map<string, SongAvailability> {
+  const store = accountCache()
+  const now = Date.now()
+  const result = new Map<string, SongAvailability>()
+  for (const mid of mids) {
+    const item = store.get(mid)
+    if (item && now - item.checkedAtMs <= PROBE_CACHE_TTL_MS) result.set(mid, item)
+  }
+  return result
+}
+
 /** 退出登录时清空当前账号或全部可用性缓存。 */
 export function clearAvailabilityCache(musicid?: string): void {
   if (musicid) cache.delete(musicid)

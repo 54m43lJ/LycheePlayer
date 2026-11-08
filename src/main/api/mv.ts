@@ -114,7 +114,12 @@ export async function getMvDetail(mvId: string): Promise<MvDetail> {
     coverUrl: coverUrl(info.cover_pic),
     description: info.desc ?? '',
     publishDate: info.pubdate
-      ? new Date(Number(info.pubdate) * 1000).toISOString().slice(0, 10)
+      ? new Intl.DateTimeFormat('en-CA', {
+          timeZone: 'Asia/Shanghai',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit'
+        }).format(new Date(Number(info.pubdate) * 1000))
       : ''
   }
 }

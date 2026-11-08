@@ -27,6 +27,7 @@ export const useRecommendStore = defineStore('recommend', () => {
 
   /** 只刷新一个分区；上游不支持时由主进程退化为全量刷新。 */
   async function refreshSection(id: RecommendSection['id']): Promise<void> {
+    error.value = ''
     const result = unwrap(await window.lychee.recommend.refresh(id))
     const current = feed.value
     if (!current) {

@@ -157,6 +157,13 @@ export const useDownloadStore = defineStore('download', () => {
     await load()
   }
 
+  function reset(): void {
+    tasks.value = []
+    batches.value = []
+    assets.value = {}
+    storage.value = null
+  }
+
   function batchOf(task: DownloadTask): DownloadBatch | undefined {
     return task.batchId ? batches.value.find((batch) => batch.id === task.batchId) : undefined
   }
@@ -180,6 +187,7 @@ export const useDownloadStore = defineStore('download', () => {
     removeBatch,
     retryFailed,
     clearCompleted,
+    reset,
     batchOf
   }
 })

@@ -260,8 +260,8 @@ onBeforeUnmount(() => {
             </button>
             <span v-if="batch" class="faint badge-inline">
               批次 {{ batch.done }} / {{ batch.total }}
-              <template v-if="batch.failed"> · 失败 {{ batch.failed }}</template>
-              <template v-if="batch.status === 'done'"> · 已全部下载</template>
+              <template v-if="batch.failed"> · 失败 {{ batch.failed }}，可在下载中心重试</template>
+              <template v-else-if="batch.status === 'done'"> · 已全部下载</template>
             </span>
             <button class="btn ghost" @click="router.push('/library')">返回我的歌单</button>
           </div>

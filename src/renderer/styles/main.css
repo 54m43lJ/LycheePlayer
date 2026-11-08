@@ -1655,60 +1655,6 @@ a {
   box-shadow: -24px 0 60px rgba(0, 0, 0, 0.4);
 }
 
-/* 歌词 / 评论：覆盖侧栏与播放条以外的主区域，左右各占一半 */
-.now-playing-panel {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: var(--player-height);
-  left: var(--sidebar-width);
-  z-index: 40;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  border-top: 1px solid var(--border-strong);
-  background: color-mix(in srgb, var(--bg) 96%, transparent);
-  backdrop-filter: blur(26px);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
-  transform: translateY(10px);
-  transition:
-    opacity 0.2s ease,
-    transform 0.2s ease,
-    visibility 0.2s ease;
-}
-
-.now-playing-panel.open {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  transform: none;
-  box-shadow: 0 -24px 60px rgba(0, 0, 0, 0.35);
-}
-
-.now-playing-side {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-.now-playing-side + .now-playing-side {
-  border-left: 1px solid var(--border);
-}
-
-.now-playing-side > .lyrics-empty {
-  flex: 1;
-  height: auto;
-}
-
-.comments-body {
-  flex: 1;
-  min-height: 0;
-  overflow-y: auto;
-}
-
 .comments-error {
   display: flex;
   flex: 1;
@@ -3616,4 +3562,9 @@ a {
   .song-action {
     width: 40px;
   }
+}
+
+.song-title .marquee {
+  flex: 1 1 auto;
+  min-width: 0;
 }
