@@ -78,15 +78,18 @@ function toSong(raw: RawSong): Song {
   const pay = raw.pay ?? {}
   const albumOnly = Number(pay.price_album ?? 0) > 0
   const vip = pay.pay_play === 1 && !albumOnly
+  // 标题优先使用 title：官方客户端展示的版本标签（Explicit / Remix 等）在 title 中；
+  // name 是去掉标签的基础名，可能带尾部空白，需 trim 后再兜底。
+  const name = (raw.title ?? '').trim() || (raw.name ?? '').trim()
   return {
     songMid: raw.mid ?? '',
     songId: String(raw.id ?? ''),
-    name: raw.name ?? raw.title ?? '',
+    name,
     // 官方客户端存在“有名字但没有歌手页”的歌手：mid 可为空，名称仍需保留。
     singers: (raw.singer ?? [])
       .map((singer) => ({ mid: singer.mid ?? '', name: (singer.name ?? '').trim() }))
       .filter((singer) => singer.name.length > 0 || singer.mid.length > 0),
-    album: { mid: raw.album?.mid ?? '', name: raw.album?.name ?? '' },
+    album: { mid: raw.album?.mid ?? '', name: (raw.album?.name ?? '').trim() },
     durationMs: Math.max(0, Number(raw.interval ?? 0)) * 1000,
     pay: {
       free: pay.pay_play === 0 && !albumOnly,
