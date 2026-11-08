@@ -78,6 +78,18 @@ function confirmRemoveTask(task: DownloadTask): void {
   void run(() => downloads.remove(task.id), '下载已删除')
 }
 
+function confirmClearDirectory(): void {
+  const directory = downloads.storage?.directory ?? '下载目录'
+  if (
+    !window.confirm(
+      `确定清空下载目录「${directory}」？\n将删除目录内的全部文件与下载记录（包括其他账号在同目录的下载）；播放缓存不受影响。`
+    )
+  ) {
+    return
+  }
+  void run(() => downloads.clearDirectory(), '下载目录已清空')
+}
+
 watch(
   () => ui.downloadOpen,
   (open) => downloads.setOpen(open),
@@ -239,6 +251,7 @@ watch(
       </section>
 
       <div class="download-footer">
+        <button class="btn ghost small" @click="confirmClearDirectory()">清空目录</button>
         <button class="btn ghost small" @click="run(() => downloads.clearCompleted())">
           清除已完成记录
         </button>
