@@ -671,6 +671,22 @@ a {
   color: var(--faint);
 }
 
+.section-title-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.song-sort-tabs {
+  margin-bottom: 0;
+  padding: 2px;
+}
+
+.song-sort-tabs .tab {
+  padding: 4px 11px;
+  font-size: 11px;
+}
+
 /* ---------- Song table ---------- */
 
 .song-table {

@@ -105,6 +105,9 @@ export interface Comment {
 
 export type CommentSort = 'hot' | 'latest' | 'oldest'
 
+/** 歌手歌曲排序：上游 order=1 为最热，其余值均为最新。 */
+export type ArtistSongSort = 'hot' | 'latest'
+
 export interface CommentLikeResult {
   commentId: string
   liked: boolean
@@ -178,6 +181,12 @@ export interface ArtistDetail {
   coverUrl: string
   songCount: number
   albumCount: number
+  songs: Song[]
+  total: number
+  hasMore: boolean
+}
+
+export interface ArtistSongPage {
   songs: Song[]
   total: number
   hasMore: boolean

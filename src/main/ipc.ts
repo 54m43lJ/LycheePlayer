@@ -34,7 +34,7 @@ import { getFavoriteStates, toggleFavorite } from './api/favorite'
 import { fetchRecommendFeed, clearRecommendCache } from './api/recommend'
 import { getMvDetail, getMvStream, searchMv } from './api/mv'
 import { searchByType } from './api/search'
-import { getArtist } from './api/artist'
+import { getArtist, getArtistSongs } from './api/artist'
 import { getAlbum } from './api/album'
 import { getStreamUrls } from './api/song'
 import { probeAvailability, clearAvailabilityCache } from './api/availability'
@@ -70,19 +70,25 @@ function broadcast(channel: string, payload: unknown): void {
   }
 }
 
-async function envelope<T>(fn: () => Promise<T>): Promise<IpcResult<T>> {
+async function envelope<T>(fn: () => Promise<T>, logError = true): Promise<IpcResult<T>> {
   try {
     return { ok: true, data: await fn() }
   } catch (err) {
     const error = toIpcError(err)
     // 不输出凭证、Cookie 与完整播放链接。
-    console.error(`[ipc] ${error.code}: ${error.message}`)
+    if (logError) console.error(`[ipc] ${error.code}: ${error.message}`)
     return { ok: false, error }
   }
 }
 
-function handle(channel: string, fn: (...args: any[]) => Promise<unknown>): void {
-  ipcMain.handle(channel, (_event, ...args: any[]) => envelope(() => fn(...args)))
+function handle(
+  channel: string,
+  fn: (...args: any[]) => Promise<unknown>,
+  options: { silent?: boolean } = {}
+): void {
+  ipcMain.handle(channel, (_event, ...args: any[]) =>
+    envelope(() => fn(...args), !options.silent)
+  )
 }
 
 function currentAuthStatus(): AuthStatus {
@@ -201,8 +207,19 @@ export function registerIpc(): void {
 
   // ---------- content ----------
   handle('search.byType', async (req: SearchRequest) => searchByType(req))
-  handle('artist.get', async (mid: unknown, offset: unknown) =>
-    getArtist(stringArg(mid, '歌手 mid'), Number(offset) || 0)
+  handle('artist.get', async (mid: unknown, offset: unknown, sort: unknown) =>
+    getArtist(
+      stringArg(mid, '歌手 mid'),
+      Number(offset) || 0,
+      sort === 'latest' ? 'latest' : 'hot'
+    )
+  )
+  handle('artist.getSongs', async (mid: unknown, offset: unknown, sort: unknown) =>
+    getArtistSongs(
+      stringArg(mid, '歌手 mid'),
+      Number(offset) || 0,
+      sort === 'latest' ? 'latest' : 'hot'
+    )
   )
   handle('album.get', async (mid: unknown, offset: unknown) =>
     getAlbum(stringArg(mid, '专辑 mid'), Number(offset) || 0)
@@ -211,10 +228,15 @@ export function registerIpc(): void {
   handle('song.getUrls', async (mids: unknown, quality: unknown) =>
     getStreamUrls(midArray(mids), qualityArg(quality))
   )
-  handle('song.probe', async (mids: unknown, options: unknown) => {
-    const list = midArray(mids, PROBE_MIDS_MAX)
-    return probeAvailability(list, (options ?? {}) as ProbeOptions)
-  })
+  handle(
+    'song.probe',
+    async (mids: unknown, options: unknown) => {
+      const list = midArray(mids, PROBE_MIDS_MAX)
+      return probeAvailability(list, (options ?? {}) as ProbeOptions)
+    },
+    // 背景可用性探测失败时渲染层会静默处理，不输出易误导的 IPC 错误日志。
+    { silent: true }
+  )
 
   handle('playlist.get', async (id: unknown, options: unknown) => {
     const value = (options ?? {}) as { offset?: number }

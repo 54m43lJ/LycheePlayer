@@ -648,3 +648,123 @@
 | `CORE.html` | §4.73 `ArtistView.vue` | 改 | 删除“或点击‘加载更多’”，改为监听 `.main` 滚动容器、距底部 160px 自动追加下一页，并补底部状态提示。 |
 | `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 改 | 明确歌手页滚动到底自动加载下一页，不提供“加载更多”点击操作。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 分页交互补“滚动到底自动加载”，不再要求点击按钮。 |
+
+### 4.10 歌手歌曲排序能力验证与“最热 / 最新”切换
+
+问题描述：ISSUES 要求确认歌手页的歌曲接口是否支持不同排序方式。`GetSingerSongList` 一直写死 `order: 1`，文档也未说明其它取值的行为，无法判断能否提供排序选项。
+
+验证方法与结论：以匿名 `comm.uin=0` 直接请求 `musichall.song_list_server / GetSingerSongList`，对周杰伦（`0025NhlN2yWrP4`）、林俊杰（`001BLpXF2DyJe2`）分别取 `order = -1, 0…11, 20` 对比首页与第 50 首起的结果：
+
+- `order=1` 返回最热歌曲（周杰伦为《晴天》《发如雪》《搁浅》…）；
+- `order=0` 及其它所有非 1 取值返回完全相同的结果，是最新顺序；`begin` 翻页后两者仍然稳定不同；
+- 每种顺序的 `totalNum` 一致，说明排序不改变总数；
+- 上游只存在“最热 / 最新”两种有效顺序，没有字母、发行时间倒序等其它模式；未知值不会报错，而是回退到最新。
+
+解决方法：
+- `shared/types.ts` 新增 `ArtistSongSort = 'hot' | 'latest'` 与 `ArtistSongPage`；`artist.get` IPC 增加可选 `sort`，默认 `hot`，保持原有歌手页默认顺序；
+- 新增 `artist.getSongs(mid, offset?, sort?)`，只请求 `GetSingerSongList`，不重复拉取歌手详情；滚动分页也改走该接口，避免每翻一页都重查歌手信息；
+- `api/artist.ts` 按 `sort` 映射上游 `order`：`hot → 1`，`latest → 0`；
+- 歌手页歌曲标题右侧增加“最热 / 最新”切换；切换时只重新请求歌曲列表，歌手头部、封面、简介保持不动，列表区显示加载态；分页强制从 `offset=0` 重新开始，不保留已滚动加载的页数，滚动位置回到页面顶部；切换失败时保留旧列表并回退到原排序；
+- 首次进入歌手页仍使用 `artist.get` 同时加载详情和首屏歌曲；
+- 新增回放测试，断言 `hot` 请求携带 `order=1`、`latest` 携带 `order=0`，并验证 `getArtistSongs` 不会请求歌手详情接口。
+
+验证：
+- 匿名实测覆盖 2 位歌手、14 个 `order` 取值与首页 / 第二页；
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 42 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌手歌曲行 / §4.3 `QqArtistSongData` | 改 | 注明 `order=1` 为最热，`order=0` 及其它值等价于最新，仅两种有效顺序，未知值不报错。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | `artist.get(mid, offset?, sort?)` 增加 `ArtistSongSort`，默认 `hot`；新增 `artist.getSongs(mid, offset?, sort?)` 仅返回歌曲页。 |
+| `CORE.html` | §4.73 `ArtistView.vue` | 改 | 增加“最热 / 最新”切换：只重载歌曲列表并重置偏移，不刷新歌手头部；滚动分页走 `artist.getSongs`。 |
+| `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录 `hot → order=1`、`latest → order=0` 的映射，并补 `getArtistSongs` 不拉取歌手详情。 |
+| `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 改 | 歌手页补充歌曲排序控件：最热 / 最新，默认最热。 |
+| `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 补歌手歌曲排序能力与“最热 / 最新”切换。 |
+
+### 4.11 部分歌手因旧详情接口返回 `code -1` 无法加载
+
+问题描述：ISSUES 新增记录，部分歌手（如 Charlie Jeer）打开歌手页时报 `[ipc] UPSTREAM_CHANGED: 歌手详情响应缺少 getSingerInfo`，页面完全加载不出来。
+
+实测原因：
+- 旧详情接口 `c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg` 对 Charlie Jeer（`000ONBNm2PwShq`）返回 HTTP 200，但响应体只有 `{"code":-1,"subcode":-1,"msg":""}`，没有任何歌手字段；
+- 同一歌手的 `GetSingerSongList` 正常，`totalNum=28`，歌曲的 `singer[]` 里能拿到名称；
+- `music.musichallSinger.SingerInfoInter / GetSingerDetail` 对该歌手正常返回 `singer_list[0].basic_info.name`、`ex_info.desc` 与 `pic.pic`，周杰伦、林俊杰等歌手也正常。
+
+解决方法：
+- `fetchArtistInfo` 不再在缺少 `getSingerInfo` 时抛错，改为返回 `null`，避免整个歌手页被旧接口拖垮；
+- 新增 `fetchSingerProfile`：调用 `music.musichallSinger.SingerInfoInter / GetSingerDetail`（`singer_mids: [mid]`、`pic/ex_singer/wiki_singer/group_singer: 1`）读取名称、简介与头像，并把 `http:` 头像改为 `https:`；
+- 旧接口缺失时以新接口补齐；新接口也失败时，名称回退到歌曲列表里同 `mid` 的歌手名，头像回退到 `T001R500x500M000<mid>.jpg`；
+- 歌曲总数仍优先取旧接口 `total_song`，缺失时用歌曲列表 `totalNum`；专辑数缺失时按 0 处理，页面在专辑数为 0 时隐藏该标签，避免显示错误的“0 张专辑”；
+- 新增回放测试：旧接口返回 `code -1` 时，仍能通过 `SingerInfoInter` 得到 Charlie Jeer 的名称、简介、头像与歌曲列表。
+
+验证：
+- 匿名实测 Charlie Jeer（`000ONBNm2PwShq`）旧接口返回 `code -1`，新接口与歌曲列表均正常；
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 43 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌手详情行 / §4.3 `QqArtistDetail` | 改 | 说明旧 `fcg_v8_singer_detail_cp.fcg` 对部分歌手只返回 `code -1`；补 `SingerInfoInter.GetSingerDetail` 的 `singer_mids`、`pic/ex_singer` 参数与 `singer_list[].basic_info/ex_info/pic` 字段。 |
+| `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录旧详情失败返回 `null`、`fetchSingerProfile` 兜底、名称回退歌曲歌手名、头像与计数降级规则。 |
+| `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 不动 | 页面结构与交互不变，仅修复上游数据源。 |
+| `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 接口验证补“旧详情接口可能返回 code -1，需使用 SingerInfoInter 兜底”。 |
+
+### 4.12 歌手页空闲时连续出现 104009 播放链接错误
+
+问题描述：用户停在歌手页、没有播放任何歌曲时，控制台仍连续输出 `[ipc] UPSTREAM_NETWORK: QQ 音乐拒绝了播放链接请求（104009）…`。
+
+排查结论：该错误只可能来自“取播放链接”链路，而歌手页本身不播放、也不探测可用性。真正来源是上一个歌单页的可用性探测：
+
+- `PlaylistView` 使用 `useAvailability`，在 `requestIdleCallback` 中延迟调用 `song.probe`；
+- 跳转到歌手页时，组件卸载但没有取消已排队的 idle 回调，也没有让 `generation` 失效，导致探测在歌手页继续执行；
+- `probeAvailability` 用 `resolveStreamUrls(..., 'flac')` 取链接：`vkey.GetVkeyServer.CgiGetVkey` 返回 104009 后会回退到 `music.vkey.GetVkey.UrlGetVkey`，两个接口都拒绝时抛出 `UPSTREAM_NETWORK`；
+- 原逻辑只在 `QUOTA_LIMITED` / `AUTH_EXPIRED` 时暂停，网络类失败不会暂停；如果歌单在探测期间继续更新，`rerun` 还会让同一轮探测再跑一次，于是出现多条相同日志；
+- 主进程 `envelope()` 默认记录所有 IPC 错误，所以背景探测失败也会以 `[ipc]` 形式刷屏。
+
+解决方法：
+- `useAvailability` 注册 `onScopeDispose`：组件卸载时递增 `generation` 并取消待执行的 idle / timeout，已发出的请求结果也不再落入状态；
+- 探测遇到 `UPSTREAM_NETWORK`（含 104009）时同样置 `suspended`，停止后续批次与 `rerun`，避免继续轰炸上游；
+- 为 IPC 注册增加 `{ silent: true }` 选项，`song.probe` 使用静默模式：失败仍返回给渲染层按未知状态处理，但不再输出容易误导的 `[ipc]` 错误日志；
+- 不影响用户主动播放失败时的错误提示与日志。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 43 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.65 `composables/availability.ts` | 改 | 补 `onScopeDispose` 取消调度并使 generation 失效；`UPSTREAM_NETWORK` 与限流 / 鉴权异常一样暂停探测。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | `handle` 增加 `{ silent?: boolean }`；`song.probe` 失败不写 IPC 错误日志。 |
+| `USER.html` | §5.3 错误与通知 | 不动 | 背景探测仍静默处理，不新增用户可见提示。 |
+| `EVOLVE.md` | #5 歌词 / 评论或 #4 歌手页 | 不动 | 属于可用性探测的生命周期修复，不改变产品交互。 |
+
+### 4.13 song.probe 请求量与 IP 104009 风控核查（未完成）
+
+问题描述：4.12 的泄漏问题修复后，用户 IP 仍被 QQ 音乐风控，播放链接请求持续返回 104009。需要确认 `song.probe` 是否绕过了限流，以及现有令牌桶是否过于宽松。
+
+核查结论（代码层面）：
+
+- **限流没有失效**。探测链路为 `song.probe → probeAvailability → resolveStreamUrls → fetchTrack / requestQuality → musicu → upstreamRequest → fetchOnce`，而 `fetchOnce` 在真正发请求前统一调用 `throttleUpstream()`；所有探测请求与播放、搜索、歌单请求共用同一个进程级令牌桶。
+- `requestQuality` 在经典 vkey 接口返回 104009 时会再请求 `music.vkey.GetVkey / UrlGetVkey`；若返回成功但没有 purl，`resolveStreams` 还会按 `flac → 320k → 128k` 继续尝试，因此最坏情况下一个探测批次会发出“50 次歌曲详情 + 3 次 vkey”。
+- 当前全局限速为 `UPSTREAM_RATE_LIMIT_PER_SECOND = 4`、`UPSTREAM_RATE_LIMIT_BURST = 8`。打开一个有 50 首歌的歌单，首次探测约需 12 秒连续请求 51 次；滚动加载下一页会再叠加同样规模，且 10 分钟后缓存过期可重来。
+- 限流器只约束“每秒请求数”，没有区分前台播放 / 搜索与后台探测，也没有单端点预算或探测冷却；对 QQ 的风控模型而言，这种“短时间集中请求同一首歌单的 50 首详情再批量取 vkey”的模式仍然很像抓取，即使瞬时速率没有超过 4 req/s。
+
+评估：限流机制本身没有失效，但对 `song.probe` 来说**过于宽松且请求形态集中**，是触发风控的高风险来源。当前尚未完成修复，待决定以下方向：
+
+1. 为后台探测增加独立的更严格限速（例如 1 req/s、burst 2），或让探测批次之间强制冷却；
+2. 避免逐首调用歌曲详情：歌曲列表响应本身已带 `file.media_mid`，可把 `mediaMid` 带到 `Song`/探测参数中，探测时直接批量取 vkey，把 50 次详情降为 1 次 vkey；
+3. 缩小探测范围：只探测首屏 / 当前可见行，而不是一次探测整页；
+4. 在 104009 / `UPSTREAM_NETWORK` 后增加全局退避与更长的冷却时间，而不只是暂停当前组件；
+5. 评估是否需要把可用性缓存 TTL 从 10 分钟延长，减少重复探测。
+
+状态：ISSUES 已新增顶层记录，未标记已解决；待完成上述策略调整后再补充验证结果。

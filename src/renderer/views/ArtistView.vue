@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { ArtistDetail } from '@shared/types'
+import type { ArtistDetail, ArtistSongSort } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
@@ -23,10 +23,17 @@ const auth = useAuthStore()
 const ui = useUiStore()
 const toast = useToast()
 
+const SONG_SORTS: Array<{ value: ArtistSongSort; label: string }> = [
+  { value: 'hot', label: '最热' },
+  { value: 'latest', label: '最新' }
+]
+
 const detail = ref<ArtistDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
 const loadingMore = ref(false)
+const songsLoading = ref(false)
+const songSort = ref<ArtistSongSort>('hot')
 const pickerOpen = ref(false)
 const pickerIndex = ref(-1)
 const pageRef = ref<HTMLElement | null>(null)
@@ -50,26 +57,39 @@ async function load(reset = true): Promise<void> {
     loading.value = true
     error.value = ''
     detail.value = null
+    loadingMore.value = false
+    songsLoading.value = false
   } else {
     if (!detail.value || !detail.value.hasMore) return
     loadingMore.value = true
   }
   try {
     const offset = reset ? 0 : songs.value.length
-    const data = unwrap(await window.lychee.artist.get(id, offset))
-    if (request !== token) return
     if (reset) {
+      const data = unwrap(await window.lychee.artist.get(id, 0, songSort.value))
+      if (request !== token) return
       detail.value = data
-    } else if (detail.value) {
-      detail.value = {
-        ...data,
-        songs: [...detail.value.songs, ...data.songs]
-      }
+      void playlistEdit.loadFavorites(data.songs.map((song) => song.songMid))
+      void download.refreshAssets(data.songs.map((song) => song.songMid))
+      return
     }
-    void playlistEdit.loadFavorites(data.songs.map((song) => song.songMid))
-    void download.refreshAssets(data.songs.map((song) => song.songMid))
+    const page = unwrap(
+      await window.lychee.artist.getSongs(id, offset, songSort.value)
+    )
+    if (request !== token || !detail.value) return
+    detail.value = {
+      ...detail.value,
+      songs: [...detail.value.songs, ...page.songs],
+      total: page.total,
+      hasMore: page.hasMore
+    }
+    void playlistEdit.loadFavorites(page.songs.map((song) => song.songMid))
+    void download.refreshAssets(page.songs.map((song) => song.songMid))
   } catch (err) {
-    if (request === token) error.value = describeError(err)
+    if (request === token) {
+      if (reset) error.value = describeError(err)
+      else toast.error(describeError(err))
+    }
   } finally {
     if (request === token) {
       loading.value = false
@@ -78,12 +98,50 @@ async function load(reset = true): Promise<void> {
   }
 }
 
+/** 仅重载歌曲列表：保留歌手头部信息，分页从 0 重新开始。 */
+async function reloadSongs(next: ArtistSongSort): Promise<void> {
+  const id = mid.value
+  if (!id) return
+  const previous = songSort.value
+  songSort.value = next
+  const request = ++token
+  loadingMore.value = false
+  songsLoading.value = true
+  try {
+    const page = unwrap(await window.lychee.artist.getSongs(id, 0, next))
+    if (request !== token) return
+    if (detail.value) {
+      detail.value = {
+        ...detail.value,
+        songs: page.songs,
+        total: page.total,
+        hasMore: page.hasMore
+      }
+    }
+    void playlistEdit.loadFavorites(page.songs.map((song) => song.songMid))
+    void download.refreshAssets(page.songs.map((song) => song.songMid))
+  } catch (err) {
+    if (request === token) {
+      songSort.value = previous
+      toast.error(describeError(err))
+    }
+  } finally {
+    if (request === token) songsLoading.value = false
+  }
+}
+
 function maybeLoadMore(): void {
-  if (loading.value || loadingMore.value || !detail.value?.hasMore) return
+  if (loading.value || loadingMore.value || songsLoading.value || !detail.value?.hasMore) return
   const el = scrollRoot
   if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_LOAD_THRESHOLD) {
     void load(false)
   }
+}
+
+function changeSort(next: ArtistSongSort): void {
+  if (songSort.value === next) return
+  scrollRoot?.scrollTo({ top: 0 })
+  void reloadSongs(next)
 }
 
 function playAll(): void {
@@ -163,7 +221,7 @@ onBeforeUnmount(() => {
           <h1>{{ detail.name || '未知歌手' }}</h1>
           <div class="playlist-meta">
             <span>{{ formatCount(detail.songCount) }} 首歌曲</span>
-            <span>{{ formatCount(detail.albumCount) }} 张专辑</span>
+            <span v-if="detail.albumCount > 0">{{ formatCount(detail.albumCount) }} 张专辑</span>
           </div>
           <div class="playlist-actions">
             <button class="btn primary" :disabled="songs.length === 0" @click="playAll()">
@@ -179,11 +237,28 @@ onBeforeUnmount(() => {
 
       <div class="section-title">
         <span>歌曲</span>
-        <span class="count">{{ songs.length }} / {{ detail.total }} 首</span>
+        <div class="section-title-right">
+          <div class="tabs song-sort-tabs">
+            <button
+              v-for="item in SONG_SORTS"
+              :key="item.value"
+              class="tab"
+              :class="{ active: songSort === item.value }"
+              @click="changeSort(item.value)"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+          <span class="count">{{ songs.length }} / {{ detail.total }} 首</span>
+        </div>
       </div>
 
+      <div v-if="songsLoading" class="loading-block">
+        <span class="spinner lg" />
+        正在加载歌曲
+      </div>
       <SongTable
-        v-if="songs.length > 0"
+        v-else-if="songs.length > 0"
         :songs="songs"
         :active-mid="player.current?.songMid"
         :favorite-mids="favoriteMids"
@@ -201,14 +276,14 @@ onBeforeUnmount(() => {
         <h3>暂无歌曲</h3>
       </div>
 
-      <div v-if="detail.hasMore" class="feed-footer">
+      <div v-if="!songsLoading && detail.hasMore" class="feed-footer">
         <template v-if="loadingMore">
           <span class="spinner" />
           <span>正在加载更多</span>
         </template>
         <span v-else>继续向下滚动加载更多</span>
       </div>
-      <div v-else-if="songs.length > 0" class="feed-footer">已经到底了</div>
+      <div v-else-if="!songsLoading && songs.length > 0" class="feed-footer">已经到底了</div>
 
       <PlaylistPicker
         :open="pickerOpen"
