@@ -499,3 +499,28 @@
 | `USER.html` | §5.2.3 播放条 · 右区音量 | 改 | 宽屏为“静音按钮 + 常驻横向滑块”，窄屏为“静音按钮 + 悬停竖直音量条”；窄屏弹层用 surface 背景并包住按钮。 |
 | `USER.html` | §5.2.1 响应式断点 | 改 | 把“≤900px 音量改为点击弹出竖直滑块”改为“≤900px 改为悬停触发的竖直 revealer”，宽屏仍保留常驻横向滑块。 |
 | `EVOLVE.md` | — | 增 | 蓝图缺少独立音量条目，建议新增“音量 revealer”项，或在相近条目中补充同类交互约定。 |
+
+### 4.4 按钮文字不再自动换行
+
+问题描述：ISSUES 指出按钮没有固定宽度，歌单界面的“播放全部 / 下载全部”会出现文字换行。`.btn` 虽然是 `inline-flex`，但没有 `white-space: nowrap`；`.playlist-actions` 只在 ≤900px 时才 `flex-wrap`，宽屏下按钮作为 flex 子项默认 `flex-shrink: 1`，空间不足时被压缩，中文标题就会在按钮内部折行。仅写死宽度并不能解决问题：宽度不足时文字仍会换行，正确做法是禁止文字折行并让整组按钮换行。
+
+解决方法：
+- `.btn` 增加 `white-space: nowrap`，图标与文字始终保持单行；
+- `.playlist-actions` 始终 `flex-wrap: wrap`，一排放不下时整组按钮换到下一行，而不是压缩单个按钮；
+- `.playlist-actions .btn` 设为 `flex: 0 0 auto`，按钮保持内容决定的稳定宽度（实测“播放全部 / 下载全部”各 109px，“返回我的歌单”112px）；
+- 删除 ≤900px 媒体查询里重复的 `.playlist-actions { flex-wrap: wrap }`。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 39 个用例通过；
+- `npm run build` 通过；
+- 静态页面实测：210px 容器下三个按钮仍各占一行、文字均单行，操作区整体换行；520px 容器下保持单行。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 补 `.btn { white-space: nowrap }`、`.playlist-actions { flex-wrap: wrap }` 与 `.playlist-actions .btn { flex: 0 0 auto }`。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明“播放全部 / 下载全部 / 返回”按钮文字单行，窄容器时整组换行而不是按钮内折行。 |
+| `USER.html` | §5.2.8 歌单详情 | 改 | 补一句：歌单头操作按钮保持文字单行，空间不足时按钮组整体换行。 |
+| `EVOLVE.md` | — | 不动 | 按钮排版属于样式实现细节，由 CORE / USER 主责。 |
