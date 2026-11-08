@@ -479,7 +479,7 @@
 解决方法：
 - 删除桌面常驻横向滑块与窄屏专用 popover，统一为一个 volume revealer；音量按钮在宽窄屏都只负责静音 / 恢复，悬停 120ms 打开、离开 200ms 关闭，Esc 与外部点击关闭；
 - 弹层复用模式 revealer 的结构：`bottom: 0`、`width: 100%`、`padding-bottom: 34px` 预留按钮高度、`border-radius: 9px`、`background: var(--panel)`、无边框；按钮通过 `z-index` 浮在弹层底部，并始终保留四角圆角；
-- 竖直滑块使用 84px 长度、96px 容器；输入元素本身扩成 34px 宽作为点击热区，视觉轨道用 `background: linear-gradient(...) center / 100% 4px no-repeat` 只绘制中间 4px；
+- 竖直滑块使用 96px 容器，视觉轨道上下各留 10px margin；输入元素扩成 34px 宽作为点击热区，视觉轨道改用独立的 `.volume-track` / `.volume-fill` 绘制成 4px 圆角条，避免背景图条带出现直角；
 - 旋转定位用负 margin 归中，避免 `translate(-50%, -50%)` 在旋转后产生 2px 偏移；
 - 移除 `compact` matchMedia 与旧 popover 样式；`closeMenus` 统一清理模式 / 音量四个定时器，并在打开模式或音质菜单时关闭音量弹层。
 
@@ -487,14 +487,14 @@
 - `npm run typecheck` 通过；
 - `npx vitest run` 11 个测试文件 / 39 个用例通过；
 - `npm run build` 通过；
-- 用静态页面实测弹层与按钮同宽、底边对齐，滑块热区 34×84px，视觉轨道居中 4px。
+- 用静态页面实测弹层与按钮同宽、底边对齐，滑块热区 34×76px，视觉轨道居中 4px 且上下各留 10px。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
 | `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 音量改为“静音按钮 + 悬停 revealer”，移除 `compact` 分支与常驻横向滑块，补齐 120 / 200ms 定时器清理。 |
-| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.volume-popover` / `.vertical-range`，新增 `.volume-menu` / `.volume-slider` 的包含式 revealer 与 4px 视觉轨道。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.volume-popover` / `.vertical-range`，新增 `.volume-menu` / `.volume-slider` 的包含式 revealer、4px 圆角轨道与上下 10px margin。 |
 | `USER.html` | §5.2.3 播放条 · 右区音量 | 改 | 改为“按钮即静音键，悬停展开竖直音量条；弹层用 surface 背景并包住按钮”。 |
 | `USER.html` | §5.2.1 响应式断点 | 改 | 删除“≤900px 音量改为点击弹出竖直滑块”，宽窄屏统一使用悬停 revealer。 |
 | `EVOLVE.md` | — | 增 | 蓝图缺少独立音量条目，建议新增“音量 revealer”项，或在相近条目中补充同类交互约定。 |

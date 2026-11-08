@@ -58,9 +58,6 @@ const MODE_ICON: Record<PlayMode, string> = {
 }
 const modeIcon = computed(() => MODE_ICON[mode.value])
 const progressStyle = computed(() => ({ width: `${progress.value}%` }))
-const volumeStyle = computed(() => ({
-  background: `linear-gradient(to right, var(--accent-strong) ${volume.value * 100}%, var(--track) ${volume.value * 100}%) center / 100% 4px no-repeat`
-}))
 const cacheForCurrent = computed(() => {
   const item = cache.value
   if (!item || item.songMid !== current.value?.songMid) return null
@@ -485,6 +482,9 @@ watch(
       >
         <div v-if="volumeOpen" class="volume-menu" @click.stop>
           <div class="volume-slider">
+            <div class="volume-track" aria-hidden="true">
+              <span class="volume-fill" :style="{ height: `${volume * 100}%` }" />
+            </div>
             <input
               class="range volume-range"
               type="range"
@@ -492,7 +492,6 @@ watch(
               max="1"
               step="0.01"
               :value="volume"
-              :style="volumeStyle"
               :title="`音量 ${Math.round(volume * 100)}%`"
               aria-label="音量"
               @input="player.setVolume(Number(($event.target as HTMLInputElement).value))"

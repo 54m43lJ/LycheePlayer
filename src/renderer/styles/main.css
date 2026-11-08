@@ -1574,13 +1574,35 @@ a {
   height: 96px;
 }
 
+.volume-track {
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  width: 4px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--track);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.volume-fill {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 999px;
+  background: var(--accent-strong);
+}
+
 .volume-slider .volume-range {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 84px;
+  width: 76px;
   height: 34px;
-  margin: -17px 0 0 -42px;
+  margin: -17px 0 0 -38px;
   min-width: 0;
   flex: none;
   background-color: transparent;
