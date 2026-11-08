@@ -790,11 +790,20 @@
 - 徽标仍保持在标题后的固定位置（`.pay-badge` / `.quality-badge` 为 `flex: 0 0 auto`），标题过长时只压缩 / 滚动歌名，徽标不被裁掉；
 - 新增搜索映射测试：`title` 优先、`title` 缺失时回退 `name`、尾部空白与专辑名、歌手名均被清理。
 
+追加修复（少数短标题歌曲仍有大段空白）：
+
+- 实际抽查 `Daydream In Blue`、`Company`、`Ojos Tristes` 的搜索与歌曲详情响应，`name` / `title` 均无尾部空白，排除 API 数据、trim 失效和缓存问题；
+- 真正原因是 CSS 选择器优先级：`.song-title .marquee { flex: 1 1 auto }` 覆盖了 `.song-title-text { flex: 0 1 auto }`，跑马灯容器因此总是撑满标题列，短标题后面的 VIP / 音质徽标被推到列尾，看起来像歌名尾部多出一段空白；长标题刚好填满所以不明显；
+- 将该规则改为 `flex: 0 1 auto`，歌名按内容宽度显示、徽标紧随其后；标题过长时仍会收缩并滚动，徽标保持常驻；
+- 用 1200px 静态布局复测：三首歌的徽标与歌名间距均为 7px，短标题不再出现大段空白。
+
 验证：
 - 匿名实测 `Big Dawgs`、`Big Dawgs (Remix|Explicit)`、`Company`、`Company (Explicit)` 等样本的 `name` / `title` / `album` / `version` / `tag`；
+- 追加抽查 `Daydream In Blue`、`Ojos Tristes` 的搜索与详情响应，确认无尾部空白字符；
 - `npm run typecheck` 通过；
 - `npx vitest run` 11 个测试文件 / 44 个用例通过；
-- `npm run build` 通过。
+- `npm run build` 通过；
+- 静态布局实测短标题与徽标相邻，长标题正常收缩。
 
 修订建议：
 
@@ -802,5 +811,6 @@
 |---|---|---|---|
 | `PROVIDER.html` | §4.3 `QqSong` | 改 | 补 `title` / `subtitle` / `version` / `tag` 字段，注明 `name` 为基础名、`title` 为含 Explicit / Remix 等标签的展示标题，标签没有独立布尔字段。 |
 | `CORE.html` | §4.11 `api/song.ts` | 改 | 显示名改为 `title.trim() || name.trim()`，并说明专辑名、歌手名同步 trim；徽标仍固定在标题后。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | `.song-title .marquee` 使用 `flex: 0 1 auto`，不得撑满标题列；VIP / 音质徽标紧随歌名。 |
 | `USER.html` | §5.2.4 歌曲列表 · 标题与徽标 | 改 | 明确歌曲显示名使用上游展示标题（含 Explicit / Remix 版本标签），VIP / 音质徽标紧随标题且不被尾部空白推离。 |
 | `EVOLVE.md` | #4 歌曲列表 | 改 | 补充版本标签来源与标题清洗规则。 |
