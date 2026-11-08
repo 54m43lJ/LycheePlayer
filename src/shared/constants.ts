@@ -35,6 +35,8 @@ export const SEARCH_PAGE_SIZE_MAX = 50
 
 // ---------- 歌单 ----------
 
+/** “我喜欢”固定歌单 ID。 */
+export const FAVORITES_PLAYLIST_ID = 'liked'
 /** 歌单固定 50 首/页。 */
 export const PLAYLIST_PAGE_SIZE = 50
 /** 歌单本地最大分页数。推荐值 20_000。 */

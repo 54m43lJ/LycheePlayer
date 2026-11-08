@@ -15,6 +15,7 @@ import { useRecommendStore } from './stores/recommend'
 import { useSettingsStore } from './stores/settings'
 import { useUiStore } from './stores/ui'
 import { singerNames, songCover } from './utils/format'
+import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
 
 const auth = useAuthStore()
 const player = usePlayerStore()
@@ -41,6 +42,7 @@ const filteredQueue = computed(() => {
   })
 })
 const currentPlaylistId = computed(() => player.queueSource?.id ?? '')
+const favoritesPath = `/playlist/${FAVORITES_PLAYLIST_ID}`
 
 let offCommand: (() => void) | null = null
 
@@ -180,6 +182,16 @@ watch(
         <RouterLink class="nav-item" active-class="active" to="/discover" @click="onSidebarNavigate">
           <AppIcon name="compass" :size="18" />
           <span class="nav-text">发现</span>
+        </RouterLink>
+        <RouterLink
+          v-if="auth.loggedIn"
+          class="nav-item"
+          active-class="active"
+          :to="favoritesPath"
+          @click="onSidebarNavigate"
+        >
+          <AppIcon name="heart" :size="18" />
+          <span class="nav-text">我喜欢</span>
         </RouterLink>
         <RouterLink class="nav-item" active-class="active" to="/library" @click="onSidebarNavigate">
           <AppIcon name="library" :size="18" />

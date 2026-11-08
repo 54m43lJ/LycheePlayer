@@ -4,7 +4,11 @@ import type {
   PlaylistPage,
   PlaylistSnapshot
 } from '../../shared/types'
-import { PLAYLIST_PAGE_MAX, PLAYLIST_PAGE_SIZE } from '../../shared/constants'
+import {
+  FAVORITES_PLAYLIST_ID,
+  PLAYLIST_PAGE_MAX,
+  PLAYLIST_PAGE_SIZE
+} from '../../shared/constants'
 import { getCredential } from '../credential'
 import { readPlaylistCache, writePlaylistCache } from '../cache/playlist'
 import { UpstreamError, musicu } from './client'
@@ -46,7 +50,6 @@ interface MineData {
   total?: number
 }
 
-const FAVORITES_ID = 'liked'
 const FAVORITES_NAME = '我喜欢'
 
 function cacheScope(): string {
@@ -59,14 +62,14 @@ function normalizeCover(value: string | undefined): string {
 }
 
 function isFavoritesId(id: string): boolean {
-  return id === FAVORITES_ID
+  return id === FAVORITES_PLAYLIST_ID
 }
 
 function toMeta(raw: RawPlaylistItem, editable: boolean): PlaylistMeta {
   const dirId = Number(raw.dirId ?? raw.dirid ?? 0)
   const favorites = dirId === 201
   return {
-    id: favorites ? FAVORITES_ID : String(raw.dissid ?? raw.disstid ?? raw.tid ?? raw.dirId ?? raw.id ?? ''),
+    id: favorites ? FAVORITES_PLAYLIST_ID : String(raw.dissid ?? raw.disstid ?? raw.tid ?? raw.dirId ?? raw.id ?? ''),
     name: favorites ? FAVORITES_NAME : (raw.dissname ?? raw.name ?? raw.title ?? raw.dirName ?? ''),
     coverUrl: normalizeCover(raw.imgurl ?? raw.picurl ?? raw.cover ?? raw.bigpicUrl),
     songCount: Number(raw.song_count ?? raw.songnum ?? raw.songNum ?? raw.song_cnt ?? 0),
@@ -97,7 +100,7 @@ async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
   const total = Number(data.dirinfo?.songnum ?? 0)
   const meta: PlaylistMeta = favorites
     ? {
-        id: FAVORITES_ID,
+        id: FAVORITES_PLAYLIST_ID,
         name: FAVORITES_NAME,
         coverUrl: normalizeCover(data.dirinfo?.picurl),
         songCount: total,
