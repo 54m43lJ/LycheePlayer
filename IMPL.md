@@ -472,29 +472,30 @@
 | `USER.html` | §5.2.3 播放条 · 播放模式 | 改 | 改为“按钮本身即当前模式高亮，展开后只显示其余模式”。 |
 | `EVOLVE.md` | #9 播放模式 | 改 | 把“当前模式固定在菜单底部”改为“当前模式固定在触发按钮上”。 |
 
-### 4.3 音量改为静音按钮 + 悬停 revealer
+### 4.3 音量改为响应式：宽屏常驻滑块，窄屏悬停 revealer
 
-问题描述：ISSUES 要求音量复用播放模式 revealer：按钮即静音键，鼠标悬停弹出音量条并与按钮合为一体；弹层用 surface 背景、按钮保留四角圆角、底部向下延伸包住按钮、内部无 padding / margin。原实现桌面端是常驻横向滑块，窄屏才切换为独立的竖直 popover；窄屏按钮点击只负责开合弹层，并非静音键；popover 自身还带 padding、边框和更宽的尺寸，无法与按钮形成包含关系。
+问题描述：ISSUES 要求音量复用播放模式 revealer：按钮即静音键，鼠标悬停弹出音量条并与按钮合为一体；弹层用 surface 背景、按钮保留四角圆角、底部向下延伸包住按钮、内部无 padding / margin。同时宽屏与窄屏需要保留响应式区分：宽屏继续使用常驻横向滑块，窄屏才使用弹出式竖直滑块。原实现的窄屏 popover 带 padding、边框和更宽尺寸，按钮点击只负责开合弹层，无法与按钮形成包含关系；而把宽屏也统一成弹层则破坏了宽屏的常驻音量条。
 
 解决方法：
-- 删除桌面常驻横向滑块与窄屏专用 popover，统一为一个 volume revealer；音量按钮在宽窄屏都只负责静音 / 恢复，悬停 120ms 打开、离开 200ms 关闭，Esc 与外部点击关闭；
-- 弹层复用模式 revealer 的结构：`bottom: 0`、`width: 100%`、`padding-bottom: 34px` 预留按钮高度、`border-radius: 9px`、`background: var(--panel)`、无边框；按钮通过 `z-index` 浮在弹层底部，并始终保留四角圆角；
+- 保留 `compact`（`max-width: 900px`）响应式分支：宽屏渲染常驻横向滑块 `v-if="!compact"`，窄屏隐藏该滑块并仅在 `compact && volumeOpen` 时渲染弹层；
+- 音量按钮在宽窄屏都只负责静音 / 恢复；仅窄屏允许悬停 120ms 打开、离开 200ms 关闭 popup，Esc 与外部点击关闭；宽屏悬停不打开 popup；
+- 窄屏弹层复用模式 revealer 的结构：`bottom: 0`、`width: 100%`、`padding-bottom: 34px` 预留按钮高度、`border-radius: 9px`、`background: var(--panel)`、无边框；按钮通过 `z-index` 浮在弹层底部，并始终保留四角圆角；
 - 竖直滑块使用 96px 容器，视觉轨道上下各留 10px margin；输入元素扩成 34px 宽作为点击热区，视觉轨道改用独立的 `.volume-track` / `.volume-fill` 绘制成 4px 圆角条，避免背景图条带出现直角；
 - 旋转定位用负 margin 归中，避免 `translate(-50%, -50%)` 在旋转后产生 2px 偏移；
-- 移除 `compact` matchMedia 与旧 popover 样式；`closeMenus` 统一清理模式 / 音量四个定时器，并在打开模式或音质菜单时关闭音量弹层。
+- 重新监听 `matchMedia('(max-width: 900px)')`：窗口变宽时关闭 popup 并清理音量定时器；`closeMenus` 统一清理模式 / 音量四个定时器，并在打开模式或音质菜单时关闭音量弹层。
 
 验证：
 - `npm run typecheck` 通过；
 - `npx vitest run` 11 个测试文件 / 39 个用例通过；
 - `npm run build` 通过；
-- 用静态页面实测弹层与按钮同宽、底边对齐，滑块热区 34×76px，视觉轨道居中 4px 且上下各留 10px。
+- 用静态页面实测窄屏弹层与按钮同宽、底边对齐，滑块热区 34×76px，视觉轨道居中 4px 且上下各留 10px；宽屏分支保留 `v-if="!compact"` 的常驻横向滑块。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 音量改为“静音按钮 + 悬停 revealer”，移除 `compact` 分支与常驻横向滑块，补齐 120 / 200ms 定时器清理。 |
-| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.volume-popover` / `.vertical-range`，新增 `.volume-menu` / `.volume-slider` 的包含式 revealer、4px 圆角轨道与上下 10px margin。 |
-| `USER.html` | §5.2.3 播放条 · 右区音量 | 改 | 改为“按钮即静音键，悬停展开竖直音量条；弹层用 surface 背景并包住按钮”。 |
-| `USER.html` | §5.2.1 响应式断点 | 改 | 删除“≤900px 音量改为点击弹出竖直滑块”，宽窄屏统一使用悬停 revealer。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 音量保留宽 / 窄屏分支：宽屏常驻横向滑块，窄屏悬停 revealer；按钮统一为静音键，补齐 120 / 200ms 定时器与媒体查询清理。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除旧 `.volume-popover` / `.vertical-range` 的 padding、边框与百分比文案，新增 `.volume-menu` / `.volume-slider` 的包含式 revealer、4px 圆角轨道与上下 10px margin；宽屏滑块使用 `.volume-range-inline`。 |
+| `USER.html` | §5.2.3 播放条 · 右区音量 | 改 | 宽屏为“静音按钮 + 常驻横向滑块”，窄屏为“静音按钮 + 悬停竖直音量条”；窄屏弹层用 surface 背景并包住按钮。 |
+| `USER.html` | §5.2.1 响应式断点 | 改 | 把“≤900px 音量改为点击弹出竖直滑块”改为“≤900px 改为悬停触发的竖直 revealer”，宽屏仍保留常驻横向滑块。 |
 | `EVOLVE.md` | — | 增 | 蓝图缺少独立音量条目，建议新增“音量 revealer”项，或在相近条目中补充同类交互约定。 |

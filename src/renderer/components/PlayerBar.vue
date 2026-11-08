@@ -32,6 +32,8 @@ const {
   progress
 } = storeToRefs(player)
 
+const compactQuery = window.matchMedia('(max-width: 900px)')
+const compact = ref(compactQuery.matches)
 const qualityMenu = ref(false)
 const volumeOpen = ref(false)
 const modeMenu = ref(false)
@@ -39,6 +41,7 @@ const qualityWrap = ref<HTMLElement | null>(null)
 const volumeWrap = ref<HTMLElement | null>(null)
 const modeWrap = ref<HTMLElement | null>(null)
 const lastVolume = ref(0.8)
+let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 let modeOpenTimer: number | null = null
 let modeCloseTimer: number | null = null
 let volumeOpenTimer: number | null = null
@@ -58,6 +61,9 @@ const MODE_ICON: Record<PlayMode, string> = {
 }
 const modeIcon = computed(() => MODE_ICON[mode.value])
 const progressStyle = computed(() => ({ width: `${progress.value}%` }))
+const volumeStyle = computed(() => ({
+  background: `linear-gradient(to right, var(--accent-strong) ${volume.value * 100}%, var(--track) ${volume.value * 100}%)`
+}))
 const cacheForCurrent = computed(() => {
   const item = cache.value
   if (!item || item.songMid !== current.value?.songMid) return null
@@ -225,6 +231,7 @@ async function downloadCurrent(): Promise<void> {
 }
 
 function openVolumeMenu(): void {
+  if (!compact.value) return
   if (volumeCloseTimer !== null) {
     window.clearTimeout(volumeCloseTimer)
     volumeCloseTimer = null
@@ -284,6 +291,21 @@ function onKeydown(event: KeyboardEvent): void {
 onMounted(() => {
   document.addEventListener('click', onDocumentClick, true)
   document.addEventListener('keydown', onKeydown)
+  mediaListener = (event) => {
+    compact.value = event.matches
+    if (!event.matches) {
+      if (volumeOpenTimer !== null) {
+        window.clearTimeout(volumeOpenTimer)
+        volumeOpenTimer = null
+      }
+      if (volumeCloseTimer !== null) {
+        window.clearTimeout(volumeCloseTimer)
+        volumeCloseTimer = null
+      }
+      volumeOpen.value = false
+    }
+  }
+  compactQuery.addEventListener('change', mediaListener)
   offCacheProgress = window.lychee.audioCache.onProgress((item) => {
     cache.value = item
   })
@@ -292,6 +314,7 @@ onMounted(() => {
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick, true)
   document.removeEventListener('keydown', onKeydown)
+  if (mediaListener) compactQuery.removeEventListener('change', mediaListener)
   if (modeOpenTimer !== null) window.clearTimeout(modeOpenTimer)
   if (modeCloseTimer !== null) window.clearTimeout(modeCloseTimer)
   if (volumeOpenTimer !== null) window.clearTimeout(volumeOpenTimer)
@@ -480,7 +503,7 @@ watch(
         @mouseenter="openVolumeMenu()"
         @mouseleave="scheduleCloseVolumeMenu()"
       >
-        <div v-if="volumeOpen" class="volume-menu" @click.stop>
+        <div v-if="compact && volumeOpen" class="volume-menu" @click.stop>
           <div class="volume-slider">
             <div class="volume-track" aria-hidden="true">
               <span class="volume-fill" :style="{ height: `${volume * 100}%` }" />
@@ -508,6 +531,18 @@ watch(
           <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="17" />
         </button>
       </div>
+      <input
+        v-if="!compact"
+        class="range volume-range-inline"
+        type="range"
+        min="0"
+        max="1"
+        step="0.01"
+        :value="volume"
+        :style="volumeStyle"
+        aria-label="音量"
+        @input="player.setVolume(Number(($event.target as HTMLInputElement).value))"
+      />
     </div>
   </footer>
 </template>

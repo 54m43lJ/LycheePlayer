@@ -1547,6 +1547,13 @@ a {
   align-items: center;
 }
 
+.volume-range-inline {
+  width: clamp(56px, 6vw, 84px);
+  min-width: 56px;
+  max-width: 84px;
+  flex: 0 0 auto;
+}
+
 /* 展开时弹层包住按钮：底部预留按钮高度，左右 / 下边缘与按钮对齐。 */
 .volume-wrap.open .volume-button {
   position: relative;
