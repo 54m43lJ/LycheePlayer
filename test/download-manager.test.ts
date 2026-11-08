@@ -1,11 +1,19 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 
-const { downloadDir, getDetailMock, resolveStreamUrlsMock } = vi.hoisted(() => ({
+const {
+  downloadDir,
+  getDetailMock,
+  resolveStreamUrlsMock,
+  getCachedAudioMock,
+  linkCachedAudioMock
+} = vi.hoisted(() => ({
   downloadDir: '/tmp/opencode/lychee-download-manager-test',
   getDetailMock: vi.fn(),
-  resolveStreamUrlsMock: vi.fn()
+  resolveStreamUrlsMock: vi.fn(),
+  getCachedAudioMock: vi.fn(),
+  linkCachedAudioMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -33,9 +41,9 @@ vi.mock('../src/main/api/availability', () => ({
 }))
 
 vi.mock('../src/main/cache/audio', () => ({
-  getCachedAudio: () => null,
+  getCachedAudio: getCachedAudioMock,
   getCachedAudioInfo: () => null,
-  linkCachedAudio: vi.fn()
+  linkCachedAudio: linkCachedAudioMock
 }))
 
 afterAll(() => {
@@ -63,6 +71,44 @@ describe('download/manager queue', () => {
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect(getDetailMock).toHaveBeenCalledTimes(3)
     expect(getDetailMock.mock.calls.map(([mids]) => mids)).toEqual([['m1'], ['m2'], ['m3']])
+  })
+
+  it('stores downloads as song-singer-album and sanitizes each part', async () => {
+    rmSync(downloadDir, { recursive: true, force: true })
+    getDetailMock.mockResolvedValue([
+      {
+        songMid: 'm9',
+        name: '晴天/Live',
+        singers: [
+          { mid: 's1', name: '周杰伦' },
+          { mid: 's2', name: '杨瑞代' }
+        ],
+        album: { mid: 'a1', name: '叶惠美' }
+      }
+    ])
+    resolveStreamUrlsMock.mockResolvedValue(
+      new Map([['m9', { url: 'https://example.test/m9.flac', quality: 'flac' }]])
+    )
+    getCachedAudioMock.mockReturnValue('/tmp/opencode/m9.flac')
+    linkCachedAudioMock.mockImplementation(async (_mid, _quality, target: string) => {
+      mkdirSync(dirname(target), { recursive: true })
+      writeFileSync(target, 'audio')
+    })
+
+    const { downloadFileName, listDownloads, startDownload } = await import(
+      '../src/main/download/manager'
+    )
+    expect(downloadFileName('歌', [], '')).toBe('歌')
+    expect(downloadFileName('A/B', ['C'], 'D')).toBe('A_B-C-D')
+
+    await startDownload('m9', 'flac')
+    await vi.waitFor(async () => {
+      const task = (await listDownloads()).find((item) => item.songMid === 'm9')
+      expect(task?.status, task?.error).toBe('done')
+    })
+    const task = (await listDownloads()).find((item) => item.songMid === 'm9')
+    expect(task?.filePath).toBe(join(downloadDir, '晴天_Live-周杰伦、杨瑞代-叶惠美.flac'))
+    expect(task && existsSync(task.filePath)).toBe(true)
   })
 
   it('clears downloaded files, partials, covers and records', async () => {

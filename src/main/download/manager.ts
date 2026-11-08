@@ -52,8 +52,25 @@ function indexPath(): string {
   return join(downloadDir(), `${DOWNLOAD_INDEX_PREFIX}${scope()}.json`)
 }
 
+function cleanName(value: string): string {
+  return value.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim()
+}
+
 function safeName(value: string): string {
-  return value.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim() || 'audio'
+  return cleanName(value) || 'audio'
+}
+
+/**
+ * 下载文件名固定为“歌名-歌手-专辑”，避免不同歌手 / 专辑的同名歌曲互相覆盖。
+ * 缺失的片段直接跳过；多个歌手用顿号连接后再统一清洗非法字符。
+ */
+export function downloadFileName(name: string, singers: string[], albumName: string): string {
+  return (
+    [name, singers.join('、'), albumName]
+      .map((part) => cleanName(part))
+      .filter(Boolean)
+      .join('-') || 'audio'
+  )
 }
 
 function extension(quality: Quality): string {
@@ -178,14 +195,28 @@ async function downloadCover(url: string, basePath: string): Promise<string | nu
 async function resolveDownload(
   songMid: string,
   requested: Quality
-): Promise<{ url: string; quality: Quality; name: string; albumMid: string }> {
+): Promise<{
+  url: string
+  quality: Quality
+  name: string
+  singers: string[]
+  albumName: string
+  albumMid: string
+}> {
   const songs = await getDetail([songMid])
   const song = songs[0]
   if (!song) throw new Error('歌曲不存在')
   const resolved = await resolveStreamUrls([songMid], requested)
   const item = resolved.get(songMid)
   if (!item?.url) throw new Error('当前账号无权下载该歌曲')
-  return { url: item.url, quality: item.quality, name: song.name, albumMid: song.album.mid }
+  return {
+    url: item.url,
+    quality: item.quality,
+    name: song.name,
+    singers: song.singers.map((singer) => singer.name).filter(Boolean),
+    albumName: song.album.name,
+    albumMid: song.album.mid
+  }
 }
 
 async function runDownload(runtime: RuntimeTask, url: string): Promise<void> {
@@ -265,7 +296,7 @@ async function pump(): Promise<void> {
         const resolved = await resolveDownload(task.songMid, task.quality)
         task.quality = resolved.quality
         task.name = resolved.name
-        const base = safeName(task.name)
+        const base = downloadFileName(resolved.name, resolved.singers, resolved.albumName)
         task.filePath = join(downloadDir(), `${base}.${extension(resolved.quality)}`)
         task.coverPath = resolved.albumMid
           ? `https://y.gtimg.cn/music/photo_new/T002R500x500M000${resolved.albumMid}.jpg`
