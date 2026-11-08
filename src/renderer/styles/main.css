@@ -2913,24 +2913,16 @@ a {
   place-items: center;
   width: 32px;
   height: 32px;
-  border: 1px solid transparent;
   border-radius: 9px;
   color: var(--accent-strong);
   background: var(--accent-soft);
   transition:
     color 0.16s ease,
-    background 0.16s ease,
-    border-color 0.16s ease,
-    border-radius 0.16s ease;
+    background 0.16s ease;
 }
 
 .mode-button:hover {
   background: color-mix(in srgb, var(--accent) 34%, transparent);
-}
-
-/* 展开时按钮作为 revealer 的底部，补齐左 / 右 / 下边框与弹出层连成一体。 */
-.mode-wrap.open .mode-button {
-  border-color: transparent var(--panel) var(--panel);
 }
 
 .mode-menu {
@@ -2943,10 +2935,8 @@ a {
   gap: 2px;
   width: 100%;
   padding: 4px 0;
-  border: 1px solid var(--panel);
-  border-bottom: none;
   border-radius: 9px 9px 0 0;
-  background: var(--bg);
+  background: var(--panel);
   box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.22);
   transform: translateX(-50%);
   transform-origin: bottom center;
