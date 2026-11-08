@@ -572,3 +572,30 @@
 | `CORE.html` | §4.61 `stores/playlist.ts` | 改 | 把“当前播放歌单高亮读取 `queueSource`”改为“高亮读取路由 + `queueSource`；播放图标仍只由 `queueSource` 决定”。 |
 | `USER.html` | §5.2.2 侧栏与导航 | 改 | 高亮规则改为：当前打开的最近歌单与正在播放的歌单都高亮，播放状态由音量图标单独表示。 |
 | `EVOLVE.md` | #11 优化左侧导航 | 改 | 把“当前正在播放的歌单在最近列表中高亮，与当前路由无关”改为同时考虑当前路由。 |
+
+### 4.7 评论点赞状态未加载
+
+问题描述：ISSUES 指出评论区刷新后已点赞的评论会回到未点赞状态，但服务端实际仍保留点赞；此时再次点击“点赞”会让 UI 数字继续增加，而服务端不重复计数，随后取消点赞会出现数字 `-2`。原实现同时存在两个问题：
+
+- 评论列表把点赞状态映射自 `IsLiked`，但 fixture 与上游真实响应字段是 `IsPraised`，导致 `liked` 永远为 `false`；
+- 评论读取被强制设为匿名（`credential: null`），上游拿不到当前用户，即使字段名正确也不会返回“我是否已点赞”。
+
+解决方法：
+- `RawComment` 增加可选 `IsPraised`，`liked` 优先读取 `IsPraised`，并保留 `IsLiked` 作为兼容回退；
+- `getComments` 不再强制匿名，改为使用当前登录凭证；未登录时 `musicu` 本身不会注入 Cookie，行为仍等价匿名；
+- 点赞 / 取消点赞仍先乐观更新，接口成功后以返回的 `liked` 校正按钮状态；初始状态正确后，数字按一次 +1 / -1 变化，不再出现 `-2`；
+- 新增回放测试，覆盖 `IsPraised`、旧字段 `IsLiked`、字段缺失三种映射，以及读取评论时携带登录 `Cookie` 与 `comm.uin`。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 40 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.3 `QqComment` | 改 | 点赞状态字段改为 `IsPraised?: number`（可兼容 `IsLiked`），并注明需要登录 Cookie 才会按当前用户返回。 |
+| `PROVIDER.html` | §4.1 歌曲评论行 / 验证记录 | 改 | 删除“评论请求固定匿名”的表述，改为“未登录匿名；登录后携带 Cookie 以读取 `IsPraised`”。 |
+| `CORE.html` | §4.15 `api/comment.ts` | 改 | 修正 `liked` 来源与凭据策略：`IsPraised → liked`，登录时携带凭证，`IsLiked` 仅作兼容。 |
+| `EVOLVE.md` | #5 / #14 | 不动 | 页面与点赞流程不变，仅修正上游字段与鉴权细节。 |

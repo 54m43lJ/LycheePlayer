@@ -16,6 +16,8 @@ interface RawComment {
   PubTime?: number
   PraiseNum?: number
   ReplyCnt?: number
+  /** 当前登录用户是否已点赞；fixture 与真实响应使用 IsPraised。 */
+  IsPraised?: number
   IsLiked?: number
 }
 
@@ -48,7 +50,7 @@ function toComment(raw: RawComment): Comment {
     likedCount: Number(raw.PraiseNum ?? 0),
     replyCount: Number(raw.ReplyCnt ?? 0),
     createdAtMs: seconds > 0 ? (seconds > 1_000_000_000_000 ? seconds : seconds * 1000) : 0,
-    liked: Number(raw.IsLiked ?? 0) === 1
+    liked: Number(raw.IsPraised ?? raw.IsLiked ?? 0) === 1
   }
 }
 
@@ -64,6 +66,7 @@ export async function getComments(
   }
 
   const method = sort === 'hot' ? 'GetHotCommentList' : 'GetNewCommentList'
+  // 必须携带登录 Cookie，上游才会按当前用户返回 IsPraised；未登录时自动匿名。
   const data = await musicu<CommentListData>(
     'music.globalComment.CommentRead',
     method,
@@ -78,8 +81,7 @@ export async function getComments(
       BizId: id,
       AudioEnable: 1,
       BizSubType: 2
-    },
-    { credential: null }
+    }
   )
 
   const list = data.CommentList

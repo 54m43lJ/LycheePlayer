@@ -55,6 +55,42 @@ describe('api/comment', () => {
     expect(oldest.comments.map((comment) => comment.id)).toEqual(['a', 'b'])
   })
 
+  it('maps IsPraised / IsLiked to liked and reads comments with the login cookie', async () => {
+    let cookie = ''
+    let uin = 0
+    vi.stubGlobal('fetch', async (url: string | URL, init?: RequestInit) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        comm?: { uin?: number }
+      }
+      uin = Number(payload.comm?.uin ?? 0)
+      cookie = new Headers(init?.headers).get('cookie') ?? ''
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: 'A', Content: 'praised', PubTime: 100, IsPraised: 1 },
+                { CmId: 'b', Nick: 'B', Content: 'legacy', PubTime: 200, IsLiked: 1 },
+                { CmId: 'c', Nick: 'C', Content: 'none', PubTime: 300 }
+              ],
+              Total: 3,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', 'latest', 0)
+    expect(page.comments.map((comment) => comment.liked)).toEqual([true, true, false])
+    expect(uin).toBe(100)
+    expect(cookie).toContain('qm_keyst=key')
+  })
+
   it('maps comment like success', async () => {
     vi.stubGlobal('fetch', async () => respond(fixture('comment-like.json')))
     const { likeComment, unlikeComment } = await import('../../src/main/api/comment')
