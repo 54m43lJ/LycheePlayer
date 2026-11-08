@@ -62,7 +62,7 @@
 │   │   ├── media/
 │   │   │   └── <a href="#c4-59">audio-protocol.ts</a>        本地音频协议
 │   │   ├── download/
-│   │   │   └── <a href="#c4-60">manager.ts</a>               下载管理器
+│   │   │   └── <a href="#c4-60">manager.ts</a>               单任务与批次下载管理
 │   │   ├── integration/                      桌面集成
 │   │   │   ├── <a href="#c4-18">mpris.ts</a>                 MPRIS 服务
 │   │   │   └── <a href="#c4-19">tray.ts</a>                  系统托盘
@@ -87,7 +87,7 @@
 │       │   ├── <a href="#c4-62">recommend.ts</a>              推荐 feed
 │       │   ├── <a href="#c4-63">playlist-edit.ts</a>          歌单编辑状态
 │       │   ├── <a href="#c4-70">mv.ts</a>                        MV 播放状态
-│       │   └── <a href="#c4-71">download.ts</a>                  下载中心状态
+│       │   └── <a href="#c4-71">download.ts</a>                  下载任务 / 批次与资产状态
 │       ├── utils/
 │       │   ├── <a href="#c4-32">format.ts</a>                 时长、计数、封面与歌手格式化
 │       │   ├── <a href="#c4-33">lrc.ts</a>                    LRC / QRC 解析与活动行查找
@@ -447,6 +447,35 @@ export interface DownloadTask {
   receivedBytes: number;
   totalBytes: number;
   error: string;
+  batchId: string | null;
+  playlistId: string | null;
+  source: 'cache-transfer' | 'network';
+}
+
+export interface DownloadBatch {
+  id: string;
+  source: 'playlist' | 'single';
+  playlistId: string | null;
+  total: number;
+  done: number;
+  failed: number;
+  status: 'pending' | 'downloading' | 'paused' | 'done' | 'failed';
+}
+
+export interface SongAssetState {
+  songMid: string;
+  cachedQuality: Quality | null;
+  downloadedQuality: Quality | null;
+  maxQuality: Quality | null;
+  taskStatus: DownloadTask['status'] | null;
+}
+
+export interface AudioCacheProgress {
+  songMid: string;
+  quality: Quality;
+  receivedBytes: number;
+  totalBytes: number;
+  complete: boolean;
 }
 
 export interface AudioCacheStats {
@@ -460,6 +489,7 @@ export interface DownloadStorageInfo {
   freeBytes: number;
   cacheBytes?: number;
   cacheFiles?: number;
+  batchCount?: number;
 }
 
 export interface Credential {
@@ -602,16 +632,29 @@ export interface FlagsFile {
     getStream(mvId: string, quality: MvStream['quality']): Promise&lt;IpcResult&lt;MvStream&gt;&gt;;
   };
   download: {
-    list(): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
+    list(): Promise&lt;IpcResult&lt;{ tasks: DownloadTask[]; batches: DownloadBatch[] }&gt;&gt;;
     start(songMid: string, quality: Quality): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
+    startBatch(options: {
+      source: 'playlist';
+      playlistId: string;
+      songMids: string[];
+    }): Promise&lt;IpcResult&lt;DownloadBatch&gt;&gt;;
     pause(id: string): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
     resume(id: string): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
     remove(id: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
+    pauseBatch(batchId: string): Promise&lt;IpcResult&lt;DownloadBatch&gt;&gt;;
+    resumeBatch(batchId: string): Promise&lt;IpcResult&lt;DownloadBatch&gt;&gt;;
+    removeBatch(batchId: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
+    retryFailed(batchId: string): Promise&lt;IpcResult&lt;DownloadBatch&gt;&gt;;
     clearCompleted(): Promise&lt;IpcResult&lt;null&gt;&gt;;
+    assetStates(songMids: string[]): Promise&lt;IpcResult&lt;SongAssetState[]&gt;&gt;;
     storage(): Promise&lt;IpcResult&lt;DownloadStorageInfo&gt;&gt;;
     openFolder(): Promise&lt;IpcResult&lt;null&gt;&gt;;
     chooseFolder(): Promise&lt;IpcResult&lt;string | null&gt;&gt;;
     clearCache(): Promise&lt;IpcResult&lt;null&gt;&gt;;
+  };
+  audioCache: {
+    onProgress(callback: (progress: AudioCacheProgress) =&gt; void): () =&gt; void;
   };
   user: {
     getProfile(): Promise&lt;IpcResult&lt;UserProfile&gt;&gt;;
@@ -641,7 +684,7 @@ export interface FlagsFile {
 <ul class="note">
   <li>该接口经 preload 暴露为 <code>window.lychee</code>；返回取消订阅函数的方法是推送订阅。</li>
   <li><code>login.setEmbedBounds</code> 与 <code>player.sendState</code> 是单向 IPC，不返回信封。</li>
-  <li><code>flags</code> 读取 / 保存当前 flags 文件；<code>download</code> 的 <code>storage</code> / <code>openFolder</code> / <code>chooseFolder</code> / <code>clearCache</code> 服务设置页与下载抽屉。</li>
+  <li><code>flags</code> 读取 / 保存当前 flags 文件；<code>download</code> 的 <code>storage</code> / <code>openFolder</code> / <code>chooseFolder</code> / <code>clearCache</code> 服务设置页与下载抽屉；<code>start</code> 返回缓存转移或新建任务的结果，<code>list</code> 同时返回任务与批次。</li>
   <li><code>lyric.decryptQrc</code> 是同步方法，在 preload 内用 Node crypto + zlib 完成解密；主进程只透传密文，接口细节见 <a href="#c4-64">§4.64</a>。</li>
 </ul>
 
@@ -1201,7 +1244,7 @@ export function useToast(): {
 <pre><code>const props = withDefaults(defineProps&lt;{ name: string; size?: number }&gt;(), { size: 20 });
 </code></pre>
 <ul class="note">
-  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式另叠加对勾标记。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
+  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式另叠加对勾标记；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
 </ul>
 
 <h3 id="c4-37">4.37 src/renderer/components/CoverArt.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1225,6 +1268,7 @@ export function useToast(): {
     availability?: Record&lt;string, SongAvailability&gt;;
     favoriteMids?: string[];
     downloadable?: boolean;
+    assetStates?: Record&lt;string, SongAssetState&gt;;
     removable?: boolean;
     playlistId?: string | null;
   }&gt;(),
@@ -1234,6 +1278,7 @@ export function useToast(): {
     availability: () =&gt; ({}),
     favoriteMids: () =&gt; [],
     downloadable: true,
+    assetStates: () =&gt; ({}),
     removable: false,
     playlistId: null
   }
@@ -1251,6 +1296,7 @@ const emit = defineEmits&lt;{
   <li>列顺序固定为 <code># / 标题 / 专辑 / 操作 / 时长</code>，所有 <code>th</code> 与操作 / 时长单元格左对齐；操作列在时长列左侧。≤900px 隐藏专辑列。</li>
   <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由加号图标按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。</li>
   <li><code>availability</code> 提供不可播标记与最高可用音质；不可播行禁用 <code>play</code> / <code>playNext</code>。收藏与下载按钮分别发出 <code>favorite</code> / <code>download</code>；未知可用性按可播处理。</li>
+  <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态，下载图标据此切换三态：未缓存未下载 / 已缓存 / 已下载，tooltip 显示档位；同时存在时显示“已下载”。</li>
   <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：窄窗口优先省略歌名，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与 tooltip。</li>
   <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。</li>
   <li>操作列基础结构为收藏、下载、下一首播放、从歌单删除四个图标按钮。删除按钮仅在 <code>removable</code> 为真时渲染，由 <code>PlaylistView</code> 按 <code>PlaylistMeta.editable</code> 且非“我喜欢”传入；点击发出 <code>remove(index)</code>，不触发行播放。</li>
@@ -1263,7 +1309,8 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>点击封面调用 <code>router.push('/lyrics')</code> 进入歌词 / 评论页；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首失败后停止，不读取探测结果。</li>
-  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
+  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>assetStates</code> 的三态渲染（未缓存未下载 / 已缓存 / 已下载），tooltip 显示“已缓存 FLAC / 已下载 320K / 下载”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
+  <li>播放进度条下方增加一条细缓存进度线，订阅 <code>audioCache.onProgress</code>，按当前 <code>songMid + quality</code> 匹配；缓存完成显示满格 / 对勾，关闭播放缓存时隐藏。缓存进度不读取下载 store，与下载进度相互独立。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
   <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭，点击 / 焦点同样打开，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
   <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染“还没有播放中的歌曲”文字。</li>
@@ -1318,6 +1365,7 @@ const emit = defineEmits&lt;{
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
   <li>处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后清除该歌单缓存并触发轮询，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变分页、轮询与队列构建。显示匹配数 / 总数与清除按钮，无匹配时显示空结果状态。</li>
+  <li>歌单头的“下载全部”按钮与“播放全部”并列，仅登录且存在可播歌曲时可用；点击调用 <code>download.startBatch({ source: 'playlist', playlistId, songMids })</code>，按歌单顺序建任务。按钮读取批次汇总显示完成 / 总数 / 失败，全部完成显示“已全部下载”，部分失败提示到下载中心重试；调用 <code>download.assetStates</code> 填充歌曲表下载图标。</li>
 </ul>
 
 <h3 id="c4-47">4.47 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1353,6 +1401,7 @@ const emit = defineEmits&lt;{
   <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。评论列表使用两行网格，正文限制两行。</li>
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
   <li>≤900px 侧栏抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code> 平移，左侧阴影表现 revealer；打开时主内容按抽屉宽度右移。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
+  <li>播放进度条下方叠加一条 2px 缓存进度线，位于播放进度与时间之间；使用独立的 accent 弱色，完成态显示满格 / 对勾，关闭缓存时整条隐藏；不改变播放进度线样式。</li>
 </ul>
 
 <h3 id="c4-50">4.50 src/shared/constants.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1388,6 +1437,10 @@ export declare const PROBE_IDLE_TIMEOUT_MS: number;         // 2000 ms
 export declare const PROBE_IDLE_FALLBACK_MS: number;        // 300 ms
 export declare const PROBE_EMPTY_BATCH_LIMIT: number;       // 2
 export declare const DOWNLOAD_POLL_MS: number;              // 1500 ms
+export declare const DOWNLOAD_CONCURRENCY: number;          // 1
+export declare const DOWNLOAD_BATCH_MAX: number;            // 5000
+export declare const DOWNLOAD_INDEX_PREFIX: string;         // '.lychee-downloads-'
+export declare const CACHE_PROGRESS_THROTTLE_MS: number;    // 300 ms
 export declare const PLAYER_STATE_THROTTLE_MS: number;      // 900 ms
 export declare const PLAY_HISTORY_MAX: number;              // 100
 export declare const TOAST_DURATION_MS: number;             // 3600 ms
@@ -1417,6 +1470,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li><code>PROBE_MAX_SONGS</code> 使用 <code>PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX</code> 派生，当前为 1,000,000；修改页大小或页上限时自动跟随。</li>
   <li><code>PROBE_MIDS_MAX</code> / <code>PROBE_VKEY_BATCH</code> 不得大于 <code>IPC_SONG_MIDS_MAX</code>；推荐与页大小 50 对齐，使一个歌单页一次探测、一批 vkey。修改任一值时同步评估其余常量。</li>
   <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
+  <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，批次内按歌单顺序串行；<code>DOWNLOAD_BATCH_MAX</code> 限制单批次任务数；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
   <li><code>RECENT_PLAYLIST_LIMIT</code> 限制最近歌单条数；<code>RECENT_PLAYLIST_CHECK_THROTTLE_MS</code> 与单飞互斥共同限制校验频率；<code>RECENT_PLAYLIST_STORAGE_PREFIX</code> 与账号 musicid 拼接为 localStorage key；<code>SIDEBAR_DRAG_THRESHOLD_PX</code> 为抽屉开关的位移阈值。</li>
   <li>已删除 <code>PLAYLIST_CACHE_TTL_MS</code> 与 <code>PLAYLIST_PREFETCH_CONCURRENCY</code>：缓存改为整份快照，分页串行加载且不做预取。</li>
 </ul>
@@ -1504,11 +1558,15 @@ export function playlistCacheBytes(): Promise&lt;number&gt;;
 
 <h3 id="c4-58">4.58 src/main/cache/audio.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getCachedAudio(songMid: string, quality: Quality): string | null;
+export function getCachedAudioInfo(
+  songMid: string
+): Array&lt;{ quality: Quality; filePath: string; bytes: number }&gt;;
 export function putCachedAudio(songMid: string, quality: Quality, filePath: string): Promise&lt;void&gt;;
 export function clearAudioCache(): Promise&lt;void&gt;;
 export function audioCacheStats(): Promise&lt;{ bytes: number; files: number }&gt;;
 </code></pre>
 <ul class="note">
+  <li><code>getCachedAudioInfo</code> 返回该歌曲已存在的全部缓存档位，供资产状态与下载前的本地转移判断；只读本地文件，不触发网络请求。</li>
   <li>目录结构为 <code>userData/cache/audio/&lt;musicid|anonymous&gt;/&lt;quality&gt;/&lt;songMid&gt;.&lt;mp3|flac&gt;</code>，同曲不同音质互不覆盖。</li>
   <li>缓存按账号隔离；超出 <code>AUDIO_CACHE_MAX_BYTES</code> 时按文件 mtime 做 LRU 清理。统计递归扫描全部账号目录。</li>
   <li>缓存文件由 <a href="#c4-59">§4.59</a> 的 <code>file</code> 分支按 Range 手工切片返回 200 / 206；命中缓存时不需要重新取 vkey，也不经过上游。</li>
@@ -1527,6 +1585,7 @@ export function readAudioFile(path: string): Promise&lt;Buffer&gt;;
   <li>URL 只有两种：缓存文件 <code>lychee-audio://file/&lt;base64url(path)&gt;</code>；未缓存流 <code>lychee-audio://stream/&lt;uuid&gt;</code>。stream token 在主进程内映射上游 URL、<code>songMid</code> 与 <code>quality</code>，渲染进程永远拿不到上游链接。</li>
   <li>token 只保存在进程内 Map，无持久化、无主动过期；应用重启后 token 失效，但缓存文件仍可通过 <code>file</code> 分支读取。</li>
   <li>渲染层取消读取时，协议处理必须同时 abort 上游 <code>net.fetch</code>：只 cancel body 可能把未读完的连接留在 socket 池，后续音频流复用该连接时会一直等到上游超时（约 10 秒）才报错重试。</li>
+  <li>完整响应落盘时按 <code>CACHE_PROGRESS_THROTTLE_MS</code> 节流推送 <code>AudioCacheProgress</code>（歌曲、音质、已写字节、总字节、完成标记）；局部 206 不推进完成度。缓存命中 <code>file</code> 分支直接视为 100%。</li>
 </ul>
 <table>
   <tr><th>URL 分支</th><th>条件</th><th>响应状态</th><th>必带响应头</th><th>是否缓存</th><th>回退 / 说明</th></tr>
@@ -1593,20 +1652,33 @@ export function readAudioFile(path: string): Promise&lt;Buffer&gt;;
 </ul>
 
 <h3 id="c4-60">4.60 src/main/download/manager.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function listDownloads(): Promise&lt;DownloadTask[]&gt;;
+<pre><code>export function listDownloads(): Promise&lt;{ tasks: DownloadTask[]; batches: DownloadBatch[] }&gt;;
 export function startDownload(songMid: string, quality: Quality): Promise&lt;DownloadTask&gt;;
+export function startBatch(options: {
+  source: 'playlist';
+  playlistId: string;
+  songMids: string[];
+}): Promise&lt;DownloadBatch&gt;;
 export function pauseDownload(id: string): Promise&lt;DownloadTask&gt;;
 export function resumeDownload(id: string): Promise&lt;DownloadTask&gt;;
 export function removeDownload(id: string): Promise&lt;void&gt;;
+export function pauseBatch(batchId: string): Promise&lt;DownloadBatch&gt;;
+export function resumeBatch(batchId: string): Promise&lt;DownloadBatch&gt;;
+export function removeBatch(batchId: string): Promise&lt;void&gt;;
+export function retryFailed(batchId: string): Promise&lt;DownloadBatch&gt;;
 export function clearCompletedDownloads(): Promise&lt;void&gt;;
+export function getAssetStates(songMids: string[]): Promise&lt;SongAssetState[]&gt;;
 export function writePart(url: string, filePath: string): Promise&lt;void&gt;;
 export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
 </code></pre>
 <ul class="note">
-  <li>状态机：<code>pending → downloading → done</code>；暂停把 <code>downloading</code> 置为 <code>paused</code> 并保留 <code>.part</code>；继续使用 <code>Range: bytes=&lt;已有字节&gt;-</code> 追加；失败置 <code>failed</code>，只允许用户手动继续。</li>
-  <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；封面下载为同名 <code>.jpg</code>，失败不阻塞任务完成。</li>
-  <li>文件名为 <code>&lt;歌手&gt; - &lt;歌名&gt;.&lt;mp3|flac&gt;</code>，非法字符替换为 <code>_</code>；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
-  <li>任务表只存在内存中，应用重启后不恢复；<code>removeDownload</code> 同时删除最终文件与 <code>.part</code>。<code>writePart</code> 是保留的简单写文件入口，不经过任务状态机。</li>
+  <li>任务状态机：<code>pending → downloading → done</code>；暂停把 <code>downloading</code> 置为 <code>paused</code> 并保留 <code>.part</code>；继续使用 <code>Range: bytes=&lt;已有字节&gt;-</code> 追加；失败置 <code>failed</code>，只允许用户手动继续。任务带 <code>batchId</code> / <code>playlistId</code> / <code>source</code>，单任务与批次共用状态机。</li>
+  <li><code>startDownload</code> 先查缓存：缓存档位达到该曲最高可用档时走本地转移（优先硬链接，失败回退复制），<code>source = 'cache-transfer'</code>；否则按最高可用档新建网络下载。已有同曲任务时直接返回现有任务，不重复创建；转移失败回退为普通下载，不新增用户可见错误码。</li>
+  <li><code>startBatch</code> 一次整单下载建一个批次，按歌单顺序为可播歌曲建任务并按 <code>DOWNLOAD_CONCURRENCY = 1</code> 串行执行；已下载同档跳过。批次控制：<code>pauseBatch</code> 暂停批次内活动任务，<code>resumeBatch</code> 继续暂停任务，<code>removeBatch</code> 确认后删除批次记录与文件，<code>retryFailed</code> 只重试失败项。</li>
+  <li>下载索引按账号隔离并放在 <code>downloadDir</code> 下：<code>.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>，记录完成与暂停任务；启动时加载当前账号索引并校验文件存在。未完成任务不自动续传，暂停任务可手动继续，失败任务只在当前会话保留；切换账号只切换索引视图，不移动磁盘文件；修改 <code>downloadDir</code> 后新目录使用新索引，旧内容不自动迁移。</li>
+  <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；封面下载为同名 <code>.jpg</code>，失败不阻塞任务完成。文件名为 <code>&lt;歌手&gt; - &lt;歌名&gt;.&lt;mp3|flac&gt;</code>，非法字符替换为 <code>_</code>；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
+  <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> / <code>removeBatch</code> 才删除最终文件与 <code>.part</code>。删除下载不影响缓存；清空缓存不影响已下载文件；<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
+  <li><code>getAssetStates</code> 聚合每首歌的 <code>cachedQuality</code> / <code>downloadedQuality</code> / <code>maxQuality</code> / 当前任务状态；下载完成、缓存写入完成、清理缓存、删除下载后刷新相关歌曲状态。<code>writePart</code> 是保留的简单写文件入口，不经过任务状态机。</li>
 </ul>
 
 <h3 id="c4-61">4.61 src/renderer/stores/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1747,19 +1819,31 @@ interface MvStore {
 </code></pre>
 
 <h3 id="c4-71">4.71 src/renderer/stores/download.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 待实现，可以根据实际情况调整
-export function useDownloadStore(): DownloadStore;
+<pre><code>export function useDownloadStore(): DownloadStore;
 
 interface DownloadStore {
   readonly tasks: DownloadTask[];
+  readonly batches: DownloadBatch[];
+  readonly assets: Record&lt;string, SongAssetState&gt;;
   readonly open: boolean;
   load(): Promise&lt;void&gt;;
+  refreshAssets(songMids: string[]): Promise&lt;void&gt;;
   start(songMid: string, quality: Quality): Promise&lt;void&gt;;
+  startBatch(playlistId: string, songMids: string[]): Promise&lt;void&gt;;
   pause(id: string): Promise&lt;void&gt;;
   resume(id: string): Promise&lt;void&gt;;
   remove(id: string): Promise&lt;void&gt;;
+  pauseBatch(batchId: string): Promise&lt;void&gt;;
+  resumeBatch(batchId: string): Promise&lt;void&gt;;
+  removeBatch(batchId: string): Promise&lt;void&gt;;
+  retryFailed(batchId: string): Promise&lt;void&gt;;
 }
 </code></pre>
+<ul class="note">
+  <li><code>load</code> 读取任务与批次列表；<code>refreshAssets</code> 按歌曲批量查询 <code>download.assetStates</code>，下载完成、缓存写入、清理缓存、删除下载后刷新相关歌曲。</li>
+  <li><code>start</code> 直接消费主进程的缓存转移决策结果（<code>source</code>），不在渲染层重复判断；<code>startBatch</code> 建批次后刷新批次汇总与歌曲资产状态。</li>
+  <li>批次操作与单任务操作共用同一状态表；删除批次需确认，<code>clearCompleted</code> 只清记录。资产状态按账号索引呈现，切换账号时重新加载。</li>
+</ul>
 
 <h3 id="c4-76">4.76 src/renderer/views/LyricsView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。路由 /lyrics 的页面容器：顶部歌曲信息与返回，左歌词、右评论。
@@ -2157,9 +2241,31 @@ app::requestSingleInstanceLock()
     └── window.lychee.download.start(songMid, quality)
         └── ipc::handle('download.start')
             └── download/manager::startDownload(songMid, quality)
+                ├── 判断缓存达到最高可用档 → 本地转移（硬链接，失败回退复制）
+                ├── 判断已有同曲任务 → 返回现有任务
                 ├── api/song::getStreamUrls([songMid], quality)
                 └── download/manager::writePart(url, filePath)
 </code></pre>
+<pre><code>views/PlaylistView::downloadAll()
+└── stores/download::startBatch(playlistId, songMids)
+    └── window.lychee.download.startBatch(...)
+        └── ipc::handle('download.startBatch')
+            └── download/manager::startBatch(...)
+                ├── 按歌单顺序建任务（空档跳过）
+                └── download/manager::startDownload(...)          // DOWNLOAD_CONCURRENCY = 1
+</code></pre>
+<pre><code>components/DownloadDrawer::onPauseBatch(batchId)
+└── stores/download::pauseBatch(batchId)
+    └── window.lychee.download.pauseBatch(batchId)
+        └── ipc::handle('download.pauseBatch')
+            └── download/manager::pauseBatch(batchId)
+                └── download/manager::pauseDownload(id)           // 批次内全部活动任务
+</code></pre>
+<ul class="note">
+  <li>单曲入口与整单入口共用任务模型与索引；批次内按歌单顺序串行下载，并发固定为 1，吞吐优先让位于稳定性与顺序。</li>
+  <li>继续 / 删除 / 重试与暂停同构：<code>resumeBatch</code> 继续已暂停任务，<code>removeBatch</code> 确认后删除批次记录与文件，<code>retryFailed</code> 只重试失败项。单任务控制保持可用。</li>
+  <li>渲染层只消费批次汇总与资产状态；缓存转移的决策在主进程完成，失败自动回退为网络下载，不新增错误码。</li>
+</ul>
 
 <h3 id="c5-17">5.17 最近歌单恢复与校验</h3>
 <pre><code>views/App::onMounted()
@@ -2181,6 +2287,20 @@ app::requestSingleInstanceLock()
   <li>最近列表按账号隔离，最多 5 条；进入歌单页时 <code>visit(meta)</code> 更新并置顶，超出淘汰最旧一条。已删除或无权限的歌单移除后不从后续条目补位。</li>
   <li>校验只读取歌单元数据；优先整份缓存，缓存缺失才请求第一页。节流与单飞避免展开侧栏时重复请求。</li>
   <li>当前正在播放的歌单由播放器 <code>queueSource</code> 驱动高亮，播放 / 暂停都高亮，与当前路由无关。</li>
+</ul>
+
+<h3 id="c5-18">5.18 音频缓存进度</h3>
+<pre><code>media/audio-protocol::writeCache(chunk)
+├── 判断完整响应 → 写盘
+├── 判断 CACHE_PROGRESS_THROTTLE_MS 节流
+└── webContents.send('audioCache:progress', progress)
+    └── components/PlayerBar::onProgress()
+        └── 按当前 songMid + quality 更新缓存进度线
+</code></pre>
+<ul class="note">
+  <li>只有完整响应落盘才推进进度，局部 206 不上报完成度；缓存命中 <code>file</code> 分支直接视为 100%，关闭播放缓存时不上报。</li>
+  <li>渲染层切歌、切音质、清理缓存时重置缓存进度；缓存进度与下载进度解耦，不读取下载 store。</li>
+  <li>事件订阅返回取消函数，<code>PlayerBar</code> 卸载时取消；通道与类型见 <a href="#c4-2">§4.2</a> / <a href="#c4-1">§4.1</a>。</li>
 </ul>
 
 </body>
