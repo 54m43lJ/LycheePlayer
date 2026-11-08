@@ -24,7 +24,7 @@ const appLicense = __APP_LICENSE__
 const flags = ref<FlagsFile | null>(null)
 const flagsDraft = ref('')
 const flagsSaving = ref(false)
-const storage = ref<{ directory: string; bytes: number; freeBytes: number; cacheBytes?: number; cacheFiles?: number; batchCount?: number } | null>(null)
+const storage = ref<{ directory: string; bytes: number; freeBytes: number; cacheBytes?: number; cacheFiles?: number } | null>(null)
 
 const expiryText = computed(() => {
   if (!auth.loggedIn) return '未登录'
@@ -309,7 +309,6 @@ onMounted(() => {
                 <div class="setting-desc mono">{{ storage?.directory ?? settings.settings.downloadDir ?? '默认目录' }}</div>
                 <div class="setting-desc" v-if="storage">
                   下载占用 {{ formatBytes(storage.bytes) }} · 剩余 {{ formatBytes(storage.freeBytes) }}
-                  <template v-if="storage.batchCount"> · {{ storage.batchCount }} 个批次</template>
                 </div>
               </div>
               <div class="panel-actions">

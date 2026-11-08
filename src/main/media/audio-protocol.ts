@@ -11,6 +11,8 @@ interface StreamSource {
   url: string
   songMid: string
   quality: Quality
+  /** 已下载到本机的文件；存在时优先直接读取，不再访问上游。 */
+  filePath?: string
 }
 
 const streams = new Map<string, StreamSource>()
@@ -38,9 +40,14 @@ export function audioProtocolUrl(filePath: string): string {
 }
 
 /** 注册一个上游音频流并返回主进程代理 URL；渲染进程不直接访问上游。 */
-export function audioStreamUrl(url: string, songMid: string, quality: Quality): string {
+export function audioStreamUrl(
+  url: string,
+  songMid: string,
+  quality: Quality,
+  filePath?: string
+): string {
   const token = randomUUID()
-  streams.set(token, { url, songMid, quality })
+  streams.set(token, { url, songMid, quality, filePath })
   return `${AUDIO_PROTOCOL_SCHEME}://stream/${token}`
 }
 
@@ -156,6 +163,14 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
   const token = url.pathname.replace(/^\/+/, '')
   const source = streams.get(token)
   if (!source) return new Response('音频流不存在', { status: 404 })
+
+  if (source.filePath) {
+    const size = await stat(source.filePath).then((info) => info.size).catch(() => 0)
+    if (size > 0) {
+      reportCacheProgress(source, size, size, true)
+      return fileResponse(source.filePath, request)
+    }
+  }
 
   if (getSettings().audioCacheEnabled) {
     const cached = getCachedAudio(source.songMid, source.quality)

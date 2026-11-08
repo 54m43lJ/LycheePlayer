@@ -12,7 +12,6 @@ import type {
   CommentLikeResult,
   CommentPage,
   CommentSort,
-  DownloadBatch,
   DownloadStorageInfo,
   DownloadTask,
   FavoriteState,
@@ -120,19 +119,15 @@ const api: LycheeApi = {
   },
   download: {
     list: () => invoke<DownloadTask[]>('download.list'),
-    batches: () => invoke<DownloadBatch[]>('download.batches'),
     assetStates: (songMids: string[]) =>
       invoke<SongAssetState[]>('download.assetStates', songMids),
     start: (songMid: string, quality: Quality) =>
       invoke<DownloadTask>('download.start', songMid, quality),
-    startBatch: (request) => invoke<DownloadBatch>('download.startBatch', request),
+    startMany: (songMids: string[], quality: Quality) =>
+      invoke<DownloadTask[]>('download.startMany', songMids, quality),
     pause: (id: string) => invoke<DownloadTask>('download.pause', id),
     resume: (id: string) => invoke<DownloadTask>('download.resume', id),
     remove: (id: string) => invoke<null>('download.remove', id),
-    pauseBatch: (batchId: string) => invoke<DownloadBatch>('download.pauseBatch', batchId),
-    resumeBatch: (batchId: string) => invoke<DownloadBatch>('download.resumeBatch', batchId),
-    removeBatch: (batchId: string) => invoke<null>('download.removeBatch', batchId),
-    retryFailed: (batchId: string) => invoke<DownloadBatch>('download.retryFailed', batchId),
     clearCompleted: () => invoke<null>('download.clearCompleted'),
     clearDirectory: () => invoke<null>('download.clearDirectory'),
     storage: () => invoke<DownloadStorageInfo>('download.storage'),

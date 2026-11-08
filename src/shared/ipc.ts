@@ -8,7 +8,6 @@ import type {
   CommentLikeResult,
   CommentPage,
   CommentSort,
-  DownloadBatch,
   DownloadStorageInfo,
   DownloadTask,
   EmbedRect,
@@ -106,22 +105,12 @@ export interface LycheeApi {
   }
   download: {
     list(): Promise<IpcResult<DownloadTask[]>>
-    batches(): Promise<IpcResult<DownloadBatch[]>>
     assetStates(songMids: string[]): Promise<IpcResult<SongAssetState[]>>
     start(songMid: string, quality: Quality): Promise<IpcResult<DownloadTask>>
-    startBatch(request: {
-      source: 'playlist'
-      playlistId: string
-      playlistName?: string
-      songMids: string[]
-    }): Promise<IpcResult<DownloadBatch>>
+    startMany(songMids: string[], quality: Quality): Promise<IpcResult<DownloadTask[]>>
     pause(id: string): Promise<IpcResult<DownloadTask>>
     resume(id: string): Promise<IpcResult<DownloadTask>>
     remove(id: string): Promise<IpcResult<null>>
-    pauseBatch(batchId: string): Promise<IpcResult<DownloadBatch>>
-    resumeBatch(batchId: string): Promise<IpcResult<DownloadBatch>>
-    removeBatch(batchId: string): Promise<IpcResult<null>>
-    retryFailed(batchId: string): Promise<IpcResult<DownloadBatch>>
     clearCompleted(): Promise<IpcResult<null>>
     clearDirectory(): Promise<IpcResult<null>>
     storage(): Promise<IpcResult<DownloadStorageInfo>>

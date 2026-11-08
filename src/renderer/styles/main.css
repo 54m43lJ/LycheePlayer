@@ -3414,7 +3414,7 @@ a {
 
 /* ---------- 下载中心批次 ---------- */
 
-.download-batch {
+.download-group {
   margin-bottom: 16px;
   padding: 10px 12px;
   border: 1px solid var(--border);
@@ -3422,7 +3422,7 @@ a {
   background: var(--panel);
 }
 
-.download-batch-head {
+.download-group-head {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
@@ -3430,12 +3430,12 @@ a {
   margin-bottom: 8px;
 }
 
-.download-batch-head .download-actions {
+.download-group-head .download-actions {
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.download-batch .download-row {
+.download-group .download-row {
   padding: 8px 0;
 }
 

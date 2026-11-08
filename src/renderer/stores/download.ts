@@ -1,7 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
-  DownloadBatch,
   DownloadStorageInfo,
   DownloadTask,
   Quality,
@@ -12,7 +11,6 @@ import { unwrap } from '../api'
 
 export const useDownloadStore = defineStore('download', () => {
   const tasks = ref<DownloadTask[]>([])
-  const batches = ref<DownloadBatch[]>([])
   const assets = ref<Record<string, SongAssetState>>({})
   const storage = ref<DownloadStorageInfo | null>(null)
   const open = ref(false)
@@ -21,7 +19,6 @@ export const useDownloadStore = defineStore('download', () => {
   async function load(): Promise<void> {
     try {
       tasks.value = unwrap(await window.lychee.download.list())
-      batches.value = unwrap(await window.lychee.download.batches())
       storage.value = unwrap(await window.lychee.download.storage())
       const mids = new Set([
         ...Object.keys(assets.value),
@@ -61,13 +58,11 @@ export const useDownloadStore = defineStore('download', () => {
   }
 
   function hasActive(): boolean {
-    return (
-      tasks.value.some(
-        (task) =>
-          task.status === 'downloading' ||
-          task.status === 'pending' ||
-          task.status === 'paused'
-      ) || batches.value.some((batch) => batch.status === 'downloading' || batch.status === 'pending')
+    return tasks.value.some(
+      (task) =>
+        task.status === 'downloading' ||
+        task.status === 'pending' ||
+        task.status === 'paused'
     )
   }
 
@@ -87,30 +82,16 @@ export const useDownloadStore = defineStore('download', () => {
       : [task, ...tasks.value]
   }
 
-  function replaceBatch(batch: DownloadBatch): void {
-    batches.value = batches.value.some((item) => item.id === batch.id)
-      ? batches.value.map((item) => (item.id === batch.id ? batch : item))
-      : [batch, ...batches.value]
+  async function startMany(songMids: string[], quality: Quality): Promise<DownloadTask[]> {
+    const next = unwrap(await window.lychee.download.startMany(songMids, quality))
+    for (const task of next) replace(task)
+    setOpen(true)
+    void refreshAssets(songMids)
+    return next
   }
 
   async function start(songMid: string, quality: Quality): Promise<void> {
-    const task = unwrap(await window.lychee.download.start(songMid, quality))
-    replace(task)
-    setOpen(true)
-    void refreshAssets([songMid])
-  }
-
-  async function startBatch(request: {
-    source: 'playlist'
-    playlistId: string
-    playlistName?: string
-    songMids: string[]
-  }): Promise<DownloadBatch> {
-    const batch = unwrap(await window.lychee.download.startBatch(request))
-    replaceBatch(batch)
-    setOpen(true)
-    void refreshAssets(request.songMids)
-    return batch
+    await startMany([songMid], quality)
   }
 
   async function pause(id: string): Promise<void> {
@@ -128,29 +109,6 @@ export const useDownloadStore = defineStore('download', () => {
     if (task) void refreshAssets([task.songMid])
   }
 
-  async function pauseBatch(batchId: string): Promise<void> {
-    replaceBatch(unwrap(await window.lychee.download.pauseBatch(batchId)))
-    await load()
-  }
-
-  async function resumeBatch(batchId: string): Promise<void> {
-    replaceBatch(unwrap(await window.lychee.download.resumeBatch(batchId)))
-    await load()
-  }
-
-  async function removeBatch(batchId: string): Promise<void> {
-    const mids = tasks.value.filter((task) => task.batchId === batchId).map((task) => task.songMid)
-    unwrap(await window.lychee.download.removeBatch(batchId))
-    batches.value = batches.value.filter((item) => item.id !== batchId)
-    tasks.value = tasks.value.filter((task) => task.batchId !== batchId)
-    void refreshAssets(mids)
-  }
-
-  async function retryFailed(batchId: string): Promise<void> {
-    replaceBatch(unwrap(await window.lychee.download.retryFailed(batchId)))
-    await load()
-  }
-
   async function clearCompleted(): Promise<void> {
     unwrap(await window.lychee.download.clearCompleted())
     tasks.value = tasks.value.filter((item) => item.status !== 'done')
@@ -161,25 +119,18 @@ export const useDownloadStore = defineStore('download', () => {
   async function clearDirectory(): Promise<void> {
     unwrap(await window.lychee.download.clearDirectory())
     tasks.value = []
-    batches.value = []
     assets.value = {}
     storage.value = unwrap(await window.lychee.download.storage())
   }
 
   function reset(): void {
     tasks.value = []
-    batches.value = []
     assets.value = {}
     storage.value = null
   }
 
-  function batchOf(task: DownloadTask): DownloadBatch | undefined {
-    return task.batchId ? batches.value.find((batch) => batch.id === task.batchId) : undefined
-  }
-
   return {
     tasks,
-    batches,
     assets,
     storage,
     open,
@@ -187,17 +138,12 @@ export const useDownloadStore = defineStore('download', () => {
     setOpen,
     refreshAssets,
     start,
-    startBatch,
+    startMany,
     pause,
     resume,
     remove,
-    pauseBatch,
-    resumeBatch,
-    removeBatch,
-    retryFailed,
     clearCompleted,
     clearDirectory,
-    reset,
-    batchOf
+    reset
   }
 })
