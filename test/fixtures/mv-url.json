@@ -1,0 +1,151 @@
+{
+  "code": 0,
+  "ts": 1794130267545,
+  "start_ts": 1794130267509,
+  "traceid": "1a4b4fb517828a8e",
+  "req_0": {
+    "code": 0,
+    "data": {
+      "w0026q7f01a": {
+        "mp4": [
+          {
+            "expire": 86400,
+            "code": 2000,
+            "filetype": 0,
+            "newFileType": 0,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 0
+          },
+          {
+            "expire": 86400,
+            "code": 0,
+            "filetype": 10,
+            "newFileType": 9814,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 14342755
+          },
+          {
+            "expire": 86400,
+            "code": 0,
+            "filetype": 20,
+            "newFileType": 9824,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 28316109
+          },
+          {
+            "expire": 86400,
+            "code": 0,
+            "filetype": 30,
+            "newFileType": 9834,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 59634794
+          },
+          {
+            "expire": 86400,
+            "code": 1000,
+            "filetype": 40,
+            "newFileType": 40,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 0
+          },
+          {
+            "expire": 86400,
+            "code": 1000,
+            "filetype": 50,
+            "newFileType": 50,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 0
+          }
+        ],
+        "hls": [
+          {
+            "expire": 86400,
+            "code": 2000,
+            "filetype": 0,
+            "newFileType": 0,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 0
+          },
+          {
+            "expire": 86400,
+            "code": 2000,
+            "filetype": 10,
+            "newFileType": 10,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 0
+          },
+          {
+            "expire": 86400,
+            "code": 2000,
+            "filetype": 20,
+            "newFileType": 20,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 0
+          },
+          {
+            "expire": 86400,
+            "code": 2000,
+            "filetype": 30,
+            "newFileType": 30,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 0
+          },
+          {
+            "expire": 86400,
+            "code": 2000,
+            "filetype": 40,
+            "newFileType": 40,
+            "format": 264,
+            "testCdn": 0,
+            "urlPath": "",
+            "videoType": 0,
+            "hlsFileFormat": "",
+            "fileSize": 0
+          }
+        ],
+        "svp_flag": 1,
+        "duration": 317
+      }
+    }
+  }
+}

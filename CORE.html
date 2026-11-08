@@ -44,6 +44,8 @@
 │   │   │   ├── <a href="#c4-8">client.ts</a>                 统一请求、错误与重试
 │   │   │   ├── <a href="#c4-9">hash.ts</a>                   hash33 / g_tk
 │   │   │   ├── <a href="#c4-10">search.ts</a>                搜索
+│   │   │   ├── <a href="#c4-79">artist.ts</a>                歌手详情与歌曲分页
+│   │   │   ├── <a href="#c4-80">album.ts</a>                 专辑详情与歌曲分页
 │   │   │   ├── <a href="#c4-11">song.ts</a>                  歌曲详情与播放链接
 │   │   │   ├── <a href="#c4-12">playlist.ts</a>              歌单
 │   │   │   ├── <a href="#c4-13">user.ts</a>                  用户资料
@@ -110,6 +112,8 @@
 │       │   └── <a href="#c4-67">DownloadDrawer.vue</a>         下载中心抽屉
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
+│       │   ├── <a href="#c4-77">ArtistView.vue</a>            歌手页
+│       │   ├── <a href="#c4-78">AlbumView.vue</a>             专辑页
 │       │   ├── <a href="#c4-45">LibraryView.vue</a>           我的歌单
 │       │   ├── <a href="#c4-46">PlaylistView.vue</a>          歌单详情
 │       │   ├── <a href="#c4-76">LyricsView.vue</a>             歌词 / 评论页
@@ -358,6 +362,30 @@ export interface CommentPage {
   hasMore: boolean;
   pageNo: number;
   sort: CommentSort;
+}
+
+export interface ArtistDetail {
+  mid: string;
+  name: string;
+  coverUrl: string;
+  description: string;
+  songCount: number;
+  albumCount: number;
+  songs: Song[];
+  total: number;
+  hasMore: boolean;
+}
+
+export interface AlbumDetail {
+  mid: string;
+  name: string;
+  coverUrl: string;
+  description: string;
+  publishDate: string;
+  singers: Singer[];
+  songs: Song[];
+  total: number;
+  hasMore: boolean;
 }
 
 export interface RecentPlaylist extends PlaylistMeta {
@@ -655,6 +683,12 @@ export interface FlagsFile {
   };
   audioCache: {
     onProgress(callback: (progress: AudioCacheProgress) =&gt; void): () =&gt; void;
+  };
+  artist: {
+    get(mid: string, offset?: number): Promise&lt;IpcResult&lt;ArtistDetail&gt;&gt;;
+  };
+  album: {
+    get(mid: string, offset?: number): Promise&lt;IpcResult&lt;AlbumDetail&gt;&gt;;
   };
   user: {
     getProfile(): Promise&lt;IpcResult&lt;UserProfile&gt;&gt;;
@@ -1017,7 +1051,7 @@ export function describeError(error: unknown): string;
 export default router;
 </code></pre>
 <ul class="note">
-  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/lyrics</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>。</li>
+  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/artist/:mid</code>、<code>/album/:mid</code>、<code>/lyrics</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>。</li>
 </ul>
 
 <h3 id="c4-26">4.26 src/renderer/env.d.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1299,6 +1333,7 @@ const emit = defineEmits&lt;{
   <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由加号图标按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。</li>
   <li><code>availability</code> 提供不可播标记与最高可用音质；不可播行禁用 <code>play</code> / <code>playNext</code>。收藏与下载按钮分别发出 <code>favorite</code> / <code>download</code>；未知可用性按可播处理。</li>
   <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态，下载图标据此切换三态：未缓存未下载 / 已缓存 / 已下载，tooltip 显示档位；同时存在时显示“已下载”。</li>
+  <li>专辑列与歌手行渲染为链接：歌手 <code>mid</code> 非空链接到 <code>/artist/:mid</code>，专辑 <code>mid</code> 非空链接到 <code>/album/:mid</code>，点击不触发行播放；<code>mid</code> 为空时按纯文本展示，名称为空不渲染。标题、歌手、专辑统一使用 <code>MarqueeText</code>，仅在溢出时滚动；≤900px 隐藏专辑列。</li>
   <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：窄窗口优先省略歌名，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与 tooltip。</li>
   <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。</li>
   <li>操作列基础结构为收藏、下载、下一首播放、从歌单删除四个图标按钮。删除按钮仅在 <code>removable</code> 为真时渲染，由 <code>PlaylistView</code> 按 <code>PlaylistMeta.editable</code> 且非“我喜欢”传入；点击发出 <code>remove(index)</code>，不触发行播放。</li>
@@ -1346,6 +1381,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”。</li>
+  <li>歌手 / 专辑卡片点击进入 <code>/artist/:mid</code> / <code>/album/:mid</code>，不再以“搜索该歌手 / 专辑的单曲”作为点击行为；MV 卡片进入 <code>/mv/:id</code>。</li>
 </ul>
 
 <h3 id="c4-45">4.45 src/renderer/views/LibraryView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1404,6 +1440,7 @@ const emit = defineEmits&lt;{
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
   <li>≤900px 侧栏抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code> 平移，左侧阴影表现 revealer；打开时主内容按抽屉宽度右移。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
   <li>播放进度条下方叠加一条 2px 缓存进度线，位于播放进度与时间之间；使用独立的 accent 弱色，完成态显示满格 / 对勾，关闭缓存时整条隐藏；不改变播放进度线样式。</li>
+  <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
 </ul>
 
 <h3 id="c4-50">4.50 src/shared/constants.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1856,6 +1893,43 @@ interface DownloadStore {
   <li>布局为左右两列各 50%，中间保留分隔线；组合 <a href="#c4-41">LyricsPanel</a> 与 <a href="#c4-42">CommentsPanel</a>，不渲染独立标题行。</li>
 </ul>
 
+<h3 id="c4-77">4.77 src/renderer/views/ArtistView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。路由 /artist/:mid 的歌手页。
+</code></pre>
+<ul class="note">
+  <li>按路由参数调用 <code>artist.get(mid, offset)</code> 加载歌手信息与歌曲；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
+  <li>歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；不可播标记与最高音质沿用 <code>useAvailability</code>。</li>
+  <li>分页固定 50 首/页，滚动到底或点击“加载更多”继续；加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
+  <li>返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>；点击歌曲不改变路由。</li>
+</ul>
+
+<h3 id="c4-78">4.78 src/renderer/views/AlbumView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。路由 /album/:mid 的专辑页。
+</code></pre>
+<ul class="note">
+  <li>按路由参数调用 <code>album.get(mid, offset)</code>；展示专辑名、封面、发行日期、简介与歌手，简介为空时隐藏。</li>
+  <li>歌手行按 <code>mid</code> 链接到歌手页；歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单。</li>
+  <li>分页固定 50 首/页；加载中、合法空状态与失败重试各自渲染。返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
+</ul>
+
+<h3 id="c4-79">4.79 src/main/api/artist.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function getArtist(mid: string, offset: number): Promise&lt;ArtistDetail&gt;;
+</code></pre>
+<ul class="note">
+  <li>歌手信息使用 <code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg?singermid=&lt;mid&gt;&amp;format=json</code>：<code>getSingerInfo.Fsinger_name</code> → <code>name</code>、<code>singerBrief</code> → <code>description</code>、<code>total_song</code> / <code>total_album</code> → 计数；封面由 <code>mid</code> 拼 <code>https://y.gtimg.cn/music/photo_new/T001R500x500M000&lt;mid&gt;.jpg</code>。</li>
+  <li>歌曲使用 <code>musicu</code> 顶层节点 <code>singerSongList</code>：模块 <code>musichall.song_list_server</code>，方法 <code>GetSingerSongList</code>，参数 <code>{ order: 1, singerMid, begin: offset, num: 50 }</code>；返回 <code>totalNum</code> 与 <code>songList[].songInfo</code>，映射为 <code>Song</code>。上游单页上限 100 首。</li>
+  <li><code>mid</code> 为空时直接返回空歌曲与空简介，不发起请求；详情或歌曲失败映射为 <code>UPSTREAM_CHANGED</code> / 现有网络错误，不用搜索接口或当前歌单数据兜底。</li>
+</ul>
+
+<h3 id="c4-80">4.80 src/main/api/album.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function getAlbum(mid: string, offset: number): Promise&lt;AlbumDetail&gt;;
+</code></pre>
+<ul class="note">
+  <li>专辑信息使用 <code>music.musichallAlbum.AlbumInfoServer / GetAlbumDetail</code>，参数 <code>{ albumMid }</code>：取 <code>basicInfo.albumName</code> / <code>publishDate</code> / <code>desc</code> 与 <code>singer[]</code>；封面由 <code>mid</code> 拼 <code>https://y.gtimg.cn/music/photo_new/T002R500x500M000&lt;mid&gt;.jpg</code>。</li>
+  <li>歌曲使用 <code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code>，参数 <code>{ albumMid, begin: offset, num: 50, order: 0 }</code>；返回 <code>totalNum</code> 与 <code>songList[].songInfo</code>。</li>
+  <li><code>mid</code> 为空时返回空详情；失败映射为 <code>UPSTREAM_CHANGED</code> / 现有网络错误，不使用搜索或歌单数据兜底。</li>
+</ul>
+
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
 
@@ -2306,6 +2380,29 @@ app::requestSingleInstanceLock()
   <li>只有完整响应落盘才推进进度，局部 206 不上报完成度；缓存命中 <code>file</code> 分支直接视为 100%，关闭播放缓存时不上报。</li>
   <li>渲染层切歌、切音质、清理缓存时重置缓存进度；缓存进度与下载进度解耦，不读取下载 store。</li>
   <li>事件订阅返回取消函数，<code>PlayerBar</code> 卸载时取消；通道与类型见 <a href="#c4-2">§4.2</a> / <a href="#c4-1">§4.1</a>。</li>
+</ul>
+
+<h3 id="c5-19">5.19 歌手 / 专辑加载</h3>
+<pre><code>views/ArtistView::watch(mid)
+└── window.lychee.artist.get(mid, offset)
+    └── ipc::handle('artist.get')
+        └── api/artist::getArtist(mid, offset)
+            ├── GET c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg?singermid=&lt;mid&gt;
+            └── api/client::musicu('musichall.song_list_server', 'GetSingerSongList', ...)
+                └── 映射 songList[].songInfo → Song
+</code></pre>
+<pre><code>views/AlbumView::watch(mid)
+└── window.lychee.album.get(mid, offset)
+    └── ipc::handle('album.get')
+        └── api/album::getAlbum(mid, offset)
+            ├── api/client::musicu('music.musichallAlbum.AlbumInfoServer', 'GetAlbumDetail', ...)
+            └── api/client::musicu('music.musichallAlbum.AlbumSongList', 'GetAlbumSongList', ...)
+                └── 映射 songList[].songInfo → Song
+</code></pre>
+<ul class="note">
+  <li>两个页面共用 <code>SongTable</code> 与可用性探测；分页各 50 首，滚动到底继续加载。歌手页的歌曲来自 <code>singerSongList</code> 顶层节点，专辑页的歌曲来自 <code>req_0.data</code>。</li>
+  <li>接口未返回数据时展示合法空状态；请求失败展示页内错误与重试，不跳转搜索、不填充占位歌曲。</li>
+  <li>歌手 / 专辑名称缺 <code>mid</code> 时不生成跨页链接，规则见 <a href="USER.html#u2">USER §2</a>。</li>
 </ul>
 
 </body>

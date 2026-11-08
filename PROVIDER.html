@@ -254,6 +254,10 @@
   <tr><td>内容 RPC</td><td><code>https://u.y.qq.com/cgi-bin/musicu.fcg</code>（内容请求 GET；登录换证 / 续期 POST）</td><td>统一 <code>musicu</code> 请求入口；搜索、歌曲详情、vkey、歌单、资料、评论、VIP 状态、登录与续期。</td></tr>
   <tr><td>搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code></td><td>按单曲 / 歌手 / 专辑 / 歌单搜索。单曲结果携带完整 <code>singer[{ mid, name }]</code>；fixture <code>test/fixtures/search-song.json</code> 验证两项字段均存在。</td></tr>
   <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code>、歌曲展示字段与真实 <code>songType</code>；<code>track_info.singer[]</code> 与搜索同结构，可能出现 <code>name</code> 有值而 <code>mid</code> 为空的条目。</td></tr>
+  <tr><td>歌手详情</td><td><code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg</code></td><td>按 <code>singermid</code> 获取歌手名、简介、歌曲数与专辑数。</td></tr>
+  <tr><td>歌手歌曲</td><td><code>musichall.song_list_server / GetSingerSongList</code>（顶层节点 <code>singerSongList</code>）</td><td>按 <code>singerMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
+  <tr><td>专辑详情</td><td><code>music.musichallAlbum.AlbumInfoServer / GetAlbumDetail</code></td><td>按 <code>albumMid</code> 获取专辑名、发行日期、简介与歌手。</td></tr>
+  <tr><td>专辑歌曲</td><td><code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code></td><td>按 <code>albumMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
   <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。</td></tr>
   <tr><td>收藏状态</td><td><code>music.musicasset.SongFavRead / IsSongFanByMid</code></td><td>按 <code>v_songMid</code> 批量读取 <code>m_fan</code> 红心状态。</td></tr>
   <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-4">§3.4</a>。</td></tr>
@@ -309,6 +313,22 @@
   <tr>
     <td>QQ 登录换证</td>
     <td><code>comm.tmeLoginType</code> · <code>param.code</code></td>
+  </tr>
+  <tr>
+    <td>歌手详情</td>
+    <td><code>singermid</code> · <code>format=json</code></td>
+  </tr>
+  <tr>
+    <td>歌手歌曲</td>
+    <td><code>singerMid</code> · <code>order</code>（1） · <code>begin</code> · <code>num</code>（≤100）</td>
+  </tr>
+  <tr>
+    <td>专辑详情</td>
+    <td><code>albumMid</code></td>
+  </tr>
+  <tr>
+    <td>专辑歌曲</td>
+    <td><code>albumMid</code> · <code>order</code>（0） · <code>begin</code> · <code>num</code>（≤100）</td>
   </tr>
   <tr>
     <td>歌词</td>
@@ -512,6 +532,43 @@ interface QqSearchData {
   };
 }
 
+interface QqArtistInfo {
+  getSingerInfo?: {
+    Fsinger_mid?: string;
+    Fsinger_name?: string;
+    Fother_name?: string;
+  };
+  singerBrief?: string;
+  total_song?: number;
+  total_album?: number;
+  total_mv?: number;
+}
+
+interface QqArtistSongData {
+  singerSongList?: {
+    data?: {
+      totalNum?: number;
+      songList?: Array&lt;{ songInfo?: QqSong }&gt;;
+    };
+  };
+}
+
+interface QqAlbumDetail {
+  basicInfo?: {
+    albumMid?: string;
+    albumName?: string;
+    publishDate?: string;
+    desc?: string;
+  };
+  singer?: Array&lt;{ mid?: string; name?: string }&gt;;
+  company?: unknown;
+}
+
+interface QqAlbumSongData {
+  totalNum?: number;
+  songList?: Array&lt;{ songInfo?: QqSong }&gt;;
+}
+
 interface QqLyricResponse {
   code?: number;
   retcode?: number;
@@ -713,6 +770,22 @@ interface QqLoginPayload {
     <td><code>song.list → songs</code>；<code>singer.list</code> / <code>album.list</code> / <code>songlist.list</code> 分别映射为 <code>Singer[]</code> / <code>Album[]</code> / <code>PlaylistMeta[]</code>；<code>meta.sum ?? estimate_sum → total</code>。</td>
   </tr>
   <tr>
+    <td><code>QqArtistInfo</code> → <code>ArtistDetail</code></td>
+    <td><code>Fsinger_mid</code> / <code>Fsinger_name</code> → <code>mid</code> / <code>name</code>；<code>singerBrief</code> → <code>description</code>；<code>total_song</code> / <code>total_album</code> → 计数；封面由 <code>mid</code> 拼 <code>T001R500x500</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqArtistSongData</code> → <code>ArtistDetail.songs</code></td>
+    <td><code>singerSongList.data.songList[].songInfo</code> → <code>Song</code>；<code>totalNum → total</code>；<code>hasMore</code> 按已载入数与总数比较。</td>
+  </tr>
+  <tr>
+    <td><code>QqAlbumDetail</code> → <code>AlbumDetail</code></td>
+    <td><code>basicInfo.albumName</code> / <code>publishDate</code> / <code>desc</code> → 对应字段；<code>singer[]</code> → <code>Singer[]</code>；封面由 <code>mid</code> 拼 <code>T002R500x500</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqAlbumSongData</code> → <code>AlbumDetail.songs</code></td>
+    <td><code>songList[].songInfo</code> → <code>Song</code>；<code>totalNum → total</code>；<code>hasMore</code> 按已载入数与总数比较。</td>
+  </tr>
+  <tr>
     <td><code>QqLyricResponse</code> → <code>Lyric</code></td>
     <td><code>qrc</code> 存在 → <code>format: 'qrc'</code>、<code>text: qrc</code>；否则 <code>format: 'lrc'</code>、<code>text: lyric</code>；<code>trans</code> 去空白后为空则 <code>null</code>；<code>-1901</code> → 空歌词。</td>
   </tr>
@@ -734,7 +807,7 @@ interface QqLoginPayload {
   </tr>
 </table>
 <ul class="note">
-  <li>内部目标模型 <code>Song</code> / <code>PlaylistMeta</code> / <code>PlaylistDetail</code> / <code>SearchResult</code> / <code>Lyric</code> / <code>Comment</code> / <code>CommentPage</code> / <code>UserProfile</code> / <code>UrlResult</code> 的定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；<code>Credential</code> 的字段定义见 <a href="#p4-3">§4.3</a>。</li>
+  <li>内部目标模型 <code>Song</code> / <code>PlaylistMeta</code> / <code>PlaylistDetail</code> / <code>SearchResult</code> / <code>Lyric</code> / <code>Comment</code> / <code>CommentPage</code> / <code>UserProfile</code> / <code>UrlResult</code> / <code>ArtistDetail</code> / <code>AlbumDetail</code> 的定义见 <a href="CORE.html#c4-1">CORE §4.1</a>；<code>Credential</code> 的字段定义见 <a href="#p4-3">§4.3</a>。</li>
   <li><code>mediaMid</code>、<code>guid</code> 与原始 <code>purl</code> 只在主进程 API 层内部存在，不进入 IPC 数据模型。</li>
   <li><code>PayInfo</code> 仅用于界面角标；实际可播性以 vkey 结果为准。</li>
   <li>收藏写入的 <code>songType</code> 必须来自详情接口真实字段；<code>webCookies</code> 与签名密钥只存在于主进程，不写日志、不跨 IPC。</li>

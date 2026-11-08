@@ -1,0 +1,72 @@
+{
+  "code": 0,
+  "ts": 1794130267400,
+  "start_ts": 1794130267383,
+  "traceid": "3f2b5fbea9c201b0",
+  "req_0": {
+    "code": 0,
+    "data": {
+      "body": {
+        "album": {
+          "list": []
+        },
+        "gedantip": {
+          "tab": 0,
+          "tip": ""
+        },
+        "mv": {
+          "list": []
+        },
+        "qc": [],
+        "singer": {
+          "list": []
+        },
+        "song": {
+          "list": []
+        },
+        "songlist": {
+          "list": []
+        },
+        "user": {
+          "list": []
+        },
+        "zhida": {
+          "list": []
+        }
+      },
+      "code": 0,
+      "feedbackURL": "",
+      "meta": {
+        "cid": "",
+        "curpage": 1,
+        "dir": "L",
+        "display_order": [],
+        "ein": 5,
+        "estimate_sum": 15471,
+        "expid": "",
+        "feedbackPlaceId": "",
+        "is_filter": -2,
+        "next_page_start": {},
+        "nextpage": -1,
+        "perpage": 5,
+        "query": "晴天",
+        "report_info": {
+          "items": {}
+        },
+        "result_trustworthy": 1,
+        "ret": 0,
+        "safetyType": 0,
+        "safetyUrl": "",
+        "searchid": "",
+        "sid": "",
+        "sin": 0,
+        "step_rela_syntax_tree": {},
+        "sum": 0,
+        "tab_list": [],
+        "uid": "",
+        "v": 0
+      },
+      "ver": 0
+    }
+  }
+}
