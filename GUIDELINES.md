@@ -33,15 +33,20 @@ Documents per project, in HTML — the development docs split by boundary:
 | 7 | Comment budget | an in-code comment with >3 information points → `ul.note` after its code block; the comment keeps only what the signature/call needs |
 | 8 | One block, one flow | a code block is a single continuous content; disjoint pieces → separate blocks/subsections |
 | 9 | CONVENTIONS chapter | USER / CORE / PROVIDER each keep one, right after the first chapter (may stay empty); stated once there, referenced from the affected sections |
+| 10 | BUILD is downstream | BUILD is generated from README / USER / CORE / PROVIDER. Those documents must never link to or cite BUILD; every fact they need lives in them, and BUILD repeats it with links back. Before development, no BUILD document exists in the doc set. |
+| 11 | Documentation-first | documents define the target design and contract before implementation; docs guide implementation, never the reverse. Never record implementation status (implemented / not implemented / pending / draft) in any document. |
 
 ## Readme
 
 [↑](#top)
 
-1. **WHAT & WHY** — IDEAL: the problem to solve · GOAL: what success looks like · non-goals (optional)
+1. **WHAT & WHY** — IDEAL: the problem to solve · GOAL: what success looks like · NON-GOAL: what we're NOT trying to do, the boundaries of this project
 2. **User interactions** — only entry points and user-observable outcomes; do not explain any mechanisms behind them. Those belong to USER/CORE.
-3. **Project map** — optional; root project of a multi-project repo only · ASCII tree of the project family
+3. **Project map** — optional; root project of a multi-project repo only · ASCII tree of the project family · document ownership and the component document index live here
 4. **Credits** — always present, always last; list the credited projects (and stack/license where useful), not what was referenced
+
+**Rules**
+- no separate ownership or boundary chapters — document ownership and component index belong to Project map; component boundaries belong to WHAT & WHY (GOAL / NON-GOAL)
 
 ## User
 
@@ -75,7 +80,7 @@ Documents per project, in HTML — the development docs split by boundary:
 - not exhaustive — key execution paths only: startup, key events, shutdown
 - symbols already defined in USER/PROVIDER → one-line declaration with trailing `//见 USER §xx.xx` / `//见 PROVIDER §xx.xx` — project language, no body, no redefinition; everything else syntactically valid in the project language
 - engineering constants (bus names, periods, capacities, …) — in the owning source file's signature subsection, declare the constant name and purpose; a concrete value may appear only as a recommended value in a comment (e.g. `// 推荐值 15_000`), never as an assignment in the declaration; do not use a separate constants table; tuned against the real system, code stays the operational source of truth; a literal may appear inline in a call stack where that flow depends on it; exception: UI visual literals (dimensions, radii, font sizes, …) pin the visual contract and may be stated in USER's UI chapters — CSS/code stays the operational source of truth
-- no implementation reference → draft meaningful names/signatures marked `待实现，可以根据实际情况调整` (call-stack lines use the drafted names, no marker at the call site); a reference exists (main branch, breadpan, std / GTK APIs) → use its real names
+- no implementation reference → draft meaningful names/signatures as the target contract; implementation may adjust names or parameters while preserving the documented semantics (call-stack lines use the drafted names); a reference exists (main branch, breadpan, std / GTK APIs) → use its real names
 
 **Chapters**
 1. **File tree** — final code structure; each entry states what the module serves and links to its signatures subsection (no subsection → plain entry); lists source/build/config/assets only — documentation artifacts and their styling are out of scope
@@ -88,7 +93,7 @@ Documents per project, in HTML — the development docs split by boundary:
    - event listeners are represented by the binding call statement; calls inside the listener are child calls, like any other call
    - a node's children are calls actually made by that node; a path shared by several callers is a separate root/subsection, never nested under one caller
    - call-tree structure follows the source: separately registered listeners stay separate; a semantic grouping such as `player.on(command)` is a note/table abstraction, not a substitute for actual registrations
-   - at most one trailing comment per call — a comment is not a tree node (no `├──`/`└──` of its own), but the ancestor spine `│` continues through its line
+   - at most one trailing comment per call — a comment is not a tree node (no `├──` / `└──` of its own), but the ancestor spine `│` continues through its line
    - motivations, policies, trade-offs beyond one comment line → prose after the block
 
 ## Provider
@@ -129,3 +134,5 @@ Sources (`*.puml`) and exports (`*.svg`) live in the owning project's own `diagr
 **Rules**
 - produced once development is complete — not written during the design phase, but kept as part of the project
 - guides other developers in using and building on the project
+- downstream only — generated from README / USER / CORE / PROVIDER; never a source for them and never cited by them
+- absent before development — delete BUILD from the product doc set until development is complete; no other document may link to it

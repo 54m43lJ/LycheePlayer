@@ -101,10 +101,6 @@
     <td>MV 接口（待探测）</td>
     <td>MV 搜索、详情与取流的上游入口；需确认登录与 VIP 权限后写入。</td>
   </tr>
-  <tr>
-    <td>mpv JSON IPC</td>
-    <td>应用主进程与系统 mpv 子进程之间的本地 JSON 命令 / 事件通道；socket 位于 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>。</td>
-  </tr>
 </table>
 <ul class="note">
   <li>音质档位与请求 / 实际音质的用户语义见 <a href="USER.html#u1">USER §1</a>；内部类型 <code>Quality</code> 见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
@@ -204,15 +200,7 @@
   <li>vkey 失效或流中断时，播放器对同一歌曲最多每 30 秒自动重新取一次链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”。<code>PROVIDER</code> 不再承诺“不会自动重新获取链接”。</li>
 </ul>
 
-<h3 id="p3-4">3.4 mpv JSON IPC</h3>
-<div class="diagram"><img src="diagram/prov-mpv.svg" alt="mpv JSON IPC 时序图"></div>
-<ul class="note">
-  <li>应用主进程启动 mpv 子进程，并通过本地 socket 发送 <code>loadfile</code>、<code>set_property</code>、<code>seek</code>、<code>observe_property</code>。</li>
-  <li>mpv 回传 <code>property-change</code>、<code>file-loaded</code>、<code>playback-restart</code>、<code>end-file</code>；应用据此更新播放状态。</li>
-  <li>socket 位于 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>，不使用 TCP；退出时终止子进程。</li>
-</ul>
-
-<h3 id="p3-5">3.5 QQ Web 签名 / 加密协议（收藏写入）</h3>
+<h3 id="p3-4">3.4 QQ Web 签名 / 加密协议（收藏写入）</h3>
 <p>
 201 目录的收藏写入使用 QQ 官网 Web 通道；算法参考 MIT 项目 <code>jixunmoe/qmweb-sign</code>，使用 Node 内置 <code>crypto</code> 实现，不新增依赖。
 </p>
@@ -263,7 +251,7 @@
   <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code>、歌曲展示字段与真实 <code>songType</code>。</td></tr>
   <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。</td></tr>
   <tr><td>收藏状态</td><td><code>music.musicasset.SongFavRead / IsSongFanByMid</code></td><td>按 <code>v_songMid</code> 批量读取 <code>m_fan</code> 红心状态。</td></tr>
-  <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-5">§3.5</a>。</td></tr>
+  <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-4">§3.4</a>。</td></tr>
   <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表。</td></tr>
   <tr><td>我的歌单</td><td><code>music.musicasset.PlaylistBaseRead / GetPlaylistByUin</code></td><td>当前账号创建 / 收藏的歌单列表。</td></tr>
   <tr><td>推荐（待探测）</td><td>—</td><td>每日推荐 / 专属雷达 / 猜你喜欢；fixture 验证后补方法名与参数。</td></tr>
@@ -360,7 +348,7 @@
 </table>
 <ul class="note">
   <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
-  <li>普通内容 CGI 不需要额外签名；收藏写入必须使用 <a href="#p3-5">§3.5</a> 的 zzc 签名 + <code>ag-1</code> 加密通道；<code>g_tk</code> 还用于 OAuth 授权、歌词与用户资料请求。</li>
+  <li>普通内容 CGI 不需要额外签名；收藏写入必须使用 <a href="#p3-4">§3.4</a> 的 zzc 签名 + <code>ag-1</code> 加密通道；<code>g_tk</code> 还用于 OAuth 授权、歌词与用户资料请求。</li>
   <li>歌曲评论单页最多 25 条；超过上限时上游返回业务码 <code>10000</code>，因此应用固定使用 20 条。评论请求匿名发送，不携带登录凭证。</li>
   <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。上游单次最多返回 100 首，应用固定 50 首/页。</li>
   <li>推荐、歌单创建 / 改名 / 删除、MV 接口尚未完成 fixture 验证；验证前不写入具体方法名，只在 CORE 标记待实现。收藏写入与状态读取已实现。</li>
@@ -637,7 +625,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqLyricResponse</code></td>
     <td><code>code</code> · <code>retcode</code> · <code>lyric</code> · <code>qrc</code> · <code>trans</code></td>
-    <td><code>-1901</code> 表示无歌词；<code>qrc</code> 为 QRC 密文，主进程只透传。QRC 编码链为 hex → 3DES-ECB（固定密钥 <code>!@#)(*$%123ZXC!@!@#)(NHL</code>，无自动填充）→ zlib → <code>LyricContent</code> XML；解密在 preload 完成，见 <a href="CORE.html#c4-66">CORE §4.66</a>。</td>
+    <td><code>-1901</code> 表示无歌词；<code>qrc</code> 为 QRC 密文，主进程只透传。QRC 编码链为 hex → 3DES-ECB（固定密钥 <code>!@#)(*$%123ZXC!@!@#)(NHL</code>，无自动填充）→ zlib → <code>LyricContent</code> XML；解密在 preload 完成，见 <a href="CORE.html#c4-64">CORE §4.64</a>。</td>
   </tr>
   <tr>
     <td><code>QqCommentList</code></td>
@@ -816,40 +804,6 @@ interface MprisMetadata {
   <li><code>LoopStatus</code> 与 <code>Shuffle</code> 的写入同步更新播放模式；<code>Volume</code> 写入同步更新播放器音量。</li>
   <li>入站命令如何转成 <code>MprisCommand</code>、播放状态如何发布，见 <a href="CORE.html#c5-6">CORE §5.6</a>；类型定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
   <li>可用 <code>playerctl -p lychee</code> 验证总线上暴露的成员。</li>
-</ul>
-
-<h3 id="p4-5">4.5 mpv JSON IPC</h3>
-<pre><code>interface MpvCommand {
-  command: string[];
-  request_id?: number;
-}
-
-interface MpvResponse {
-  request_id?: number;
-  error: 'success' | string;
-  data?: unknown;
-}
-
-interface MpvEvent {
-  event: 'property-change' | 'file-loaded' | 'playback-restart' | 'end-file';
-  name?: string;
-  data?: unknown;
-}
-</code></pre>
-<table>
-  <tr><th>命令 / 事件</th><th>用途</th></tr>
-  <tr><td><code>loadfile</code></td><td>加载音频 URL；队列追加用于 gapless。</td></tr>
-  <tr><td><code>set_property</code></td><td>设置 <code>pause</code> / <code>volume</code> / <code>af</code>（EQ、响度归一）。</td></tr>
-  <tr><td><code>seek</code></td><td>跳转播放位置。</td></tr>
-  <tr><td><code>observe_property</code></td><td>订阅播放位置、暂停、时长等属性。</td></tr>
-  <tr><td><code>property-change</code></td><td>属性变化；驱动播放状态与进度。</td></tr>
-  <tr><td><code>file-loaded</code></td><td>音频文件加载完成。</td></tr>
-  <tr><td><code>playback-restart</code></td><td>播放重新开始。</td></tr>
-  <tr><td><code>end-file</code></td><td>当前文件结束；触发下一首或停止。</td></tr>
-</table>
-<ul class="note">
-  <li>socket 位于 <code>XDG_RUNTIME_DIR</code>，权限 <code>0600</code>，不使用 TCP；应用退出时终止子进程。</li>
-  <li>mpv 缺失或版本不满足时回退 HTML5 Audio，并在界面提示。</li>
 </ul>
 
 </body>

@@ -118,10 +118,6 @@
     <td>下载当前账号可播歌曲到本机的任务，以及管理进度、暂停 / 继续、删除的侧栏抽屉。</td>
   </tr>
   <tr>
-    <td>播放引擎 / gapless / EQ / 响度归一</td>
-    <td>实际输出音频的引擎；<code>Settings.audioEngine</code> 为预留字段（未正式上线），当前仅保留持久化契约，未知值回退 <code>auto</code>。HTML5 Audio 为实际默认引擎；mpv 的无缝播放 / EQ / 响度归一等能力尚未作为已交付承诺。</td>
-  </tr>
-  <tr>
     <td>评论（Comment）</td>
     <td>当前歌曲在上游的评论列表；字段见 <a href="CORE.html#c4-1">CORE §4.1</a> 的 <code>Comment</code>。界面展示评论总数、昵称、正文与点赞数。</td>
   </tr>
@@ -515,25 +511,14 @@
       <div class="u-rowline"><span>音频引擎</span><span>HTML5 Audio</span></div>
       <div class="u-rowline"><span>许可证</span><span>GPL-3.0-only</span></div>
     </div>
-    <div class="u-panel">
-      <h5>音频引擎（预留 / 未上线）</h5>
-      <div class="u-opts">
-        <div class="u-opt active"><b>自动</b></div>
-        <div class="u-opt"><b>HTML5</b></div>
-        <div class="u-opt"><b>mpv</b></div>
-      </div>
-      <div class="u-rowline"><span>EQ</span><span class="u-switch"></span></div>
-      <div class="u-rowline"><span>响度归一</span><span class="u-switch"></span></div>
-    </div>
   </div>
 </div>
 </div>
 <ul class="note">
-  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口 / 启动参数 / 缓存与下载，右列账号 / 关于 / 音频引擎。</li>
+  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口 / 启动参数 / 缓存与下载，右列账号 / 关于。</li>
   <li>启动参数展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
   <li>缓存与下载区展示缓存开关、当前占用、清理；下载目录、容量与剩余空间提示。</li>
-  <li><code>Settings</code> 的确切持久化字段为 <code>defaultQuality</code>、<code>closeToTray</code>、<code>theme</code>、<code>audioCacheEnabled</code>、<code>audioEngine?</code>、<code>downloadDir?</code>。<code>downloadDir</code> 缺省为 <code>~/Music/Lychee Player</code>；未知值由主进程回退默认。</li>
-  <li><code>audioEngine</code> 为预留 / 未上线字段：当前只保留持久化契约（<code>auto</code> / <code>html5</code> / <code>mpv</code>，未知值回退 <code>auto</code>），不作为已交付的引擎切换能力描述；EQ / 响度归一同样未上线。</li>
+  <li><code>Settings</code> 的确切持久化字段为 <code>defaultQuality</code>、<code>closeToTray</code>、<code>theme</code>、<code>audioCacheEnabled</code>、<code>downloadDir?</code>。<code>downloadDir</code> 缺省为 <code>~/Music/Lychee Player</code>；未知值由主进程回退默认。</li>
   <li>关于区展示版本、音频引擎与许可证；版本与许可证以构建配置为准。</li>
   <li>音质四档，默认“自动”；回退静默，不弹提示。</li>
   <li>关闭到托盘默认开启；账号区展示到期时间，手动 Cookie 凭证禁用“立即续期”。</li>
