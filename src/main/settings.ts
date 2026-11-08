@@ -1,6 +1,5 @@
 import { app } from 'electron'
-import { readFileSync } from 'node:fs'
-import { writeFile, mkdir } from 'node:fs/promises'
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Quality, Settings } from '../shared/types'
 import { AUDIO_CACHE_DEFAULT_BYTES, normalizeAudioCacheLimitBytes } from '../shared/constants'
@@ -66,10 +65,11 @@ export function getSettings(): Settings {
   return { ...current }
 }
 
-export function saveSettings(next: Settings): Promise<void> {
+export function saveSettings(next: Settings): void {
   current = sanitize(next)
   const file = settingsFile()
-  return mkdir(dirname(file), { recursive: true })
-    .then(() => writeFile(file, JSON.stringify(current, null, 2), { mode: 0o600 }))
-    .then(() => undefined)
+  mkdirSync(dirname(file), { recursive: true })
+  const temp = `${file}.part`
+  writeFileSync(temp, JSON.stringify(current, null, 2), { mode: 0o600 })
+  renameSync(temp, file)
 }

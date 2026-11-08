@@ -956,6 +956,32 @@
 | `USER.html` | §5.2.7 设置页 · Settings 字段 | 改 | 持久化字段补 `audioCacheMaxBytes`。 |
 | `EVOLVE.md` | #2 下载与缓存系统 | 改 | 补设置页播放缓存上限档位与超限清理行为。 |
 
+追加修复（缓存上限持久化）：
+
+问题描述：ISSUES 指出缓存上限设置没有持久化保存。排查后确认有两处会丢值：设置页原来只在滑杆 `change` 事件写盘，拖动 / 键盘调整期间不保存，`change` 未送达（快速切页或退出）时值不会落盘；主进程 `saveSettings` 使用异步 `writeFile`，`before-quit` 里又不等待 Promise，退出瞬间的最后一次写入可能被进程终止，且直接覆盖不是原子写，异常中断会留下半截 JSON。
+
+解决方法：
+
+- 设置页 `input` 时立即更新本地档位并安排 200ms 防抖保存；`change` 时取消防抖并立即落盘；组件卸载时若有待保存值则立即 flush，避免快速切换页面导致丢值；
+- 主进程 `saveSettings` 改为同步原子写：先写 `settings.json.part`，再 `renameSync` 覆盖正式文件；`before-quit` 的保存因此会在进程退出前完成，也不会留下半截文件；
+- 新增 `test/settings-persistence.test.ts`：保存 512M 后直接读取磁盘并重新 `loadSettings()` 校验；非档位值按最近档位归一。
+
+追加验证：
+
+- `npx vitest run` 15 个测试文件 / 58 个用例通过；
+- 设置页保存路径：拖动结束立即写盘，未触发 `change` 时 200ms 内也会写盘，卸载时兜底 flush。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.48 `SettingsView.vue` | 改 | 缓存上限滑杆 `input` 防抖保存、`change` 立即 flush、卸载兜底保存，保证调整后一定落盘。 |
+| `CORE.html` | §4.6 `main/settings.ts` | 改 | `saveSettings` 改为同步原子写（`.part` + `renameSync`），退出时保存不依赖异步 Promise。 |
+| `CORE.html` | §4.2 `ipc.ts` | 不改 | `settings.set` 仍在返回前完成保存；持久化实现改动不影响 IPC 契约。 |
+| `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 缓存上限调整后自动保存，重启应用保持所选档位。 |
+| `BUILD.html` | §11 存储 | 增 | `settings.json` 使用 `.part` 原子替换，退出时同步写入。 |
+| `EVOLVE.md` | #2 下载与缓存系统 | 改 | 补缓存上限档位持久化与退出时原子写要求。 |
+
 ### 4.19 首页改为发现页并交换侧栏“发现 / 搜索”顺序
 
 问题描述：ISSUES 要求把首页改成发现页，并把导航栏中的“发现”和“搜索”交换位置。原实现根路径 `/` 重定向到 `/search`，侧栏“浏览”组顺序也是“搜索 → 发现”，因此应用启动后落在搜索页，发现页需要手动点击。
