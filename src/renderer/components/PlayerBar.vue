@@ -12,6 +12,7 @@ import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
 import { useToast } from '../composables/toast'
 import { formatDuration, songCover } from '../utils/format'
+import { downloadStateIcon, resolveDownloadState } from '../utils/download-state'
 
 const player = usePlayerStore()
 const ui = useUiStore()
@@ -108,23 +109,16 @@ const requestedQualityLabel = computed(() =>
 const asset = computed(() =>
   current.value ? download.assets[current.value.songMid] : undefined
 )
-const downloadIcon = computed(() => {
-  if (asset.value?.downloadedQuality) return 'download-done'
-  if (asset.value?.cachedQuality) return 'download-cached'
-  return 'download'
-})
+const downloadState = computed(() => resolveDownloadState(asset.value))
+const downloadIcon = computed(() => downloadStateIcon(downloadState.value))
 const downloadTitle = computed(() => {
   const item = asset.value
   const label = (value?: string | null): string =>
     value === 'flac' ? 'FLAC' : (value ?? '').toUpperCase()
   if (item?.taskStatus === 'downloading' || item?.taskStatus === 'pending') return '正在下载'
   if (item?.taskStatus === 'paused') return '下载已暂停'
-  if (item?.downloadedQuality) {
-    return item.cachedQuality
-      ? `已下载 ${label(item.downloadedQuality)} · 已缓存 ${label(item.cachedQuality)}`
-      : `已下载 ${label(item.downloadedQuality)}`
-  }
-  if (item?.cachedQuality) return `已缓存 ${label(item.cachedQuality)}`
+  if (downloadState.value === 'downloaded') return `已下载 ${label(item?.downloadedQuality)}`
+  if (downloadState.value === 'cached') return `已缓存 ${label(item?.cachedQuality)}`
   return '下载'
 })
 
@@ -469,10 +463,7 @@ watch(
       </button>
       <button
         class="icon-btn"
-        :class="{
-          cached: asset?.cachedQuality,
-          downloaded: asset?.downloadedQuality
-        }"
+        :class="downloadState === 'none' ? null : downloadState"
         :title="downloadTitle"
         :disabled="!hasSong"
         @click.stop="downloadCurrent()"

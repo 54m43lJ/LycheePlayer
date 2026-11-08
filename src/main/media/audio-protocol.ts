@@ -164,6 +164,7 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
   const source = streams.get(token)
   if (!source) return new Response('音频流不存在', { status: 404 })
 
+  // 取源优先级固定为：本机下载文件 > 播放缓存 > 网络。下载命中时不得再读缓存。
   if (source.filePath) {
     const size = await stat(source.filePath).then((info) => info.size).catch(() => 0)
     if (size > 0) {
