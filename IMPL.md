@@ -599,3 +599,29 @@
 | `PROVIDER.html` | §4.1 歌曲评论行 / 验证记录 | 改 | 删除“评论请求固定匿名”的表述，改为“未登录匿名；登录后携带 Cookie 以读取 `IsPraised`”。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 改 | 修正 `liked` 来源与凭据策略：`IsPraised → liked`，登录时携带凭证，`IsLiked` 仅作兼容。 |
 | `EVOLVE.md` | #5 / #14 | 不动 | 页面与点赞流程不变，仅修正上游字段与鉴权细节。 |
+
+### 4.8 点击歌词跳转失效与高亮样式调整
+
+问题描述：ISSUES 指出歌词页点击某一行不再跳转到对应时间。`LyricsPanel.vue` 的 `@click="seekLine(...)"` 仍存在，但拖拽实现从 `pointerdown` 起就对整个列表调用 `setPointerCapture`。指针捕获后，`pointerup` 目标被重定向到列表容器，浏览器派发的 `click` 目标是按下与抬起目标的共同祖先，不再是 `.lyric-line` 按钮，因此按钮的 click 永远不触发。该回归是在加入“拖拽与滚轮滚动歌词”后出现的。
+
+同项还要求调整高亮呈现：歌词水平居中、去掉左侧紫色高亮边、左右不留空白。
+
+解决方法：
+- 将“按下”与“拖拽”拆成两个状态：`pointerdown` 只记录起点，不立即捕获；移动距离超过 6px 后才设置 `dragging` 并调用 `setPointerCapture`；
+- 未达到阈值时松开鼠标，指针从未被捕获，原生 `click` 正常命中 `.lyric-line`，沿用现有 `seekLine()` 跳转；
+- 达到阈值后继续走原有拖拽滚动，`suppressClick` 仍用于兜底阻止拖拽结束后的误点击；`pointercancel` / `pointerleave` 负责清理按下状态；
+- `.lyrics-page-list` 水平 padding 改为 `0`；`.lyrics-page-list .lyric-line` 改为 `text-align: center`、左右 padding 为 `0`、移除左侧边框，使高亮背景条铺满整行且不再有紫色竖边。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 40 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.41 `LyricsPanel.vue` | 改 | 说明指针捕获必须在超过拖拽阈值后才启用，确保未拖拽时原生 click 可触发歌词跳转。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 补歌词页 `.lyrics-page-list` 水平 padding 为 0、`.lyric-line` 居中且无左边框，高亮条铺满整行。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 明确歌词文字水平居中、高亮背景无左侧强调边、背景条左右不留空白，并保留点击定位与拖拽滚动。 |
+| `EVOLVE.md` | #5 | 不动 | 交互需求未变，仅修正实现回归与视觉细节。 |

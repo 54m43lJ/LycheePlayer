@@ -3221,7 +3221,7 @@ a {
 .lyrics-page-list {
   position: absolute;
   inset: 0;
-  padding: 38% 34px;
+  padding: 38% 0;
   overflow-y: auto;
   cursor: grab;
   user-select: none;
@@ -3231,7 +3231,15 @@ a {
   cursor: grabbing;
 }
 
+.lyrics-page-list .lyric-line {
+  padding-right: 0;
+  padding-left: 0;
+  border-left: 0;
+  text-align: center;
+}
+
 .lyrics-page-list .lyric-line.active {
+  border-left: 0;
   font-size: 20px;
 }
 

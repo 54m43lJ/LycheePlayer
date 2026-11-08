@@ -11,6 +11,8 @@ const { current } = storeToRefs(player)
 const { lines, loading, error, activeIndex } = useLyrics()
 const listRef = ref<HTMLElement | null>(null)
 const dragging = ref(false)
+const DRAG_THRESHOLD = 6
+let pressing = false
 let dragStartY = 0
 let dragStartScroll = 0
 let moved = 0
@@ -39,28 +41,46 @@ watch(
 
 function onPointerDown(event: PointerEvent): void {
   if (event.button !== 0 || !listRef.value) return
-  dragging.value = true
+  pressing = true
+  dragging.value = false
   moved = 0
   dragStartY = event.clientY
   dragStartScroll = listRef.value.scrollTop
-  listRef.value.setPointerCapture(event.pointerId)
 }
 
 function onPointerMove(event: PointerEvent): void {
-  if (!dragging.value || !listRef.value) return
+  if (!pressing || !listRef.value) return
   const delta = event.clientY - dragStartY
+  // 只有超过阈值才进入拖拽并捕获指针；否则保留原生 click，歌词可正常点击跳转。
+  if (!dragging.value) {
+    if (Math.abs(delta) <= DRAG_THRESHOLD) return
+    dragging.value = true
+    listRef.value.setPointerCapture(event.pointerId)
+  }
   moved = Math.max(moved, Math.abs(delta))
   listRef.value.scrollTop = dragStartScroll - delta
 }
 
 function onPointerUp(event: PointerEvent): void {
-  if (!dragging.value) return
+  if (!pressing) return
+  pressing = false
+  const wasDragging = dragging.value
   dragging.value = false
-  suppressClick = moved > 6
+  if (!wasDragging) return
+  suppressClick = moved > DRAG_THRESHOLD
   listRef.value?.releasePointerCapture(event.pointerId)
   window.setTimeout(() => {
     suppressClick = false
   }, 0)
+}
+
+function onPointerCancel(): void {
+  pressing = false
+  dragging.value = false
+}
+
+function onPointerLeave(): void {
+  if (!dragging.value) pressing = false
 }
 
 function seekLine(timeMs: number): void {
@@ -69,6 +89,7 @@ function seekLine(timeMs: number): void {
 }
 
 onBeforeUnmount(() => {
+  pressing = false
   dragging.value = false
 })
 </script>
@@ -94,7 +115,8 @@ onBeforeUnmount(() => {
         @pointerdown="onPointerDown"
         @pointermove="onPointerMove"
         @pointerup="onPointerUp"
-        @pointercancel="onPointerUp"
+        @pointercancel="onPointerCancel"
+        @pointerleave="onPointerLeave"
       >
         <button
           v-for="(line, index) in lines"
