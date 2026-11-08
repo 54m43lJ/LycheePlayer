@@ -7,6 +7,7 @@ import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
 import { usePlayerStore } from '../stores/player'
 import { formatDuration, singerNames, songCover } from '../utils/format'
+import { downloadStateIcon, resolveDownloadState } from '../utils/download-state'
 
 const props = withDefaults(
   defineProps<{
@@ -71,11 +72,12 @@ function isFavorite(song: Song): boolean {
   return props.favoriteMids.includes(song.songMid)
 }
 
+function downloadState(song: Song) {
+  return resolveDownloadState(props.assetStates[song.songMid])
+}
+
 function downloadIcon(song: Song): string {
-  const asset = props.assetStates[song.songMid]
-  if (asset?.downloadedQuality) return 'download-done'
-  if (asset?.cachedQuality) return 'download-cached'
-  return 'download'
+  return downloadStateIcon(downloadState(song))
 }
 
 function downloadTitle(song: Song): string {
@@ -85,12 +87,8 @@ function downloadTitle(song: Song): string {
   if (asset?.taskStatus === 'downloading' || asset?.taskStatus === 'pending') return '正在下载'
   if (asset?.taskStatus === 'paused') return '下载已暂停'
   if (asset?.taskStatus === 'failed') return '下载失败，点击重试'
-  if (asset?.downloadedQuality) {
-    return asset.cachedQuality
-      ? `已下载 ${quality(asset.downloadedQuality)} · 已缓存 ${quality(asset.cachedQuality)}`
-      : `已下载 ${quality(asset.downloadedQuality)}`
-  }
-  if (asset?.cachedQuality) return `已缓存 ${quality(asset.cachedQuality)}`
+  if (downloadState(song) === 'downloaded') return `已下载 ${quality(asset?.downloadedQuality)}`
+  if (downloadState(song) === 'cached') return `已缓存 ${quality(asset?.cachedQuality)}`
   return '下载'
 }
 
@@ -223,10 +221,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               class="song-icon"
-              :class="{
-                cached: assetStates[song.songMid]?.cachedQuality,
-                downloaded: assetStates[song.songMid]?.downloadedQuality
-              }"
+              :class="downloadState(song) === 'none' ? null : downloadState(song)"
               :title="downloadTitle(song)"
               :disabled="!downloadable || availability[song.songMid]?.playable === false"
               @click.stop="emit('download', index)"

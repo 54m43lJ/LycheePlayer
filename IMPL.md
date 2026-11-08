@@ -893,17 +893,31 @@
 - `npx vitest run` 12 个测试文件 / 47 个用例通过；
 - `npm run build` 通过。
 
+追加修复（遗留问题）：
+
+- 缓存态的边框仍画在按钮外沿：播放条 34px / 图标 17px、歌曲表 26px / 图标 15px，四周留白分别约 8.5px 与 5.5px，明显大于已下载高亮。改为所有状态共用一个 24px 的居中状态框（用 `::before` 伪元素绘制）：缓存态为 surface 背景块（`var(--panel)`），下载态为 `accent-soft` 填充；边框方案因观感生硬被弃用，播放条与歌曲表尺寸完全一致，按钮点击热区不变；
+- 状态选择收敛为单一枚举：新增 `utils/download-state.ts` 的 `resolveDownloadState` / `downloadStateIcon`，按 `downloaded → cached → none` 返回唯一状态；`SongTable` / `PlayerBar` 的 class、图标与 tooltip 都由该状态派生，不再分别判断 `cachedQuality` / `downloadedQuality`，即使资产同时带两个档位也只显示已下载；
+- tooltip 不再拼接“已下载 … · 已缓存 …”：有下载时只显示“已下载 X”，否则显示“已缓存 X”或“下载”；
+- 播放取源顺序核对：`api/song.ts` 的 `getStreamUrls` 先调用 `resolveDownloadedAudio`，命中则跳过上游；`media/audio-protocol.ts` 的 `handleStream` 固定按“下载文件 > 播放缓存 > 网络”返回，并补注释锁定该顺序。现有 `test/api/song-stream.test.ts` 已覆盖已下载时不请求上游，新增 `test/download-state.test.ts` 覆盖展示状态优先级。
+
+追加验证：
+
+- 静态页实测播放条与歌曲表的缓存态为 24×24 的 surface 背景块、下载态为 24×24 的 accent 填充；同时挂 `cached` 与 `downloaded` class 时只显示下载填充；
+- `npx vitest run` 13 个测试文件 / 51 个用例通过。
+
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.36 `AppIcon.vue` | 改 | 明确 `download-cached` 与普通下载图标一致（下载箭头 + 完整底线）；缓存状态由按钮边框表达，不再使用带框或断线图标。 |
-| `CORE.html` | §4.39 `SongTable.vue` | 改 | 下载按钮三态统一为：普通 / 已缓存（2px 圆角内边框）/ 已下载（accent 高亮），与播放条使用同一组选择器。 |
-| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放条下载按钮补 `cached` / `downloaded` 状态样式，与歌曲表一致；已下载高亮用 4px padding + `background-clip: content-box` 收紧到图标附近，点击热区不变；图标优先级仍为已下载 > 已缓存 > 普通。 |
-| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.song-icon.cached` 的 1px `outline`，改为 `.song-icon.cached, .icon-btn.cached` 的 2px inset 圆角边框；`.downloaded` 同时覆盖两类按钮，并给 `.icon-btn.downloaded` 增加 4px padding 与 `background-clip: content-box`。 |
-| `USER.html` | §5.2.3 播放条 · 右区下载 | 改 | 三态呈现改为：普通图标 / 普通图标 + 2px 圆角边框（已缓存）/ 实心背景高亮（已下载，高亮范围收紧到图标附近）；与歌曲表一致。 |
-| `USER.html` | §5.2.4 歌曲列表 · 操作列 | 改 | 下载按钮已缓存时保留普通图标，仅按钮出现 2px 圆角边框；已下载时按钮高亮。 |
-| `EVOLVE.md` | #2 下载队列 / #9 播放条 | 不动 | 状态语义未变，仅统一图标与样式表达，由 CORE / USER 主责。 |
+| `CORE.html` | §4.36 `AppIcon.vue` | 改 | 明确 `download-cached` 与普通下载图标一致（下载箭头 + 完整底线）；缓存状态由按钮的 surface 状态块表达，不再使用带框或断线图标。 |
+| `CORE.html` | §1 File tree · `src/renderer/utils/` | 增 | 新增 `download-state.ts`，提供 `resolveDownloadState` / `downloadStateIcon`，作为下载按钮状态的唯一来源。 |
+| `CORE.html` | §4.39 `SongTable.vue` | 改 | 下载按钮三态由 `resolveDownloadState` 派生，class / 图标 / tooltip 使用同一状态；已缓存与已下载互斥，下载优先；状态框固定 24px，点击热区不变。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 与歌曲表共用 `download-state` 状态与 24px 状态框；tooltip 只显示当前优先级状态，不再拼接“已下载 · 已缓存”。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除按钮外沿的 inset 边框与 `background-clip` 方案；改用 `.cached / .downloaded` 共用的 24px `::before` 状态框：缓存态 surface 背景、下载态 accent 填充，并让下载态覆盖缓存态。 |
+| `CORE.html` | §4.11 `api/song.ts` / §4.59 `media/audio-protocol.ts` | 改 | 明确取源优先级为“本机下载文件 > 播放缓存 > 网络”，两处顺序一致并加注释锁定。 |
+| `USER.html` | §5.2.3 播放条 · 右区下载 | 改 | 三态呈现改为：普通图标 / 24px surface 背景块（已缓存）/ 24px accent 实心高亮（已下载）；缓存与下载互斥，有下载时只显示已下载，tooltip 不再同时列出两种状态。 |
+| `USER.html` | §5.2.4 歌曲列表 · 操作列 | 改 | 与播放条一致：已缓存为 24px surface 背景块，已下载为 accent 高亮；两种状态只显示一种，下载优先。 |
+| `EVOLVE.md` | #2 下载队列 / #9 播放条 | 改 | 删除“tooltip 补充缓存档位”与状态可共存表述，改为单一状态且下载优先；播放取源固定下载 > 缓存 > 网络。 |
 
 ### 4.18 设置页新增带节点的播放缓存上限滑动条
 
