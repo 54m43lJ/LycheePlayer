@@ -89,10 +89,13 @@ export async function flushDownloads(): Promise<void> {
     clearTimeout(saveTimer)
     saveTimer = null
   }
+  // 从未访问过下载模块时不要用空快照覆盖已有索引。
+  if (!loadedScope) return
   await saveIndex()
 }
 
 async function saveIndex(): Promise<void> {
+  if (!loadedScope) return
   const directory = downloadDir()
   try {
     await mkdir(directory, { recursive: true })
@@ -147,6 +150,14 @@ async function loadIndex(): Promise<void> {
 async function ensureScope(): Promise<void> {
   const current = scope()
   if (loadedScope === current) return
+  if (loadedScope) {
+    // 先把旧账号的索引落盘，再切换视图。
+    if (saveTimer) {
+      clearTimeout(saveTimer)
+      saveTimer = null
+    }
+    await saveIndex()
+  }
   for (const runtime of tasks.values()) runtime.controller?.abort()
   loadedScope = current
   await loadIndex()
