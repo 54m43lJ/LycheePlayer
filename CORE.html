@@ -131,7 +131,7 @@
 │   └── replay.ts                             fetch stub 与断言辅助
 ├── vitest.config.ts                          Vitest 配置（Node 环境；CJS 加载告警已知）
 ├── electron-builder.yml                      Linux dir 打包配置
-├── install.sh                                curl 安装脚本
+├── install.sh                                curl 安装脚本（缓存 + 校验 + 运行期依赖）
 ├── package.json                              依赖、脚本与版本
 └── tsconfig.json / tsconfig.node.json / tsconfig.web.json  TypeScript 配置
 </code></pre>
@@ -936,6 +936,8 @@ export function destroyTray(): void;
 </code></pre>
 <ul class="note">
   <li><code>updateTray</code> 同步播放 / 暂停菜单文案、上一首 / 下一首可用状态与 tooltip；无当前歌曲时禁用播放控制。菜单只在歌曲 mid 或播放状态变化时重建，tooltip 只在文案变化时写入，避免每 900 ms 的状态推送反复刷新 dbusmenu。</li>
+  <li>播放 / 暂停点击不直接广播 <code>toggle</code>：托盘侧读取最近一次 <code>player:state</code>，解析为明确的 <code>play</code> 或 <code>pause</code> 后下发，避免渲染进程状态滞后导致第一次点击被吞；同一 200ms 窗口内的重复命令去重，但不合并用户连续操作（去重后仍下发最新一条）。</li>
+  <li>菜单重建时重新绑定点击回调，避免重建丢失回调导致首次点击无效；Linux AppIndicator 可能延迟首帧，作为外部限制记录在 <a href="USER.html#u5-4">USER §5.4</a>。</li>
   <li>单击托盘图标只显示主窗口；GNOME 需要 AppIndicator 扩展，初始化失败静默降级。</li>
 </ul>
 
@@ -2055,11 +2057,14 @@ app::requestSingleInstanceLock()
 
 <h4 id="c5-6-1">5.6.1 命令下发</h4>
 <pre><code>ipc::sendPlayerCommand(command)
+├── 判断 command === 'toggle' → 按最近一次 player:state 解析为 'play' / 'pause'
+├── 判断 200ms 内重复命令 → 去重（保留最新一条）
 └── webContents.send('player:command', command)
     └── stores/player::handleCommand(command)
 </code></pre>
 <ul class="note">
   <li><code>sendPlayerCommand</code> 遍历所有未销毁窗口，逐个 <code>webContents.send</code> 广播。</li>
+  <li><code>toggle</code> 在入口处按主进程缓存的最新播放状态解析为 <code>play</code> / <code>pause</code>，渲染进程只执行明确命令；MPRIS 的 <code>playpause</code> 与托盘共用该路径。200ms 去重窗口只合并同源重复，不吞掉用户的连续操作。</li>
 </ul>
 
 <h3 id="c5-7">5.7 会话续期</h3>

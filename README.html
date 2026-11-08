@@ -88,7 +88,7 @@
   </tr>
   <tr>
     <td>安装 / 运行</td>
-    <td>下载 tar.gz 手动运行，或用 curl 一行安装到用户目录 / 系统目录（默认 Preview）；安装脚本缓存安装包并校验 sha256，安装运行期依赖可选。</td>
+    <td>下载 tar.gz 手动运行，或用 curl 一行安装到用户目录 / 系统目录（默认 Preview）；安装脚本缓存安装包并先比对 sha256，一致时跳过下载；运行期依赖用 <code>--with-deps</code> / <code>--no-deps</code> 指定，TTY 下可交互确认。</td>
     <td>—</td>
   </tr>
   <tr>
@@ -128,7 +128,7 @@
   </tr>
   <tr>
     <td>系统集成</td>
-    <td>通过 MPRIS 暴露媒体控制；托盘菜单随播放状态更新。</td>
+    <td>通过 MPRIS 暴露媒体控制；托盘菜单随播放状态更新，托盘播放 / 暂停单次点击生效。</td>
     <td><a href="PROVIDER.html#p4-4">PROVIDER §4.4</a> · <a href="USER.html#u5-4">USER §5.4</a></td>
   </tr>
   <tr>
