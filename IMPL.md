@@ -904,3 +904,40 @@
 | `USER.html` | §5.2.3 播放条 · 右区下载 | 改 | 三态呈现改为：普通图标 / 普通图标 + 2px 圆角边框（已缓存）/ 实心背景高亮（已下载，高亮范围收紧到图标附近）；与歌曲表一致。 |
 | `USER.html` | §5.2.4 歌曲列表 · 操作列 | 改 | 下载按钮已缓存时保留普通图标，仅按钮出现 2px 圆角边框；已下载时按钮高亮。 |
 | `EVOLVE.md` | #2 下载队列 / #9 播放条 | 不动 | 状态语义未变，仅统一图标与样式表达，由 CORE / USER 主责。 |
+
+### 4.18 设置页新增带节点的播放缓存上限滑动条
+
+问题描述：ISSUES 要求设置里的缓存选项增加一个带节点的滑动条，用固定档位调整缓存大小：最小 128MB、最大 2GB，档位为 128M → 256M → 512M → 1G → 1.5G → 2G。原实现只有播放缓存开关与“清空”按钮，容量上限写死为 `AUDIO_CACHE_MAX_BYTES = 2 GiB`，用户无法调整；`Settings` 与设置页也没有对应字段。
+
+解决方法：
+
+- `shared/constants.ts` 新增 `AUDIO_CACHE_LIMIT_STEPS_BYTES`（6 个固定档位）、`AUDIO_CACHE_DEFAULT_BYTES`（沿用旧行为，默认 2 GiB）与纯函数 `normalizeAudioCacheLimitBytes`：合法档位原样返回，越界 / 非档位值归一到最近档位，非法值回退默认档位；
+- `Settings` 新增 `audioCacheMaxBytes`；主进程 `createDefaultSettings` / `sanitize` 与渲染层 `defaultSettings` 同步补默认值和归一化；
+- `cache/audio.ts` 的 LRU 清理不再读常量，改为每次按 `getSettings().audioCacheMaxBytes` 执行，并导出 `enforceAudioCacheLimit()`：写入缓存后仍自动清理，设置页下调上限时也立即清理；
+- `settings.set` 保存后若缓存上限发生变化，调用 `enforceAudioCacheLimit()`；关闭播放缓存仍沿用原有清空逻辑，返回实际落盘后的 `saved` 设置；
+- 设置页在播放缓存开关下方新增全宽 `cache-limit-row`：左侧显示“播放缓存上限 / 超出后按最久未使用自动清理”，右侧显示当前档位；滑杆固定 6 个节点，已选节点与轨道填充使用 accent 色，未到节点保持弱色；
+- 滑杆拖动时只更新本地预览档位，释放（`change`）后才写入设置并刷新缓存占用，失败时回退到当前设置值并提示；`aria-label` 为“播放缓存上限”，节点标签为 128M / 256M / 512M / 1G / 1.5G / 2G；
+- `styles/main.css` 增加滑杆、填充轨道、滑块、节点与焦点环样式；轨道两端各留 7px 与滑块半径对齐，节点使用绝对定位，首尾标签不会挤出面板。
+
+验证：
+
+- 静态页实测 578px 宽滑杆的 6 个节点中心与轨道档位对齐，首尾标签均落在面板内；选择 1G 时轨道填充到 60%，1.5G / 2G 节点保持未激活色；
+- 新增 `test/cache-limit.test.ts` 覆盖固定档位、合法值保留、就近归一与非法值回退；
+- `npm run typecheck` 通过；
+- `npx vitest run` 13 个测试文件 / 51 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `AUDIO_CACHE_LIMIT_STEPS_BYTES`、`AUDIO_CACHE_DEFAULT_BYTES` 与 `normalizeAudioCacheLimitBytes`；说明 `AUDIO_CACHE_MAX_BYTES` 为默认 / 最大档位。 |
+| `CORE.html` | §4.1 `types.ts` | 改 | `Settings` 增加 `audioCacheMaxBytes: number`，取值限定为 6 个档位。 |
+| `CORE.html` | §4.6 `main/settings.ts` | 改 | 默认值与 `sanitize` 补 `audioCacheMaxBytes`，非法值按最近档位归一。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | `settings.set` 在缓存上限变化后调用 `enforceAudioCacheLimit()`，返回落盘后的设置。 |
+| `CORE.html` | §4.58 `cache/audio.ts` | 改 | 缓存上限改为读取设置而非固定常量；导出 `enforceAudioCacheLimit()`，写入缓存与下调上限时都按当前档位做 mtime LRU 清理。 |
+| `CORE.html` | §4.48 `SettingsView.vue` | 改 | 缓存区增加带 6 个节点的上限滑杆；拖动仅预览，释放后写盘并刷新占用；显示当前档位。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.cache-limit-row` / `.cache-slider` / `.cache-slider-nodes` 样式：accent 填充、滑块、节点激活色与焦点环。 |
+| `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 播放缓存区增加上限滑杆：128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G；下调后立即按最久未使用清理超限文件。 |
+| `USER.html` | §5.2.7 设置页 · Settings 字段 | 改 | 持久化字段补 `audioCacheMaxBytes`。 |
+| `EVOLVE.md` | #2 下载与缓存系统 | 改 | 补设置页播放缓存上限档位与超限清理行为。 |

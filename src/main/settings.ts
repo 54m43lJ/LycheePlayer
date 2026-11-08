@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs'
 import { writeFile, mkdir } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { Quality, Settings } from '../shared/types'
+import { AUDIO_CACHE_DEFAULT_BYTES, normalizeAudioCacheLimitBytes } from '../shared/constants'
 
 const QUALITIES: Quality[] = ['128k', '320k', 'flac']
 
@@ -16,6 +17,7 @@ export function createDefaultSettings(): Settings {
     closeToTray: true,
     theme: 'dark',
     audioCacheEnabled: true,
+    audioCacheMaxBytes: AUDIO_CACHE_DEFAULT_BYTES,
     downloadDir: defaultDownloadDir()
   }
 }
@@ -42,6 +44,7 @@ function sanitize(value: unknown): Settings {
       typeof raw.audioCacheEnabled === 'boolean'
         ? raw.audioCacheEnabled
         : defaults.audioCacheEnabled,
+    audioCacheMaxBytes: normalizeAudioCacheLimitBytes(raw.audioCacheMaxBytes),
     downloadDir:
       typeof raw.downloadDir === 'string' && raw.downloadDir.trim()
         ? raw.downloadDir

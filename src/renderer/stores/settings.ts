@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Settings } from '@shared/types'
+import { AUDIO_CACHE_DEFAULT_BYTES } from '@shared/constants'
 import { unwrap } from '../api'
 
 export function defaultSettings(): Settings {
@@ -8,7 +9,8 @@ export function defaultSettings(): Settings {
     defaultQuality: 'auto',
     closeToTray: true,
     theme: 'dark',
-    audioCacheEnabled: true
+    audioCacheEnabled: true,
+    audioCacheMaxBytes: AUDIO_CACHE_DEFAULT_BYTES
   }
 }
 

@@ -282,6 +282,8 @@ export interface Settings {
   closeToTray: boolean
   theme: 'dark' | 'light'
   audioCacheEnabled: boolean
+  /** 播放缓存上限（字节），取值限定为 128M / 256M / 512M / 1G / 1.5G / 2G。 */
+  audioCacheMaxBytes: number
   /** 下载目录；缺省为 ~/Music/Lychee Player。 */
   downloadDir?: string
 }
