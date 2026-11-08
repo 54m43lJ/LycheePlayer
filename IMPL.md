@@ -813,4 +813,57 @@
 | `CORE.html` | §4.11 `api/song.ts` | 改 | 显示名改为 `title.trim() || name.trim()`，并说明专辑名、歌手名同步 trim；徽标仍固定在标题后。 |
 | `CORE.html` | §4.49 `styles/main.css` | 改 | `.song-title .marquee` 使用 `flex: 0 1 auto`，不得撑满标题列；VIP / 音质徽标紧随歌名。 |
 | `USER.html` | §5.2.4 歌曲列表 · 标题与徽标 | 改 | 明确歌曲显示名使用上游展示标题（含 Explicit / Remix 版本标签），VIP / 音质徽标紧随标题且不被尾部空白推离。 |
-| `EVOLVE.md` | #4 歌曲列表 | 改 | 补充版本标签来源与标题清洗规则。 |
+
+### 4.15 整单下载彻底取消批次并复用统一队列
+
+问题描述：ISSUES 先要求整单下载与单曲下载共用队列、歌曲信息在出队时再拉取；后续又明确要求下载任务不按批次合并，完全取消“批次”概念。原实现虽然已经不再预取歌曲详情，但仍保留 `DownloadBatch`、`batchId` / `playlistId`、`startBatch` 与批次级暂停 / 继续 / 删除 / 重试，下载中心也按批次分组。
+
+解决方法：
+- 删除 `DownloadBatch`、`DownloadTask.batchId` / `playlistId` 与 `DownloadSource = 'batch'`，任务来源只保留 `network` / `cache`；
+- 下载索引简化为 `{ tasks }`；旧索引中的 `batches` 字段加载时忽略，旧 `source: 'batch'` 归一化为 `network`；
+- 新增 `startDownloads(songMids, quality)`：按给定顺序去重后逐首调用同一个 `enqueueTask`，已存在同曲任务时复用；`startDownload` 直接复用它；
+- 移除批次 IPC（`batches` / `startBatch` / `pauseBatch` / `resumeBatch` / `removeBatch` / `retryFailed`），新增 `download.startMany`；
+- 渲染层下载 store 删除批次状态与批次方法；下载中心改为单一任务列表；歌单“下载全部”直接调用 `download.startMany`，不再创建批次；
+- `DOWNLOAD_BATCH_MAX` 更名为 `DOWNLOAD_QUEUE_MAX`，仅限制单次“下载全部”的入队数量；
+- 歌曲名、文件路径与音质解析仍只在 `pump` 出队时逐首执行，保持 `DOWNLOAD_CONCURRENCY = 1`。
+
+### 4.16 已下载歌曲改用本地文件播放并修正缓存进度
+
+问题描述：ISSUES 指出歌曲已下载后，播放条缓存进度仍跟着播放缓冲变化。排查确认不是单纯 UI 问题：`audio-protocol.handleStream` 只检查播放缓存 `getCachedAudio`，不读取下载目录；`getStreamUrls` 也总是先请求上游链接。因此已下载歌曲既没有用上本地文件，缓存进度事件也不会立即变成完成态。
+
+解决方法：
+- 新增 `download/registry.ts` 作为下载文件查询边界，避免 `api/song` 与 `download/manager` 循环引用；
+- `download/manager` 注册 `findDownloadedAudio(songMid, quality)`：优先返回请求档位，否则返回最高已下载档，并校验文件仍存在；
+- `getStreamUrls` 先查询已下载文件；命中时直接返回带本地文件路径的音频代理 URL，不再请求上游详情 / vkey；
+- `audioStreamUrl` 支持可选 `filePath`；`handleStream` 优先读取本地下载文件，并立即上报 `complete: true` 的缓存进度；
+- `PlayerBar` 对已下载当前曲直接把缓存进度视为 100%，tooltip 显示“已下载到本机”，不再表现为跟随播放缓冲。
+
+验证：
+- `test/download-manager.test.ts`：整单入队不预取详情、出队逐首调用 `getDetail`；清空目录删除文件、分片、封面与记录；
+- `test/api/song-stream.test.ts` 新增已下载文件命中用例：不调用任何上游 `musicu`，直接返回本地播放 URL；
+- `npm run typecheck` 通过；
+- `npx vitest run` 12 个测试文件 / 47 个用例通过；
+- `npm run build` 通过。
+
+追加需求：清空下载目录按钮。
+
+- 设置页“缓存与下载”的下载目录行增加“清空目录”按钮，下载中心底部同步提供同一操作；点击前用确认框展示实际目录，并说明会删除目录内全部文件与下载记录，播放缓存不受影响；
+- 主进程新增 `clearDownloadDirectory()`：先中止活动下载、清空任务记录，再删除下载目录内的全部内容并写回空索引；
+- 阻止清空文件系统根目录、用户主目录及其上级目录，避免误选目录造成系统级删除；
+- 新增 IPC `download.clearDirectory`，preload 与渲染层下载 store 同步清空本地任务 / 资产快照；设置页清空后刷新存储占用；
+- 该操作与“清除已完成记录”区分：后者仍只清记录不删文件。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.1 `types.ts` | 改 | 删除 `DownloadBatch`、`batchId` / `playlistId` 与 `DownloadSource = 'batch'`；`DownloadStorageInfo` 删除 `batchCount`。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 说明 `startDownload` / `startDownloads` 共用 `enqueueTask`；彻底移除批次与批次控制；补 `findDownloadedAudio`、`clearDownloadDirectory` 与根目录 / 主目录保护。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | `download` 命名空间用 `startMany` 取代批次接口；保留 `clearDirectory`，明确其删除下载目录内容与记录、不影响播放缓存。 |
+| `CORE.html` | §4.59 `media/audio-protocol.ts` | 改 | `audioStreamUrl` 支持本地下载文件；`handleStream` 优先读取下载文件并上报完成态缓存进度。 |
+| `CORE.html` | §4.11 `api/song.ts` | 改 | `getStreamUrls` 先查询已下载文件，命中时跳过上游详情 / vkey。 |
+| `CORE.html` | §4.49 `components/PlayerBar.vue` | 改 | 当前曲已下载时缓存进度按 100% 显示，tooltip 使用“已下载到本机”。 |
+| `USER.html` | §1 TERMS 下载限制 | 改 | 明确下载任务只有统一队列，没有批次；已下载歌曲直接本地播放，不再重新缓冲。 |
+| `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 下载目录行增加“清空目录”，确认后删除目录内已下载文件、封面、分片与记录；播放缓存独立清理。 |
+| `USER.html` | §5.2.8 页面结构 · 下载中心 | 改 | 下载中心只展示单一任务列表，不再按批次分组；底部提供“清空目录”。 |
+| `EVOLVE.md` | #2 下载队列 | 改 | 删除批次模型与批次控制，补充统一入队、出队时解析歌曲信息、已下载文件本地播放与清空下载目录约束。 |

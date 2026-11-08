@@ -1,6 +1,7 @@
 import type { PayInfo, Quality, Song, UrlResult } from '../../shared/types'
 import { IPC_SONG_MIDS_MAX, PROBE_DETAIL_CONCURRENCY, PROBE_VKEY_BATCH } from '../../shared/constants'
 import { getCredential } from '../credential'
+import { resolveDownloadedAudio } from '../download/registry'
 import { audioStreamUrl } from '../media/audio-protocol'
 import { mapUpstreamCode, UpstreamError, getGuid, musicu } from './client'
 import { isVipUser } from './user'
@@ -269,8 +270,25 @@ export async function getStreamUrls(mids: string[], quality: Quality): Promise<U
   const unique = [...new Set(mids.filter(Boolean))].slice(0, IPC_SONG_MIDS_MAX)
   if (unique.length === 0) return []
 
-  const { urls, failures } = await resolveStreams(unique, quality)
+  // 已下载到本机的歌曲直接走本地文件，不再请求上游链接。
+  const downloaded = new Map<string, { filePath: string; quality: Quality }>()
+  const remoteMids: string[] = []
+  for (const mid of unique) {
+    const local = await resolveDownloadedAudio(mid, quality)
+    if (local) downloaded.set(mid, local)
+    else remoteMids.push(mid)
+  }
+
+  const { urls, failures } = await resolveStreams(remoteMids, quality)
   const results = unique.map<UrlResult>((mid) => {
+    const local = downloaded.get(mid)
+    if (local) {
+      return {
+        songMid: mid,
+        url: audioStreamUrl('', mid, local.quality, local.filePath),
+        quality: local.quality
+      }
+    }
     const item = urls.get(mid)
     return {
       songMid: mid,

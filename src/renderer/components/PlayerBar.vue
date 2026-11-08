@@ -71,6 +71,8 @@ const cacheForCurrent = computed(() => {
   return item
 })
 const cachePercent = computed(() => {
+  // 已下载歌曲直接播放本地文件，缓存进度按满格处理。
+  if (asset.value?.downloadedQuality) return 100
   const item = cacheForCurrent.value
   if (!item || item.totalBytes <= 0) return 0
   return Math.min(100, (item.receivedBytes / item.totalBytes) * 100)
@@ -85,6 +87,7 @@ const bufferStyle = computed(() => ({ width: `${bufferPercent.value}%` }))
 const bufferVisible = computed(() => hasSong.value && bufferPercent.value > 0)
 const bufferLabel = computed(() => {
   if (!bufferVisible.value) return ''
+  if (asset.value?.downloadedQuality) return '已下载到本机'
   if (cacheForCurrent.value?.complete) return '缓存完成'
   return `缓冲 ${Math.round(bufferPercent.value)}%`
 })

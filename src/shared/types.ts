@@ -222,7 +222,7 @@ export interface MvStream {
   url: string | null
 }
 
-export type DownloadSource = 'network' | 'cache' | 'batch'
+export type DownloadSource = 'network' | 'cache'
 
 export interface DownloadTask {
   id: string
@@ -235,21 +235,7 @@ export interface DownloadTask {
   receivedBytes: number
   totalBytes: number
   error: string
-  batchId?: string | null
-  playlistId?: string | null
   source: DownloadSource
-}
-
-export interface DownloadBatch {
-  id: string
-  source: 'playlist' | 'single'
-  playlistId: string | null
-  playlistName: string | null
-  total: number
-  done: number
-  failed: number
-  status: 'pending' | 'downloading' | 'paused' | 'done' | 'failed'
-  createdAtMs: number
 }
 
 /** 每首歌的本机资产状态：缓存档位、下载档位、最高可用档与当前任务。 */
@@ -363,5 +349,4 @@ export interface DownloadStorageInfo {
   freeBytes: number
   cacheBytes?: number
   cacheFiles?: number
-  batchCount?: number
 }

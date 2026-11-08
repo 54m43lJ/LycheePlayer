@@ -12,7 +12,7 @@ import type {
   SearchRequest,
   Settings
 } from '../shared/types'
-import { DOWNLOAD_BATCH_MAX, IPC_SONG_MIDS_MAX, PROBE_MIDS_MAX } from '../shared/constants'
+import { DOWNLOAD_QUEUE_MAX, IPC_SONG_MIDS_MAX, PROBE_MIDS_MAX } from '../shared/constants'
 import { loginWithCookie, refreshSession } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
@@ -50,18 +50,14 @@ import { readFlagsFile, writeFlagsFile } from './startup-flags'
 import {
   assetStates,
   clearCompletedDownloads,
+  clearDownloadDirectory,
   downloadStorage,
-  listBatches,
   listDownloads,
-  pauseBatch,
   pauseDownload,
-  removeBatch,
   removeDownload,
-  resumeBatch,
   resumeDownload,
-  retryFailed,
-  startBatch,
-  startDownload
+  startDownload,
+  startDownloads
 } from './download/manager'
 
 function broadcast(channel: string, payload: unknown): void {
@@ -300,7 +296,6 @@ export function registerIpc(): void {
 
   // ---------- download ----------
   handle('download.list', async () => listDownloads())
-  handle('download.batches', async () => listBatches())
   handle('download.assetStates', async (mids: unknown) =>
     assetStates(
       Array.isArray(mids)
@@ -311,28 +306,9 @@ export function registerIpc(): void {
   handle('download.start', async (mid: unknown, quality: unknown) =>
     startDownload(stringArg(mid, '歌曲 mid'), qualityArg(quality))
   )
-  handle('download.startBatch', async (request: unknown) => {
-    const value = request as {
-      source?: unknown
-      playlistId?: unknown
-      playlistName?: unknown
-      songMids?: unknown
-    }
-    if (value?.source !== 'playlist') throw new Error('非法下载批次来源')
-    return startBatch({
-      source: 'playlist',
-      playlistId: stringArg(value.playlistId, '歌单 ID'),
-      playlistName: typeof value.playlistName === 'string' ? value.playlistName : undefined,
-      songMids: midArray(value.songMids, DOWNLOAD_BATCH_MAX)
-    })
-  })
-  handle('download.pauseBatch', async (id: unknown) => pauseBatch(stringArg(id, '批次 ID')))
-  handle('download.resumeBatch', async (id: unknown) => resumeBatch(stringArg(id, '批次 ID')))
-  handle('download.removeBatch', async (id: unknown) => {
-    await removeBatch(stringArg(id, '批次 ID'))
-    return null
-  })
-  handle('download.retryFailed', async (id: unknown) => retryFailed(stringArg(id, '批次 ID')))
+  handle('download.startMany', async (mids: unknown, quality: unknown) =>
+    startDownloads(midArray(mids, DOWNLOAD_QUEUE_MAX), qualityArg(quality))
+  )
   handle('download.pause', async (id: unknown) => pauseDownload(stringArg(id, '任务 ID')))
   handle('download.resume', async (id: unknown) => resumeDownload(stringArg(id, '任务 ID')))
   handle('download.remove', async (id: unknown) => {
@@ -341,6 +317,10 @@ export function registerIpc(): void {
   })
   handle('download.clearCompleted', async () => {
     await clearCompletedDownloads()
+    return null
+  })
+  handle('download.clearDirectory', async () => {
+    await clearDownloadDirectory()
     return null
   })
   handle('download.storage', async () => {

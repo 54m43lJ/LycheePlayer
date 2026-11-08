@@ -63,11 +63,6 @@ const playableSongs = computed(() =>
   songs.value.filter((song) => availability.value[song.songMid]?.playable !== false)
 )
 
-const batch = computed(() => {
-  const items = download.batches.filter((item) => item.playlistId === id.value)
-  return items.sort((a, b) => b.createdAtMs - a.createdAtMs)[0] ?? null
-})
-
 function source(): { kind: 'playlist'; id: string } {
   return { kind: 'playlist', id: id.value }
 }
@@ -111,13 +106,11 @@ async function downloadAt(index: number): Promise<void> {
 async function downloadAll(): Promise<void> {
   if (!meta.value || playableSongs.value.length === 0) return
   try {
-    await download.startBatch({
-      source: 'playlist',
-      playlistId: id.value,
-      playlistName: meta.value.name,
-      songMids: playableSongs.value.map((song) => song.songMid)
-    })
-    toast.show('已开始整单下载')
+    await download.startMany(
+      playableSongs.value.map((song) => song.songMid),
+      player.requestedQuality
+    )
+    toast.show('已加入下载队列')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -248,21 +241,12 @@ onBeforeUnmount(() => {
             </button>
             <button
               class="btn ghost"
-              :disabled="
-                !auth.loggedIn ||
-                playableSongs.length === 0 ||
-                Boolean(batch && batch.status !== 'done' && batch.status !== 'failed')
-              "
+              :disabled="!auth.loggedIn || playableSongs.length === 0"
               @click="downloadAll()"
             >
               <AppIcon name="download" :size="15" />
               下载全部
             </button>
-            <span v-if="batch" class="faint badge-inline">
-              批次 {{ batch.done }} / {{ batch.total }}
-              <template v-if="batch.failed"> · 失败 {{ batch.failed }}，可在下载中心重试</template>
-              <template v-else-if="batch.status === 'done'"> · 已全部下载</template>
-            </span>
             <button class="btn ghost" @click="router.push('/library')">返回我的歌单</button>
           </div>
         </div>

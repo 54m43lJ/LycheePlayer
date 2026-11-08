@@ -3,10 +3,9 @@ import { createWriteStream } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, extname, join } from 'node:path'
+import { dirname, extname, join, parse, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type {
-  DownloadBatch,
   DownloadSource,
   DownloadStorageInfo,
   DownloadTask,
@@ -14,15 +13,16 @@ import type {
   SongAssetState
 } from '../../shared/types'
 import {
-  DOWNLOAD_BATCH_MAX,
   DOWNLOAD_INDEX_PREFIX,
-  DOWNLOAD_INDEX_SAVE_MS
+  DOWNLOAD_INDEX_SAVE_MS,
+  DOWNLOAD_QUEUE_MAX
 } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { getSettings } from '../settings'
 import { getDetail, resolveStreamUrls } from '../api/song'
 import { peekAvailability } from '../api/availability'
 import { getCachedAudio, getCachedAudioInfo, linkCachedAudio } from '../cache/audio'
+import { setDownloadedAudioResolver } from './registry'
 
 interface RuntimeTask {
   task: DownloadTask
@@ -31,11 +31,9 @@ interface RuntimeTask {
 
 interface DownloadIndex {
   tasks: DownloadTask[]
-  batches: DownloadBatch[]
 }
 
 const tasks = new Map<string, RuntimeTask>()
-const batches = new Map<string, DownloadBatch>()
 
 let loadedScope = ''
 let saveTimer: ReturnType<typeof setTimeout> | null = null
@@ -66,10 +64,6 @@ function snapshot(task: DownloadTask): DownloadTask {
   return { ...task }
 }
 
-function batchSnapshot(batch: DownloadBatch): DownloadBatch {
-  return { ...batch }
-}
-
 function persistable(task: DownloadTask): DownloadTask {
   if (task.status === 'downloading' || task.status === 'pending') {
     return { ...task, status: 'paused' }
@@ -89,8 +83,7 @@ function indexSnapshot(): DownloadIndex {
   return {
     tasks: [...tasks.values()]
       .map((item) => persistable(item.task))
-      .filter((task) => task.status === 'done' || task.status === 'paused'),
-    batches: [...batches.values()]
+      .filter((task) => task.status === 'done' || task.status === 'paused')
   }
 }
 
@@ -129,16 +122,13 @@ async function saveIndex(): Promise<void> {
 
 async function loadIndex(): Promise<void> {
   tasks.clear()
-  batches.clear()
   try {
     const raw = JSON.parse(await readFile(indexPath(), 'utf8')) as Partial<DownloadIndex>
     for (const task of raw.tasks ?? []) {
       if (!task || typeof task !== 'object') continue
       const normalized: DownloadTask = {
         ...task,
-        source: (task.source as DownloadSource) ?? 'network',
-        batchId: task.batchId ?? null,
-        playlistId: task.playlistId ?? null
+        source: task.source === 'cache' ? 'cache' : 'network'
       }
       if (normalized.status === 'done' && !existsSync(normalized.filePath)) continue
       if (normalized.status === 'downloading' || normalized.status === 'pending') {
@@ -146,15 +136,6 @@ async function loadIndex(): Promise<void> {
       }
       tasks.set(normalized.id, { task: normalized, controller: null })
     }
-    for (const batch of raw.batches ?? []) {
-      if (!batch || typeof batch !== 'object') continue
-      const normalized: DownloadBatch = { ...batch }
-      if (normalized.status === 'downloading' || normalized.status === 'pending') {
-        normalized.status = 'paused'
-      }
-      batches.set(normalized.id, normalized)
-    }
-    for (const batch of batches.values()) recalcBatch(batch)
   } catch {
     // 无索引或索引损坏时以空列表启动。
   }
@@ -177,33 +158,7 @@ async function ensureScope(): Promise<void> {
   await loadIndex()
 }
 
-function recalcBatch(batch: DownloadBatch): void {
-  const items = [...tasks.values()]
-    .map((item) => item.task)
-    .filter((task) => task.batchId === batch.id)
-  batch.total = items.length
-  batch.done = items.filter((task) => task.status === 'done').length
-  batch.failed = items.filter((task) => task.status === 'failed').length
-  const active = items.some(
-    (task) => task.status === 'downloading' || task.status === 'pending'
-  )
-  if (items.length === 0) {
-    batch.status = 'done'
-  } else if (active) {
-    batch.status = batch.status === 'paused' ? 'paused' : 'downloading'
-  } else if (batch.failed > 0) {
-    batch.status = 'failed'
-  } else {
-    batch.status = 'done'
-  }
-  scheduleSave()
-}
-
-function touchTask(task: DownloadTask): void {
-  if (task.batchId) {
-    const batch = batches.get(task.batchId)
-    if (batch) recalcBatch(batch)
-  }
+function touchTask(_task: DownloadTask): void {
   scheduleSave()
 }
 
@@ -359,13 +314,6 @@ export async function listDownloads(): Promise<DownloadTask[]> {
   return [...tasks.values()].map((item) => snapshot(item.task))
 }
 
-export async function listBatches(): Promise<DownloadBatch[]> {
-  await ensureScope()
-  return [...batches.values()]
-    .sort((a, b) => b.createdAtMs - a.createdAtMs)
-    .map(batchSnapshot)
-}
-
 export async function assetStates(songMids: string[]): Promise<SongAssetState[]> {
   await ensureScope()
   const unique = [...new Set(songMids.filter(Boolean))]
@@ -402,13 +350,35 @@ function qualityRank(quality: Quality): number {
   return 1
 }
 
-export async function startDownload(songMid: string, _quality: Quality): Promise<DownloadTask> {
+/** 查找本机已下载的音频文件；优先请求档位，否则取最高已下载档。 */
+export async function findDownloadedAudio(
+  songMid: string,
+  quality: Quality
+): Promise<{ filePath: string; quality: Quality } | null> {
   await ensureScope()
-  const existing = [...tasks.values()].find(
-    (item) => item.task.songMid === songMid && item.task.status !== 'failed'
-  )
-  if (existing) return snapshot(existing.task)
+  const done = [...tasks.values()]
+    .map((item) => item.task)
+    .filter(
+      (task) =>
+        task.songMid === songMid && task.status === 'done' && existsSync(task.filePath)
+    )
+  if (done.length === 0) return null
+  const exact = done.find((task) => task.quality === quality)
+  const best = exact ?? done.sort((a, b) => qualityRank(b.quality) - qualityRank(a.quality))[0]
+  return { filePath: best.filePath, quality: best.quality }
+}
 
+setDownloadedAudioResolver(findDownloadedAudio)
+
+interface EnqueueOptions {
+  source?: DownloadSource
+}
+
+/**
+ * 只把歌曲 mid 放入统一队列；歌曲名、文件路径、可用音质等都在 pump 出队时再解析。
+ * 单曲下载与“下载全部”共用此入口。
+ */
+function enqueueTask(songMid: string, options: EnqueueOptions = {}): DownloadTask {
   const task: DownloadTask = {
     id: randomUUID(),
     songMid,
@@ -421,66 +391,34 @@ export async function startDownload(songMid: string, _quality: Quality): Promise
     receivedBytes: 0,
     totalBytes: 0,
     error: '',
-    batchId: null,
-    playlistId: null,
-    source: 'network'
+    source: options.source ?? 'network'
   }
   tasks.set(task.id, { task, controller: null })
-  schedulePump()
-  return snapshot(task)
+  return task
 }
 
-export async function startBatch(request: {
-  source: 'playlist'
-  playlistId: string
-  playlistName?: string
-  songMids: string[]
-}): Promise<DownloadBatch> {
+function enqueueMissing(songMid: string): DownloadTask {
+  const existing = [...tasks.values()].find(
+    (item) => item.task.songMid === songMid && item.task.status !== 'failed'
+  )
+  return existing ? existing.task : enqueueTask(songMid)
+}
+
+export async function startDownload(songMid: string, _quality: Quality): Promise<DownloadTask> {
+  const [task] = await startDownloads([songMid], _quality)
+  return task
+}
+
+/** 把多首歌曲按给定顺序加入同一队列；已存在同曲任务时复用，不合并成批次。 */
+export async function startDownloads(
+  songMids: string[],
+  _quality: Quality
+): Promise<DownloadTask[]> {
   await ensureScope()
-  const mids = [...new Set(request.songMids.filter(Boolean))].slice(0, DOWNLOAD_BATCH_MAX)
-  const songs = await getDetail(mids)
-  const nameByMid = new Map(songs.map((song) => [song.songMid, song.name]))
-  const batch: DownloadBatch = {
-    id: randomUUID(),
-    source: 'playlist',
-    playlistId: request.playlistId,
-    playlistName: request.playlistName ?? null,
-    total: mids.length,
-    done: 0,
-    failed: 0,
-    status: mids.length > 0 ? 'pending' : 'done',
-    createdAtMs: Date.now()
-  }
-  batches.set(batch.id, batch)
-  for (const mid of mids) {
-    const existing = [...tasks.values()].find(
-      (item) => item.task.songMid === mid && item.task.status !== 'failed'
-    )
-    if (existing) {
-      existing.task.batchId = batch.id
-      existing.task.playlistId = request.playlistId
-      continue
-    }
-    const task: DownloadTask = {
-      id: randomUUID(),
-      songMid: mid,
-      name: nameByMid.get(mid) ?? mid,
-      quality: 'flac',
-      filePath: join(downloadDir(), `${safeName(nameByMid.get(mid) ?? mid)}.mp3`),
-      coverPath: null,
-      status: 'pending',
-      receivedBytes: 0,
-      totalBytes: 0,
-      error: '',
-      batchId: batch.id,
-      playlistId: request.playlistId,
-      source: 'batch'
-    }
-    tasks.set(task.id, { task, controller: null })
-  }
-  recalcBatch(batch)
+  const mids = [...new Set(songMids.filter(Boolean))].slice(0, DOWNLOAD_QUEUE_MAX)
+  const result = mids.map((mid) => snapshot(enqueueMissing(mid)))
   schedulePump()
-  return batchSnapshot(batch)
+  return result
 }
 
 export async function pauseDownload(id: string): Promise<DownloadTask> {
@@ -502,10 +440,6 @@ export async function resumeDownload(id: string): Promise<DownloadTask> {
   }
   runtime.task.status = 'pending'
   runtime.task.error = ''
-  if (runtime.task.batchId) {
-    const batch = batches.get(runtime.task.batchId)
-    if (batch) batch.status = 'downloading'
-  }
   touchTask(runtime.task)
   schedulePump()
   return snapshot(runtime.task)
@@ -519,76 +453,7 @@ export async function removeDownload(id: string): Promise<void> {
   tasks.delete(id)
   await rm(runtime.task.filePath, { force: true })
   await rm(`${runtime.task.filePath}.part`, { force: true })
-  if (runtime.task.batchId) {
-    const batch = batches.get(runtime.task.batchId)
-    if (batch) recalcBatch(batch)
-  }
   scheduleSave()
-}
-
-export async function pauseBatch(batchId: string): Promise<DownloadBatch> {
-  await ensureScope()
-  const batch = batches.get(batchId)
-  if (!batch) throw new Error('下载批次不存在')
-  batch.status = 'paused'
-  for (const runtime of tasks.values()) {
-    if (runtime.task.batchId !== batchId) continue
-    if (runtime.task.status === 'downloading') runtime.controller?.abort()
-    if (runtime.task.status === 'downloading' || runtime.task.status === 'pending') {
-      runtime.task.status = 'paused'
-    }
-  }
-  recalcBatch(batch)
-  return batchSnapshot(batch)
-}
-
-export async function resumeBatch(batchId: string): Promise<DownloadBatch> {
-  await ensureScope()
-  const batch = batches.get(batchId)
-  if (!batch) throw new Error('下载批次不存在')
-  for (const runtime of tasks.values()) {
-    if (runtime.task.batchId !== batchId) continue
-    if (runtime.task.status === 'paused') {
-      runtime.task.status = 'pending'
-      runtime.task.error = ''
-    }
-  }
-  batch.status = 'downloading'
-  recalcBatch(batch)
-  schedulePump()
-  return batchSnapshot(batch)
-}
-
-export async function removeBatch(batchId: string): Promise<void> {
-  await ensureScope()
-  const batch = batches.get(batchId)
-  if (!batch) return
-  for (const [id, runtime] of [...tasks]) {
-    if (runtime.task.batchId !== batchId) continue
-    runtime.controller?.abort()
-    tasks.delete(id)
-    await rm(runtime.task.filePath, { force: true })
-    await rm(`${runtime.task.filePath}.part`, { force: true })
-  }
-  batches.delete(batchId)
-  scheduleSave()
-}
-
-export async function retryFailed(batchId: string): Promise<DownloadBatch> {
-  await ensureScope()
-  const batch = batches.get(batchId)
-  if (!batch) throw new Error('下载批次不存在')
-  for (const runtime of tasks.values()) {
-    if (runtime.task.batchId !== batchId) continue
-    if (runtime.task.status === 'failed') {
-      runtime.task.status = 'pending'
-      runtime.task.error = ''
-    }
-  }
-  batch.status = 'downloading'
-  recalcBatch(batch)
-  schedulePump()
-  return batchSnapshot(batch)
 }
 
 export async function clearCompletedDownloads(): Promise<void> {
@@ -597,8 +462,44 @@ export async function clearCompletedDownloads(): Promise<void> {
   for (const [id, runtime] of tasks) {
     if (runtime.task.status === 'done') tasks.delete(id)
   }
-  for (const batch of batches.values()) recalcBatch(batch)
   scheduleSave()
+}
+
+async function stopRuntime(runtime: RuntimeTask): Promise<void> {
+  const controller = runtime.controller
+  if (!controller) return
+  controller.abort()
+  // 等待文件流与 fetch 收尾，避免清空目录后又被正在退出的任务写回。
+  const deadline = Date.now() + 2000
+  while (runtime.controller && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+/** 清空下载目录：停止任务后删除目录内全部内容，并清空任务记录。 */
+export async function clearDownloadDirectory(): Promise<void> {
+  await ensureScope()
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  const directory = downloadDir()
+  const target = resolve(directory)
+  const home = resolve(app.getPath('home'))
+  if (target === parse(target).root) throw new Error('不能清空文件系统根目录')
+  if (target === home || home.startsWith(`${target}${sep}`)) {
+    throw new Error('不能清空用户主目录或其上级目录')
+  }
+  const runtimes = [...tasks.values()]
+  for (const runtime of runtimes) runtime.controller?.abort()
+  // 先移出队列，防止 pump 继续取下一个任务。
+  tasks.clear()
+  await Promise.all(runtimes.map((runtime) => stopRuntime(runtime)))
+  const entries = await readdir(directory, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    await rm(join(directory, entry.name), { recursive: true, force: true })
+  }
+  await saveIndex()
 }
 
 /** 文档签名保留：把远程 URL 写入给定文件（不经过任务表）。 */
@@ -648,7 +549,6 @@ export async function downloadStorage(): Promise<DownloadStorageInfo> {
   return {
     directory,
     bytes,
-    freeBytes,
-    batchCount: batches.size
+    freeBytes
   }
 }

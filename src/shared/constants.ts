@@ -86,10 +86,10 @@ export const CATALOG_PAGE_SIZE = 50
 
 /** 下载中心进度轮询间隔。推荐值 1500 ms。 */
 export const DOWNLOAD_POLL_MS = 1500
-/** 下载并发；固定为 1，批次按歌单顺序串行。 */
+/** 下载并发；固定为 1，按入队顺序串行。 */
 export const DOWNLOAD_CONCURRENCY = 1
-/** 单批次歌曲上限。推荐值 2000。 */
-export const DOWNLOAD_BATCH_MAX = 2000
+/** 单次“下载全部”入队歌曲上限。推荐值 2000。 */
+export const DOWNLOAD_QUEUE_MAX = 2000
 /** 下载索引文件名前缀；按账号隔离并放在 downloadDir 内。 */
 export const DOWNLOAD_INDEX_PREFIX = '.lychee-downloads-'
 /** 下载索引落盘节流。推荐值 800 ms。 */
