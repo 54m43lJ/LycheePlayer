@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, RouterView } from 'vue-router'
+import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
 import DownloadDrawer from './components/DownloadDrawer.vue'
@@ -17,6 +17,7 @@ import { useUiStore } from './stores/ui'
 import { singerNames, songCover } from './utils/format'
 import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
 
+const route = useRoute()
 const auth = useAuthStore()
 const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
@@ -42,6 +43,9 @@ const filteredQueue = computed(() => {
   })
 })
 const currentPlaylistId = computed(() => player.queueSource?.id ?? '')
+const viewedPlaylistId = computed(() =>
+  route.name === 'playlist' ? String(route.params.id ?? '') : ''
+)
 const favoritesPath = `/playlist/${FAVORITES_PLAYLIST_ID}`
 
 let offCommand: (() => void) | null = null
@@ -202,7 +206,10 @@ watch(
             v-for="item in playlistStore.recent"
             :key="item.id"
             class="nav-recent-item"
-            :class="{ active: item.id === currentPlaylistId, stale: item.stale }"
+            :class="{
+              active: item.id === viewedPlaylistId || item.id === currentPlaylistId,
+              stale: item.stale
+            }"
             :to="`/playlist/${item.id}`"
             @click="onSidebarNavigate"
           >
