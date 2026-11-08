@@ -2331,9 +2331,14 @@ a {
     gap: 0;
   }
 
-  .player-controls .icon-btn {
+  .player-controls .icon-btn,
+  .player-controls .mode-button {
     width: 28px;
     height: 28px;
+  }
+
+  .player-controls .mode-menu {
+    padding-bottom: 28px;
   }
 
   .play-button {
@@ -2903,30 +2908,57 @@ a {
 
 .mode-wrap {
   position: relative;
-}
-
-.mode-menu {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  z-index: 35;
   display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 4px;
-  border: 1px solid var(--border-strong);
-  border-radius: 11px;
-  background: var(--panel);
-  box-shadow: var(--shadow);
-  transform: translateX(-50%);
+  align-items: center;
 }
 
-.mode-option {
+.mode-button {
   display: grid;
   place-items: center;
   width: 32px;
   height: 32px;
   border-radius: 9px;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  transition:
+    color 0.16s ease,
+    background 0.16s ease;
+}
+
+.mode-button:hover {
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
+/* 展开时让弹层包住按钮：底部预留按钮高度，按钮与弹层左右 / 下边缘对齐。 */
+.mode-wrap.open .mode-button {
+  position: relative;
+  z-index: 36;
+}
+
+.mode-menu {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  z-index: 35;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  padding: 0 0 32px;
+  border-radius: 9px;
+  background: var(--panel);
+  box-shadow: 0 -10px 24px rgba(0, 0, 0, 0.22);
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  animation: mode-reveal 0.14s ease-out;
+}
+
+.mode-option {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 30px;
+  border-radius: 7px;
   color: var(--muted);
 }
 
@@ -2935,9 +2967,15 @@ a {
   color: var(--text);
 }
 
-.mode-option.current {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+@keyframes mode-reveal {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) scaleY(0.72);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) scaleY(1);
+  }
 }
 
 /* ---------- 发现 ---------- */

@@ -51,12 +51,13 @@ const cache = ref<AudioCacheProgress | null>(null)
 const cover = computed(() => songCover(current.value, 300))
 const hasSong = computed(() => Boolean(current.value))
 const totalMs = computed(() => durationMs.value || current.value?.durationMs || 0)
-const modeIcon = computed(() => {
-  if (mode.value === 'repeat-one') return 'repeat-one'
-  if (mode.value === 'shuffle') return 'shuffle'
-  if (mode.value === 'repeat-all') return 'repeat'
-  return 'list'
-})
+const MODE_ICON: Record<PlayMode, string> = {
+  sequence: 'list',
+  'repeat-all': 'repeat',
+  'repeat-one': 'repeat-one',
+  shuffle: 'shuffle'
+}
+const modeIcon = computed(() => MODE_ICON[mode.value])
 const progressStyle = computed(() => ({ width: `${progress.value}%` }))
 const volumeStyle = computed(() => ({
   background: `linear-gradient(to right, var(--accent-strong) ${volume.value * 100}%, var(--track) ${volume.value * 100}%)`
@@ -122,9 +123,10 @@ const downloadTitle = computed(() => {
   return '下载'
 })
 
-const menuModes = computed<PlayMode[]>(() => {
+/** 弹出层只展示“其它模式”；当前模式由常驻按钮本身表示。 */
+const otherModes = computed<PlayMode[]>(() => {
   const order: PlayMode[] = ['sequence', 'repeat-all', 'repeat-one', 'shuffle']
-  return [...order.filter((item) => item !== mode.value), mode.value]
+  return order.filter((item) => item !== mode.value)
 })
 
 function visibleSingers(): Array<{ mid: string; name: string }> {
@@ -174,6 +176,14 @@ function scheduleCloseModeMenu(): void {
 }
 
 function toggleModeMenu(): void {
+  if (modeOpenTimer !== null) {
+    window.clearTimeout(modeOpenTimer)
+    modeOpenTimer = null
+  }
+  if (modeCloseTimer !== null) {
+    window.clearTimeout(modeCloseTimer)
+    modeCloseTimer = null
+  }
   modeMenu.value = !modeMenu.value
   qualityMenu.value = false
   volumeOpen.value = false
@@ -322,38 +332,28 @@ watch(
         <div
           ref="modeWrap"
           class="mode-wrap"
+          :class="{ open: modeMenu }"
           @mouseenter="openModeMenu()"
           @mouseleave="scheduleCloseModeMenu()"
         >
           <button
-            class="icon-btn"
+            class="mode-button"
             :title="PLAY_MODE_LABEL[mode]"
-            :class="{ active: mode !== 'sequence' }"
+            aria-haspopup="true"
+            :aria-expanded="modeMenu"
             @click="toggleModeMenu()"
           >
             <AppIcon :name="modeIcon" :size="16" />
           </button>
           <div v-if="modeMenu" class="mode-menu" @click.stop>
             <button
-              v-for="item in menuModes"
+              v-for="item in otherModes"
               :key="item"
               class="mode-option"
-              :class="{ current: item === mode }"
               :title="PLAY_MODE_LABEL[item]"
               @click="chooseMode(item)"
             >
-              <AppIcon
-                :name="
-                  item === 'sequence'
-                    ? 'list'
-                    : item === 'repeat-all'
-                      ? 'repeat'
-                      : item === 'repeat-one'
-                        ? 'repeat-one'
-                        : 'shuffle'
-                "
-                :size="16"
-              />
+              <AppIcon :name="MODE_ICON[item]" :size="16" />
             </button>
           </div>
         </div>
