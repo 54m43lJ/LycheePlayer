@@ -34,7 +34,7 @@ import { getFavoriteStates, toggleFavorite } from './api/favorite'
 import { fetchRecommendFeed, clearRecommendCache } from './api/recommend'
 import { getMvDetail, getMvStream, searchMv } from './api/mv'
 import { searchByType } from './api/search'
-import { getArtist } from './api/artist'
+import { getArtist, getArtistSongs } from './api/artist'
 import { getAlbum } from './api/album'
 import { getStreamUrls } from './api/song'
 import { probeAvailability, clearAvailabilityCache } from './api/availability'
@@ -203,6 +203,13 @@ export function registerIpc(): void {
   handle('search.byType', async (req: SearchRequest) => searchByType(req))
   handle('artist.get', async (mid: unknown, offset: unknown, sort: unknown) =>
     getArtist(
+      stringArg(mid, '歌手 mid'),
+      Number(offset) || 0,
+      sort === 'latest' ? 'latest' : 'hot'
+    )
+  )
+  handle('artist.getSongs', async (mid: unknown, offset: unknown, sort: unknown) =>
+    getArtistSongs(
       stringArg(mid, '歌手 mid'),
       Number(offset) || 0,
       sort === 'latest' ? 'latest' : 'hot'

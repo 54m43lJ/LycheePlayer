@@ -48,6 +48,21 @@ describe('api/catalog', () => {
     expect(orders.at(-1)).toBe(0)
   })
 
+  it('loads artist songs without refetching artist info', async () => {
+    const hosts: string[] = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const parsed = new URL(String(url))
+      hosts.push(parsed.hostname)
+      return respond(fixture('singer-songs.json'))
+    })
+
+    const { getArtistSongs } = await import('../../src/main/api/artist')
+    const page = await getArtistSongs('0025NhlN2yWrP4', 0, 'latest')
+    expect(page.songs.length).toBeGreaterThan(0)
+    expect(page.total).toBeGreaterThan(0)
+    expect(hosts).toEqual(['u.y.qq.com'])
+  })
+
   it('uses detail and song-list responses for albums', async () => {
     vi.stubGlobal('fetch', async (url: string | URL) => {
       const data = new URL(String(url)).searchParams.get('data')

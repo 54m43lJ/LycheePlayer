@@ -186,6 +186,12 @@ export interface ArtistDetail {
   hasMore: boolean
 }
 
+export interface ArtistSongPage {
+  songs: Song[]
+  total: number
+  hasMore: boolean
+}
+
 export interface AlbumDetail {
   mid: string
   name: string

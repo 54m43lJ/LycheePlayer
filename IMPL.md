@@ -661,15 +661,17 @@
 - 上游只存在“最热 / 最新”两种有效顺序，没有字母、发行时间倒序等其它模式；未知值不会报错，而是回退到最新。
 
 解决方法：
-- `shared/types.ts` 新增 `ArtistSongSort = 'hot' | 'latest'`；`artist.get` IPC 增加可选 `sort`，默认 `hot`，保持原有歌手页默认顺序；
+- `shared/types.ts` 新增 `ArtistSongSort = 'hot' | 'latest'` 与 `ArtistSongPage`；`artist.get` IPC 增加可选 `sort`，默认 `hot`，保持原有歌手页默认顺序；
+- 新增 `artist.getSongs(mid, offset?, sort?)`，只请求 `GetSingerSongList`，不重复拉取歌手详情；滚动分页也改走该接口，避免每翻一页都重查歌手信息；
 - `api/artist.ts` 按 `sort` 映射上游 `order`：`hot → 1`，`latest → 0`；
-- 歌手页歌曲标题右侧增加“最热 / 最新”切换；切换时从 `offset=0` 重新加载、回到页面顶部，滚动分页继续沿用当前排序；
-- 新增回放测试，断言 `hot` 请求携带 `order=1`、`latest` 携带 `order=0`。
+- 歌手页歌曲标题右侧增加“最热 / 最新”切换；切换时只重新请求歌曲列表，歌手头部、封面、简介保持不动，列表区显示加载态；分页强制从 `offset=0` 重新开始，不保留已滚动加载的页数，滚动位置回到页面顶部；切换失败时保留旧列表并回退到原排序；
+- 首次进入歌手页仍使用 `artist.get` 同时加载详情和首屏歌曲；
+- 新增回放测试，断言 `hot` 请求携带 `order=1`、`latest` 携带 `order=0`，并验证 `getArtistSongs` 不会请求歌手详情接口。
 
 验证：
 - 匿名实测覆盖 2 位歌手、14 个 `order` 取值与首页 / 第二页；
 - `npm run typecheck` 通过；
-- `npx vitest run` 11 个测试文件 / 41 个用例通过；
+- `npx vitest run` 11 个测试文件 / 42 个用例通过；
 - `npm run build` 通过。
 
 修订建议：
@@ -677,8 +679,8 @@
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
 | `PROVIDER.html` | §4.1 歌手歌曲行 / §4.3 `QqArtistSongData` | 改 | 注明 `order=1` 为最热，`order=0` 及其它值等价于最新，仅两种有效顺序，未知值不报错。 |
-| `CORE.html` | §4.2 `ipc.ts` | 改 | `artist.get(mid, offset?, sort?)` 增加 `ArtistSongSort`，默认 `hot`。 |
-| `CORE.html` | §4.73 `ArtistView.vue` | 改 | 增加“最热 / 最新”切换，切换后重置偏移并回到顶部，保留滚动分页。 |
-| `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录 `hot → order=1`、`latest → order=0` 的映射。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | `artist.get(mid, offset?, sort?)` 增加 `ArtistSongSort`，默认 `hot`；新增 `artist.getSongs(mid, offset?, sort?)` 仅返回歌曲页。 |
+| `CORE.html` | §4.73 `ArtistView.vue` | 改 | 增加“最热 / 最新”切换：只重载歌曲列表并重置偏移，不刷新歌手头部；滚动分页走 `artist.getSongs`。 |
+| `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录 `hot → order=1`、`latest → order=0` 的映射，并补 `getArtistSongs` 不拉取歌手详情。 |
 | `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 改 | 歌手页补充歌曲排序控件：最热 / 最新，默认最热。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 补歌手歌曲排序能力与“最热 / 最新”切换。 |

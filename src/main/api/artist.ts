@@ -1,4 +1,4 @@
-import type { ArtistDetail, ArtistSongSort, Song } from '../../shared/types'
+import type { ArtistDetail, ArtistSongPage, ArtistSongSort } from '../../shared/types'
 import { CATALOG_PAGE_SIZE } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu, upstreamRequest } from './client'
@@ -47,7 +47,7 @@ async function fetchArtistSongs(
   mid: string,
   offset: number,
   sort: ArtistSongSort
-): Promise<{ songs: Song[]; total: number; hasMore: boolean }> {
+): Promise<ArtistSongPage> {
   const data = await musicu<ArtistSongData>(
     'musichall.song_list_server',
     'GetSingerSongList',
@@ -71,6 +71,16 @@ async function fetchArtistSongs(
     total,
     hasMore: songs.length === CATALOG_PAGE_SIZE && offset + songs.length < total
   }
+}
+
+export async function getArtistSongs(
+  mid: string,
+  offset = 0,
+  sort: ArtistSongSort = 'hot'
+): Promise<ArtistSongPage> {
+  const id = mid.trim()
+  if (!id) throw new UpstreamError('UPSTREAM_CHANGED', '歌手 mid 为空')
+  return fetchArtistSongs(id, offset, sort)
 }
 
 export async function getArtist(

@@ -32,6 +32,7 @@ const detail = ref<ArtistDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
 const loadingMore = ref(false)
+const songsLoading = ref(false)
 const songSort = ref<ArtistSongSort>('hot')
 const pickerOpen = ref(false)
 const pickerIndex = ref(-1)
@@ -56,26 +57,39 @@ async function load(reset = true): Promise<void> {
     loading.value = true
     error.value = ''
     detail.value = null
+    loadingMore.value = false
+    songsLoading.value = false
   } else {
     if (!detail.value || !detail.value.hasMore) return
     loadingMore.value = true
   }
   try {
     const offset = reset ? 0 : songs.value.length
-    const data = unwrap(await window.lychee.artist.get(id, offset, songSort.value))
-    if (request !== token) return
     if (reset) {
+      const data = unwrap(await window.lychee.artist.get(id, 0, songSort.value))
+      if (request !== token) return
       detail.value = data
-    } else if (detail.value) {
-      detail.value = {
-        ...data,
-        songs: [...detail.value.songs, ...data.songs]
-      }
+      void playlistEdit.loadFavorites(data.songs.map((song) => song.songMid))
+      void download.refreshAssets(data.songs.map((song) => song.songMid))
+      return
     }
-    void playlistEdit.loadFavorites(data.songs.map((song) => song.songMid))
-    void download.refreshAssets(data.songs.map((song) => song.songMid))
+    const page = unwrap(
+      await window.lychee.artist.getSongs(id, offset, songSort.value)
+    )
+    if (request !== token || !detail.value) return
+    detail.value = {
+      ...detail.value,
+      songs: [...detail.value.songs, ...page.songs],
+      total: page.total,
+      hasMore: page.hasMore
+    }
+    void playlistEdit.loadFavorites(page.songs.map((song) => song.songMid))
+    void download.refreshAssets(page.songs.map((song) => song.songMid))
   } catch (err) {
-    if (request === token) error.value = describeError(err)
+    if (request === token) {
+      if (reset) error.value = describeError(err)
+      else toast.error(describeError(err))
+    }
   } finally {
     if (request === token) {
       loading.value = false
@@ -84,8 +98,40 @@ async function load(reset = true): Promise<void> {
   }
 }
 
+/** 仅重载歌曲列表：保留歌手头部信息，分页从 0 重新开始。 */
+async function reloadSongs(next: ArtistSongSort): Promise<void> {
+  const id = mid.value
+  if (!id) return
+  const previous = songSort.value
+  songSort.value = next
+  const request = ++token
+  loadingMore.value = false
+  songsLoading.value = true
+  try {
+    const page = unwrap(await window.lychee.artist.getSongs(id, 0, next))
+    if (request !== token) return
+    if (detail.value) {
+      detail.value = {
+        ...detail.value,
+        songs: page.songs,
+        total: page.total,
+        hasMore: page.hasMore
+      }
+    }
+    void playlistEdit.loadFavorites(page.songs.map((song) => song.songMid))
+    void download.refreshAssets(page.songs.map((song) => song.songMid))
+  } catch (err) {
+    if (request === token) {
+      songSort.value = previous
+      toast.error(describeError(err))
+    }
+  } finally {
+    if (request === token) songsLoading.value = false
+  }
+}
+
 function maybeLoadMore(): void {
-  if (loading.value || loadingMore.value || !detail.value?.hasMore) return
+  if (loading.value || loadingMore.value || songsLoading.value || !detail.value?.hasMore) return
   const el = scrollRoot
   if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_LOAD_THRESHOLD) {
     void load(false)
@@ -94,9 +140,8 @@ function maybeLoadMore(): void {
 
 function changeSort(next: ArtistSongSort): void {
   if (songSort.value === next) return
-  songSort.value = next
   scrollRoot?.scrollTo({ top: 0 })
-  void load(true)
+  void reloadSongs(next)
 }
 
 function playAll(): void {
@@ -208,8 +253,12 @@ onBeforeUnmount(() => {
         </div>
       </div>
 
+      <div v-if="songsLoading" class="loading-block">
+        <span class="spinner lg" />
+        正在加载歌曲
+      </div>
       <SongTable
-        v-if="songs.length > 0"
+        v-else-if="songs.length > 0"
         :songs="songs"
         :active-mid="player.current?.songMid"
         :favorite-mids="favoriteMids"
@@ -227,14 +276,14 @@ onBeforeUnmount(() => {
         <h3>暂无歌曲</h3>
       </div>
 
-      <div v-if="detail.hasMore" class="feed-footer">
+      <div v-if="!songsLoading && detail.hasMore" class="feed-footer">
         <template v-if="loadingMore">
           <span class="spinner" />
           <span>正在加载更多</span>
         </template>
         <span v-else>继续向下滚动加载更多</span>
       </div>
-      <div v-else-if="songs.length > 0" class="feed-footer">已经到底了</div>
+      <div v-else-if="!songsLoading && songs.length > 0" class="feed-footer">已经到底了</div>
 
       <PlaylistPicker
         :open="pickerOpen"
