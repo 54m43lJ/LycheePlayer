@@ -179,13 +179,13 @@ watch(
 
       <nav class="nav">
         <div class="nav-label">浏览</div>
-        <RouterLink class="nav-item" active-class="active" to="/search" @click="onSidebarNavigate">
-          <AppIcon name="search" :size="18" />
-          <span class="nav-text">搜索</span>
-        </RouterLink>
         <RouterLink class="nav-item" active-class="active" to="/discover" @click="onSidebarNavigate">
           <AppIcon name="compass" :size="18" />
           <span class="nav-text">发现</span>
+        </RouterLink>
+        <RouterLink class="nav-item" active-class="active" to="/search" @click="onSidebarNavigate">
+          <AppIcon name="search" :size="18" />
+          <span class="nav-text">搜索</span>
         </RouterLink>
         <RouterLink
           v-if="auth.loggedIn"
