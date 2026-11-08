@@ -139,8 +139,29 @@ export const FAVORITE_STATUS_CACHE_MS = 30_000
 export const VIP_CACHE_MS = 5 * 60_000
 /** 评论单页条数；上游上限 25。 */
 export const COMMENT_PAGE_SIZE = 20
-/** 音频缓存总容量上限。推荐值 2 GiB。 */
+/** 音频缓存上限的最高档位，也是旧版本沿用的默认值（2 GiB）。 */
 export const AUDIO_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
+/** 播放缓存上限的可选档位：128M / 256M / 512M / 1G / 1.5G / 2G。 */
+export const AUDIO_CACHE_LIMIT_STEPS_BYTES = [
+  128 * 1024 * 1024,
+  256 * 1024 * 1024,
+  512 * 1024 * 1024,
+  1024 * 1024 * 1024,
+  1536 * 1024 * 1024,
+  2048 * 1024 * 1024
+] as const
+/** 默认缓存上限；与旧版本保持一致，为 2 GiB。 */
+export const AUDIO_CACHE_DEFAULT_BYTES = AUDIO_CACHE_MAX_BYTES
+
+/** 将任意输入归一到最近的缓存上限档位；非法值回退到默认档位。 */
+export function normalizeAudioCacheLimitBytes(value: unknown): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return AUDIO_CACHE_DEFAULT_BYTES
+  let best: number = AUDIO_CACHE_LIMIT_STEPS_BYTES[0]
+  for (const step of AUDIO_CACHE_LIMIT_STEPS_BYTES) {
+    if (Math.abs(step - value) < Math.abs(best - value)) best = step
+  }
+  return best
+}
 /** 音频缓存目录名。 */
 export const AUDIO_CACHE_DIR = 'audio'
 /** 音频缓存进度上报节流。推荐值 300 ms。 */

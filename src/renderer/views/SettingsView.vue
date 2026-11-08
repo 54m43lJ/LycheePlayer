@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FlagsFile, Settings } from '@shared/types'
+import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
 import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
@@ -49,6 +50,30 @@ const THEMES: Array<{ value: Settings['theme']; label: string }> = [
   { value: 'dark', label: '深色' },
   { value: 'light', label: '浅色' }
 ]
+
+const CACHE_LIMIT_STEPS = AUDIO_CACHE_LIMIT_STEPS_BYTES.map((bytes) => ({
+  bytes,
+  label: bytes >= 1024 * 1024 * 1024 ? `${bytes / (1024 * 1024 * 1024)}G` : `${bytes / (1024 * 1024)}M`
+}))
+
+function cacheLimitIndexFor(bytes: number): number {
+  const index = CACHE_LIMIT_STEPS.findIndex((step) => step.bytes === bytes)
+  return index >= 0 ? index : CACHE_LIMIT_STEPS.length - 1
+}
+
+const cacheLimitIndex = ref(cacheLimitIndexFor(settings.settings.audioCacheMaxBytes))
+const cacheLimitStep = computed(() => CACHE_LIMIT_STEPS[cacheLimitIndex.value])
+const cacheLimitFill = computed(
+  () => `${(cacheLimitIndex.value / (CACHE_LIMIT_STEPS.length - 1)) * 100}%`
+)
+
+watch(
+  () => settings.settings.audioCacheMaxBytes,
+  (value) => {
+    cacheLimitIndex.value = cacheLimitIndexFor(value)
+  },
+  { immediate: true }
+)
 
 async function loadFlags(): Promise<void> {
   try {
@@ -106,6 +131,26 @@ async function toggleAudioCache(): Promise<void> {
     await settings.update({ audioCacheEnabled: !settings.settings.audioCacheEnabled })
     await loadStorage()
   } catch (err) {
+    toast.error(describeError(err))
+  }
+}
+
+function onCacheLimitInput(event: Event): void {
+  const index = Number((event.target as HTMLInputElement).value)
+  if (Number.isInteger(index) && index >= 0 && index < CACHE_LIMIT_STEPS.length) {
+    cacheLimitIndex.value = index
+  }
+}
+
+async function saveCacheLimit(): Promise<void> {
+  const step = CACHE_LIMIT_STEPS[cacheLimitIndex.value]
+  if (!step || step.bytes === settings.settings.audioCacheMaxBytes) return
+  try {
+    await settings.update({ audioCacheMaxBytes: step.bytes })
+    await loadStorage()
+    toast.show(`播放缓存上限已调整为 ${step.label}`)
+  } catch (err) {
+    cacheLimitIndex.value = cacheLimitIndexFor(settings.settings.audioCacheMaxBytes)
     toast.error(describeError(err))
   }
 }
@@ -301,6 +346,42 @@ onMounted(() => {
                   aria-label="切换播放缓存"
                   @click="toggleAudioCache()"
                 />
+              </div>
+            </div>
+            <div class="setting-row cache-limit-row">
+              <div class="cache-limit-body">
+                <div class="cache-limit-head">
+                  <div>
+                    <div class="setting-name">播放缓存上限</div>
+                    <div class="setting-desc">超出后按最久未使用自动清理</div>
+                  </div>
+                  <span class="cache-limit-value">{{ cacheLimitStep.label }}</span>
+                </div>
+                <div class="cache-slider-wrap">
+                  <input
+                    class="cache-slider"
+                    type="range"
+                    min="0"
+                    :max="CACHE_LIMIT_STEPS.length - 1"
+                    step="1"
+                    :value="cacheLimitIndex"
+                    :style="{ '--cache-fill': cacheLimitFill }"
+                    aria-label="播放缓存上限"
+                    @input="onCacheLimitInput"
+                    @change="saveCacheLimit"
+                  />
+                  <div class="cache-slider-nodes" aria-hidden="true">
+                    <span
+                      v-for="(step, index) in CACHE_LIMIT_STEPS"
+                      :key="step.bytes"
+                      :class="{ active: index <= cacheLimitIndex }"
+                      :style="{ left: `${(index / (CACHE_LIMIT_STEPS.length - 1)) * 100}%` }"
+                    >
+                      <i />
+                      <em>{{ step.label }}</em>
+                    </span>
+                  </div>
+                </div>
               </div>
             </div>
             <div class="setting-row">

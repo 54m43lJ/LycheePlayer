@@ -45,7 +45,7 @@ import { getSettings, saveSettings } from './settings'
 import { publishState } from './integration/mpris'
 import { updateTray } from './integration/tray'
 import { clearPlaylistCache, invalidatePlaylistCache } from './cache/playlist'
-import { audioCacheStats, clearAudioCache } from './cache/audio'
+import { audioCacheStats, clearAudioCache, enforceAudioCacheLimit } from './cache/audio'
 import { readFlagsFile, writeFlagsFile } from './startup-flags'
 import {
   assetStates,
@@ -367,8 +367,10 @@ export function registerIpc(): void {
     const previous = getSettings()
     const next: Settings = { ...previous, ...patch }
     await saveSettings(next)
-    if (previous.audioCacheEnabled && !next.audioCacheEnabled) await clearAudioCache()
-    return next
+    const saved = getSettings()
+    if (previous.audioCacheEnabled && !saved.audioCacheEnabled) await clearAudioCache()
+    if (saved.audioCacheMaxBytes !== previous.audioCacheMaxBytes) await enforceAudioCacheLimit()
+    return saved
   })
 
   // ---------- player ----------
