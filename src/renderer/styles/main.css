@@ -2916,7 +2916,7 @@ a {
 }
 
 .progress-played {
-  background: var(--gold);
+  background: var(--accent);
 }
 
 .progress-range {
