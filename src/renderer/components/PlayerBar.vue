@@ -44,6 +44,8 @@ const lastVolume = ref(0.8)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 let modeOpenTimer: number | null = null
 let modeCloseTimer: number | null = null
+let volumeOpenTimer: number | null = null
+let volumeCloseTimer: number | null = null
 let offCacheProgress: (() => void) | null = null
 
 const cache = ref<AudioCacheProgress | null>(null)
@@ -142,6 +144,22 @@ function toggleQualityMenu(): void {
 }
 
 function closeMenus(): void {
+  if (modeOpenTimer !== null) {
+    window.clearTimeout(modeOpenTimer)
+    modeOpenTimer = null
+  }
+  if (modeCloseTimer !== null) {
+    window.clearTimeout(modeCloseTimer)
+    modeCloseTimer = null
+  }
+  if (volumeOpenTimer !== null) {
+    window.clearTimeout(volumeOpenTimer)
+    volumeOpenTimer = null
+  }
+  if (volumeCloseTimer !== null) {
+    window.clearTimeout(volumeCloseTimer)
+    volumeCloseTimer = null
+  }
   qualityMenu.value = false
   volumeOpen.value = false
   modeMenu.value = false
@@ -161,6 +179,8 @@ function openModeMenu(): void {
   modeOpenTimer = window.setTimeout(() => {
     modeMenu.value = true
     modeOpenTimer = null
+    volumeOpen.value = false
+    qualityMenu.value = false
   }, 120)
 }
 
@@ -210,16 +230,30 @@ async function downloadCurrent(): Promise<void> {
   }
 }
 
-function toggleVolume(): void {
-  if (compact.value) {
-    volumeOpen.value = !volumeOpen.value
-    if (volumeOpen.value) {
-      qualityMenu.value = false
-      modeMenu.value = false
-    }
-    return
+function openVolumeMenu(): void {
+  if (!compact.value) return
+  if (volumeCloseTimer !== null) {
+    window.clearTimeout(volumeCloseTimer)
+    volumeCloseTimer = null
   }
-  toggleMute()
+  if (volumeOpen.value) return
+  volumeOpenTimer = window.setTimeout(() => {
+    volumeOpen.value = true
+    volumeOpenTimer = null
+    qualityMenu.value = false
+    modeMenu.value = false
+  }, 120)
+}
+
+function scheduleCloseVolumeMenu(): void {
+  if (volumeOpenTimer !== null) {
+    window.clearTimeout(volumeOpenTimer)
+    volumeOpenTimer = null
+  }
+  volumeCloseTimer = window.setTimeout(() => {
+    volumeOpen.value = false
+    volumeCloseTimer = null
+  }, 200)
 }
 
 function toggleMute(): void {
@@ -259,7 +293,17 @@ onMounted(() => {
   document.addEventListener('keydown', onKeydown)
   mediaListener = (event) => {
     compact.value = event.matches
-    if (!event.matches) volumeOpen.value = false
+    if (!event.matches) {
+      if (volumeOpenTimer !== null) {
+        window.clearTimeout(volumeOpenTimer)
+        volumeOpenTimer = null
+      }
+      if (volumeCloseTimer !== null) {
+        window.clearTimeout(volumeCloseTimer)
+        volumeCloseTimer = null
+      }
+      volumeOpen.value = false
+    }
   }
   compactQuery.addEventListener('change', mediaListener)
   offCacheProgress = window.lychee.audioCache.onProgress((item) => {
@@ -273,6 +317,8 @@ onBeforeUnmount(() => {
   if (mediaListener) compactQuery.removeEventListener('change', mediaListener)
   if (modeOpenTimer !== null) window.clearTimeout(modeOpenTimer)
   if (modeCloseTimer !== null) window.clearTimeout(modeCloseTimer)
+  if (volumeOpenTimer !== null) window.clearTimeout(volumeOpenTimer)
+  if (volumeCloseTimer !== null) window.clearTimeout(volumeCloseTimer)
   offCacheProgress?.()
 })
 
@@ -450,37 +496,44 @@ watch(
           </button>
         </div>
       </div>
-      <div ref="volumeWrap" class="volume-wrap">
-        <button
-          class="icon-btn"
-          :title="compact ? '音量' : volume > 0 ? '静音' : '恢复音量'"
-          @click.stop="toggleVolume()"
-        >
-          <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="17" />
-        </button>
-        <div v-if="compact && volumeOpen" class="volume-popover" @click.stop>
-          <span class="volume-value">{{ Math.round(volume * 100) }}%</span>
-          <div class="vertical-range">
+      <div
+        ref="volumeWrap"
+        class="volume-wrap"
+        :class="{ open: volumeOpen }"
+        @mouseenter="openVolumeMenu()"
+        @mouseleave="scheduleCloseVolumeMenu()"
+      >
+        <div v-if="compact && volumeOpen" class="volume-menu" @click.stop>
+          <div class="volume-slider">
+            <div class="volume-track" aria-hidden="true">
+              <span class="volume-fill" :style="{ height: `${volume * 100}%` }" />
+            </div>
             <input
-              class="range"
+              class="range volume-range"
               type="range"
               min="0"
               max="1"
               step="0.01"
               :value="volume"
-              :style="volumeStyle"
+              :title="`音量 ${Math.round(volume * 100)}%`"
               aria-label="音量"
               @input="player.setVolume(Number(($event.target as HTMLInputElement).value))"
             />
           </div>
-          <button class="icon-btn" title="静音" @click="toggleMute()">
-            <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="15" />
-          </button>
         </div>
+        <button
+          class="icon-btn volume-button"
+          :title="volume > 0 ? '静音' : '恢复音量'"
+          aria-haspopup="true"
+          :aria-expanded="volumeOpen"
+          @click.stop="toggleMute()"
+        >
+          <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="17" />
+        </button>
       </div>
       <input
         v-if="!compact"
-        class="range volume-range"
+        class="range volume-range-inline"
         type="range"
         min="0"
         max="1"
