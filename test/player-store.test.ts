@@ -110,6 +110,20 @@ describe('player queue', () => {
     expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
   })
 
+  it('cycles play modes in the preset order', async () => {
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    expect(player.mode).toBe('sequence')
+    player.cycleMode()
+    expect(player.mode).toBe('repeat-all')
+    player.cycleMode()
+    expect(player.mode).toBe('repeat-one')
+    player.cycleMode()
+    expect(player.mode).toBe('shuffle')
+    player.cycleMode()
+    expect(player.mode).toBe('sequence')
+  })
+
   it('stops skipping after ten consecutive NO_STREAM results', async () => {
     const getUrls = vi.fn(() =>
       Promise.resolve({

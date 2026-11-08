@@ -983,3 +983,34 @@
 | `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序改为“发现 / 搜索 / 我的歌单”，并说明启动默认落在发现页。 |
 | `USER.html` | §3.4 页面 / URL 架构图 | 改 | 注明根路径 `/` 默认进入 `/discover`。 |
 | `EVOLVE.md` | #11 优化左侧导航 | 改 | 补“发现”在“搜索”之前、根路径默认进入发现页的导航约定。 |
+
+### 4.20 播放模式按钮点击遍历与顺序播放图标区分
+
+问题描述：ISSUES 要求播放模式按钮点击时按预设顺序遍历模式，而不是停留在当前模式；同时顺序播放图标与播放队列图标都使用 `list`（左侧三个点 + 三条横线），视觉上难以区分，要求把左侧三个点改成向下的长箭头。
+
+解决方法：
+
+- 播放模式按钮点击不再开合菜单，改为调用新增的 `cyclePlayMode()`：先清理模式 / 音量 / 音质弹层与定时器，再调用 `player.cycleMode()`；
+- 沿用播放器 store 已有的固定顺序 `sequence → repeat-all → repeat-one → shuffle → sequence`，循环时从当前模式前进一格；悬停 120ms 仍打开其它模式菜单，菜单项仍可直接选择，Esc 与外部点击关闭逻辑不变；
+- `AppIcon` 新增 `sequence` 图标：右侧保留三条横线，左侧由三个点改为“向下的长竖线 + 箭头”，向下箭头与右侧列表共同表示顺序播放；
+- 播放队列按钮继续使用 `list` 图标（三个点 + 三条横线），`MODE_ICON.sequence` 改为 `sequence`，模式菜单中的顺序播放项也同步使用新图标，两处图标不再重复；
+- 播放模式按钮的 `title` 仍显示当前模式名称，菜单 aria 属性与选择逻辑保持不变。
+
+验证：
+
+- 新增 `test/player-store.test.ts` 用例，确认 `cycleMode()` 按 `sequence → repeat-all → repeat-one → shuffle → sequence` 循环；
+- 静态页以 64px / 16px 对比 `sequence` 与 `list`：顺序播放为“左向下箭头 + 右列表”，播放队列为“左三点 + 右列表”，16px 下仍可区分；
+- `npm run typecheck` 通过；
+- `npx vitest run` 14 个测试文件 / 56 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.36 `AppIcon.vue` | 改 | 新增 `sequence` 图标（左侧向下长箭头 + 三条横线）；`list` 专用于播放队列。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放模式按钮点击改为按固定顺序遍历，悬停菜单保留；`MODE_ICON.sequence` 使用 `sequence` 图标。 |
+| `CORE.html` | §4.29 `stores/player.ts` | 改 | 说明 `cycleMode()` 的顺序为 `sequence → repeat-all → repeat-one → shuffle → sequence`，供模式按钮点击使用。 |
+| `USER.html` | §5.2.3 播放条 · 播放模式 | 改 | 点击按钮按“顺序 / 列表循环 / 单曲循环 / 随机”依次切换；悬停展开菜单可直接选择其它模式。 |
+| `USER.html` | §5.2.3 播放条 · 播放队列入口 | 改 | 播放队列继续使用三点 + 横线图标，与顺序播放的向下箭头图标区分。 |
+| `EVOLVE.md` | #9 播放模式 | 改 | 补点击遍历顺序与 `sequence` 图标区分要求。 |
