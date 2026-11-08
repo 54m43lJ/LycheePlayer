@@ -54,17 +54,6 @@ import {
   resumeDownload,
   startDownload
 } from './download/manager'
-import {
-  getMpvState,
-  loadAndPlayMpv,
-  mpvPause,
-  mpvPlay,
-  mpvSeek,
-  mpvSetVolume,
-  startMpv,
-  stopMpv
-} from './audio/mpv'
-import { resolveProtocolSource } from './media/audio-protocol'
 
 function broadcast(channel: string, payload: unknown): void {
   for (const window of BrowserWindow.getAllWindows()) {
@@ -118,9 +107,23 @@ function qualityArg(value: unknown): Quality {
   return value
 }
 
+let lastPlayerStatus: PlayerState['status'] = 'stopped'
+let lastToggleAt = 0
+
 /** MPRIS / 托盘等主进程侧控制统一转成 player:command 推送。 */
 export function sendPlayerCommand(command: MprisCommand): void {
   broadcast('player:command', command)
+}
+
+/**
+ * 托盘播放 / 暂停：把 toggle 解析成明确的 play / pause，避免渲染进程与菜单状态竞态；
+ * 200ms 内的重复点击只执行一次，但不会吞掉间隔更长的连续操作。
+ */
+export function sendPlaybackToggle(): void {
+  const now = Date.now()
+  if (now - lastToggleAt < 200) return
+  lastToggleAt = now
+  sendPlayerCommand(lastPlayerStatus === 'playing' ? 'pause' : 'play')
 }
 
 export function registerIpc(): void {
@@ -294,40 +297,6 @@ export function registerIpc(): void {
     return null
   })
 
-  // ---------- mpv ----------
-  handle('mpv.getState', async () => getMpvState())
-  handle('mpv.setEnabled', async (enabled: unknown) => {
-    if (enabled) await startMpv()
-    else await stopMpv()
-    return getMpvState()
-  })
-  handle('mpv.loadAndPlay', async (url: unknown) => {
-    const resolved = resolveProtocolSource(stringArg(url, '音频地址', 4096))
-    if (!resolved) throw new Error('无效的音频地址')
-    await loadAndPlayMpv(resolved)
-    return null
-  })
-  handle('mpv.play', async () => {
-    await mpvPlay()
-    return null
-  })
-  handle('mpv.pause', async () => {
-    await mpvPause()
-    return null
-  })
-  handle('mpv.stop', async () => {
-    await mpvPause()
-    return null
-  })
-  handle('mpv.seek', async (positionMs: unknown) => {
-    await mpvSeek(Number(positionMs) || 0)
-    return null
-  })
-  handle('mpv.setVolume', async (volume: unknown) => {
-    await mpvSetVolume(Number(volume) || 0)
-    return null
-  })
-
   // ---------- account / metadata ----------
   handle('user.getProfile', async () => getProfile())
   handle('lyric.get', async (songMid: unknown) => getLyric(stringArg(songMid, '歌曲 mid')))
@@ -345,6 +314,7 @@ export function registerIpc(): void {
 
   // ---------- player ----------
   ipcMain.on('player:state', (_event, state: PlayerState) => {
+    lastPlayerStatus = state.status
     publishState(state)
     updateTray(state)
   })

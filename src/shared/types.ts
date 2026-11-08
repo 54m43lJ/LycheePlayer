@@ -22,7 +22,9 @@ export interface IpcError {
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: IpcError }
 
 export interface Singer {
+  /** 歌手页 mid；官方存在无歌手页但仍有名称的歌手，此时为空字符串。 */
   mid: string
+  /** 可能为空；渲染时跳过空名称。 */
   name: string
 }
 
@@ -184,18 +186,6 @@ export interface DownloadTask {
   error: string
 }
 
-export interface MpvState {
-  available: boolean
-  version: string | null
-  playing: boolean
-}
-
-export interface MpvEvent {
-  type: 'time' | 'duration' | 'play' | 'pause' | 'loaded' | 'ended' | 'error'
-  positionMs?: number
-  durationMs?: number
-}
-
 /** 登录凭证；完整字段与转换见 PROVIDER §4.3。仅主进程持有。 */
 export interface Credential {
   musicid: string
@@ -222,8 +212,6 @@ export interface Settings {
   closeToTray: boolean
   theme: 'dark' | 'light'
   audioCacheEnabled: boolean
-  /** 音频引擎选择；mpv 缺失时回退 HTML5。 */
-  audioEngine?: 'auto' | 'html5' | 'mpv'
   /** 下载目录；缺省为 ~/Music/Lychee Player。 */
   downloadDir?: string
 }

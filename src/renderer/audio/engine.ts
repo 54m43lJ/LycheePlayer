@@ -1,6 +1,6 @@
 /**
  * 渲染进程播放引擎边界：播放器 store 只依赖 AudioEngine 接口。
- * 当前实现为 HTML5 Audio；替换为 mpv 等引擎时实现同一接口即可。
+ * 唯一实现为 HTML5 Audio。
  */
 
 export interface AudioEngineHandlers {

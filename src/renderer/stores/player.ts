@@ -9,7 +9,6 @@ import {
 } from '@shared/constants'
 import { IpcCallError, describeError, unwrap } from '../api'
 import { createAudioEngine, type AudioEngine, type AudioEngineHandlers } from '../audio/engine'
-import { createRemoteEngine } from '../audio/remote-engine'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from './auth'
 import { useSettingsStore } from './settings'
@@ -58,7 +57,6 @@ export const usePlayerStore = defineStore('player', () => {
   let noStreamStreak = 0
   let seekWatch: number | null = null
   let engine: AudioEngine
-  let engineKind: 'html5' | 'mpv' = 'html5'
 
   function clampVolume(value: number): number {
     if (!Number.isFinite(value)) return 0.8
@@ -162,45 +160,8 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  function createEngine(kind: 'html5' | 'mpv'): AudioEngine {
-    engineKind = kind
-    return kind === 'mpv' ? createRemoteEngine(handlers) : createAudioEngine(handlers)
-  }
-
-  engine = createEngine('html5')
+  engine = createAudioEngine(handlers)
   engine.setVolume(volume.value)
-
-  function switchEngine(kind: 'html5' | 'mpv'): void {
-    if (kind === engineKind) return
-    const resumeSong = current.value
-    engine.stop()
-    engine = createEngine(kind)
-    engine.setVolume(volume.value)
-    if (resumeSong) void loadAndPlay(resumeSong, requestedQuality.value)
-  }
-
-  function applyEngine(): void {
-    const preference = settings.settings.audioEngine ?? 'auto'
-    if (preference === 'html5') {
-      switchEngine('html5')
-      return
-    }
-    void window.lychee.mpv
-      .getState()
-      .then((state) => {
-        if (!state.ok) {
-          switchEngine('html5')
-          return
-        }
-        if (!state.data.available) {
-          if (preference === 'mpv') toast.error('未检测到 mpv，已回退 HTML5 Audio')
-          switchEngine('html5')
-          return
-        }
-        switchEngine('mpv')
-      })
-      .catch(() => switchEngine('html5'))
-  }
 
   function shuffleUpcoming(): void {
     const start = index.value + 1
@@ -553,18 +514,21 @@ export const usePlayerStore = defineStore('player', () => {
     sendState()
   }
 
+  function setMode(next: PlayMode): void {
+    if (next === mode.value) return
+    mode.value = next
+    if (next === 'shuffle') shuffleUpcoming()
+    sendState()
+  }
+
   function cycleMode(): void {
     const currentIndex = MODES.indexOf(mode.value)
-    mode.value = MODES[(currentIndex + 1) % MODES.length]
-    if (mode.value === 'shuffle') shuffleUpcoming()
-    toast.show(PLAY_MODE_LABEL[mode.value])
-    sendState()
+    setMode(MODES[(currentIndex + 1) % MODES.length])
   }
 
   function applySettings(): void {
     requestedQuality.value = defaultQuality.value
     if (!current.value) quality.value = requestedQuality.value
-    applyEngine()
   }
 
   function handleCommand(command: MprisCommand): void {
@@ -624,6 +588,7 @@ export const usePlayerStore = defineStore('player', () => {
     setQuality,
     setLoopStatus,
     setShuffle,
+    setMode,
     cycleMode,
     applySettings,
     handleCommand,

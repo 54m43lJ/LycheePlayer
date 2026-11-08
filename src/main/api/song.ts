@@ -82,9 +82,10 @@ function toSong(raw: RawSong): Song {
     songMid: raw.mid ?? '',
     songId: String(raw.id ?? ''),
     name: raw.name ?? raw.title ?? '',
+    // 官方客户端存在“有名字但没有歌手页”的歌手：mid 可为空，名称仍需保留。
     singers: (raw.singer ?? [])
-      .filter((singer) => Boolean(singer.mid))
-      .map((singer) => ({ mid: singer.mid ?? '', name: singer.name ?? '' })),
+      .map((singer) => ({ mid: singer.mid ?? '', name: (singer.name ?? '').trim() }))
+      .filter((singer) => singer.name.length > 0 || singer.mid.length > 0),
     album: { mid: raw.album?.mid ?? '', name: raw.album?.name ?? '' },
     durationMs: Math.max(0, Number(raw.interval ?? 0)) * 1000,
     pay: {

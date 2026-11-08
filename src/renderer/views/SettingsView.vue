@@ -48,19 +48,6 @@ const THEMES: Array<{ value: Settings['theme']; label: string }> = [
   { value: 'light', label: '浅色' }
 ]
 
-const ENGINES: Array<{ value: 'auto' | 'html5' | 'mpv'; label: string }> = [
-  { value: 'auto', label: '自动' },
-  { value: 'html5', label: 'HTML5' },
-  { value: 'mpv', label: 'mpv' }
-]
-
-const engineLabel = computed(() => {
-  const engine = settings.settings.audioEngine ?? 'auto'
-  if (engine === 'mpv') return 'mpv'
-  if (engine === 'html5') return 'HTML5 Audio'
-  return '自动（优先 mpv）'
-})
-
 async function loadFlags(): Promise<void> {
   try {
     flags.value = unwrap(await window.lychee.flags.get())
@@ -126,28 +113,6 @@ async function chooseTheme(theme: Settings['theme']): Promise<void> {
   try {
     await settings.update({ theme })
     toast.show(theme === 'light' ? '已切换到浅色模式' : '已切换到深色模式')
-  } catch (err) {
-    toast.error(describeError(err))
-  }
-}
-
-async function chooseEngine(engine: 'auto' | 'html5' | 'mpv'): Promise<void> {
-  try {
-    if (engine === 'mpv') {
-      const state = unwrap(await window.lychee.mpv.getState())
-      if (!state.available) {
-        toast.error('未检测到 mpv，已回退 HTML5 Audio')
-        await settings.update({ audioEngine: 'html5' })
-        player.applySettings()
-        return
-      }
-      unwrap(await window.lychee.mpv.setEnabled(true))
-    } else if (engine === 'html5') {
-      unwrap(await window.lychee.mpv.setEnabled(false))
-    }
-    await settings.update({ audioEngine: engine })
-    player.applySettings()
-    toast.show(`音频引擎已切换为 ${ENGINES.find((item) => item.value === engine)?.label}`)
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -374,35 +339,11 @@ onMounted(() => {
           <div class="panel-head"><h2>关于</h2></div>
           <div class="panel-body">
             <div class="setting-row"><span class="setting-name">版本</span><span class="mono faint">{{ appVersion }}</span></div>
-            <div class="setting-row"><span class="setting-name">音频引擎</span><span class="faint">{{ engineLabel }}</span></div>
+            <div class="setting-row"><span class="setting-name">音频引擎</span><span class="faint">HTML5 Audio</span></div>
             <div class="setting-row"><span class="setting-name">许可证</span><span class="faint">{{ appLicense }}</span></div>
           </div>
         </section>
 
-        <section class="panel">
-          <div class="panel-head"><h2>音频引擎</h2></div>
-          <div class="panel-body">
-            <div class="quality-options">
-              <button
-                v-for="engine in ENGINES"
-                :key="engine.value"
-                class="quality-option"
-                :class="{ active: (settings.settings.audioEngine ?? 'auto') === engine.value }"
-                @click="chooseEngine(engine.value)"
-              >
-                <strong>{{ engine.label }}</strong>
-              </button>
-            </div>
-            <div class="setting-row">
-              <span class="setting-name">EQ</span>
-              <span class="faint">仅 mpv 引擎生效</span>
-            </div>
-            <div class="setting-row">
-              <span class="setting-name">响度归一</span>
-              <span class="faint">仅 mpv 引擎生效</span>
-            </div>
-          </div>
-        </section>
       </div>
     </div>
   </div>

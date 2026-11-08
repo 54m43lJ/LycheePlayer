@@ -8,8 +8,7 @@ export function defaultSettings(): Settings {
     defaultQuality: 'auto',
     closeToTray: true,
     theme: 'dark',
-    audioCacheEnabled: true,
-    audioEngine: 'auto'
+    audioCacheEnabled: true
   }
 }
 

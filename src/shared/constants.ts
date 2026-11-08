@@ -87,11 +87,6 @@ export const TOAST_DURATION_MS = 3600
 export const PREVIOUS_RESTART_THRESHOLD_MS = 3000
 /** 连续无法获取播放链接的歌曲数上限；达到后停止自动切歌。推荐值 10。 */
 export const NO_STREAM_SKIP_LIMIT = 10
-/** mpv 可执行文件名。 */
-export const MPV_BINARY = 'mpv'
-/** mpv IPC socket 文件名前缀。 */
-export const MPV_SOCKET_PREFIX = 'lychee-mpv'
-
 // ---------- IPC ----------
 
 /** song.getUrls / song.probe 单次批量上限。推荐值 100。 */

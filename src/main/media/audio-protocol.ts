@@ -133,26 +133,6 @@ async function handleFile(url: URL, request: Request): Promise<Response> {
   return fileResponse(filePath, request)
 }
 
-/** 把主进程音频协议 URL 解析为 mpv 可加载的本地路径或上游地址。 */
-export function resolveProtocolSource(protocolUrl: string): string | null {
-  try {
-    const url = new URL(protocolUrl)
-    if (url.protocol !== `${AUDIO_PROTOCOL_SCHEME}:`) return null
-    const segment = url.pathname.replace(/^\/+/, '')
-    if (url.hostname === 'file') {
-      return Buffer.from(segment, 'base64url').toString('utf8')
-    }
-    if (url.hostname === 'stream') {
-      const source = streams.get(segment)
-      if (!source) return null
-      return getCachedAudio(source.songMid, source.quality) ?? source.url
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
 async function handleStream(url: URL, request: Request): Promise<Response> {
   const token = url.pathname.replace(/^\/+/, '')
   const source = streams.get(token)

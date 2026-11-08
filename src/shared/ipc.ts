@@ -9,8 +9,6 @@ import type {
   IpcResult,
   Lyric,
   MprisCommand,
-  MpvEvent,
-  MpvState,
   MvDetail,
   MvStream,
   PlayerState,
@@ -93,17 +91,6 @@ export interface LycheeApi {
     openFolder(): Promise<IpcResult<null>>
     chooseFolder(): Promise<IpcResult<string | null>>
     clearCache(): Promise<IpcResult<null>>
-  }
-  mpv: {
-    getState(): Promise<IpcResult<MpvState>>
-    setEnabled(enabled: boolean): Promise<IpcResult<MpvState>>
-    loadAndPlay(url: string): Promise<IpcResult<null>>
-    play(): Promise<IpcResult<null>>
-    pause(): Promise<IpcResult<null>>
-    stop(): Promise<IpcResult<null>>
-    seek(positionMs: number): Promise<IpcResult<null>>
-    setVolume(volume: number): Promise<IpcResult<null>>
-    onEvent(callback: (event: MpvEvent) => void): () => void
   }
   user: {
     getProfile(): Promise<IpcResult<UserProfile>>

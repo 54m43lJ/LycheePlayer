@@ -15,6 +15,7 @@ UNINSTALL=0
 DRY_RUN=0
 LOCAL_TARBALL=""
 ARCH="x86_64"
+DEPS_MODE="ask" # ask | yes | no
 
 usage() {
   cat <<'EOF'
@@ -24,9 +25,13 @@ Lychee Player 安装脚本
   --local <tarball> 从本地打包产物安装（需要同目录 .sha256；用于开发测试）
   --prefix <dir>    用户级安装目录
   --system          安装到 /opt/lychee-player（需要 root / sudo）
+  --with-deps       安装运行期依赖（GTK / libsecret / NSS / ALSA / D-Bus）
+  --no-deps         跳过运行期依赖安装
   --uninstall       删除程序、桌面文件与图标，保留设置与缓存
-  --dry-run         只打印动作，不写盘
+  --dry-run         只打印动作，不写盘、不等待输入
   -h, --help        显示帮助
+
+依赖安装默认在客户端安装成功后执行；失败不会阻塞客户端安装。
 EOF
 }
 
@@ -36,6 +41,12 @@ while [ $# -gt 0 ]; do
     --local) LOCAL_TARBALL="${2:?缺少 tarball 路径}"; shift 2 ;;
     --prefix) PREFIX="${2:?缺少目录}"; shift 2 ;;
     --system) SYSTEM=1; shift ;;
+    --with-deps)
+      if [ "$DEPS_MODE" = "no" ]; then echo "--with-deps 与 --no-deps 互斥。" >&2; exit 2; fi
+      DEPS_MODE="yes"; shift ;;
+    --no-deps)
+      if [ "$DEPS_MODE" = "yes" ]; then echo "--with-deps 与 --no-deps 互斥。" >&2; exit 2; fi
+      DEPS_MODE="no"; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -52,7 +63,7 @@ run() {
 }
 
 if [ "$SYSTEM" -eq 1 ]; then
-  if [ "$(id -u)" -ne 0 ]; then
+  if [ "$(id -u)" -ne 0 ] && [ "$DRY_RUN" -eq 0 ]; then
     echo "--system 需要 root / sudo 权限。" >&2
     exit 1
   fi
@@ -79,6 +90,23 @@ fi
 
 TMP="$(mktemp -d)"
 trap 'rm -rf "$TMP"' EXIT
+
+CACHE_BASE="${XDG_CACHE_HOME:-$HOME/.cache}/lychee-player/install"
+
+# 安装包进入缓存前先写 .part，校验通过后原子改名，避免半截文件被复用。
+fetch_to_cache() {
+  url="$1"
+  target="$2"
+  mkdir -p "$(dirname "$target")"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[dry-run] curl -fL --proto "=https" --tlsv1.2 -o "%s.part" "%s"\n' "$target" "$url"
+    printf '[dry-run] move %s.part -> %s\n' "$target" "$target"
+    return 0
+  fi
+  rm -f "$target.part"
+  curl -fL --proto '=https' --tlsv1.2 -o "$target.part" "$url"
+  mv "$target.part" "$target"
+}
 
 if [ -n "$LOCAL_TARBALL" ]; then
   if [ ! -f "$LOCAL_TARBALL" ]; then
@@ -118,9 +146,48 @@ else
     INSTALL_VERSION="$TAG"
   fi
   BASE="https://github.com/$REPO/releases/download/$TAG"
-  echo "下载 $ASSET"
-  run curl -fL --proto '=https' --tlsv1.2 -o "$TMP/$ASSET" "$BASE/$ASSET"
-  run curl -fL --proto '=https' --tlsv1.2 -o "$TMP/$ASSET.sha256" "$BASE/$ASSET.sha256"
+  CACHE_DIR="$CACHE_BASE/$TAG"
+  CACHE_TAR="$CACHE_DIR/$ASSET"
+  CACHE_SHA="$CACHE_DIR/$ASSET.sha256"
+
+  echo "校验缓存 $CACHE_TAR"
+  REMOTE_SHA=""
+  if REMOTE_SHA="$(curl -fsSL --proto '=https' --tlsv1.2 "$BASE/$ASSET.sha256" 2>/dev/null)"; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "[dry-run] 远端校验和可用；将比对本地缓存后决定是否下载"
+    elif [ -f "$CACHE_TAR" ] && [ -n "$REMOTE_SHA" ]; then
+      LOCAL_SHA="$(sha256sum "$CACHE_TAR" | awk '{print $1}')"
+      WANT_SHA="$(printf '%s\n' "$REMOTE_SHA" | awk '{print $1}')"
+      if [ "$LOCAL_SHA" = "$WANT_SHA" ]; then
+        echo "缓存校验通过，跳过下载"
+      else
+        echo "缓存校验和不匹配，重新下载"
+        rm -f "$CACHE_TAR"
+        fetch_to_cache "$BASE/$ASSET" "$CACHE_TAR"
+        printf '%s\n' "$REMOTE_SHA" > "$CACHE_SHA"
+      fi
+    else
+      fetch_to_cache "$BASE/$ASSET" "$CACHE_TAR"
+      printf '%s\n' "$REMOTE_SHA" > "$CACHE_SHA"
+    fi
+  else
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "[dry-run] 远端校验和不可用"
+    else
+      echo "无法获取远端校验和；为避免使用过期缓存，已停止安装。" >&2
+      echo "可稍后重试，或清理缓存目录：$CACHE_BASE" >&2
+      exit 1
+    fi
+  fi
+
+  if [ "$DRY_RUN" -eq 1 ] || [ -f "$CACHE_TAR" ]; then
+    run cp "$CACHE_TAR" "$TMP/$ASSET"
+    if [ -f "$CACHE_SHA" ]; then
+      run cp "$CACHE_SHA" "$TMP/$ASSET.sha256"
+    else
+      printf '%s\n' "$REMOTE_SHA" > "$TMP/$ASSET.sha256"
+    fi
+  fi
 fi
 
 if [ "$DRY_RUN" -eq 0 ]; then
@@ -151,3 +218,57 @@ fi
 
 echo "已安装 Lychee Player $INSTALL_VERSION 到 $APP_DIR"
 echo "入口：$BIN"
+
+# ---------- 运行期依赖 ----------
+# 默认只处理 GTK / libsecret / NSS / ALSA / D-Bus；失败不阻塞客户端安装。
+install_deps() {
+  if ! command -v pacman >/dev/null 2>&1; then
+    echo "未检测到 pacman，跳过运行期依赖安装（可参考 BUILD §1 手动安装）。"
+    return 0
+  fi
+  PKGS="gtk3 libsecret nss alsa-lib dbus"
+  if [ "$DRY_RUN" -eq 1 ]; then
+    printf '[dry-run] %s\n' "sudo pacman -S --needed $PKGS"
+    return 0
+  fi
+  if [ "$(id -u)" -eq 0 ]; then
+    pacman -S --needed --noconfirm $PKGS || echo "运行期依赖安装失败，可能影响启动，但不影响客户端本体。" >&2
+  elif command -v sudo >/dev/null 2>&1; then
+    sudo pacman -S --needed --noconfirm $PKGS || echo "运行期依赖安装失败，可能影响启动，但不影响客户端本体。" >&2
+  else
+    echo "缺少 root / sudo，跳过运行期依赖安装；可参考 BUILD §1 手动安装。" >&2
+  fi
+}
+
+if [ "$DRY_RUN" -eq 1 ]; then
+  case "$DEPS_MODE" in
+    yes) install_deps ;;
+    no) echo "[dry-run] 跳过运行期依赖安装（--no-deps）" ;;
+    *)
+      if [ -t 0 ]; then
+        echo "[dry-run] 将询问：安装运行期依赖？[Y/n]（默认 Y）"
+      else
+        echo "[dry-run] 非交互且未给依赖参数：默认跳过运行期依赖"
+      fi
+      ;;
+  esac
+else
+  case "$DEPS_MODE" in
+    yes) install_deps ;;
+    no) echo "已按 --no-deps 跳过运行期依赖安装。" ;;
+    *)
+      if [ -t 0 ]; then
+        printf '安装运行期依赖（GTK / libsecret / NSS / ALSA / D-Bus）？[Y/n] '
+        read -r answer || answer=""
+        case "$answer" in
+          ""|y|Y|yes|YES|Yes) install_deps ;;
+          *) echo "已跳过运行期依赖安装。" ;;
+        esac
+      else
+        echo "非交互环境且未给依赖参数，已跳过运行期依赖安装。"
+        echo "如需安装，请重新运行：./install.sh --with-deps"
+        echo "或先下载脚本再执行：curl -fsSL <install.sh> -o install.sh && sh install.sh"
+      fi
+      ;;
+  esac
+fi

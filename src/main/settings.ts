@@ -16,7 +16,6 @@ export function createDefaultSettings(): Settings {
     closeToTray: true,
     theme: 'dark',
     audioCacheEnabled: true,
-    audioEngine: 'auto',
     downloadDir: defaultDownloadDir()
   }
 }
@@ -43,10 +42,6 @@ function sanitize(value: unknown): Settings {
       typeof raw.audioCacheEnabled === 'boolean'
         ? raw.audioCacheEnabled
         : defaults.audioCacheEnabled,
-    audioEngine:
-      raw.audioEngine === 'html5' || raw.audioEngine === 'mpv'
-        ? raw.audioEngine
-        : defaults.audioEngine,
     downloadDir:
       typeof raw.downloadDir === 'string' && raw.downloadDir.trim()
         ? raw.downloadDir

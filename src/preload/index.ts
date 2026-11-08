@@ -12,8 +12,6 @@ import type {
   IpcResult,
   Lyric,
   MprisCommand,
-  MpvEvent,
-  MpvState,
   MvDetail,
   MvStream,
   PlayerState,
@@ -113,22 +111,6 @@ const api: LycheeApi = {
     openFolder: () => invoke<null>('download.openFolder'),
     chooseFolder: () => invoke<string | null>('download.chooseFolder'),
     clearCache: () => invoke<null>('download.clearCache')
-  },
-  mpv: {
-    getState: () => invoke<MpvState>('mpv.getState'),
-    setEnabled: (enabled: boolean) => invoke<MpvState>('mpv.setEnabled', enabled),
-    loadAndPlay: (url: string) => invoke<null>('mpv.loadAndPlay', url),
-    play: () => invoke<null>('mpv.play'),
-    pause: () => invoke<null>('mpv.pause'),
-    stop: () => invoke<null>('mpv.stop'),
-    seek: (positionMs: number) => invoke<null>('mpv.seek', positionMs),
-    setVolume: (volume: number) => invoke<null>('mpv.setVolume', volume),
-    onEvent: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent, event: MpvEvent): void =>
-        callback(event)
-      ipcRenderer.on('mpv:event', listener)
-      return () => ipcRenderer.removeListener('mpv:event', listener)
-    }
   },
   user: {
     getProfile: () => invoke<UserProfile>('user.getProfile')
