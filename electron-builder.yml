@@ -1,0 +1,21 @@
+appId: io.github.lycheeplayer
+productName: Lychee Player
+directories:
+  output: dist
+  buildResources: build
+files:
+  - out/**/*
+  - package.json
+  - LICENSE
+extraResources:
+  - from: resources
+    to: .
+    filter:
+      - icon.png
+      - tray.png
+linux:
+  target:
+    - dir
+  category: AudioVideo
+  executableName: lychee-player
+  icon: build/icon.png

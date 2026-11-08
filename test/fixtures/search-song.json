@@ -1,0 +1,24 @@
+{
+  "code": 0,
+  "req_0": {
+    "code": 0,
+    "data": {
+      "body": {
+        "song": {
+          "list": [
+            {
+              "id": 123456,
+              "mid": "001SongMid",
+              "name": "晴天",
+              "interval": 269,
+              "singer": [{ "mid": "001Singer", "name": "周杰伦" }],
+              "album": { "mid": "001Album", "name": "叶惠美" },
+              "pay": { "pay_play": 1, "price_album": 0 }
+            }
+          ]
+        },
+        "meta": { "sum": 1 }
+      }
+    }
+  }
+}

@@ -1,0 +1,81 @@
+name: Preview
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: preview-release
+  cancel-in-progress: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build package
+        run: npm run package:arch
+
+      - name: Prepare preview assets
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          cp "dist/lychee-player-${version}-x86_64.tar.gz" "dist/lychee-player-preview-x86_64.tar.gz"
+          (
+            cd dist
+            sha256sum lychee-player-preview-x86_64.tar.gz > lychee-player-preview-x86_64.tar.gz.sha256
+          )
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: lychee-player-preview
+          path: |
+            dist/lychee-player-preview-x86_64.tar.gz
+            dist/lychee-player-preview-x86_64.tar.gz.sha256
+
+      - name: Publish preview release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="preview"
+          notes="自动构建自 main@${GITHUB_SHA:0:7}（$(date -u +%Y-%m-%dT%H:%M:%SZ)）"
+          assets=(
+            "dist/lychee-player-preview-x86_64.tar.gz"
+            "dist/lychee-player-preview-x86_64.tar.gz.sha256"
+          )
+
+          # 让 preview tag 始终指向当前 main 提交。
+          if gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$tag" >/dev/null 2>&1; then
+            gh api --method PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/$tag" \
+              -f sha="$GITHUB_SHA" -F force=true >/dev/null
+          else
+            gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$tag" -f sha="$GITHUB_SHA" >/dev/null
+          fi
+
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release edit "$tag" --prerelease --title "Preview" --notes "$notes"
+            gh release upload "$tag" "${assets[@]}" --clobber
+          else
+            gh release create "$tag" "${assets[@]}" \
+              --prerelease \
+              --title "Preview" \
+              --notes "$notes"
+          fi
