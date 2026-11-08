@@ -2370,6 +2370,13 @@ app::requestSingleInstanceLock()
                 ├── api/client::musicu('music.musicasset.PlaylistBaseWrite', 'EditPlaylist', ...)
                 └── 读回 dirinfo.title 确认
 </code></pre>
+<pre><code>views/LibraryView::onDelete(id)
+└── stores/playlist-edit::remove(id)
+    └── window.lychee.playlist.remove(id)
+        └── ipc::handle('playlist.remove')
+            └── api/playlist-write::removePlaylist(id)
+                └── api/client::musicu('music.musicasset.PlaylistBaseWrite', 'DelPlaylist', ...)
+</code></pre>
 <pre><code>components/PlaylistPicker::emit('picked', playlistId)
 └── stores/playlist-edit::addSongs(playlistId, [songMid])
     └── window.lychee.playlist.addSongs(playlistId, mids)
