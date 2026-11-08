@@ -68,7 +68,7 @@
   --palette-bg: #f7f7f7;
   --palette-surface: #f2f0ef;
   --palette-fg: #000000;
-  --palette-muted: #55585c;
+  --palette-muted: #CED6E0;
   --palette-purple: #8a2e8f;
   --palette-purple-light: #d998d9;
   --palette-gold: #5c4824;
@@ -2907,12 +2907,12 @@ a {
 }
 
 .progress-buffer {
-  background: color-mix(in srgb, var(--text) 32%, transparent);
+  background: var(--muted);
   transition: width 0.3s ease;
 }
 
 .progress-buffer.complete {
-  background: color-mix(in srgb, var(--text) 48%, transparent);
+  background: var(--muted);
 }
 
 .progress-played {
