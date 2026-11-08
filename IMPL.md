@@ -684,3 +684,34 @@
 | `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录 `hot → order=1`、`latest → order=0` 的映射，并补 `getArtistSongs` 不拉取歌手详情。 |
 | `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 改 | 歌手页补充歌曲排序控件：最热 / 最新，默认最热。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 补歌手歌曲排序能力与“最热 / 最新”切换。 |
+
+### 4.11 部分歌手因旧详情接口返回 `code -1` 无法加载
+
+问题描述：ISSUES 新增记录，部分歌手（如 Charlie Jeer）打开歌手页时报 `[ipc] UPSTREAM_CHANGED: 歌手详情响应缺少 getSingerInfo`，页面完全加载不出来。
+
+实测原因：
+- 旧详情接口 `c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg` 对 Charlie Jeer（`000ONBNm2PwShq`）返回 HTTP 200，但响应体只有 `{"code":-1,"subcode":-1,"msg":""}`，没有任何歌手字段；
+- 同一歌手的 `GetSingerSongList` 正常，`totalNum=28`，歌曲的 `singer[]` 里能拿到名称；
+- `music.musichallSinger.SingerInfoInter / GetSingerDetail` 对该歌手正常返回 `singer_list[0].basic_info.name`、`ex_info.desc` 与 `pic.pic`，周杰伦、林俊杰等歌手也正常。
+
+解决方法：
+- `fetchArtistInfo` 不再在缺少 `getSingerInfo` 时抛错，改为返回 `null`，避免整个歌手页被旧接口拖垮；
+- 新增 `fetchSingerProfile`：调用 `music.musichallSinger.SingerInfoInter / GetSingerDetail`（`singer_mids: [mid]`、`pic/ex_singer/wiki_singer/group_singer: 1`）读取名称、简介与头像，并把 `http:` 头像改为 `https:`；
+- 旧接口缺失时以新接口补齐；新接口也失败时，名称回退到歌曲列表里同 `mid` 的歌手名，头像回退到 `T001R500x500M000<mid>.jpg`；
+- 歌曲总数仍优先取旧接口 `total_song`，缺失时用歌曲列表 `totalNum`；专辑数缺失时按 0 处理，页面在专辑数为 0 时隐藏该标签，避免显示错误的“0 张专辑”；
+- 新增回放测试：旧接口返回 `code -1` 时，仍能通过 `SingerInfoInter` 得到 Charlie Jeer 的名称、简介、头像与歌曲列表。
+
+验证：
+- 匿名实测 Charlie Jeer（`000ONBNm2PwShq`）旧接口返回 `code -1`，新接口与歌曲列表均正常；
+- `npm run typecheck` 通过；
+- `npx vitest run` 11 个测试文件 / 43 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌手详情行 / §4.3 `QqArtistDetail` | 改 | 说明旧 `fcg_v8_singer_detail_cp.fcg` 对部分歌手只返回 `code -1`；补 `SingerInfoInter.GetSingerDetail` 的 `singer_mids`、`pic/ex_singer` 参数与 `singer_list[].basic_info/ex_info/pic` 字段。 |
+| `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录旧详情失败返回 `null`、`fetchSingerProfile` 兜底、名称回退歌曲歌手名、头像与计数降级规则。 |
+| `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 不动 | 页面结构与交互不变，仅修复上游数据源。 |
+| `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 接口验证补“旧详情接口可能返回 code -1，需使用 SingerInfoInter 兜底”。 |

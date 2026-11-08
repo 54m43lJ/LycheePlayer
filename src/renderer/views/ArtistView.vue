@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
           <h1>{{ detail.name || '未知歌手' }}</h1>
           <div class="playlist-meta">
             <span>{{ formatCount(detail.songCount) }} 首歌曲</span>
-            <span>{{ formatCount(detail.albumCount) }} 张专辑</span>
+            <span v-if="detail.albumCount > 0">{{ formatCount(detail.albumCount) }} 张专辑</span>
           </div>
           <div class="playlist-actions">
             <button class="btn primary" :disabled="songs.length === 0" @click="playAll()">
