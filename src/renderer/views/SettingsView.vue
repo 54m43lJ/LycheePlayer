@@ -6,12 +6,14 @@ import AppIcon from '../components/AppIcon.vue'
 import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
+import { useDownloadStore } from '../stores/download'
 import { usePlayerStore } from '../stores/player'
 import { useSettingsStore } from '../stores/settings'
 import { formatBytes } from '../utils/format'
 
 const settings = useSettingsStore()
 const auth = useAuthStore()
+const downloads = useDownloadStore()
 const player = usePlayerStore()
 const router = useRouter()
 const toast = useToast()
@@ -135,6 +137,24 @@ async function chooseDownloadDir(): Promise<void> {
     await settings.update({ downloadDir: path })
     await loadStorage()
     toast.show('下载目录已更新')
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
+
+async function clearDownloadDir(): Promise<void> {
+  const directory = storage.value?.directory ?? settings.settings.downloadDir ?? '下载目录'
+  if (
+    !window.confirm(
+      `确定清空下载目录「${directory}」？\n将删除目录内的全部文件与下载记录（包括其他账号在同目录的下载）；播放缓存不受影响。`
+    )
+  ) {
+    return
+  }
+  try {
+    await downloads.clearDirectory()
+    await loadStorage()
+    toast.show('下载目录已清空')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -292,7 +312,10 @@ onMounted(() => {
                   <template v-if="storage.batchCount"> · {{ storage.batchCount }} 个批次</template>
                 </div>
               </div>
-              <button class="btn small" @click="chooseDownloadDir()">选择</button>
+              <div class="panel-actions">
+                <button class="btn ghost small" @click="clearDownloadDir()">清空目录</button>
+                <button class="btn small" @click="chooseDownloadDir()">选择</button>
+              </div>
             </div>
           </div>
         </section>

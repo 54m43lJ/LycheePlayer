@@ -3,7 +3,7 @@ import { createWriteStream } from 'node:fs'
 import { existsSync } from 'node:fs'
 import { mkdir, readdir, readFile, rename, rm, stat, statfs, writeFile } from 'node:fs/promises'
 import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
-import { dirname, extname, join } from 'node:path'
+import { dirname, extname, join, parse, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type {
   DownloadBatch,
@@ -602,6 +602,44 @@ export async function clearCompletedDownloads(): Promise<void> {
   }
   for (const batch of batches.values()) recalcBatch(batch)
   scheduleSave()
+}
+
+async function stopRuntime(runtime: RuntimeTask): Promise<void> {
+  const controller = runtime.controller
+  if (!controller) return
+  controller.abort()
+  // 等待文件流与 fetch 收尾，避免清空目录后又被正在退出的任务写回。
+  const deadline = Date.now() + 2000
+  while (runtime.controller && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 10))
+  }
+}
+
+/** 清空下载目录：停止任务后删除目录内全部内容，并清空任务与批次记录。 */
+export async function clearDownloadDirectory(): Promise<void> {
+  await ensureScope()
+  if (saveTimer) {
+    clearTimeout(saveTimer)
+    saveTimer = null
+  }
+  const directory = downloadDir()
+  const target = resolve(directory)
+  const home = resolve(app.getPath('home'))
+  if (target === parse(target).root) throw new Error('不能清空文件系统根目录')
+  if (target === home || home.startsWith(`${target}${sep}`)) {
+    throw new Error('不能清空用户主目录或其上级目录')
+  }
+  const runtimes = [...tasks.values()]
+  for (const runtime of runtimes) runtime.controller?.abort()
+  // 先移出队列，防止 pump 继续取下一个任务。
+  tasks.clear()
+  batches.clear()
+  await Promise.all(runtimes.map((runtime) => stopRuntime(runtime)))
+  const entries = await readdir(directory, { withFileTypes: true }).catch(() => [])
+  for (const entry of entries) {
+    await rm(join(directory, entry.name), { recursive: true, force: true })
+  }
+  await saveIndex()
 }
 
 /** 文档签名保留：把远程 URL 写入给定文件（不经过任务表）。 */

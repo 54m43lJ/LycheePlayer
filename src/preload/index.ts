@@ -134,6 +134,7 @@ const api: LycheeApi = {
     removeBatch: (batchId: string) => invoke<null>('download.removeBatch', batchId),
     retryFailed: (batchId: string) => invoke<DownloadBatch>('download.retryFailed', batchId),
     clearCompleted: () => invoke<null>('download.clearCompleted'),
+    clearDirectory: () => invoke<null>('download.clearDirectory'),
     storage: () => invoke<DownloadStorageInfo>('download.storage'),
     openFolder: () => invoke<null>('download.openFolder'),
     chooseFolder: () => invoke<string | null>('download.chooseFolder'),

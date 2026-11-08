@@ -827,14 +827,25 @@
 
 验证：
 - 新增 `test/download-manager.test.ts`：整单入队后断言 `getDetail` 尚未调用、任务 `name` 为 mid；随后等待出队，断言 `getDetail` 按 `['m1']`、`['m2']`、`['m3']` 逐首调用；
+- 同一测试文件追加清空下载目录用例：预置歌曲文件、`.part` 与封面后执行清空，断言文件与任务 / 批次记录全部移除；
 - `npm run typecheck` 通过；
-- `npx vitest run` 12 个测试文件 / 45 个用例通过；
+- `npx vitest run` 12 个测试文件 / 46 个用例通过；
 - `npm run build` 通过。
+
+追加需求：清空下载目录按钮。
+
+- 设置页“缓存与下载”的下载目录行增加“清空目录”按钮，点击前用确认框展示实际目录，并说明会删除目录内全部文件与下载记录，播放缓存不受影响；
+- 主进程新增 `clearDownloadDirectory()`：先中止活动下载、清空任务与批次，再删除下载目录内的全部内容并写回空索引；
+- 阻止清空文件系统根目录、用户主目录及其上级目录，避免误选目录造成系统级删除；
+- 新增 IPC `download.clearDirectory`，preload 与渲染层下载 store 同步清空本地任务 / 批次 / 资产快照；设置页清空后刷新存储占用；
+- 该操作与“清除已完成记录”区分：后者仍只清记录不删文件。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 说明 `startDownload` / `startBatch` 共用 `enqueueTask`；整单入队只写 mid，不预取详情；歌曲信息与链接在 `pump` 出队时逐首解析。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 说明 `startDownload` / `startBatch` 共用 `enqueueTask`；整单入队只写 mid，不预取详情；歌曲信息与链接在 `pump` 出队时逐首解析；补 `clearDownloadDirectory` 的停止任务、清空目录与根目录 / 主目录保护。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | `download` 命名空间增加 `clearDirectory`，明确其删除下载目录内容与记录、不影响播放缓存。 |
 | `USER.html` | §1 TERMS 下载限制 | 改 | 明确“下载全部”只把歌曲按顺序加入统一队列，点击后不预取整单歌曲信息，任务开始下载时再解析。 |
-| `EVOLVE.md` | #2 下载队列 | 改 | 补充整单与单曲共用入队入口、出队时再拉取歌曲信息的约束。 |
+| `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 下载目录行增加“清空目录”，确认后删除目录内已下载文件、封面、分片与记录；播放缓存独立清理。 |
+| `EVOLVE.md` | #2 下载队列 | 改 | 补充整单与单曲共用入队入口、出队时再拉取歌曲信息，以及清空下载目录的约束。 |

@@ -50,6 +50,7 @@ import { readFlagsFile, writeFlagsFile } from './startup-flags'
 import {
   assetStates,
   clearCompletedDownloads,
+  clearDownloadDirectory,
   downloadStorage,
   listBatches,
   listDownloads,
@@ -341,6 +342,10 @@ export function registerIpc(): void {
   })
   handle('download.clearCompleted', async () => {
     await clearCompletedDownloads()
+    return null
+  })
+  handle('download.clearDirectory', async () => {
+    await clearDownloadDirectory()
     return null
   })
   handle('download.storage', async () => {

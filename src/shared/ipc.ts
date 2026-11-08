@@ -123,6 +123,7 @@ export interface LycheeApi {
     removeBatch(batchId: string): Promise<IpcResult<null>>
     retryFailed(batchId: string): Promise<IpcResult<DownloadBatch>>
     clearCompleted(): Promise<IpcResult<null>>
+    clearDirectory(): Promise<IpcResult<null>>
     storage(): Promise<IpcResult<DownloadStorageInfo>>
     openFolder(): Promise<IpcResult<null>>
     chooseFolder(): Promise<IpcResult<string | null>>

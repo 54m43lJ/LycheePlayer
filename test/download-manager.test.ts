@@ -1,4 +1,5 @@
-import { rmSync } from 'node:fs'
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterAll, describe, expect, it, vi } from 'vitest'
 
 const { downloadDir, getDetailMock, resolveStreamUrlsMock } = vi.hoisted(() => ({
@@ -68,5 +69,27 @@ describe('download/manager startBatch', () => {
     await new Promise((resolve) => setTimeout(resolve, 30))
     expect(getDetailMock).toHaveBeenCalledTimes(3)
     expect(getDetailMock.mock.calls.map(([mids]) => mids)).toEqual([['m1'], ['m2'], ['m3']])
+  })
+
+  it('clears downloaded files, partials, covers and records', async () => {
+    mkdirSync(downloadDir, { recursive: true })
+    for (const mid of ['m1', 'm2', 'm3']) {
+      writeFileSync(join(downloadDir, `${mid}.mp3`), 'audio')
+      writeFileSync(join(downloadDir, `${mid}.mp3.part`), 'partial')
+      writeFileSync(join(downloadDir, `${mid}.jpg`), 'cover')
+    }
+
+    const { clearDownloadDirectory, listBatches, listDownloads } = await import(
+      '../src/main/download/manager'
+    )
+    await clearDownloadDirectory()
+
+    expect(await listDownloads()).toEqual([])
+    expect(await listBatches()).toEqual([])
+    for (const mid of ['m1', 'm2', 'm3']) {
+      expect(existsSync(join(downloadDir, `${mid}.mp3`))).toBe(false)
+      expect(existsSync(join(downloadDir, `${mid}.mp3.part`))).toBe(false)
+      expect(existsSync(join(downloadDir, `${mid}.jpg`))).toBe(false)
+    }
   })
 })

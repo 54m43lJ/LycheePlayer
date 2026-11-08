@@ -157,6 +157,15 @@ export const useDownloadStore = defineStore('download', () => {
     await load()
   }
 
+  /** 清空下载目录内的文件与下载记录；不影响播放缓存。 */
+  async function clearDirectory(): Promise<void> {
+    unwrap(await window.lychee.download.clearDirectory())
+    tasks.value = []
+    batches.value = []
+    assets.value = {}
+    storage.value = unwrap(await window.lychee.download.storage())
+  }
+
   function reset(): void {
     tasks.value = []
     batches.value = []
@@ -187,6 +196,7 @@ export const useDownloadStore = defineStore('download', () => {
     removeBatch,
     retryFailed,
     clearCompleted,
+    clearDirectory,
     reset,
     batchOf
   }
