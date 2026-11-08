@@ -814,3 +814,27 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | `.song-title .marquee` 使用 `flex: 0 1 auto`，不得撑满标题列；VIP / 音质徽标紧随歌名。 |
 | `USER.html` | §5.2.4 歌曲列表 · 标题与徽标 | 改 | 明确歌曲显示名使用上游展示标题（含 Explicit / Remix 版本标签），VIP / 音质徽标紧随标题且不被尾部空白推离。 |
 | `EVOLVE.md` | #4 歌曲列表 | 改 | 补充版本标签来源与标题清洗规则。 |
+### 4.15 整单下载与单曲下载共用队列
+
+问题描述：ISSUES 指出整单下载应和单曲下载走同一条队列，不做特殊处理；歌曲信息应在下载任务出队时再逐首拉取。原实现中 `startBatch` 在入队前先调用 `getDetail(mids)` 为整单所有歌曲预取名称，再单独构造批次任务；这既让“下载全部”要等待整单详情请求完成，也会在一个点击内集中触发大量上游请求。批次任务与单曲任务还各写了一套任务初始化字段。
+
+解决方法：
+- 提取 `enqueueTask(songMid, options)` 作为单曲与整单下载共用的入队入口，任务初始只携带 `songMid`，`name` 先以 mid 占位，文件路径与音质在出队时回填；
+- `startBatch` 只创建批次元数据并按歌单顺序把 mid 放入统一任务队列，不再调用 `getDetail` 预取整单歌曲信息；
+- 已有同曲任务仍直接复用并挂到当前批次，避免重复下载；
+- 真正的歌曲详情与播放链接解析仍只在 `pump` 的 `resolveDownload` 中逐首执行，保持 `DOWNLOAD_CONCURRENCY = 1` 的串行出队语义；
+- 批次仅作为下载中心分组与批次控制的元数据，不再影响任务入队与执行路径。
+
+验证：
+- 新增 `test/download-manager.test.ts`：整单入队后断言 `getDetail` 尚未调用、任务 `name` 为 mid；随后等待出队，断言 `getDetail` 按 `['m1']`、`['m2']`、`['m3']` 逐首调用；
+- `npm run typecheck` 通过；
+- `npx vitest run` 12 个测试文件 / 45 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 说明 `startDownload` / `startBatch` 共用 `enqueueTask`；整单入队只写 mid，不预取详情；歌曲信息与链接在 `pump` 出队时逐首解析。 |
+| `USER.html` | §1 TERMS 下载限制 | 改 | 明确“下载全部”只把歌曲按顺序加入统一队列，点击后不预取整单歌曲信息，任务开始下载时再解析。 |
+| `EVOLVE.md` | #2 下载队列 | 改 | 补充整单与单曲共用入队入口、出队时再拉取歌曲信息的约束。 |

@@ -402,13 +402,17 @@ function qualityRank(quality: Quality): number {
   return 1
 }
 
-export async function startDownload(songMid: string, _quality: Quality): Promise<DownloadTask> {
-  await ensureScope()
-  const existing = [...tasks.values()].find(
-    (item) => item.task.songMid === songMid && item.task.status !== 'failed'
-  )
-  if (existing) return snapshot(existing.task)
+interface EnqueueOptions {
+  batchId?: string | null
+  playlistId?: string | null
+  source?: DownloadSource
+}
 
+/**
+ * 只把歌曲 mid 放入队列；歌曲名、文件路径、可用音质等都在 pump 出队时再解析。
+ * 单曲与整单下载共用此入口，避免整单下载在入队阶段预取歌曲详情。
+ */
+function enqueueTask(songMid: string, options: EnqueueOptions = {}): DownloadTask {
   const task: DownloadTask = {
     id: randomUUID(),
     songMid,
@@ -421,11 +425,22 @@ export async function startDownload(songMid: string, _quality: Quality): Promise
     receivedBytes: 0,
     totalBytes: 0,
     error: '',
-    batchId: null,
-    playlistId: null,
-    source: 'network'
+    batchId: options.batchId ?? null,
+    playlistId: options.playlistId ?? null,
+    source: options.source ?? 'network'
   }
   tasks.set(task.id, { task, controller: null })
+  return task
+}
+
+export async function startDownload(songMid: string, _quality: Quality): Promise<DownloadTask> {
+  await ensureScope()
+  const existing = [...tasks.values()].find(
+    (item) => item.task.songMid === songMid && item.task.status !== 'failed'
+  )
+  if (existing) return snapshot(existing.task)
+
+  const task = enqueueTask(songMid)
   schedulePump()
   return snapshot(task)
 }
@@ -438,8 +453,6 @@ export async function startBatch(request: {
 }): Promise<DownloadBatch> {
   await ensureScope()
   const mids = [...new Set(request.songMids.filter(Boolean))].slice(0, DOWNLOAD_BATCH_MAX)
-  const songs = await getDetail(mids)
-  const nameByMid = new Map(songs.map((song) => [song.songMid, song.name]))
   const batch: DownloadBatch = {
     id: randomUUID(),
     source: 'playlist',
@@ -461,22 +474,12 @@ export async function startBatch(request: {
       existing.task.playlistId = request.playlistId
       continue
     }
-    const task: DownloadTask = {
-      id: randomUUID(),
-      songMid: mid,
-      name: nameByMid.get(mid) ?? mid,
-      quality: 'flac',
-      filePath: join(downloadDir(), `${safeName(nameByMid.get(mid) ?? mid)}.mp3`),
-      coverPath: null,
-      status: 'pending',
-      receivedBytes: 0,
-      totalBytes: 0,
-      error: '',
+    // 与单曲下载使用同一个入队入口；不在此处请求歌曲详情。
+    enqueueTask(mid, {
       batchId: batch.id,
       playlistId: request.playlistId,
       source: 'batch'
-    }
-    tasks.set(task.id, { task, controller: null })
+    })
   }
   recalcBatch(batch)
   schedulePump()
