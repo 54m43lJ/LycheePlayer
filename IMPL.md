@@ -1014,3 +1014,41 @@
 | `USER.html` | §5.2.3 播放条 · 播放模式 | 改 | 点击按钮按“顺序 / 列表循环 / 单曲循环 / 随机”依次切换；悬停展开菜单可直接选择其它模式。 |
 | `USER.html` | §5.2.3 播放条 · 播放队列入口 | 改 | 播放队列继续使用三点 + 横线图标，与顺序播放的向下箭头图标区分。 |
 | `EVOLVE.md` | #9 播放模式 | 改 | 补点击遍历顺序与 `sequence` 图标区分要求。 |
+
+### 4.21 空播放条封面去掉边框并统一收敛全部阴影
+
+问题描述：ISSUES 指出没有歌曲播放时，播放条封面占位元素仍有边框；并追加要求把阴影效果改为 fg 色、略降强度，且整体缩小尺寸。后续澄清：是整体阴影尺寸缩小，不是只压缩宽度，并且该策略要应用到所有阴影效果，而不只是封面。原实现中 `.player-empty-state .player-cover.placeholder` 使用 `1px dashed var(--border-strong)`；阴影则分散为多组黑色硬编码值（如 `0 18px 50px rgba(0,0,0,.45)`、`0 10px 26px`、`-24px 0 60px` 等），范围偏大且与主题前景色无关。
+
+解决方法：
+
+- 删除空状态占位封面的 `1px dashed` 边框，只保留 `color-mix(in srgb, var(--panel) 80%, var(--bg))` 的弱背景；
+- 在主题 token 中新增 `--shadow-color`（深色 `var(--text)` 20%、浅色 14%）以及统一缩放后的阴影 token：
+  - `--shadow-sm: 0 2px 6px`
+  - `--shadow: 0 5px 16px`
+  - `--shadow-lg: 0 7px 22px`
+  - `--shadow-up: 0 -4px 12px`
+  - `--shadow-left: -8px 0 24px`
+  - `--shadow-right: 8px 0 24px`
+  - `--shadow-handle: 3px 0 10px`
+- 所有投影统一改用这些 token：品牌标记、主按钮、tab、封面 / 头像、弹层、面板、Toast、模态框、播放条上弹层、歌词 / 下载抽屉、窄屏侧栏与拖拽把手；品牌主按钮原先的 accent 色光晕也改为中性 fg 阴影；
+- 焦点环（`0 0 0 Npx`）、输入框 inset 高光与遮罩层的纯背景色不属于投影，保持不变；
+- 播放条封面改用 `--shadow-sm`，有歌曲封面与空状态占位共用同一套阴影；封面按钮 hover 的亮度反馈保持不变。
+
+验证：
+
+- 静态页确认空状态占位无边框，封面阴影为 fg 色；
+- 检查 computed style：`--shadow-color` 为 `var(--text)` 混色，各投影均引用缩放后的 token，页面中不再存在硬编码黑色投影；
+- `npm run typecheck` 通过；
+- `npx vitest run` 14 个测试文件 / 56 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.49 `styles/main.css` · 主题 token | 改 | 主题 token 增 `--shadow-color` 与 `--shadow-sm/base/lg/up/left/right/handle`；说明深色 20%、浅色 14% 的 fg 混色与整体缩小的尺寸。 |
+| `CORE.html` | §4.49 `styles/main.css` · 组件投影 | 改 | 删除空状态占位封面的虚线边框；全部投影改用 fg 阴影 token，焦点环与 inset 高光保持独立。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 空状态封面仅保留弱背景、无边框；有封面与占位共用 `--shadow-sm`。 |
+| `USER.html` | §5.2.3 播放条 · 空状态 | 改 | 封面占位不再显示边框；全局阴影统一为 fg 色、略降强度并整体缩小。 |
+| `USER.html` | §5.1 视觉规范 | 改 | 阴影统一使用 fg 混色而非纯黑，范围整体缩小；不再出现按宽度单独压缩的例外。 |
+| `EVOLVE.md` | #5 播放条空状态 | 改 | 补封面占位无边框与全局 fg 轻阴影策略。 |
