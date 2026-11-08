@@ -3290,6 +3290,38 @@ a {
   white-space: pre-wrap;
 }
 
+.catalog-desc-block {
+  max-width: 900px;
+  margin: 0 0 22px;
+}
+
+.catalog-desc-block .catalog-desc {
+  max-width: none;
+  margin: 0;
+}
+
+.catalog-desc.clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.catalog-desc-toggle {
+  margin-top: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent-strong);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.catalog-desc-toggle:hover {
+  text-decoration: underline;
+}
+
 .artist-links {
   display: inline-flex;
   gap: 2px;

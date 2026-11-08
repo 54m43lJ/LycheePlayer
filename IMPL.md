@@ -1078,3 +1078,31 @@
 | `USER.html` | §5.2.3 播放条 · 空状态 | 改 | 封面占位不再显示边框；全局阴影统一为 fg 色、略降强度并整体缩小。 |
 | `USER.html` | §5.1 视觉规范 | 改 | 阴影统一使用 fg 混色而非纯黑，范围整体缩小；不再出现按宽度单独压缩的例外。 |
 | `EVOLVE.md` | #5 播放条空状态 | 改 | 补封面占位无边框与全局 fg 轻阴影策略。 |
+
+### 4.22 歌手简介过长时提供展开 / 收起
+
+问题描述：ISSUES 要求歌手简介太长时提供展开 / 收起选项。原 `ArtistView.vue` 只渲染一整段 `.catalog-desc`，简介较长时会占据大量首屏空间，把歌曲列表推到很下方；短简介又不应出现无意义的切换按钮。因此需要按实际渲染高度判断是否溢出，而不是按字符数或固定长度猜测。
+
+解决方法：
+
+- 歌手简介外层改为 `.catalog-desc-block`，段落按 `descExpanded` 切换 `.clamped`：折叠态用 4 行 `-webkit-line-clamp` 截断，展开态恢复正常高度；
+- 新增 `descRef` 与 `measureDesc()`：折叠态下用 `scrollHeight > clientHeight + 1` 判断是否被截断，只有溢出时才渲染“展开 / 收起”按钮；短简介不显示按钮；
+- 使用 `ResizeObserver` 监听简介元素，窗口宽度或字体导致换行变化时重新判断；切换歌手或简介变化时重置折叠状态并重新测量；
+- 展开后保留按钮以便收起，文案随 `descExpanded` 在“展开 / 收起”之间切换，并同步 `aria-expanded`；
+- 样式上让 `.catalog-desc-block` 承担 900px 宽度与底部间距，块内段落取消自身外边距；切换按钮使用 accent 色、透明背景，悬停加下划线。
+
+验证：
+
+- 静态页实测 13px / 1.8 行高下折叠为 4 行（94px），长简介完整高度 117px，`scrollHeight > clientHeight + 1` 判定溢出；短简介为 23px，判定不溢出；移除 `.clamped` 后高度恢复为 117px；
+- `npm run typecheck` 通过；
+- `npx vitest run` 15 个测试文件 / 58 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.73 `ArtistView.vue` | 改 | 补简介折叠：4 行 line-clamp、按实际高度判断溢出、仅溢出时显示展开 / 收起、`ResizeObserver` 重新测量与切歌重置。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.catalog-desc-block`、`.catalog-desc.clamped` 与 `.catalog-desc-toggle` 样式；块内简介取消自身宽度与间距。 |
+| `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 改 | 歌手页简介超过 4 行时折叠并显示“展开”，展开后可“收起”；短简介不显示切换按钮。 |
+| `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 补歌手简介折叠与展开 / 收起交互要求。 |

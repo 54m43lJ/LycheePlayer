@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { ArtistDetail, ArtistSongSort } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
@@ -37,8 +37,12 @@ const songSort = ref<ArtistSongSort>('hot')
 const pickerOpen = ref(false)
 const pickerIndex = ref(-1)
 const pageRef = ref<HTMLElement | null>(null)
+const descRef = ref<HTMLElement | null>(null)
+const descExpanded = ref(false)
+const descOverflow = ref(false)
 const SCROLL_LOAD_THRESHOLD = 160
 let scrollRoot: HTMLElement | null = null
+let descObserver: ResizeObserver | null = null
 let token = 0
 const mid = computed(() => String(route.params.mid ?? ''))
 const songs = computed(() => detail.value?.songs ?? [])
@@ -179,6 +183,41 @@ function openPicker(index: number): void {
   pickerOpen.value = true
 }
 
+/** 折叠时检测简介是否超出可视行数；展开后保持切换按钮可收起。 */
+function measureDesc(): void {
+  const el = descRef.value
+  if (!el || descExpanded.value) return
+  descOverflow.value = el.scrollHeight > el.clientHeight + 1
+}
+
+function toggleDesc(): void {
+  descExpanded.value = !descExpanded.value
+  if (!descExpanded.value) void nextTick().then(measureDesc)
+}
+
+watch(
+  descRef,
+  (el) => {
+    descObserver?.disconnect()
+    if (!el) return
+    if (!descObserver) descObserver = new ResizeObserver(() => measureDesc())
+    descObserver.observe(el)
+    measureDesc()
+  },
+  { flush: 'post' }
+)
+
+watch(
+  () => detail.value?.description,
+  async () => {
+    descExpanded.value = false
+    descOverflow.value = false
+    await nextTick()
+    measureDesc()
+  },
+  { flush: 'post' }
+)
+
 watch(mid, () => void load(), { immediate: true })
 
 onMounted(() => {
@@ -189,6 +228,8 @@ onMounted(() => {
 onBeforeUnmount(() => {
   scrollRoot?.removeEventListener('scroll', maybeLoadMore)
   scrollRoot = null
+  descObserver?.disconnect()
+  descObserver = null
 })
 </script>
 
@@ -233,7 +274,22 @@ onBeforeUnmount(() => {
         </div>
       </section>
 
-      <p v-if="detail.description" class="catalog-desc">{{ detail.description }}</p>
+      <div v-if="detail.description" class="catalog-desc-block">
+        <p
+          ref="descRef"
+          class="catalog-desc"
+          :class="{ clamped: !descExpanded }"
+        >{{ detail.description }}</p>
+        <button
+          v-if="descOverflow"
+          type="button"
+          class="catalog-desc-toggle"
+          :aria-expanded="descExpanded"
+          @click="toggleDesc"
+        >
+          {{ descExpanded ? '收起' : '展开' }}
+        </button>
+      </div>
 
       <div class="section-title">
         <span>歌曲</span>
