@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { ArtistDetail } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
@@ -29,6 +29,9 @@ const error = ref('')
 const loadingMore = ref(false)
 const pickerOpen = ref(false)
 const pickerIndex = ref(-1)
+const pageRef = ref<HTMLElement | null>(null)
+const SCROLL_LOAD_THRESHOLD = 160
+let scrollRoot: HTMLElement | null = null
 let token = 0
 const mid = computed(() => String(route.params.mid ?? ''))
 const songs = computed(() => detail.value?.songs ?? [])
@@ -75,6 +78,14 @@ async function load(reset = true): Promise<void> {
   }
 }
 
+function maybeLoadMore(): void {
+  if (loading.value || loadingMore.value || !detail.value?.hasMore) return
+  const el = scrollRoot
+  if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_LOAD_THRESHOLD) {
+    void load(false)
+  }
+}
+
 function playAll(): void {
   if (songs.value.length > 0) player.playList(songs.value, 0)
 }
@@ -111,10 +122,20 @@ function openPicker(index: number): void {
 }
 
 watch(mid, () => void load(), { immediate: true })
+
+onMounted(() => {
+  scrollRoot = pageRef.value?.closest<HTMLElement>('.main') ?? null
+  scrollRoot?.addEventListener('scroll', maybeLoadMore, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  scrollRoot?.removeEventListener('scroll', maybeLoadMore)
+  scrollRoot = null
+})
 </script>
 
 <template>
-  <div class="page">
+  <div ref="pageRef" class="page">
     <div class="page-head">
       <button class="btn ghost small" @click="router.back()">
         <AppIcon name="chevron-left" :size="15" />
@@ -181,10 +202,13 @@ watch(mid, () => void load(), { immediate: true })
       </div>
 
       <div v-if="detail.hasMore" class="feed-footer">
-        <button class="btn ghost small" :disabled="loadingMore" @click="load(false)">
-          {{ loadingMore ? '加载中' : '加载更多' }}
-        </button>
+        <template v-if="loadingMore">
+          <span class="spinner" />
+          <span>正在加载更多</span>
+        </template>
+        <span v-else>继续向下滚动加载更多</span>
       </div>
+      <div v-else-if="songs.length > 0" class="feed-footer">已经到底了</div>
 
       <PlaylistPicker
         :open="pickerOpen"
