@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FlagsFile, Settings } from '@shared/types'
 import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
@@ -75,6 +75,8 @@ watch(
   { immediate: true }
 )
 
+let cacheLimitSaveTimer: number | null = null
+
 async function loadFlags(): Promise<void> {
   try {
     flags.value = unwrap(await window.lychee.flags.get())
@@ -139,10 +141,23 @@ function onCacheLimitInput(event: Event): void {
   const index = Number((event.target as HTMLInputElement).value)
   if (Number.isInteger(index) && index >= 0 && index < CACHE_LIMIT_STEPS.length) {
     cacheLimitIndex.value = index
+    scheduleCacheLimitSave()
   }
 }
 
+function scheduleCacheLimitSave(): void {
+  if (cacheLimitSaveTimer !== null) window.clearTimeout(cacheLimitSaveTimer)
+  cacheLimitSaveTimer = window.setTimeout(() => {
+    cacheLimitSaveTimer = null
+    void saveCacheLimit()
+  }, 200)
+}
+
 async function saveCacheLimit(): Promise<void> {
+  if (cacheLimitSaveTimer !== null) {
+    window.clearTimeout(cacheLimitSaveTimer)
+    cacheLimitSaveTimer = null
+  }
   const step = CACHE_LIMIT_STEPS[cacheLimitIndex.value]
   if (!step || step.bytes === settings.settings.audioCacheMaxBytes) return
   try {
@@ -234,6 +249,14 @@ function quitApp(): void {
 onMounted(() => {
   void loadFlags()
   void loadStorage()
+})
+
+onBeforeUnmount(() => {
+  if (cacheLimitSaveTimer !== null) {
+    window.clearTimeout(cacheLimitSaveTimer)
+    cacheLimitSaveTimer = null
+    void saveCacheLimit()
+  }
 })
 </script>
 
