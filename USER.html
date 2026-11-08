@@ -86,6 +86,10 @@
     <td>当前账号固定的收藏歌单，不依赖列表位置；详情页统一显示名称“我喜欢”。</td>
   </tr>
   <tr>
+    <td>从歌单删除</td>
+    <td>把歌曲从当前普通歌单的成员中移除；不删除本机文件、不改变播放队列与当前播放。仅当前账号可编辑的普通歌单显示该入口，“我喜欢”的移除仍走收藏按钮。</td>
+  </tr>
+  <tr>
     <td>不可播标记 / 最高可用音质</td>
     <td>歌单中每首歌的可用性标记：不可播，或当前账号可用的最高音质档位；未知状态按可播处理。</td>
   </tr>
@@ -178,7 +182,7 @@
   </tr>
   <tr>
     <td>乐观更新与回滚</td>
-    <td>收藏、歌单编辑等写操作先更新界面；失败时回滚并提示。</td>
+    <td>收藏、歌单编辑与从歌单删除等写操作先更新界面；失败时回滚并提示。从歌单删除失败时恢复被删行与歌曲数。</td>
   </tr>
   <tr>
     <td>下载限制</td>
@@ -406,10 +410,10 @@
 <div class="ui-proto" style="width: 760px; padding: 14px">
   <div class="u-table">
     <div class="u-th with-action"><span>#</span><span>标题</span><span>专辑</span><span>操作</span><span>时长</span></div>
-    <div class="u-tr with-action active"><span class="u-idx">▶</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">晴天 <span class="u-badge gold">VIP</span></span><small>周杰伦</small></span></span><span>叶惠美</span><span><span class="u-tab">♥ ⊖ ＋</span></span><span class="u-muted">4:29</span></div>
-    <div class="u-tr with-action"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年 <span class="u-badge">数字专辑</span></span><small>五月天</small></span></span><span>自传</span><span><span class="u-tab">♡ ⊖ ＋</span></span><span class="u-muted">4:28</span></div>
-    <div class="u-tr with-action"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span>启示录</span><span><span class="u-tab">♡ ⊖ ＋</span></span><span class="u-muted">4:41</span></div>
-    <div class="u-tr with-action"><span class="u-idx">4</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span>孤勇者</span><span><span class="u-tab">♡ ⊖ ＋</span></span><span class="u-muted">4:16</span></div>
+    <div class="u-tr with-action active"><span class="u-idx">▶</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">晴天 <span class="u-badge gold">VIP</span></span><small>周杰伦</small></span></span><span>叶惠美</span><span><span class="u-tab">♥ ⊖ ＋ ✕</span></span><span class="u-muted">4:29</span></div>
+    <div class="u-tr with-action"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年 <span class="u-badge">数字专辑</span></span><small>五月天</small></span></span><span>自传</span><span><span class="u-tab">♡ ⊖ ＋ ✕</span></span><span class="u-muted">4:28</span></div>
+    <div class="u-tr with-action"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span>启示录</span><span><span class="u-tab">♡ ⊖ ＋ ✕</span></span><span class="u-muted">4:41</span></div>
+    <div class="u-tr with-action"><span class="u-idx">4</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span>孤勇者</span><span><span class="u-tab">♡ ⊖ ＋ ✕</span></span><span class="u-muted">4:16</span></div>
   </div>
 </div>
 </div>
@@ -418,7 +422,9 @@
   <li>双击行播放并替换队列；悬停或当前播放行在 # 列显示播放 / 暂停按钮，其余显示从 1 开始的序号文本；当前播放行以 accent 底色标记。</li>
   <li>点击非当前行的播放按钮即单曲播放，与双击一样替换播放队列；当前行的按钮切换暂停 / 继续。操作列的加号图标按钮执行“下一首播放”，只把歌曲插入队列头，不改变当前歌曲。</li>
   <li>权限角标：VIP / 数字专辑 / 付费；歌单加载后会追加不可播标记与最高可用音质标签（如 FLAC / 320K / 128K）。标题拆为可压缩歌名与常驻徽标：窄窗口优先省略歌名，VIP / 音质徽标不被裁掉；不可播行禁用播放与“下一首播放”入口；未知状态按可播处理。≤900px 隐藏专辑列，操作列保留。歌手单元格按 <a href="#u2">§2</a> 的“歌手名缺失”规则降级：名字为空不渲染歌手文本，有名字无 <code>mid</code> 只显示纯文本。</li>
-  <li>操作列包含收藏、下载与加号按钮；收藏按当前账号状态显示实心 / 空心爱心与“收藏 / 取消收藏” tooltip，下载只对当前账号可播内容可用。操作按钮放在单元格内部容器中，不能把 <code>td</code> 改成 flex，行线挂 <code>tr</code>。</li>
+  <li>操作列基础结构为收藏、下载、下一首播放（加号）与从歌单删除四个图标按钮；收藏按当前账号状态显示实心 / 空心爱心与“收藏 / 取消收藏” tooltip，下载只对当前账号可播内容可用。操作按钮放在单元格内部容器中，不能把 <code>td</code> 改成 flex，行线挂 <code>tr</code>。</li>
+  <li>“从歌单删除”只在当前账号可编辑的普通歌单显示；“我喜欢”不显示删除按钮（取消收藏继续走收藏按钮）。点击后先确认歌曲名与歌单名，确认后移除该行并更新歌曲数；失败恢复行与计数并提示。删除只改变歌单成员，不影响当前播放与播放队列。</li>
+  <li>≤900px 时四个基础按钮收为一个“…”按钮，弹出“图标 + 文字”菜单；菜单项按收藏、下载、下一首播放、从歌单删除排列，点击菜单不触发行播放，点击外部或按 Esc 关闭。</li>
 </ul>
 
 <h4 id="u5-2-5">5.2.5 歌词与评论</h4>
@@ -571,17 +577,17 @@
   <div class="u-rowline" style="padding: 10px 0"><span>正在播放<br /><small>晴天 · 周杰伦</small></span></div>
   <div class="u-table">
     <div class="u-th"><span>#</span><span>标题</span><span>操作</span></div>
-    <div class="u-tr"><span class="u-idx">1</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年</span><small>五月天</small></span></span><span><span class="u-tab">移除</span></span></div>
-    <div class="u-tr"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span><span class="u-tab">移除</span></span></div>
-    <div class="u-tr"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span><span class="u-tab">移除</span></span></div>
+    <div class="u-tr"><span class="u-idx">1</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年</span><small>五月天</small></span></span><span><span class="u-tab" title="从队列移除">✕</span></span></div>
+    <div class="u-tr"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span><span class="u-tab" title="从队列移除">✕</span></span></div>
+    <div class="u-tr"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span><span class="u-tab" title="从队列移除">✕</span></span></div>
   </div>
   <div class="u-rowline" style="padding-top: 10px"><span class="u-tab">清空队列</span></div>
 </div>
 </div>
 <ul class="note">
   <li>入口为播放条上的“播放队列”按钮；面板固定于内容区右侧，与歌词 / 评论面板互斥，同时只打开一个。</li>
-  <li>当前歌曲单独显示在面板顶部并标注“正在播放”，不计入队列；下方只列当前歌曲之后的待播放歌曲，顺序即实际播放顺序。队列行只显示序号、封面、歌名 / 歌手与移除按钮，<strong>不显示专辑名</strong>；网格为 <code>20px 38px minmax(0, 1fr) 40px</code>，歌名单行省略。</li>
-  <li>队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲。“下一首播放”是手动加入队列的唯一入口，把歌曲插入队列头，当前歌曲不变。</li>
+  <li>当前歌曲单独显示在面板顶部并标注“正在播放”，不计入队列；下方只列当前歌曲之后的待播放歌曲，顺序即实际播放顺序。队列行只显示序号、封面、歌名 / 歌手与移除图标按钮，<strong>不显示专辑名</strong>；网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略。</li>
+  <li>队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲、播放历史与队列顺序。移除按钮为图标按钮，tooltip 与无障碍标签均为“从队列移除”，点击不触发播放；键盘 Enter / Space 可用，最后一列宽 32px 与图标对齐。“下一首播放”是手动加入队列的唯一入口，把歌曲插入队列头，当前歌曲不变。</li>
   <li>队列快照：播放开始时若歌单尚未完整加载，允许一次临时快照顶替（优先整份缓存，缓存没有当前曲时用已载入页）；歌单完整、非 stale 且 VIP / 音质 / 可用性探测完成后生成最终快照，签名不同才替换。当前曲、进度与播放历史保持不变；手动插入的歌曲在替换时保留。</li>
   <li>已知不可播歌曲在进入快照前剔除，当前曲除外；队列本身不做检测或清理。播放时仍独立校验取流，当前曲不可播时沿队列向后尝试到可播或队列空；连续 10 首不可播即停止，避免登录失效或风控时无限切歌。</li>
   <li>上一首按播放历史回退；播放历史只记录本次播放开始后实际播放过的歌曲，重建队列时清空。</li>
@@ -606,6 +612,7 @@
   <li>音频加载失败时先自动重取一次链接（同一歌曲 30 秒内只重试一次）并保留播放位置；再次失败才显示“音频加载失败，可能链接已过期”。</li>
   <li>收藏成功只以写后读回与成员可见性为准；业务码成功、状态接口为 true 或总数增加都不单独显示成功，避免出现官方歌单 / 手机端看不到的“假成功”。</li>
   <li>歌单可用性标记获取失败时静默保留未知状态，不弹错误；播放失败仍按本表提示。</li>
+  <li>“从歌单删除”失败时按 <code>NO_PERMISSION</code> / 网络错误提示并恢复被删行与歌曲数；删除只改变歌单成员，不改变当前播放与队列。</li>
   <li>登录流程中的具体失败原因（验证码、设备限制等）由上游返回；界面是否展示原始原因取决于错误映射策略。</li>
 </ul>
 
