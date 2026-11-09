@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import { useRouter } from 'vue-router'
 import type { AudioCacheProgress, Quality } from '@shared/types'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
@@ -19,7 +18,6 @@ const ui = useUiStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const toast = useToast()
-const router = useRouter()
 const {
   current,
   status,
@@ -53,6 +51,10 @@ const cache = ref<AudioCacheProgress | null>(null)
 
 const cover = computed(() => songCover(current.value, 300))
 const hasSong = computed(() => Boolean(current.value))
+const lyricsTitle = computed(() => {
+  if (!hasSong.value) return ''
+  return ui.lyricsOpen ? '关闭歌词与评论' : '歌词与评论'
+})
 const totalMs = computed(() => durationMs.value || current.value?.durationMs || 0)
 const MODE_ICON: Record<PlayMode, string> = {
   sequence: 'sequence',
@@ -253,9 +255,9 @@ function toggleMute(): void {
   }
 }
 
-function openLyrics(): void {
+function toggleLyrics(): void {
   if (!current.value) return
-  void router.push('/lyrics')
+  ui.toggleLyrics()
 }
 
 function onDocumentClick(event: MouseEvent): void {
@@ -325,9 +327,9 @@ watch(
     <div class="player-now">
       <button
         class="player-cover-button"
-        :title="hasSong ? '歌词与评论' : ''"
+        :title="lyricsTitle"
         :disabled="!hasSong"
-        @click="openLyrics()"
+        @click="toggleLyrics()"
       >
         <CoverArt v-if="hasSong" :src="cover" image-class="player-cover" :icon-size="20" />
         <span v-else class="player-cover placeholder" aria-hidden="true" />
