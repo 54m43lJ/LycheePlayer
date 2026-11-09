@@ -13,7 +13,7 @@ export const useDownloadStore = defineStore('download', () => {
   const tasks = ref<DownloadTask[]>([])
   const assets = ref<Record<string, SongAssetState>>({})
   const storage = ref<DownloadStorageInfo | null>(null)
-  const open = ref(false)
+  const visible = ref(false)
   let timer: number | null = null
   let hydrated = false
   const knownStatuses = new Map<string, DownloadTask['status']>()
@@ -40,10 +40,10 @@ export const useDownloadStore = defineStore('download', () => {
       const next = unwrap(await window.lychee.download.list())
       const changed = trackStatuses(next)
       tasks.value = next
-      // 目录用量扫描较重，只在下载中心可见时刷新；关闭时保留上一次快照。
-      if (open.value) storage.value = unwrap(await window.lychee.download.storage())
+      // 目录用量扫描较重，只在下载中心可见时刷新；不可见时保留上一次快照。
+      if (visible.value) storage.value = unwrap(await window.lychee.download.storage())
       if (changed.length > 0) void refreshAssets(changed)
-      if (!open.value && !hasActive()) stopPolling()
+      if (!visible.value && !hasActive()) stopPolling()
     } catch {
       // 下载列表不可用时保持上一次快照。
     }
@@ -83,8 +83,8 @@ export const useDownloadStore = defineStore('download', () => {
     )
   }
 
-  function setOpen(next: boolean): void {
-    open.value = next
+  function setVisible(next: boolean): void {
+    visible.value = next
     if (next) {
       void load()
       startPolling()
@@ -95,9 +95,10 @@ export const useDownloadStore = defineStore('download', () => {
 
   function replace(task: DownloadTask): void {
     knownStatuses.set(task.id, task.status)
+    // 新任务追加到末尾，页面按数组倒序展示；主进程队列仍按入队顺序处理。
     tasks.value = tasks.value.some((item) => item.id === task.id)
       ? tasks.value.map((item) => (item.id === task.id ? task : item))
-      : [task, ...tasks.value]
+      : [...tasks.value, task]
   }
 
   async function startMany(songMids: string[], quality: Quality): Promise<DownloadTask[]> {
@@ -151,16 +152,21 @@ export const useDownloadStore = defineStore('download', () => {
     storage.value = null
     knownStatuses.clear()
     hydrated = false
-    stopPolling()
+    if (visible.value) {
+      // 下载页仍然可见（例如登录态刷新触发重置）时立即重新加载，避免页面停在空列表。
+      void load()
+    } else {
+      stopPolling()
+    }
   }
 
   return {
     tasks,
     assets,
     storage,
-    open,
+    visible,
     load,
-    setOpen,
+    setVisible,
     refreshAssets,
     start,
     startMany,

@@ -14,7 +14,6 @@ import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { usePlaylistStore } from '../stores/playlist'
 import { PLAYLIST_POLL_INTERVAL_MS } from '@shared/constants'
-import { useUiStore } from '../stores/ui'
 import { singerNames } from '../utils/format'
 
 const route = useRoute()
@@ -24,7 +23,6 @@ const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
-const ui = useUiStore()
 const toast = useToast()
 
 const id = computed(() => String(route.params.id ?? ''))
@@ -96,7 +94,6 @@ async function downloadAt(index: number): Promise<void> {
   if (!song) return
   try {
     await download.start(song.songMid, player.requestedQuality)
-    if (!ui.downloadOpen) ui.toggleDownload()
     toast.show('已加入下载任务')
   } catch (err) {
     toast.error(describeError(err))

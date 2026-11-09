@@ -2544,8 +2544,7 @@ a {
 .page-head-actions,
 .panel-actions,
 .empty-actions,
-.download-actions,
-.download-footer {
+.download-actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2560,41 +2559,97 @@ a {
   padding: 24px;
 }
 
-.download-drawer {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: var(--player-height);
-  z-index: 41;
-  display: flex;
-  flex-direction: column;
-  width: 390px;
-  border-left: 1px solid var(--border-strong);
-  background: color-mix(in srgb, var(--bg) 92%, transparent);
-  backdrop-filter: blur(26px);
-  opacity: 0;
-  visibility: hidden;
-  pointer-events: none;
+/* ---------- 下载中心页面 ---------- */
+
+.downloads-page {
+  position: relative;
+  min-height: 100%;
+}
+
+.downloads-progress-count {
+  position: absolute;
+  top: 5px;
+  right: 34px;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.downloads-progress-track {
+  height: 4px;
+  overflow: hidden;
+  background: var(--track);
+}
+
+.downloads-progress-track span {
+  display: block;
+  height: 100%;
+  background: var(--palette-purple-light);
+  transition: width 0.2s ease;
+}
+
+.downloads-toolbar {
+  padding: 12px 20px;
+}
+
+.downloads-filter {
+  display: inline-flex;
+  gap: 2px;
+  margin: 8px 0 0 8px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--subtle-bg);
+}
+
+.downloads-filter-btn {
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
   transition:
-    opacity 0.24s ease,
-    visibility 0.24s ease;
+    background 0.16s ease,
+    color 0.16s ease;
 }
 
-.download-drawer.open {
-  opacity: 1;
-  visibility: visible;
-  pointer-events: auto;
-  box-shadow: var(--shadow-left);
+.downloads-filter-btn:hover {
+  color: var(--text);
 }
 
-.download-total {
-  padding: 0 22px 8px;
+.downloads-filter-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
-.download-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 8px 22px 24px;
+.downloads-list {
+  padding: 4px 20px 16px;
+}
+
+.downloads-list .download-row {
+  padding: 14px 0;
+}
+
+.downloads-list .download-row:last-child {
+  border-bottom: 0;
+}
+
+.downloads-list .download-main {
+  margin-bottom: 0;
+}
+
+.downloads-list .download-bar {
+  margin-top: 10px;
+}
+
+.downloads-list .download-actions {
+  justify-content: flex-start;
 }
 
 .download-row {
@@ -2637,11 +2692,6 @@ a {
 .download-actions {
   margin-top: 8px;
   justify-content: flex-end;
-}
-
-.download-footer {
-  margin-top: 14px;
-  justify-content: space-between;
 }
 
 .quality-badge {
@@ -2842,8 +2892,8 @@ a {
     display: none;
   }
 
-  .download-drawer {
-    width: min(390px, 100%);
+  .downloads-progress-count {
+    right: 20px;
   }
 
   .mv-info {
@@ -2852,8 +2902,20 @@ a {
 }
 
 @media (max-width: 560px) {
-  .download-drawer {
-    width: 100%;
+  .downloads-progress-count {
+    right: 12px;
+  }
+
+  .downloads-filter-btn {
+    padding: 0 10px;
+  }
+
+  .downloads-toolbar {
+    padding: 10px 14px;
+  }
+
+  .downloads-list {
+    padding: 4px 14px 12px;
   }
 
   .page-head-actions {

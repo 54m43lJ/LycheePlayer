@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
-import DownloadDrawer from './components/DownloadDrawer.vue'
 import LyricsOverlay from './components/LyricsOverlay.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ToastStack from './components/ToastStack.vue'
@@ -255,15 +254,10 @@ watch(
           </RouterLink>
         </div>
         <div class="nav-label" style="margin-top: 14px">应用</div>
-        <button
-          class="nav-item"
-          :class="{ active: ui.downloadOpen }"
-          type="button"
-          @click="ui.toggleDownload()"
-        >
+        <RouterLink class="nav-item" active-class="active" to="/downloads" @click="onSidebarNavigate">
           <AppIcon name="download" :size="18" />
           <span class="nav-text">下载</span>
-        </button>
+        </RouterLink>
         <RouterLink class="nav-item" active-class="active" to="/settings" @click="onSidebarNavigate">
           <AppIcon name="settings" :size="18" />
           <span class="nav-text">设置</span>
@@ -372,7 +366,6 @@ watch(
       </div>
     </aside>
 
-    <DownloadDrawer />
     <ToastStack />
   </div>
 </template>
