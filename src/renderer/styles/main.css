@@ -2579,17 +2579,13 @@ a {
   padding: 20px 34px 16px;
 }
 
-.downloads-head-actions {
-  align-items: flex-end;
-}
-
 .downloads-progress-count {
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
+  padding: 4px 34px 0;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   font-variant-numeric: tabular-nums;
-  line-height: 1.4;
+  line-height: 1.2;
+  text-align: right;
   white-space: nowrap;
 }
 
@@ -2914,6 +2910,10 @@ a {
     padding: 18px 20px 14px;
   }
 
+  .downloads-progress-count {
+    padding: 4px 20px 0;
+  }
+
   .downloads-content {
     padding: 16px 20px 30px;
   }
@@ -2926,6 +2926,10 @@ a {
 @media (max-width: 560px) {
   .downloads-head {
     padding: 16px 12px 12px;
+  }
+
+  .downloads-progress-count {
+    padding: 4px 12px 0;
   }
 
   .downloads-content {

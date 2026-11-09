@@ -111,6 +111,10 @@ onBeforeUnmount(() => downloads.setVisible(false))
       >
         <span :style="{ width: `${progress.percent}%` }" />
       </div>
+      <div class="downloads-progress-count">
+        ({{ progress.done }}/{{ progress.total }})
+        <template v-if="progress.failed > 0"> · 失败 {{ progress.failed }}</template>
+      </div>
 
       <div class="page-head downloads-head">
         <div>
@@ -136,10 +140,6 @@ onBeforeUnmount(() => downloads.setVisible(false))
             <AppIcon name="folder" :size="14" />
             打开文件夹
           </button>
-          <span class="downloads-progress-count">
-            ({{ progress.done }}/{{ progress.total }})
-            <template v-if="progress.failed > 0"> · 失败 {{ progress.failed }}</template>
-          </span>
         </div>
       </div>
     </header>
