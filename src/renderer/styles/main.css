@@ -2607,7 +2607,8 @@ a {
 }
 
 .downloads-toolbar {
-  margin-bottom: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--border);
 }
 
 .downloads-filter {
@@ -2938,6 +2939,10 @@ a {
 
   .downloads-filter-btn {
     padding: 0 10px;
+  }
+
+  .downloads-toolbar {
+    padding: 10px 14px;
   }
 
   .downloads-list {

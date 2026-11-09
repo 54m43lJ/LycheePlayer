@@ -146,29 +146,29 @@ onBeforeUnmount(() => downloads.setVisible(false))
 
     <div class="downloads-content">
       <template v-if="progress.total > 0">
-        <div class="downloads-toolbar">
-          <div class="downloads-filter" role="group" aria-label="下载任务过滤">
-            <button
-              v-for="item in FILTERS"
-              :key="item.value"
-              type="button"
-              class="downloads-filter-btn"
-              :class="{ active: filter === item.value }"
-              @click="filter = item.value"
-            >
-              {{ item.label }}
-            </button>
+        <div class="panel downloads-panel">
+          <div class="downloads-toolbar">
+            <div class="downloads-filter" role="group" aria-label="下载任务过滤">
+              <button
+                v-for="item in FILTERS"
+                :key="item.value"
+                type="button"
+                class="downloads-filter-btn"
+                :class="{ active: filter === item.value }"
+                @click="filter = item.value"
+              >
+                {{ item.label }}
+              </button>
+            </div>
           </div>
-        </div>
 
-        <div v-if="filteredTasks.length === 0" class="empty compact">
-          <div class="empty-icon"><AppIcon name="download" :size="24" /></div>
-          <h3>没有符合条件的任务</h3>
-          <p>切换过滤条件查看其他下载任务。</p>
-        </div>
+          <div v-if="filteredTasks.length === 0" class="empty compact">
+            <div class="empty-icon"><AppIcon name="download" :size="24" /></div>
+            <h3>没有符合条件的任务</h3>
+            <p>切换过滤条件查看其他下载任务。</p>
+          </div>
 
-        <div v-else class="panel downloads-panel">
-          <div class="downloads-list">
+          <div v-else class="downloads-list">
             <article v-for="task in filteredTasks" :key="task.id" class="download-row">
               <div class="download-main">
                 <div class="song-text">
