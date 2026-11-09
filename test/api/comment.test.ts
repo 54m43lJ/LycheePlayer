@@ -20,14 +20,17 @@ function respond(data: unknown): Response {
 }
 
 describe('api/comment', () => {
-  it('uses GetHotCommentList for hot sort and sorts oldest locally', async () => {
-    const methods: string[] = []
+  it('uses GetNewCommentList without WithHot and sorts oldest locally', async () => {
+    const requests: Array<{ method: string; param: Record<string, unknown> }> = []
     vi.stubGlobal('fetch', async (url: string | URL) => {
       const data = new URL(String(url)).searchParams.get('data')
       const payload = JSON.parse(data ?? '{}') as {
-        req_0?: { method?: string }
+        req_0?: { method?: string; param?: Record<string, unknown> }
       }
-      methods.push(payload.req_0?.method ?? '')
+      requests.push({
+        method: payload.req_0?.method ?? '',
+        param: payload.req_0?.param ?? {}
+      })
       return respond({
         code: 0,
         req_0: {
@@ -36,10 +39,11 @@ describe('api/comment', () => {
             CommentList: {
               Comments: [
                 { CmId: 'b', Nick: 'B', Content: 'second', PubTime: 200, PraiseNum: 2 },
+                { CmId: '', Nick: 'X', Content: 'missing id', PubTime: 150 },
                 { CmId: 'a', Nick: 'A', Content: 'first', PubTime: 100, PraiseNum: 1 }
               ],
-              Total: 2,
-              HasMore: 0
+              Total: 3,
+              HasMore: 1
             }
           }
         }
@@ -47,11 +51,13 @@ describe('api/comment', () => {
     })
 
     const { getComments } = await import('../../src/main/api/comment')
-    const hot = await getComments('123', 'hot', 0)
-    expect(methods).toContain('GetHotCommentList')
-    expect(hot.comments.map((comment) => comment.id)).toEqual(['b', 'a'])
+    const latest = await getComments('123', 'latest', 0)
+    expect(requests[0]?.method).toBe('GetNewCommentList')
+    expect(requests[0]?.param.WithHot).toBeUndefined()
+    expect(latest.comments.map((comment) => comment.id)).toEqual(['b', 'a'])
 
     const oldest = await getComments('123', 'oldest', 0)
+    expect(requests.at(-1)?.param.WithHot).toBeUndefined()
     expect(oldest.comments.map((comment) => comment.id)).toEqual(['a', 'b'])
   })
 

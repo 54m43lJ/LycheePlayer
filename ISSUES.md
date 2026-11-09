@@ -38,7 +38,7 @@
 - 歌曲探测方案一首一首探测太笨拙。参考一下项目https://github.com/sansenjian/qq-music-api，如何实现的POST /batchGetSongInfo接口。 [已解决]
 - 设置里的“退出应用”按钮移到右边单独开一块 [已解决]
 - 托盘图标有时候是全黑。我只需要彩色图标 [已解决]
-- 按点赞排序评论的API有问题（[ipc] UPSTREAM_CHANGED: 上游返回错误码 10000（music.globalComment.CommentRead.GetHotCommentList））
+- 按点赞排序评论的API有问题（[ipc] UPSTREAM_CHANGED: 上游返回错误码 10000（music.globalComment.CommentRead.GetHotCommentList）） [已解决]
 - 播放条的封面点击切换歌词/评论窗口开关，而不是只起打开效果
 - 所有歌曲元信息改用懒加载策略，永久缓存，仅在失败时探测
   - 例如VIP和歌曲最高音质，仅在播放失败/下载失败时探测
