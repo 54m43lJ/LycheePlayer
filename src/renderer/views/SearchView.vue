@@ -12,7 +12,6 @@ import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
 import { SEARCH_PAGE_SIZE_DEFAULT } from '@shared/constants'
-import { useUiStore } from '../stores/ui'
 import { useAuthStore } from '../stores/auth'
 import { albumCover, formatCount, playlistSubtitle } from '../utils/format'
 
@@ -22,7 +21,6 @@ const router = useRouter()
 const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
-const ui = useUiStore()
 const auth = useAuthStore()
 const toast = useToast()
 
@@ -149,7 +147,6 @@ async function downloadAt(index: number): Promise<void> {
   if (!song) return
   try {
     await download.start(song.songMid, player.requestedQuality)
-    if (!ui.downloadOpen) ui.toggleDownload()
     toast.show('已加入下载任务')
   } catch (err) {
     toast.error(describeError(err))

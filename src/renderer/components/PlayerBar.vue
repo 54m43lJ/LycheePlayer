@@ -213,7 +213,6 @@ async function downloadCurrent(): Promise<void> {
   if (!current.value) return
   try {
     await download.start(current.value.songMid, quality.value)
-    if (!ui.downloadOpen) ui.toggleDownload()
     toast.show('已加入下载任务')
   } catch (err) {
     toast.error(err instanceof Error ? err.message : String(err))

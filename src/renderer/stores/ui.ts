@@ -3,13 +3,11 @@ import { ref } from 'vue'
 
 export const useUiStore = defineStore('ui', () => {
   const queueOpen = ref(false)
-  const downloadOpen = ref(false)
   const lyricsOpen = ref(false)
   const sidebarOpen = ref(false)
 
-  function closeOthers(keep: 'queue' | 'download' | 'sidebar'): void {
+  function closeOthers(keep: 'queue' | 'sidebar'): void {
     if (keep !== 'queue') queueOpen.value = false
-    if (keep !== 'download') downloadOpen.value = false
     if (keep !== 'sidebar') sidebarOpen.value = false
   }
 
@@ -20,15 +18,6 @@ export const useUiStore = defineStore('ui', () => {
 
   function closeQueue(): void {
     queueOpen.value = false
-  }
-
-  function toggleDownload(): void {
-    downloadOpen.value = !downloadOpen.value
-    if (downloadOpen.value) closeOthers('download')
-  }
-
-  function closeDownload(): void {
-    downloadOpen.value = false
   }
 
   function openSidebar(): void {
@@ -55,13 +44,10 @@ export const useUiStore = defineStore('ui', () => {
 
   return {
     queueOpen,
-    downloadOpen,
     lyricsOpen,
     sidebarOpen,
     toggleQueue,
     closeQueue,
-    toggleDownload,
-    closeDownload,
     toggleLyrics,
     closeLyrics,
     openSidebar,

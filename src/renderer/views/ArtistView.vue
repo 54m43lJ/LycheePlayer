@@ -11,7 +11,6 @@ import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
-import { useUiStore } from '../stores/ui'
 import { formatCount } from '../utils/format'
 
 const route = useRoute()
@@ -20,7 +19,6 @@ const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
-const ui = useUiStore()
 const toast = useToast()
 
 const SONG_SORTS: Array<{ value: ArtistSongSort; label: string }> = [
@@ -171,7 +169,6 @@ async function downloadAt(index: number): Promise<void> {
   if (!song) return
   try {
     await download.start(song.songMid, player.requestedQuality)
-    if (!ui.downloadOpen) ui.toggleDownload()
     toast.show('已加入下载任务')
   } catch (err) {
     toast.error(describeError(err))
