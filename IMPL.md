@@ -419,6 +419,33 @@
 | `CORE.html` | §4.49 `styles/main.css` | 不动 | 菜单定位与高亮样式由 #9 维护。 |
 | `USER.html` | §5.2.3 播放模式 | 不动 | 交互契约由 #9 维护，见该节。 |
 
+### 3.11 音频代理取消时 `reader.cancel` 拒绝产生未处理 Promise
+
+问题描述：运行中偶发出现 `UnhandledPromiseRejectionWarning: Error: net::ERR_CONNECTION_CLOSED`，堆栈位于 Electron 的 `SimpleURLLoaderWrapper` / `IncomingMessage`。触发条件不稳定，常见于切歌、seek、关闭音频流或上游提前断开连接之后。
+
+原因：`audio-protocol.ts` 的响应流 `cancel(reason)` 先 `abortUpstream()` 中止上游 `net.fetch`，随后用 `void reader.cancel(reason)` 丢弃取消 Promise。上游连接已经因 abort 或对端关闭而断开时，`reader.cancel()` 会以 `net::ERR_CONNECTION_CLOSED` / `ERR_CONTENT_LENGTH_MISMATCH` 拒绝；`void` 既不等待也不捕获，于是变成进程级未处理拒绝。用 Electron `net.fetch` + 中途断开的本机 HTTP 服务可稳定复现同一堆栈：连接关闭后调用未捕获的 `reader.cancel()` 即触发 `UnhandledPromiseRejectionWarning`。
+
+解决方法：
+
+- `cancel(reason)` 改为 `reader.cancel(reason).catch(() => undefined)`；取消路径上的连接关闭属于预期结果，只吞掉该拒绝，不影响正常读取错误；
+- 新增 `test/audio-protocol.test.ts`：mock `net.fetch` 返回一个 `cancel()` 会拒绝的流，调用协议响应体的 `cancel()`，断言不会产生 `unhandledRejection`；
+- 保留 `abortUpstream()`，继续确保取消时释放上游连接，避免半读连接留在 socket 池。
+
+验证：
+
+- 修复前测试稳定收到 `unhandledRejection: net::ERR_CONNECTION_CLOSED`，修复后通过；
+- `npm run typecheck` 通过；
+- `npx vitest run` 18 个测试文件 / 67 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.59 `media/audio-protocol.ts` | 改 | 补取消路径约束：`abortUpstream` 后 `reader.cancel()` 必须以 catch 吞掉连接关闭类拒绝，不能留下未处理 Promise。 |
+| `USER.html` | — | 不动 | 未处理拒绝只产生控制台警告，不改变用户可见的播放 / 切歌行为。 |
+| `EVOLVE.md` | — | 不动 | 现有“切歌中止上游流”要求不变，仅补齐取消异常处理。 |
+
 ## 4. ISSUES 未决项修复记录
 
 ### 4.1 播放条合并为单轨进度条并补齐缓冲进度

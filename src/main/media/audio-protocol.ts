@@ -272,7 +272,9 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
       },
       cancel(reason) {
         abortUpstream()
-        void reader.cancel(reason)
+        // abort 后连接可能已关闭，reader.cancel 会以 ERR_CONNECTION_CLOSED 拒绝；
+        // 这是取消路径的预期结果，必须吞掉，否则会变成进程级未处理拒绝。
+        reader.cancel(reason).catch(() => undefined)
       }
     })
     return new Response(request.method === 'HEAD' ? null : stream, {
