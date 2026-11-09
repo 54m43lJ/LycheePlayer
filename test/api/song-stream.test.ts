@@ -9,9 +9,10 @@ vi.mock('electron', () => ({
   net: { fetch: () => Promise.reject(new Error('network disabled')) }
 }))
 
-const { musicuMock, vipMock, credentialState, downloadedState } = vi.hoisted(() => ({
+const { musicuMock, vipMock, tripBlockMock, credentialState, downloadedState } = vi.hoisted(() => ({
   musicuMock: vi.fn(),
   vipMock: vi.fn(),
+  tripBlockMock: vi.fn(),
   credentialState: { value: null as Credential | null },
   downloadedState: {
     value: null as { filePath: string; quality: '128k' | '320k' | 'flac' } | null
@@ -35,6 +36,7 @@ vi.mock('../../src/main/api/client', () => {
   return {
     UpstreamError,
     musicu: musicuMock,
+    tripUpstreamBlock: tripBlockMock,
     getGuid: () => 'test-guid',
     upstreamRequest: vi.fn(),
     mapUpstreamCode: (code: number, context: string) =>
@@ -70,6 +72,7 @@ function vkeyResult(result: number, purl = ''): unknown {
 beforeEach(() => {
   musicuMock.mockReset()
   vipMock.mockReset()
+  tripBlockMock.mockReset()
   credentialState.value = { musicid: '42', musickey: 'key', expiredAtMs: null }
   downloadedState.value = null
   musicuMock.mockImplementation(async (module: string) => {
@@ -175,6 +178,7 @@ describe('api/song stream failures', () => {
       quality: '128k'
     })
     expect(musicuMock.mock.calls.map((call) => call[0])).toContain('music.vkey.GetVkey')
+    expect(tripBlockMock).not.toHaveBeenCalled()
   })
 
   it('reports 104009 from both vkey endpoints as a network / proxy problem', async () => {
@@ -205,6 +209,7 @@ describe('api/song stream failures', () => {
       code: 'UPSTREAM_NETWORK',
       message: expect.stringContaining('104009')
     })
+    expect(tripBlockMock).toHaveBeenCalledTimes(1)
   })
 
   it('requests a 50-song vkey batch in one upstream call', async () => {

@@ -33,6 +33,7 @@ import type {
   Settings,
   SongAssetState,
   SongAvailability,
+  UpstreamBlockedEvent,
   UrlResult,
   UserProfile
 } from '../shared/types'
@@ -169,6 +170,16 @@ const api: LycheeApi = {
         callback(command)
       ipcRenderer.on('player:command', listener)
       return () => ipcRenderer.removeListener('player:command', listener)
+    }
+  },
+  upstream: {
+    onBlocked: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        blocked: UpstreamBlockedEvent
+      ): void => callback(blocked)
+      ipcRenderer.on('upstream:blocked', listener)
+      return () => ipcRenderer.removeListener('upstream:blocked', listener)
     }
   }
 }

@@ -15,16 +15,35 @@ export const useDownloadStore = defineStore('download', () => {
   const storage = ref<DownloadStorageInfo | null>(null)
   const open = ref(false)
   let timer: number | null = null
+  let hydrated = false
+  const knownStatuses = new Map<string, DownloadTask['status']>()
+
+  /**
+   * 轮询只需刷新状态发生变化的任务资产，避免大批量下载时每 1.5 秒
+   * 对数以千计的歌曲重复调用 download.assetStates。
+   */
+  function trackStatuses(next: DownloadTask[]): string[] {
+    const changed: string[] = []
+    if (hydrated) {
+      for (const task of next) {
+        if (knownStatuses.get(task.id) !== task.status) changed.push(task.songMid)
+      }
+    }
+    knownStatuses.clear()
+    for (const task of next) knownStatuses.set(task.id, task.status)
+    hydrated = true
+    return changed
+  }
 
   async function load(): Promise<void> {
     try {
-      tasks.value = unwrap(await window.lychee.download.list())
-      storage.value = unwrap(await window.lychee.download.storage())
-      const mids = new Set([
-        ...Object.keys(assets.value),
-        ...tasks.value.map((task) => task.songMid)
-      ])
-      if (mids.size > 0) void refreshAssets([...mids])
+      const next = unwrap(await window.lychee.download.list())
+      const changed = trackStatuses(next)
+      tasks.value = next
+      // 目录用量扫描较重，只在下载中心可见时刷新；关闭时保留上一次快照。
+      if (open.value) storage.value = unwrap(await window.lychee.download.storage())
+      if (changed.length > 0) void refreshAssets(changed)
+      if (!open.value && !hasActive()) stopPolling()
     } catch {
       // 下载列表不可用时保持上一次快照。
     }
@@ -60,9 +79,7 @@ export const useDownloadStore = defineStore('download', () => {
   function hasActive(): boolean {
     return tasks.value.some(
       (task) =>
-        task.status === 'downloading' ||
-        task.status === 'pending' ||
-        task.status === 'paused'
+        task.status === 'downloading' || task.status === 'pending' || task.status === 'paused'
     )
   }
 
@@ -77,6 +94,7 @@ export const useDownloadStore = defineStore('download', () => {
   }
 
   function replace(task: DownloadTask): void {
+    knownStatuses.set(task.id, task.status)
     tasks.value = tasks.value.some((item) => item.id === task.id)
       ? tasks.value.map((item) => (item.id === task.id ? task : item))
       : [task, ...tasks.value]
@@ -85,7 +103,8 @@ export const useDownloadStore = defineStore('download', () => {
   async function startMany(songMids: string[], quality: Quality): Promise<DownloadTask[]> {
     const next = unwrap(await window.lychee.download.startMany(songMids, quality))
     for (const task of next) replace(task)
-    setOpen(true)
+    // “下载全部”不自动打开下载中心；仅在有活动任务时轮询以更新歌曲表图标。
+    startPolling()
     void refreshAssets(songMids)
     return next
   }
@@ -105,6 +124,7 @@ export const useDownloadStore = defineStore('download', () => {
   async function remove(id: string): Promise<void> {
     const task = tasks.value.find((item) => item.id === id)
     unwrap(await window.lychee.download.remove(id))
+    knownStatuses.delete(id)
     tasks.value = tasks.value.filter((item) => item.id !== id)
     if (task) void refreshAssets([task.songMid])
   }
@@ -120,6 +140,8 @@ export const useDownloadStore = defineStore('download', () => {
     unwrap(await window.lychee.download.clearDirectory())
     tasks.value = []
     assets.value = {}
+    knownStatuses.clear()
+    hydrated = false
     storage.value = unwrap(await window.lychee.download.storage())
   }
 
@@ -127,6 +149,9 @@ export const useDownloadStore = defineStore('download', () => {
     tasks.value = []
     assets.value = {}
     storage.value = null
+    knownStatuses.clear()
+    hydrated = false
+    stopPolling()
   }
 
   return {

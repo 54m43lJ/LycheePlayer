@@ -8,7 +8,7 @@ import {
 import { getCredential } from '../credential'
 import { resolveDownloadedAudio } from '../download/registry'
 import { audioStreamUrl } from '../media/audio-protocol'
-import { mapUpstreamCode, UpstreamError, getGuid, musicu } from './client'
+import { mapUpstreamCode, tripUpstreamBlock, UpstreamError, getGuid, musicu } from './client'
 import { isVipUser } from './user'
 
 interface RawSong {
@@ -221,15 +221,20 @@ async function requestQuality(
 
     let data: VkeyData
     try {
-      data = await musicu<VkeyData>('vkey.GetVkeyServer', 'CgiGetVkey', {
-        guid: getGuid(),
-        songmid,
-        songtype,
-        filename,
-        uin,
-        loginflag: 1,
-        platform: '20'
-      })
+      data = await musicu<VkeyData>(
+        'vkey.GetVkeyServer',
+        'CgiGetVkey',
+        {
+          guid: getGuid(),
+          songmid,
+          songtype,
+          filename,
+          uin,
+          loginflag: 1,
+          platform: '20'
+        },
+        { deferBlock: true }
+      )
       // 有些响应把具体错误放在 data.retcode，而 req_0.code 为 0。
       const retcode = Number(data.retcode)
       if (Number.isFinite(retcode) && retcode !== 0) {
@@ -238,17 +243,30 @@ async function requestQuality(
     } catch (err) {
       // 经典接口返回 104009 invalidq 时，尝试当前维护的 UrlGetVkey 接口。
       if (!(err instanceof UpstreamError) || err.upstreamCode !== 104009) throw err
-      data = await musicu<VkeyData>('music.vkey.GetVkey', 'UrlGetVkey', {
-        uin,
-        filename,
-        guid: getGuid(),
-        songmid,
-        songtype,
-        ctx: 0
-      })
-      const retcode = Number(data.retcode)
-      if (Number.isFinite(retcode) && retcode !== 0) {
-        throw mapUpstreamCode(retcode, 'music.vkey.GetVkey.UrlGetVkey')
+      try {
+        data = await musicu<VkeyData>(
+          'music.vkey.GetVkey',
+          'UrlGetVkey',
+          {
+            uin,
+            filename,
+            guid: getGuid(),
+            songmid,
+            songtype,
+            ctx: 0
+          },
+          { deferBlock: true }
+        )
+        const retcode = Number(data.retcode)
+        if (Number.isFinite(retcode) && retcode !== 0) {
+          throw mapUpstreamCode(retcode, 'music.vkey.GetVkey.UrlGetVkey')
+        }
+      } catch (fallbackError) {
+        // 两个 vkey 入口都拒绝时，说明不是单曲问题；进入全局 60 秒截断窗口。
+        if (fallbackError instanceof UpstreamError && fallbackError.upstreamCode === 104009) {
+          tripUpstreamBlock()
+        }
+        throw fallbackError
       }
     }
 
