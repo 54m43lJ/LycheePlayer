@@ -152,7 +152,12 @@ export const useDownloadStore = defineStore('download', () => {
     storage.value = null
     knownStatuses.clear()
     hydrated = false
-    stopPolling()
+    if (visible.value) {
+      // 下载页仍然可见（例如登录态刷新触发重置）时立即重新加载，避免页面停在空列表。
+      void load()
+    } else {
+      stopPolling()
+    }
   }
 
   return {
