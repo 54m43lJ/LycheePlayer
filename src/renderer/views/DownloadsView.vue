@@ -1,11 +1,20 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { DownloadTask } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import { useDownloadStore } from '../stores/download'
 import { useToast } from '../composables/toast'
 import { downloadOverallProgress } from '../utils/download-progress'
 import { formatBytes } from '../utils/format'
+
+type DownloadFilter = 'all' | 'active' | 'done' | 'failed'
+
+const FILTERS: Array<{ value: DownloadFilter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'active', label: '进行中' },
+  { value: 'done', label: '已完成' },
+  { value: 'failed', label: '未成功' }
+]
 
 const downloads = useDownloadStore()
 const toast = useToast()
@@ -16,6 +25,21 @@ const storage = computed(() => downloads.storage)
 const activeText = computed(() =>
   progress.value.active > 0 ? `${progress.value.active} 个任务进行中` : '没有进行中的任务'
 )
+const filter = ref<DownloadFilter>('all')
+// 任务顺序降序展示，新任务在最前；只影响显示，不改变主进程队列处理顺序。
+const orderedTasks = computed(() => [...tasks.value].reverse())
+const filteredTasks = computed(() => {
+  const list = orderedTasks.value
+  if (filter.value === 'active') {
+    return list.filter(
+      (task) =>
+        task.status === 'downloading' || task.status === 'pending' || task.status === 'paused'
+    )
+  }
+  if (filter.value === 'done') return list.filter((task) => task.status === 'done')
+  if (filter.value === 'failed') return list.filter((task) => task.status === 'failed')
+  return list
+})
 
 function percent(task: DownloadTask): number {
   if (!task.totalBytes) return task.status === 'done' ? 100 : 0
@@ -77,27 +101,8 @@ onBeforeUnmount(() => downloads.setVisible(false))
 
 <template>
   <div class="downloads-page">
-    <div class="downloads-progress">
-      <div class="downloads-progress-meta">
-        <span class="downloads-progress-title">整体进度</span>
-        <span class="downloads-progress-count">
-          ({{ progress.done }}/{{ progress.total }})
-          <template v-if="progress.failed > 0"> · 失败 {{ progress.failed }}</template>
-        </span>
-      </div>
-      <div
-        class="downloads-progress-track"
-        role="progressbar"
-        :aria-valuenow="progress.percent"
-        aria-valuemin="0"
-        aria-valuemax="100"
-      >
-        <span :style="{ width: `${progress.percent}%` }" />
-      </div>
-    </div>
-
-    <div class="page">
-      <div class="page-head">
+    <header class="downloads-header">
+      <div class="page-head downloads-head">
         <div>
           <div class="eyebrow">Downloads</div>
           <h1 class="page-title">下载中心</h1>
@@ -124,54 +129,97 @@ onBeforeUnmount(() => downloads.setVisible(false))
         </div>
       </div>
 
-      <div v-if="progress.total === 0" class="empty">
+      <div class="downloads-progress">
+        <div class="downloads-progress-count">
+          ({{ progress.done }}/{{ progress.total }})
+          <template v-if="progress.failed > 0"> · 失败 {{ progress.failed }}</template>
+        </div>
+        <div
+          class="downloads-progress-track"
+          role="progressbar"
+          :aria-valuenow="progress.percent"
+          aria-valuemin="0"
+          aria-valuemax="100"
+        >
+          <span :style="{ width: `${progress.percent}%` }" />
+        </div>
+      </div>
+    </header>
+
+    <div class="downloads-content">
+      <template v-if="progress.total > 0">
+        <div class="downloads-toolbar">
+          <div class="downloads-filter" role="group" aria-label="下载任务过滤">
+            <button
+              v-for="item in FILTERS"
+              :key="item.value"
+              type="button"
+              class="downloads-filter-btn"
+              :class="{ active: filter === item.value }"
+              @click="filter = item.value"
+            >
+              {{ item.label }}
+            </button>
+          </div>
+        </div>
+
+        <div v-if="filteredTasks.length === 0" class="empty compact">
+          <div class="empty-icon"><AppIcon name="download" :size="24" /></div>
+          <h3>没有符合条件的任务</h3>
+          <p>切换过滤条件查看其他下载任务。</p>
+        </div>
+
+        <div v-else class="panel downloads-panel">
+          <div class="downloads-list">
+            <article v-for="task in filteredTasks" :key="task.id" class="download-row">
+              <div class="download-main">
+                <div class="song-text">
+                  <div class="song-title">{{ task.name }}</div>
+                  <div class="song-artist">
+                    {{ task.quality.toUpperCase() }} · {{ sourceLabel(task) }} ·
+                    {{ statusLabel(task.status) }}
+                    <template v-if="task.error"> · {{ task.error }}</template>
+                  </div>
+                </div>
+                <span class="download-size">
+                  {{ formatBytes(task.receivedBytes) }}
+                  <template v-if="task.totalBytes">
+                    / {{ formatBytes(task.totalBytes) }}
+                  </template>
+                </span>
+              </div>
+              <div class="download-bar">
+                <span
+                  :class="{ failed: task.status === 'failed' }"
+                  :style="{ width: `${percent(task)}%` }"
+                />
+              </div>
+              <div class="download-actions">
+                <button
+                  v-if="task.status === 'downloading'"
+                  class="btn ghost small"
+                  @click="run(() => downloads.pause(task.id))"
+                >
+                  暂停
+                </button>
+                <button
+                  v-else-if="task.status === 'paused' || task.status === 'failed'"
+                  class="btn small"
+                  @click="run(() => downloads.resume(task.id))"
+                >
+                  继续
+                </button>
+                <button class="btn ghost small" @click="confirmRemoveTask(task)">删除</button>
+              </div>
+            </article>
+          </div>
+        </div>
+      </template>
+
+      <div v-else class="empty">
         <div class="empty-icon"><AppIcon name="download" :size="28" /></div>
         <h3>还没有下载任务</h3>
         <p>在歌单或歌曲表中点击下载按钮，任务会显示在这里。</p>
-      </div>
-
-      <div v-else class="panel downloads-panel">
-        <div class="downloads-list">
-          <article v-for="task in tasks" :key="task.id" class="download-row">
-            <div class="download-main">
-              <div class="song-text">
-                <div class="song-title">{{ task.name }}</div>
-                <div class="song-artist">
-                  {{ task.quality.toUpperCase() }} · {{ sourceLabel(task) }} ·
-                  {{ statusLabel(task.status) }}
-                  <template v-if="task.error"> · {{ task.error }}</template>
-                </div>
-              </div>
-              <span class="download-size">
-                {{ formatBytes(task.receivedBytes)
-                }}<template v-if="task.totalBytes"> / {{ formatBytes(task.totalBytes) }}</template>
-              </span>
-            </div>
-            <div class="download-bar">
-              <span
-                :class="{ failed: task.status === 'failed' }"
-                :style="{ width: `${percent(task)}%` }"
-              />
-            </div>
-            <div class="download-actions">
-              <button
-                v-if="task.status === 'downloading'"
-                class="btn ghost small"
-                @click="run(() => downloads.pause(task.id))"
-              >
-                暂停
-              </button>
-              <button
-                v-else-if="task.status === 'paused' || task.status === 'failed'"
-                class="btn small"
-                @click="run(() => downloads.resume(task.id))"
-              >
-                继续
-              </button>
-              <button class="btn ghost small" @click="confirmRemoveTask(task)">删除</button>
-            </div>
-          </article>
-        </div>
       </div>
     </div>
   </div>

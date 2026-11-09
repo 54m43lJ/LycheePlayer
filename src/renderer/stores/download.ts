@@ -95,9 +95,10 @@ export const useDownloadStore = defineStore('download', () => {
 
   function replace(task: DownloadTask): void {
     knownStatuses.set(task.id, task.status)
+    // 新任务追加到末尾，页面按数组倒序展示；主进程队列仍按入队顺序处理。
     tasks.value = tasks.value.some((item) => item.id === task.id)
       ? tasks.value.map((item) => (item.id === task.id ? task : item))
-      : [task, ...tasks.value]
+      : [...tasks.value, task]
   }
 
   async function startMany(songMids: string[], quality: Quality): Promise<DownloadTask[]> {

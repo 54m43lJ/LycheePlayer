@@ -2565,41 +2565,34 @@ a {
   min-height: 100%;
 }
 
-.downloads-progress {
+.downloads-header {
   position: sticky;
   top: 0;
   z-index: 6;
-  padding: 12px 0 0;
+  padding: 24px 34px 0;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(18px);
 }
 
-.downloads-progress-meta {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 34px 10px;
+.downloads-head {
+  margin-bottom: 14px;
 }
 
-.downloads-progress-title {
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  color: var(--muted);
-  text-transform: uppercase;
+.downloads-progress {
+  padding-bottom: 10px;
 }
 
 .downloads-progress-count {
-  color: var(--text);
+  margin-bottom: 6px;
+  color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
+  text-align: right;
 }
 
 .downloads-progress-track {
   height: 4px;
-  margin-top: 0;
   overflow: hidden;
   background: var(--track);
 }
@@ -2609,6 +2602,46 @@ a {
   height: 100%;
   background: var(--gold);
   transition: width 0.2s ease;
+}
+
+.downloads-content {
+  padding: 18px 34px 40px;
+}
+
+.downloads-toolbar {
+  margin-bottom: 16px;
+}
+
+.downloads-filter {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--subtle-bg);
+}
+
+.downloads-filter-btn {
+  height: 28px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition:
+    background 0.16s ease,
+    color 0.16s ease;
+}
+
+.downloads-filter-btn:hover {
+  color: var(--text);
+}
+
+.downloads-filter-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .downloads-list {
@@ -2875,12 +2908,12 @@ a {
     display: none;
   }
 
-  .downloads-progress {
-    padding: 10px 0 0;
+  .downloads-header {
+    padding: 20px 20px 0;
   }
 
-  .downloads-progress-meta {
-    padding: 0 20px 8px;
+  .downloads-content {
+    padding: 16px 20px 30px;
   }
 
   .mv-info {
@@ -2889,12 +2922,16 @@ a {
 }
 
 @media (max-width: 560px) {
-  .downloads-progress {
-    padding: 10px 0 0;
+  .downloads-header {
+    padding: 18px 12px 0;
   }
 
-  .downloads-progress-meta {
-    padding: 0 12px 8px;
+  .downloads-content {
+    padding: 14px 12px 26px;
+  }
+
+  .downloads-filter-btn {
+    padding: 0 10px;
   }
 
   .downloads-list {
