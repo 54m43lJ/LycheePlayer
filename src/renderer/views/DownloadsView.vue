@@ -102,6 +102,16 @@ onBeforeUnmount(() => downloads.setVisible(false))
 <template>
   <div class="downloads-page">
     <header class="downloads-header">
+      <div
+        class="downloads-progress-track"
+        role="progressbar"
+        :aria-valuenow="progress.percent"
+        aria-valuemin="0"
+        aria-valuemax="100"
+      >
+        <span :style="{ width: `${progress.percent}%` }" />
+      </div>
+
       <div class="page-head downloads-head">
         <div>
           <div class="eyebrow">Downloads</div>
@@ -113,7 +123,7 @@ onBeforeUnmount(() => downloads.setVisible(false))
             </template>
           </p>
         </div>
-        <div class="page-head-actions">
+        <div class="page-head-actions downloads-head-actions">
           <button
             class="btn ghost small"
             :disabled="progress.total === 0"
@@ -126,22 +136,10 @@ onBeforeUnmount(() => downloads.setVisible(false))
             <AppIcon name="folder" :size="14" />
             打开文件夹
           </button>
-        </div>
-      </div>
-
-      <div class="downloads-progress">
-        <div class="downloads-progress-count">
-          ({{ progress.done }}/{{ progress.total }})
-          <template v-if="progress.failed > 0"> · 失败 {{ progress.failed }}</template>
-        </div>
-        <div
-          class="downloads-progress-track"
-          role="progressbar"
-          :aria-valuenow="progress.percent"
-          aria-valuemin="0"
-          aria-valuemax="100"
-        >
-          <span :style="{ width: `${progress.percent}%` }" />
+          <span class="downloads-progress-count">
+            ({{ progress.done }}/{{ progress.total }})
+            <template v-if="progress.failed > 0"> · 失败 {{ progress.failed }}</template>
+          </span>
         </div>
       </div>
     </header>

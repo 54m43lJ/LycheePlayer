@@ -2569,26 +2569,28 @@ a {
   position: sticky;
   top: 0;
   z-index: 6;
-  padding: 24px 34px 0;
   border-bottom: 1px solid var(--border);
   background: color-mix(in srgb, var(--bg) 92%, transparent);
   backdrop-filter: blur(18px);
 }
 
 .downloads-head {
-  margin-bottom: 14px;
+  margin: 0;
+  padding: 20px 34px 16px;
 }
 
-.downloads-progress {
-  padding-bottom: 10px;
+.downloads-head-actions {
+  align-items: flex-end;
 }
 
 .downloads-progress-count {
-  margin-bottom: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
   color: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  line-height: 1.4;
+  white-space: nowrap;
 }
 
 .downloads-progress-track {
@@ -2908,8 +2910,8 @@ a {
     display: none;
   }
 
-  .downloads-header {
-    padding: 20px 20px 0;
+  .downloads-head {
+    padding: 18px 20px 14px;
   }
 
   .downloads-content {
@@ -2922,8 +2924,8 @@ a {
 }
 
 @media (max-width: 560px) {
-  .downloads-header {
-    padding: 18px 12px 0;
+  .downloads-head {
+    padding: 16px 12px 12px;
   }
 
   .downloads-content {
