@@ -1,5 +1,10 @@
 import type { PayInfo, Quality, Song, UrlResult } from '../../shared/types'
-import { IPC_SONG_MIDS_MAX, PROBE_DETAIL_CONCURRENCY, PROBE_VKEY_BATCH } from '../../shared/constants'
+import {
+  IPC_SONG_MIDS_MAX,
+  PROBE_DETAIL_CONCURRENCY,
+  PROBE_VKEY_BATCH,
+  SONG_DETAIL_BATCH
+} from '../../shared/constants'
 import { getCredential } from '../credential'
 import { resolveDownloadedAudio } from '../download/registry'
 import { audioStreamUrl } from '../media/audio-protocol'
@@ -100,6 +105,14 @@ function toSong(raw: RawSong): Song {
   }
 }
 
+function trackMeta(raw: RawTrackInfo, fallbackMid: string): TrackMeta {
+  return {
+    mediaMid: raw.file?.media_mid ?? fallbackMid,
+    pay: toSong(raw).pay
+  }
+}
+
+/** 单曲详情兜底：批量详情缺少某首歌时再单独请求。 */
 async function fetchTrack(mid: string): Promise<RawTrackInfo> {
   const data = await musicu<{ track_info?: RawTrackInfo }>(
     'music.pf_song_detail_svr',
@@ -114,6 +127,45 @@ async function fetchTrack(mid: string): Promise<RawTrackInfo> {
     trackMetaCache.set(mid, { mediaMid, pay: toSong(data.track_info).pay })
   }
   return data.track_info
+}
+
+/** 一次请求取回多首歌曲详情；按 mid 建立索引，响应顺序不影响结果。 */
+async function fetchTrackBatch(mids: string[]): Promise<Map<string, RawTrackInfo>> {
+  const result = new Map<string, RawTrackInfo>()
+  for (let start = 0; start < mids.length; start += SONG_DETAIL_BATCH) {
+    const batch = mids.slice(start, start + SONG_DETAIL_BATCH)
+    const data = await musicu<{ tracks?: RawTrackInfo[] }>(
+      'music.trackInfo.UniformRuleCtrl',
+      'CgiGetTrackInfo',
+      {
+        types: batch.map(() => 0),
+        modify_stamp: batch.map(() => 0),
+        ctx: 0,
+        client: 1,
+        mids: batch
+      }
+    )
+    if (!Array.isArray(data.tracks)) {
+      throw new UpstreamError('UPSTREAM_CHANGED', '批量歌曲详情响应缺少 tracks')
+    }
+    for (const track of data.tracks) {
+      if (track.mid) result.set(track.mid, track)
+    }
+  }
+  return result
+}
+
+/** 批量详情 + 缺口单曲兜底，返回按 mid 索引的原始歌曲。 */
+async function fetchTracksById(mids: string[]): Promise<Map<string, RawTrackInfo>> {
+  const unique = [...new Set(mids.filter(Boolean))]
+  if (unique.length === 0) return new Map()
+  const result = await fetchTrackBatch(unique)
+  const missing = unique.filter((mid) => !result.has(mid))
+  if (missing.length > 0) {
+    const fallback = await mapLimit(missing, PROBE_DETAIL_CONCURRENCY, fetchTrack)
+    missing.forEach((mid, index) => result.set(mid, fallback[index]))
+  }
+  return result
 }
 
 async function mapLimit<T, R>(
@@ -137,8 +189,14 @@ async function mapLimit<T, R>(
 /** 按 songMid 批量取详情，供歌单/播放器补齐非搜索来源的歌曲。 */
 export async function getDetail(mids: string[]): Promise<Song[]> {
   const unique = [...new Set(mids.filter(Boolean))]
-  const tracks = await mapLimit(unique, PROBE_DETAIL_CONCURRENCY, (mid) => fetchTrack(mid))
-  return tracks.map(toSong)
+  if (unique.length === 0) return []
+  const tracks = await fetchTracksById(unique)
+  return unique.map((mid) => {
+    const raw = tracks.get(mid)
+    if (!raw) throw new UpstreamError('UPSTREAM_CHANGED', `歌曲详情缺少 track_info：${mid}`)
+    trackMetaCache.set(mid, trackMeta(raw, mid))
+    return toSong(raw)
+  })
 }
 
 function buildStreamUrl(purl: string): string {
@@ -210,15 +268,18 @@ async function resolveStreams(mids: string[], requested: Quality): Promise<Resol
   const failures = new Map<string, StreamFailure>()
   if (unique.length === 0) return { urls, failures }
 
-  const tracks = await mapLimit(unique, PROBE_DETAIL_CONCURRENCY, async (mid) => {
-    const cached = trackMetaCache.get(mid)
-    if (cached) return { songMid: mid, ...cached }
-    const track = await fetchTrack(mid)
-    const meta: TrackMeta = {
-      mediaMid: track.file?.media_mid ?? mid,
-      pay: toSong(track).pay
+  const missing = unique.filter((mid) => !trackMetaCache.has(mid))
+  if (missing.length > 0) {
+    const fetched = await fetchTracksById(missing)
+    for (const mid of missing) {
+      const raw = fetched.get(mid)
+      if (!raw) throw new UpstreamError('UPSTREAM_CHANGED', `歌曲详情缺少 track_info：${mid}`)
+      trackMetaCache.set(mid, trackMeta(raw, mid))
     }
-    trackMetaCache.set(mid, meta)
+  }
+  const tracks: PendingTrack[] = unique.map((mid) => {
+    const meta = trackMetaCache.get(mid)
+    if (!meta) throw new UpstreamError('UPSTREAM_CHANGED', `歌曲详情缺少 track_info：${mid}`)
     return { songMid: mid, ...meta }
   })
 

@@ -57,8 +57,10 @@ export const PLAYLIST_PAGE_RETRY_BACKOFF_MS = 500
  * 约束：与 PLAYLIST_PAGE_SIZE 对齐（一个 50 首歌单页一次探测），且不超过 IPC_SONG_MIDS_MAX。
  */
 export const PROBE_MIDS_MAX = 50
-/** 歌曲详情并发。推荐值 2。 */
+/** 歌曲详情并发（批量详情缺失时的单曲兜底）。推荐值 2。 */
 export const PROBE_DETAIL_CONCURRENCY = 2
+/** 批量歌曲详情单次请求上限。推荐值 50。 */
+export const SONG_DETAIL_BATCH = 50
 /**
  * vkey 批量大小。推荐值 50。
  * 约束：与 PROBE_MIDS_MAX 对齐（一批探测一次 vkey），且不超过 IPC_SONG_MIDS_MAX。

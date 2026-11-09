@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PROBE_VKEY_BATCH } from '../../src/shared/constants'
 import type { Credential } from '../../src/shared/types'
 
 vi.mock('electron', () => ({
@@ -72,16 +73,18 @@ beforeEach(() => {
   credentialState.value = { musicid: '42', musickey: 'key', expiredAtMs: null }
   downloadedState.value = null
   musicuMock.mockImplementation(async (module: string) => {
-    if (module === 'music.pf_song_detail_svr') {
+    if (module === 'music.trackInfo.UniformRuleCtrl') {
       return {
-        track_info: {
-          mid: 'song-mid',
-          id: 1,
-          name: 'song',
-          interval: 180,
-          file: { media_mid: 'media-mid' },
-          pay: { pay_play: 0, price_album: 0 }
-        }
+        tracks: [
+          {
+            mid: 'song-mid',
+            id: 1,
+            name: 'song',
+            interval: 180,
+            file: { media_mid: 'media-mid' },
+            pay: { pay_play: 0, price_album: 0 }
+          }
+        ]
       }
     }
     return vkeyResult(104003)
@@ -202,5 +205,48 @@ describe('api/song stream failures', () => {
       code: 'UPSTREAM_NETWORK',
       message: expect.stringContaining('104009')
     })
+  })
+
+  it('requests a 50-song vkey batch in one upstream call', async () => {
+    const mids = Array.from({ length: PROBE_VKEY_BATCH }, (_, index) => `mid-${index}`)
+    const vkeyParams: Array<{ songmid: string[]; filename: string[] }> = []
+    musicuMock.mockImplementation(
+      async (module: string, _method: string, param: Record<string, unknown>) => {
+        if (module === 'music.trackInfo.UniformRuleCtrl') {
+          const batch = param.mids as string[]
+          return {
+            tracks: batch.map((mid) => ({
+              mid,
+              id: 1,
+              name: mid,
+              interval: 100,
+              file: { media_mid: `media-${mid}` },
+              pay: { pay_play: 0, price_album: 0 }
+            }))
+          }
+        }
+        if (module === 'vkey.GetVkeyServer') {
+          const batch = param as { songmid: string[]; filename: string[] }
+          vkeyParams.push(batch)
+          return {
+            midurlinfo: batch.songmid.map((mid) => ({
+              songmid: mid,
+              purl: `purl-${mid}`,
+              result: 0
+            }))
+          }
+        }
+        throw new Error(`unexpected module ${module}`)
+      }
+    )
+    const { getStreamUrls } = await import('../../src/main/api/song')
+
+    const results = await getStreamUrls(mids, 'flac')
+
+    expect(results).toHaveLength(PROBE_VKEY_BATCH)
+    expect(vkeyParams).toHaveLength(1)
+    expect(vkeyParams[0].songmid).toHaveLength(PROBE_VKEY_BATCH)
+    expect(vkeyParams[0].filename).toHaveLength(PROBE_VKEY_BATCH)
+    expect(results.every((result) => result.url !== null)).toBe(true)
   })
 })
