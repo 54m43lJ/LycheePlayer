@@ -13,7 +13,6 @@ const auth = useAuthStore()
 const toast = useToast()
 
 const SORTS: Array<{ value: CommentSort; label: string }> = [
-  { value: 'hot', label: '点赞' },
   { value: 'latest', label: '最新' },
   { value: 'oldest', label: '最旧' }
 ]

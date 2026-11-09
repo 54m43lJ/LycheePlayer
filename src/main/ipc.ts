@@ -350,8 +350,7 @@ export function registerIpc(): void {
   handle('user.getProfile', async () => getProfile())
   handle('lyric.get', async (songMid: unknown) => getLyric(stringArg(songMid, '歌曲 mid')))
   handle('comment.get', async (songId: unknown, sort: unknown, pageNo: unknown) => {
-    const order: 'hot' | 'latest' | 'oldest' =
-      sort === 'hot' || sort === 'oldest' ? sort : 'latest'
+    const order: 'latest' | 'oldest' = sort === 'oldest' ? 'oldest' : 'latest'
     return getComments(String(songId), order, Number(pageNo) || 0)
   })
   handle('comment.like', async (commentId: unknown) =>

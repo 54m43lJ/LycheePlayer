@@ -103,7 +103,7 @@ export interface Comment {
   liked?: boolean
 }
 
-export type CommentSort = 'hot' | 'latest' | 'oldest'
+export type CommentSort = 'latest' | 'oldest'
 
 /** 歌手歌曲排序：上游 order=1 为最热，其余值均为最新。 */
 export type ArtistSongSort = 'hot' | 'latest'

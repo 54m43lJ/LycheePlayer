@@ -1251,3 +1251,41 @@
 | `CORE.html` | §1 File tree · `resources/` | 改 | 注明 `tray.png` 为 22×22 全彩托盘资源，无单色变体。 |
 | `USER.html` | §5.4 托盘 | 改 | 补一句：托盘只提供全彩图标，不随主题切换为单色 / 黑色图标。 |
 | `EVOLVE.md` | — | 增 | 补“托盘图标固定 22×22 全彩资源，避免高 DPI 下导出 44×44 pixmap”的约束。 |
+
+### 4.28 取消评论“点赞”排序（上游没有按点赞排序接口）
+
+问题描述：ISSUES 指出按点赞排序评论时报 `[ipc] UPSTREAM_CHANGED: 上游返回错误码 10000（music.globalComment.CommentRead.GetHotCommentList）`。原实现把 `hot` 当作评论排序交给 `GetHotCommentList`，而该方法的响应只有 `req_0.code = 10000` 与空的 `CommentList`，页面直接进入错误态。
+
+对 API 的正确理解：QQ 音乐的 Hot 是评论浏览列表之外的“热评”附加模块，只展示少量最热门评论，冷门歌曲可能为空；它不是可按页浏览的评论排序，也不能替代“按点赞数排序”。
+
+实测结论（歌曲 `97773`，匿名请求）：
+
+- `GetHotCommentList` 无论使用原参数、最小参数、`WithHot=1`、`PageNum=1` 还是去掉 `LastCommentSeqNo`，均返回 HTTP 200、顶层 `code=0`、`req_0.code=10000`，`CommentList.Comments` 为空；
+- `GetNewCommentList + WithHot=1` 返回的 `CommentList2` 是上述热评附加模块：首次 21 条、`Total=3965`、包含 22488 / 265810 等高赞评论；`PageNum=1` / `PageNum=2` 时 `CommentList2` 为空，说明它只有首屏，不是可分页的评论列表；
+- `GetNewCommentList` 额外传 `Order` / `Sort` / `SortType` / `OrderType` / `CommentSort` / `Hot` / `Type` / `SortMode` / `OrderBy` / `SortBy` / `Rank` 时，返回的评论顺序与点赞数完全一致，确认上游没有真正的“按点赞数排序”参数；
+- 因此不能把 `CommentList2` 强行当作评论排序结果，正确做法是取消该排序功能。
+
+解决方法：
+
+- `CommentSort` 从 `hot | latest | oldest` 改为 `latest | oldest`；
+- 评论排序控件删除“点赞”，只保留“最新 / 最旧”；默认仍为“最新”；
+- `comment.ts` 统一调用 `GetNewCommentList` 并读取 `CommentList`，不再使用 `GetHotCommentList`、`WithHot` 或 `CommentList2`；`oldest` 继续在已加载评论上按 `createdAtMs` 本地升序重排；
+- `comment.get` IPC 只接受 `latest` / `oldest`，旧渲染层若仍传入 `hot` 会回退为 `latest`，不会再把上游错误码暴露给用户；
+- 更新 `test/api/comment.test.ts`：锁定最新 / 最旧都使用 `GetNewCommentList`、不携带 `WithHot`，并保留评论过滤与本地排序校验；
+- 热评附加模块当前不实现；若后续需要在评论区之外展示，应作为独立区块单独加载，并允许空状态。
+
+验证：
+
+- 匿名实测 `GetHotCommentList` 返回 `req_0.code=10000`；`GetNewCommentList` 在多种排序参数下顺序均不变；`WithHot=1` 的 `CommentList2` 仅首屏可用；
+- `npm run typecheck` 通过；
+- `npx vitest run` 17 个测试文件 / 66 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌曲评论行 / §4.3 `QqCommentList` | 改 | 删除“点赞排序走 `GetHotCommentList`”；注明上游没有按点赞排序参数，`GetHotCommentList` 返回业务码 `10000`；`WithHot=1` 的 `CommentList2` 是热评附加模块，仅首屏、可为空，不是评论排序。 |
+| `CORE.html` | §4.15 `comment.ts` | 改 | `CommentSort` 改为 `latest | oldest`；删除 hot 分支与 `CommentList2` 读取；说明评论只支持最新 / 最旧。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论排序选项改为“最新 / 最旧”，删除“点赞”；若展示热评，应在评论列表外单独说明。 |
+| `EVOLVE.md` | — | 改 | 删除“评论按点赞排序”的要求；如需热评，改为独立的附加模块需求。 |
