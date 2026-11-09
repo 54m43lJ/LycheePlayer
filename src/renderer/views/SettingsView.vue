@@ -317,16 +317,6 @@ onBeforeUnmount(() => {
                 @click="toggleCloseToTray()"
               />
             </div>
-            <div class="setting-row">
-              <div>
-                <div class="setting-name">退出应用</div>
-                <div class="setting-desc">不受“关闭到托盘”影响，直接结束进程</div>
-              </div>
-              <button class="btn ghost small" @click="quitApp()">
-                <AppIcon name="power" :size="14" />
-                退出
-              </button>
-            </div>
           </div>
         </section>
 
@@ -468,6 +458,22 @@ onBeforeUnmount(() => {
             <div class="setting-row"><span class="setting-name">版本</span><span class="mono faint">{{ appVersion }}</span></div>
             <div class="setting-row"><span class="setting-name">音频引擎</span><span class="faint">HTML5 Audio</span></div>
             <div class="setting-row"><span class="setting-name">许可证</span><span class="faint">{{ appLicense }}</span></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head"><h2>应用</h2></div>
+          <div class="panel-body">
+            <div class="setting-row">
+              <div>
+                <div class="setting-name">退出应用</div>
+                <div class="setting-desc">不受“关闭到托盘”影响，直接结束进程</div>
+              </div>
+              <button class="btn ghost small" @click="quitApp()">
+                <AppIcon name="power" :size="14" />
+                退出
+              </button>
+            </div>
           </div>
         </section>
 
