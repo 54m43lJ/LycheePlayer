@@ -1346,3 +1346,53 @@
 | `CORE.html` | §4.72 `LyricsView.vue` | 改 | 文件改为 `components/LyricsOverlay.vue`；返回按钮关闭弹出层；从路由表删除 `/lyrics`。 |
 | `USER.html` | §3.4 页面表 / §5.2.5 歌词与评论 | 改 | 歌词 / 评论改为从播放条封面打开的弹出层，不再作为独立路由页；再次点击封面或返回按钮关闭。 |
 | `EVOLVE.md` | — | 改 | 删除“歌词 / 评论为普通路由页”的要求，改为内容区弹出层。 |
+
+### 4.30 批量下载卡住页面与 104009 全局截断
+
+问题描述：ISSUES 指出开始批量下载歌曲后，设置页、搜索页等界面无法打开，同时播放会收到 104009；要求先分析旧代码确认根因，确认改用批量接口后是否仍存在，再决定跳过或修复；并要求作为兜底，收到 104009 时触发 60 秒超时，期间任何上游请求都被截断并 toast 提示。
+
+根因分析：
+
+1. 上游请求侧（批量接口已解决）：
+   - 旧实现的 `getDetail` / `resolveStreamUrls` 对每首歌调用 `music.pf_song_detail_svr / get_song_detail_yqq`；`song.probe` 打开一个 50 首歌单页会先发 50 次详情，批量下载出队时每首也要先发 1 次详情再发 1 次 vkey。
+   - 所有请求共用进程级 FIFO 令牌桶（4 req/s）。搜索、歌单等前台请求会排在大批后台探测 / 下载请求之后，表现为“页面迟迟打不开”。
+   - 改用 `music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo` 后：50 首探测降为 1 次批量详情 + 1 次 vkey；下载出队仍只解析当前一首（1 次详情 + 1 次 vkey）；已下载歌曲直接本地播放、不再请求上游。该部分已由 4.25 覆盖，无需额外改造。
+2. 渲染侧（批量接口没有解决，仍然存在）：
+   - `stores/download.ts` 每 1.5 秒轮询 `download.list`，并把“所有已缓存资产 + 所有任务歌曲”重新提交给 `download.assetStates`；主进程对每个 mid 都要遍历全部任务，任务上千时单次轮询就是平方级开销，且 100 首一块的分块请求会互相叠加。
+   - `DownloadDrawer` 即使关闭也会渲染全部任务行；上千任务时每次轮询都会重排整张列表，阻塞渲染线程，使设置、搜索等较重的路由看起来无法打开。
+3. 104009 兜底缺失：收到 104009 时只做一次备用入口尝试并提示当前歌曲失败，没有进程级冷却；下载泵还会把后续待下载任务快速标记为失败。
+
+解决方法：
+
+- 渲染侧：
+  - `DownloadDrawer` 仅在 `ui.downloadOpen` 为真时渲染进度条、空状态与任务列表；关闭时不再保留上千行 DOM；
+  - `download` store 在有活动任务时继续轮询以更新歌曲表图标，但下载中心关闭后不渲染任务列表、也不扫描目录用量；任务全部结束后自动停止轮询；`startMany` 不再假装打开下载中心；
+  - 轮询只在任务状态发生变化时刷新对应歌曲的资产状态，首次载入不再把所有任务重新查一遍；`remove` / `clearDirectory` / `reset` 同步清理状态记录。
+- 104009 全局截断：
+  - `shared/constants.ts` 新增 `UPSTREAM_BLOCK_MS`，推荐值 `60_000`；
+  - `api/client.ts` 增加进程级截断窗口：`tripUpstreamBlock()` 设置截止时间并通知渲染层，`upstreamBlockRemainingMs()` 返回剩余时长，`assertUpstreamAvailable()` 在窗口内直接抛错；
+  - `fetchOnce` 在取令牌前后各检查一次，窗口内不再发出任何网络请求；`favorite.ts` 的签名写入与 `login.ts` 的 OAuth authorize 等绕过 `fetchOnce` 的请求，也在取令牌后显式检查；
+  - `musicu` 默认在 104009 时触发截断；vkey 需要先尝试备用入口，`song.ts` 用 `deferBlock` 暂停截断，只有两个入口都返回 104009 时才触发，备用入口成功则不进入冷却；
+  - 截断期间的错误统一为 `UPSTREAM_NETWORK`、`upstreamCode = 104009`，文案包含剩余秒数，不重试；
+  - `download/manager.ts` 在截断窗口内停止出队；若正在解析的任务收到 104009，则保持 `pending`、不标记失败，并在窗口结束后自动恢复下载；
+  - 主进程通过 `upstream:blocked` 事件广播截断通知，preload 暴露 `upstream.onBlocked`，`App.vue` 收到后 toast 提示暂停秒数与原因；同一窗口内只通知一次，避免并发失败刷屏。
+
+验证：
+
+- 新增 `test/api/client-block.test.ts`：104009 触发截断、后续请求在发出 fetch 前即失败、重复触发只通知一次、60 秒后自动解除、`deferBlock` 期间不触发；
+- `test/api/song-stream.test.ts` 增加断言：备用入口成功时不触发截断，两个入口都 104009 时触发一次；
+- `npm run typecheck` 通过；
+- `npx vitest run` 19 个测试文件 / 70 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 补 104009 全局截断：`UPSTREAM_BLOCK_MS`、`tripUpstreamBlock` / `upstreamBlockRemainingMs` / `assertUpstreamAvailable`；`fetchOnce` 取令牌前后检查；`musicu` 默认截断，vkey 用 `deferBlock` 等两次入口都失败后再截断；`upstream:blocked` 广播。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 截断窗口内停止出队；任务遇到 104009 保持待下载并在窗口结束后自动恢复，不标记失败。 |
+| `CORE.html` | §4.31 `stores/download.ts` / §4.72 `DownloadDrawer.vue` | 改 | 仅在下载中心打开时轮询与渲染任务列表；资产状态只刷新状态变化的任务，禁止每次轮询全量查询。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `UPSTREAM_BLOCK_MS`，推荐值 60_000。 |
+| `USER.html` | §5.3 错误与通知 | 改 | 收到 104009 时提示已暂停上游请求 60 秒，请检查网络 / VPN / 代理出口；期间播放、搜索、下载等上游操作直接失败。 |
+| `USER.html` | §5.2.8 下载中心 | 改 | 下载中心关闭时不渲染全量任务列表、不扫描目录用量；有活动任务时仍轮询状态以更新歌曲表图标，全部结束后停止；打开时刷新用量与完整进度。 |
+| `PROVIDER.html` | §4.1 vkey / 错误码表 | 改 | 补 104009 触发全局 60 秒截断：两个 vkey 入口都拒绝后不再请求上游。 |
