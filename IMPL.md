@@ -1396,3 +1396,36 @@
 | `USER.html` | §5.3 错误与通知 | 改 | 收到 104009 时提示已暂停上游请求 60 秒，请检查网络 / VPN / 代理出口；期间播放、搜索、下载等上游操作直接失败。 |
 | `USER.html` | §5.2.8 下载中心 | 改 | 下载中心关闭时不渲染全量任务列表、不扫描目录用量；有活动任务时仍轮询状态以更新歌曲表图标，全部结束后停止；打开时刷新用量与完整进度。 |
 | `PROVIDER.html` | §4.1 vkey / 错误码表 | 改 | 补 104009 触发全局 60 秒截断：两个 vkey 入口都拒绝后不再请求上游。 |
+
+### 4.31 下载中心改为完整页面
+
+问题描述：ISSUES 要求把下载中心从右侧弹出抽屉改为完整页面；清空目录、打开文件夹等操作按钮放在顶部；页面顶部的进度栏横跨窗口，并显示整体进度（形如 `(1/100)`）。
+
+解决方法：
+
+- 新增 `views/DownloadsView.vue`，删除 `components/DownloadDrawer.vue`，新增 `/downloads` 路由；侧栏“下载”由按钮改为 `RouterLink`，按当前路由高亮；
+- 页面顶部增加吸顶的整体进度栏，横跨内容区宽度：显示完成数 / 总数（如 `(1/100)`）与失败数，进度按 `done / total` 计算；任务列表为空时显示空状态；
+- `page-head-actions` 集中放置“清除已完成”“清空目录”“打开文件夹”，其中“清除已完成”只清记录，“清空目录”仍保留目录确认与路径提示；
+- 列表复用原任务行样式，保留单任务暂停 / 继续 / 删除；页面底部不再保留抽屉式操作栏；
+- 删除 `ui.downloadOpen` 及 `toggleDownload` / `closeDownload`：下载中心不再与播放队列 / 侧栏互斥，也不再作为弹出层；播放条与各歌曲表的单曲下载只加入队列并提示，不再自动打开下载中心；
+- `download` store 的 `setOpen` 改名为 `setVisible`：下载页挂载时开启轮询并刷新目录用量，离开时若仍有活动任务则保留轮询以更新歌曲表图标，全部结束后自动停止；
+- 新增 `utils/download-progress.ts` 与对应测试，统一整体进度计算。
+
+验证：
+
+- 新增 `test/download-progress.test.ts`：空列表、混合状态、全部完成三种情况的计数与百分比；
+- `npm run typecheck` 通过；
+- `npx vitest run` 20 个测试文件 / 73 个用例通过；
+- `npm run build` 通过，产物新增 `DownloadsView` 分包。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §1 文件树 / §4.67 | 改 | 删除 `components/DownloadDrawer.vue`，改为 `views/DownloadsView.vue`；下载中心为 `/downloads` 路由页，不再占弹出层。 |
+| `CORE.html` | §4.31 `stores/ui.ts` | 改 | 删除 `downloadOpen` / `toggleDownload` / `closeDownload`；下载中心不再参与抽屉互斥。 |
+| `CORE.html` | §4.31 `stores/download.ts` | 改 | `setOpen` 改为 `setVisible`；下载页可见时轮询并刷新目录用量，不可见时仅在存在活动任务时继续轮询。 |
+| `CORE.html` | §4.71 `utils/download-progress.ts` | 增 | 补 `downloadOverallProgress`：总任务 / 完成 / 失败 / 进行中 / 百分比。 |
+| `USER.html` | §3.4 页面表 / §5.2.8 下载中心 | 改 | 下载中心改为侧栏可进入的完整页面；顶部跨窗口整体进度栏显示 `(完成/总数)` 与失败数；清空目录 / 清除已完成 / 打开文件夹位于页面顶部。 |
+| `USER.html` | §5.2.2 侧栏 | 改 | “下载”改为路由入口，指向 `/downloads`；不再打开右侧抽屉。 |
+| `EVOLVE.md` | — | 改 | 下载中心由抽屉改为完整页面，补充顶部操作区与整体进度栏要求。 |
