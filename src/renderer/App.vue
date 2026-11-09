@@ -70,28 +70,40 @@ function openSidebar(): void {
   void playlistStore.validateRecent(true)
 }
 
-// 左边缘 / 主界面向右拖动显示侧栏，向左拖动隐藏。
+// 侧栏拖拽手势只在窄屏启用；宽屏仍通过侧栏按钮或空白点击进入。
+const narrowQuery = window.matchMedia('(max-width: 900px)')
 let dragStartX: number | null = null
 
+function hasSelectedText(): boolean {
+  const selection = window.getSelection()
+  return Boolean(selection && !selection.isCollapsed && selection.toString().trim())
+}
+
 function onPointerDown(event: PointerEvent): void {
-  if (event.button !== 0) return
+  if (event.button !== 0 || !narrowQuery.matches) return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, button, a, [role="button"], .range')) return
   if (event.clientX <= 10 || (ui.sidebarOpen && event.clientX < 300)) {
     dragStartX = event.clientX
     return
   }
-  // 主界面向右拖动可拉出侧栏；向左拖动可收起。
+  // 窄屏主界面向右拖动可拉出侧栏；向左拖动可收起。
   dragStartX = event.clientX
 }
 
 function onPointerUp(event: PointerEvent): void {
   if (dragStartX === null) return
   const delta = event.clientX - dragStartX
+  dragStartX = null
+  // 触屏长按会形成文本选区，此时应保留选择而不是切换侧栏。
+  if (event.pointerType === 'touch' && hasSelectedText()) return
   if (Math.abs(delta) > 60) {
     if (delta > 0 && !ui.sidebarOpen) openSidebar()
     else if (delta < 0 && ui.sidebarOpen) ui.closeSidebar()
   }
+}
+
+function onPointerCancel(): void {
   dragStartX = null
 }
 
@@ -104,6 +116,7 @@ onMounted(() => {
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('pointerdown', onPointerDown)
   window.addEventListener('pointerup', onPointerUp)
+  window.addEventListener('pointercancel', onPointerCancel)
   void (async () => {
     await Promise.allSettled([auth.refresh(), settings.load()])
     settings.applyTheme()
@@ -124,6 +137,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('keydown', onKeydown)
   window.removeEventListener('pointerdown', onPointerDown)
   window.removeEventListener('pointerup', onPointerUp)
+  window.removeEventListener('pointercancel', onPointerCancel)
 })
 
 watch(

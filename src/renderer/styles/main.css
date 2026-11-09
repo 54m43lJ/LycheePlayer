@@ -3866,3 +3866,15 @@ a {
   flex: 0 1 auto;
   min-width: 0;
 }
+
+/* 窄屏非触屏（鼠标）禁用文本选择，避免拖拽手势与文本选区冲突。 */
+@media (max-width: 900px) and (hover: hover) and (pointer: fine) {
+  .app-shell {
+    user-select: none;
+  }
+
+  .app-shell input,
+  .app-shell textarea {
+    user-select: text;
+  }
+}
