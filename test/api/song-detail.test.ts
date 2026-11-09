@@ -106,6 +106,31 @@ describe('api/song batch detail', () => {
     expect(songs).toHaveLength(SONG_DETAIL_BATCH + 1)
   })
 
+  it('sends two full 50-song batches sequentially with rate-limit spacing', async () => {
+    const mids = Array.from({ length: SONG_DETAIL_BATCH * 2 }, (_, index) => `n${index}`)
+    const simulatedLatencyMs = 300
+    const callTimes: number[] = []
+    musicuMock.mockImplementation(
+      async (_module: string, _method: string, param: { mids: string[] }) => {
+        callTimes.push(Date.now())
+        await new Promise((resolve) => setTimeout(resolve, simulatedLatencyMs))
+        // 模拟真实上游：响应顺序与请求顺序不同，批次之间必须串行等待。
+        return { tracks: [...param.mids].reverse().map((mid) => rawTrack(mid)) }
+      }
+    )
+    const { getDetail } = await import('../../src/main/api/song')
+
+    const songs = await getDetail(mids)
+
+    expect(musicuMock).toHaveBeenCalledTimes(2)
+    const first = musicuMock.mock.calls[0][2] as { mids: string[] }
+    const second = musicuMock.mock.calls[1][2] as { mids: string[] }
+    expect(first.mids).toEqual(mids.slice(0, SONG_DETAIL_BATCH))
+    expect(second.mids).toEqual(mids.slice(SONG_DETAIL_BATCH))
+    expect(callTimes[1] - callTimes[0]).toBeGreaterThanOrEqual(simulatedLatencyMs - 50)
+    expect(songs.map((song) => song.songMid)).toEqual(mids)
+  })
+
   it('falls back to a single detail request when the batch omits a song', async () => {
     musicuMock.mockImplementation(async (module: string) => {
       if (module === 'music.trackInfo.UniformRuleCtrl') {

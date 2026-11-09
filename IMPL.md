@@ -1175,15 +1175,17 @@
 - `shared/constants.ts` 新增 `SONG_DETAIL_BATCH = 50`，作为单次批量详情请求的歌曲上限；
 - `api/song.ts` 新增 `fetchTrackBatch`：按 `SONG_DETAIL_BATCH` 分块调用 `CgiGetTrackInfo`，按 `mid` 建索引，响应顺序不影响结果；
 - 新增 `fetchTracksById`：先走批量详情，仅对批量响应中缺失的歌曲回退到 `get_song_detail_yqq` 单曲接口，避免个别受限歌曲导致整批失败；单曲兜底仍使用 `PROBE_DETAIL_CONCURRENCY = 2`；
-- `getDetail` 与 `resolveStreams` 的详情获取统一改为 `fetchTracksById`，并继续写入 `trackMetaCache`；vkey 仍按 `PROBE_VKEY_BATCH = 50` 批量请求；
+- `getDetail` 与 `resolveStreams` 的详情获取统一改为 `fetchTracksById`，并继续写入 `trackMetaCache`；
+- vkey 的 50 首批量是**一次** `musicu` 请求携带 50 组 `songmid` / `songtype` / `filename`，上游在 `midurlinfo[]` 中逐首返回，不是逐首发请求；
 - 50 首歌的探测由约 50 次详情请求降为 1 次批量详情请求，只有缺失歌曲才产生额外单曲请求。
 
 验证：
 
 - 新增 `test/api/song-detail.test.ts`：多首歌只发一次 `CgiGetTrackInfo`，参数包含 `mids` / `types` / `modify_stamp`；超过 50 首按 50 分块；批量响应缺歌时回退单曲详情且保持请求顺序；
-- 更新 `test/api/song-stream.test.ts` 的详情 mock 为 `CgiGetTrackInfo` 响应，原有取流 / 104003 / 104004 / 104009 用例保持通过；
+- 新增两次完整 50 首批量用例：模拟每批 300ms 上游延迟，验证两批串行等待、第二次在第一次返回后才发起，且乱序响应仍能按原请求顺序还原；
+- 更新 `test/api/song-stream.test.ts` 的详情 mock 为 `CgiGetTrackInfo` 响应，并新增 50 首歌只为一次 vkey 请求：请求携带 50 组 `songmid` / `filename`，响应 `midurlinfo[]` 覆盖 50 首；原有取流 / 104003 / 104004 / 104009 用例保持通过；
 - `npm run typecheck` 通过；
-- `npx vitest run` 16 个测试文件 / 62 个用例通过；
+- `npx vitest run` 16 个测试文件 / 64 个用例通过；
 - `npm run build` 通过。
 
 修订建议：
