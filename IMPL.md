@@ -1223,3 +1223,31 @@
 | `CORE.html` | §4.48 `SettingsView.vue` | 改 | 说明“退出应用”位于右列独立“应用”面板，不再与“关闭到托盘”同组。 |
 | `USER.html` | §5.2.7 设置页 · 窗口 / 应用 | 改 | “窗口”区只保留关闭到托盘；右侧“应用”区提供退出应用，且不受关闭到托盘影响。 |
 | `EVOLVE.md` | — | 增 | 补设置页“退出应用”独立区块的位置要求。 |
+
+### 4.27 托盘图标固定为 22×22 全彩资源
+
+问题描述：ISSUES 指出托盘图标有时候全黑、有时候彩色，只希望保留彩色图标。原实现把 32×32 的 `resources/tray.png` 在运行时 `resize({ width: 22, height: 22 })` 后交给 `Tray`。在 2x 缩放的显示器上，缩放后的 `nativeImage` 会带有 1x / 2x 两个表示；Electron 导出 Linux `StatusNotifierItem` 的 `IconPixmap` 时采用 2x 位图，实际发送的是 44×44，而不是 22×22。部分托盘宿主（例如当前环境中的 Vicinae）按固定的 22×22 解析 pixmap，遇到 44×44 数据时会读错步长 / 通道，显示成整块黑色；在 1x 显示器上同一路径发送 22×22，颜色正常，于是表现为“有时候全黑”。
+
+解决方法：
+
+- 用 `resources/tray.svg` 重新导出 22×22 全彩 RGBA PNG，替换 `resources/tray.png` 与打包用副本 `build/tray.png`，不再保留黑色 / 单色托盘资源；
+- `tray.ts` 的 `loadTrayImage()` 直接 `nativeImage.createFromPath()`，不再在运行时缩放，避免高 DPI 下再次生成 44×44 的 `IconPixmap`；
+- 显式调用 `image.setTemplateImage(false)`，声明托盘图标为全彩图，而不是交给宿主按主题色 / 单色图标处理；
+- 图标为空时输出警告并放弃创建托盘，避免用空图占位产生黑色方块；
+- 新增 `test/tray-icon.test.ts`，锁定托盘资源必须是 22×22、8-bit RGBA（PNG color type 6），防止后续误换成单色或大尺寸图标。
+
+验证：
+
+- 用与 `loadTrayImage()` 相同的加载方式启动测试托盘，查询 D-Bus：`IconPixmap` 为 `22 22 1936`，像素采样包含 `A=255 / R=30 / G=215 / B=96` 的品牌绿色；修改前同一查询为 `44 44 7744`；
+- `npm run typecheck` 通过；
+- `npx vitest run` 17 个测试文件 / 66 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.19 `tray.ts` | 改 | 说明托盘图标固定加载 22×22 全彩 PNG，不在运行时缩放，且显式非模板图；空图标不创建托盘。 |
+| `CORE.html` | §1 File tree · `resources/` | 改 | 注明 `tray.png` 为 22×22 全彩托盘资源，无单色变体。 |
+| `USER.html` | §5.4 托盘 | 改 | 补一句：托盘只提供全彩图标，不随主题切换为单色 / 黑色图标。 |
+| `EVOLVE.md` | — | 增 | 补“托盘图标固定 22×22 全彩资源，避免高 DPI 下导出 44×44 pixmap”的约束。 |
