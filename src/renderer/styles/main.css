@@ -2587,7 +2587,7 @@ a {
 .downloads-progress-track span {
   display: block;
   height: 100%;
-  background: var(--gold);
+  background: var(--palette-purple-light);
   transition: width 0.2s ease;
 }
 
