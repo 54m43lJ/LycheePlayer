@@ -1163,3 +1163,35 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 增窄屏非触屏 `user-select: none` 规则，输入框 / 文本域恢复可选中。 |
 | `USER.html` | §5.2.1 窗口与布局 | 改 | 明确宽屏不提供主界面拖拽手势；窄屏触屏长按选择文本、拖动切换侧栏；窄屏鼠标端不支持文本选择。 |
 | `EVOLVE.md` | #11 优化左侧导航 | 改 | 补“拖拽手势仅窄屏启用”“触屏长按选择优先”“窄屏非触屏禁用文本选择”约束。 |
+
+### 4.25 歌曲探测改用批量详情接口
+
+问题描述：ISSUES 指出歌曲探测一首一首请求太笨拙，并引用 `sansenjian/qq-music-api` 的 `POST /batchGetSongInfo` 作为参考。原 `getDetail` 与 `resolveStreams` 都通过 `music.pf_song_detail_svr / get_song_detail_yqq` 逐首获取详情，再用并发 2 的 `mapLimit` 限制；打开一个 50 首歌单仍会产生约 50 次详情请求，再叠加 vkey 请求，探测形态集中且容易触发限流。
+
+调研结论：参考项目的 `batchGetSongInfo` 只是对每首歌并发调用同一个单曲接口，本身并没有真正合并上游请求；QQ 音乐实际提供批量详情接口 `music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo`，参数为等长数组 `mids`、`types`、`modify_stamp`，并带 `ctx: 0`、`client: 1`，响应为 `tracks[]`，字段与单曲详情的 `track_info` 一致。
+
+解决方法：
+
+- `shared/constants.ts` 新增 `SONG_DETAIL_BATCH = 50`，作为单次批量详情请求的歌曲上限；
+- `api/song.ts` 新增 `fetchTrackBatch`：按 `SONG_DETAIL_BATCH` 分块调用 `CgiGetTrackInfo`，按 `mid` 建索引，响应顺序不影响结果；
+- 新增 `fetchTracksById`：先走批量详情，仅对批量响应中缺失的歌曲回退到 `get_song_detail_yqq` 单曲接口，避免个别受限歌曲导致整批失败；单曲兜底仍使用 `PROBE_DETAIL_CONCURRENCY = 2`；
+- `getDetail` 与 `resolveStreams` 的详情获取统一改为 `fetchTracksById`，并继续写入 `trackMetaCache`；vkey 仍按 `PROBE_VKEY_BATCH = 50` 批量请求；
+- 50 首歌的探测由约 50 次详情请求降为 1 次批量详情请求，只有缺失歌曲才产生额外单曲请求。
+
+验证：
+
+- 新增 `test/api/song-detail.test.ts`：多首歌只发一次 `CgiGetTrackInfo`，参数包含 `mids` / `types` / `modify_stamp`；超过 50 首按 50 分块；批量响应缺歌时回退单曲详情且保持请求顺序；
+- 更新 `test/api/song-stream.test.ts` 的详情 mock 为 `CgiGetTrackInfo` 响应，原有取流 / 104003 / 104004 / 104009 用例保持通过；
+- `npm run typecheck` 通过；
+- `npx vitest run` 16 个测试文件 / 62 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌曲详情行 / §4.3 数据模型 | 改 | 增批量详情 `music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo`：`mids` / `types` / `modify_stamp` / `ctx` / `client` 与 `tracks[]` 响应；注明字段与 `get_song_detail_yqq` 的 `track_info` 一致。 |
+| `CORE.html` | §4.11 `api/song.ts` | 改 | 补 `fetchTrackBatch` / `fetchTracksById`：50 首分块、按 mid 索引、缺失歌曲单曲兜底；`getDetail` / `resolveStreams` 共用。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `SONG_DETAIL_BATCH`，推荐值 50；`PROBE_DETAIL_CONCURRENCY` 仅用于批量缺口的单曲兜底。 |
+| `USER.html` | §5.2.4 歌曲列表 / §5.3 错误与通知 | 不动 | 探测结果与用户可见状态不变，仅减少上游请求次数。 |
+| `EVOLVE.md` | — | 增 | 补“歌曲详情改用批量接口探测，50 首分块，缺失才单曲兜底”的要求。 |

@@ -72,16 +72,18 @@ beforeEach(() => {
   credentialState.value = { musicid: '42', musickey: 'key', expiredAtMs: null }
   downloadedState.value = null
   musicuMock.mockImplementation(async (module: string) => {
-    if (module === 'music.pf_song_detail_svr') {
+    if (module === 'music.trackInfo.UniformRuleCtrl') {
       return {
-        track_info: {
-          mid: 'song-mid',
-          id: 1,
-          name: 'song',
-          interval: 180,
-          file: { media_mid: 'media-mid' },
-          pay: { pay_play: 0, price_album: 0 }
-        }
+        tracks: [
+          {
+            mid: 'song-mid',
+            id: 1,
+            name: 'song',
+            interval: 180,
+            file: { media_mid: 'media-mid' },
+            pay: { pay_play: 0, price_album: 0 }
+          }
+        ]
       }
     }
     return vkeyResult(104003)

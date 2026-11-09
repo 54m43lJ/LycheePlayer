@@ -35,7 +35,7 @@
 - 歌手简介太长时提供展开/收起选项 [已解决]
 - 解决下载文件冲突：用`歌名-歌手-专辑.格式`的方式存储 [已解决]
 - 歌手详情页选中歌手介绍文字时界面突然变暗（不规律，只有某些文本选中时才发生，具体条件未知） [已解决]
-- 歌曲探测方案一首一首探测太笨拙。参考一下项目https://github.com/sansenjian/qq-music-api，如何实现的POST /batchGetSongInfo接口。
+- 歌曲探测方案一首一首探测太笨拙。参考一下项目https://github.com/sansenjian/qq-music-api，如何实现的POST /batchGetSongInfo接口。 [已解决]
 - 设置里的“退出应用”按钮移到右边单独开一块
 - 托盘图标有时候全黑有时候彩色。只需要保留彩色图标就行了
 - 按点赞排序评论的API有问题（[ipc] UPSTREAM_CHANGED: 上游返回错误码 10000（music.globalComment.CommentRead.GetHotCommentList））
