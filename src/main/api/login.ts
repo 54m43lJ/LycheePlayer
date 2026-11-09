@@ -2,6 +2,7 @@ import type { Credential } from '../../shared/types'
 import { OAUTH_TIMEOUT_MS, SESSION_REFRESH_AHEAD_MS, SESSION_REFRESH_FALLBACK_MS } from '../../shared/constants'
 import { getCredential, saveCredential } from '../credential'
 import {
+  assertUpstreamAvailable,
   mapUpstreamCode,
   throttleUpstream,
   UpstreamError,
@@ -51,6 +52,7 @@ export async function requestOAuthCodeWithCookies(
   })
 
   await throttleUpstream()
+  assertUpstreamAvailable()
   const authorizeResponse = await fetch(authorizeUrl, {
     method: 'POST',
     redirect: 'manual',

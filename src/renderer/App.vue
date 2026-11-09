@@ -15,6 +15,7 @@ import { usePlaylistStore } from './stores/playlist'
 import { useRecommendStore } from './stores/recommend'
 import { useSettingsStore } from './stores/settings'
 import { useUiStore } from './stores/ui'
+import { useToast } from './composables/toast'
 import { singerNames, songCover } from './utils/format'
 import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
 
@@ -27,6 +28,7 @@ const download = useDownloadStore()
 const recommend = useRecommendStore()
 const settings = useSettingsStore()
 const ui = useUiStore()
+const toast = useToast()
 
 const avatarLetter = computed(() => {
   const name = auth.profile?.nickname || auth.musicid || 'Q'
@@ -50,6 +52,7 @@ const viewedPlaylistId = computed(() =>
 const favoritesPath = `/playlist/${FAVORITES_PLAYLIST_ID}`
 
 let offCommand: (() => void) | null = null
+let offUpstreamBlocked: (() => void) | null = null
 
 function onLogout(): void {
   playlistStore.reset()
@@ -136,10 +139,15 @@ onMounted(() => {
   })()
 
   offCommand = window.lychee.player.onCommand((command) => player.handleCommand(command))
+  offUpstreamBlocked = window.lychee.upstream.onBlocked((event) => {
+    const seconds = Math.max(1, Math.ceil((event.untilMs - Date.now()) / 1000))
+    toast.error(`QQ 音乐风控：已暂停上游请求 ${seconds} 秒。${event.reason}`)
+  })
 })
 
 onBeforeUnmount(() => {
   offCommand?.()
+  offUpstreamBlocked?.()
   window.removeEventListener('lychee:logout', onLogout)
   document.removeEventListener('keydown', onKeydown)
   window.removeEventListener('pointerdown', onPointerDown)

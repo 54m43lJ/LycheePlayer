@@ -1,6 +1,7 @@
-import type { Credential, ErrorCode, IpcError } from '../../shared/types'
+import type { Credential, ErrorCode, IpcError, UpstreamBlockedEvent } from '../../shared/types'
 import {
   MUSICU_BUSY_BACKOFF_MS,
+  UPSTREAM_BLOCK_MS,
   UPSTREAM_NETWORK_BACKOFF_MS,
   UPSTREAM_QUOTA_BACKOFF_MS,
   UPSTREAM_RATE_LIMIT_BURST,
@@ -15,6 +16,50 @@ const USER_AGENT =
 
 /** 进程级稳定 GUID，播放链接请求使用。 */
 const GUID = String(Math.floor(1_000_000_000 + Math.random() * 8_000_000_000))
+
+const BLOCK_REASON = 'QQ 音乐拒绝了播放链接请求（104009），可能是网络 / VPN / 代理出口或临时风控'
+
+let blockedUntilMs = 0
+let blockNotifier: ((event: UpstreamBlockedEvent) => void) | null = null
+
+/** 注册全局截断通知；主进程通过 IPC 广播给渲染层展示 toast。 */
+export function setUpstreamBlockNotifier(
+  notifier: ((event: UpstreamBlockedEvent) => void) | null
+): void {
+  blockNotifier = notifier
+}
+
+/** 返回全局截断的剩余时长；0 表示当前可以请求上游。 */
+export function upstreamBlockRemainingMs(): number {
+  return Math.max(0, blockedUntilMs - Date.now())
+}
+
+/**
+ * 收到 104009 后进入全局截断窗口：窗口内所有上游请求立即失败，避免继续触发风控。
+ * 已经处于截断窗口时不重复通知，避免并发失败刷出多条 toast。
+ */
+export function tripUpstreamBlock(reason = BLOCK_REASON): void {
+  const wasBlocked = upstreamBlockRemainingMs() > 0
+  const untilMs = Date.now() + UPSTREAM_BLOCK_MS
+  blockedUntilMs = Math.max(blockedUntilMs, untilMs)
+  if (!wasBlocked) blockNotifier?.({ untilMs, reason })
+}
+
+/** 仅测试使用：清除截断状态。 */
+export function resetUpstreamBlock(): void {
+  blockedUntilMs = 0
+}
+
+export function assertUpstreamAvailable(): void {
+  const remaining = upstreamBlockRemainingMs()
+  if (remaining <= 0) return
+  throw new UpstreamError(
+    'UPSTREAM_NETWORK',
+    `上游请求已暂停（104009），请 ${Math.ceil(remaining / 1000)} 秒后重试`,
+    false,
+    104009
+  )
+}
 
 export class UpstreamError extends Error {
   readonly code: ErrorCode
@@ -103,6 +148,7 @@ export function throttleUpstream(): Promise<void> {
 }
 
 async function fetchOnce(req: UpstreamRequest): Promise<Response> {
+  assertUpstreamAvailable()
   const credential = req.credential === undefined ? getCredential() : req.credential
   const url = new URL(req.path, req.host)
   for (const [key, value] of Object.entries(req.params)) {
@@ -110,6 +156,8 @@ async function fetchOnce(req: UpstreamRequest): Promise<Response> {
   }
 
   await throttleUpstream()
+  // 排队取令牌期间可能刚好收到 104009，取到令牌后再检查一次。
+  assertUpstreamAvailable()
 
   let response: Response
   try {
@@ -209,6 +257,8 @@ export interface MusicuOptions {
   comm?: Record<string, unknown> | false
   /** undefined 使用当前登录态，null 强制匿名。 */
   credential?: Credential | null
+  /** vkey 需要先尝试备用入口，104009 由调用方在两次失败后统一触发截断。 */
+  deferBlock?: boolean
 }
 
 /** 调用 musicu.fcg 的单个 req_0 请求，返回其 data。 */
@@ -253,6 +303,7 @@ export async function musicu<T>(
         await sleep(MUSICU_BUSY_BACKOFF_MS * 2 ** attempt)
         continue
       }
+      if (code === 104009 && !options.deferBlock) tripUpstreamBlock()
       throw mapUpstreamCode(code, `${module}.${method}`)
     }
     if (!node) {

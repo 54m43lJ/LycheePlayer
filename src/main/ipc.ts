@@ -39,7 +39,7 @@ import { getAlbum } from './api/album'
 import { getStreamUrls } from './api/song'
 import { probeAvailability, clearAvailabilityCache } from './api/availability'
 import { getProfile } from './api/user'
-import { toIpcError } from './api/client'
+import { toIpcError, setUpstreamBlockNotifier } from './api/client'
 import { clearCredential, getCredential, loadCredential, saveCredential } from './credential'
 import { getSettings, saveSettings } from './settings'
 import { publishState } from './integration/mpris'
@@ -138,6 +138,9 @@ export function sendPlaybackToggle(): void {
 }
 
 export function registerIpc(): void {
+  // 104009 触发全局截断时，通知渲染层展示 toast；截断本身由上游请求入口执行。
+  setUpstreamBlockNotifier((event) => broadcast('upstream:blocked', event))
+
   // ---------- application ----------
   ipcMain.on('app.quit', () => app.quit())
 

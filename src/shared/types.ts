@@ -247,6 +247,13 @@ export interface SongAssetState {
   taskStatus: DownloadTask['status'] | null
 }
 
+/** 主进程收到 104009 后进入全局上游截断窗口的通知。 */
+export interface UpstreamBlockedEvent {
+  /** 截断结束时间（Unix 毫秒）；此前所有上游请求立即失败。 */
+  untilMs: number
+  reason: string
+}
+
 /** 主进程上报的边播边缓存进度。 */
 export interface AudioCacheProgress {
   songMid: string

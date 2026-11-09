@@ -31,6 +31,7 @@ import type {
   Settings,
   SongAssetState,
   SongAvailability,
+  UpstreamBlockedEvent,
   UrlResult,
   UserProfile
 } from './types'
@@ -141,5 +142,9 @@ export interface LycheeApi {
   player: {
     sendState(state: PlayerState): void
     onCommand(callback: (command: MprisCommand) => void): () => void
+  }
+  upstream: {
+    /** 收到 104009 进入全局截断窗口时通知渲染层展示提示。 */
+    onBlocked(callback: (event: UpstreamBlockedEvent) => void): () => void
   }
 }

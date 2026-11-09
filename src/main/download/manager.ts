@@ -19,6 +19,7 @@ import {
 } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { getSettings } from '../settings'
+import { UpstreamError, upstreamBlockRemainingMs } from '../api/client'
 import { getDetail, resolveStreamUrls } from '../api/song'
 import { peekAvailability } from '../api/availability'
 import { getCachedAudio, getCachedAudioInfo, linkCachedAudio } from '../cache/audio'
@@ -39,6 +40,7 @@ let loadedScope = ''
 let saveTimer: ReturnType<typeof setTimeout> | null = null
 let running = false
 let pumpScheduled = false
+let blockTimer: ReturnType<typeof setTimeout> | null = null
 
 function scope(): string {
   return getCredential()?.musicid ?? 'anonymous'
@@ -289,6 +291,11 @@ async function pump(): Promise<void> {
   running = true
   try {
     for (;;) {
+      // 上游处于 104009 截断窗口时不继续出队，等窗口结束后自动恢复。
+      if (upstreamBlockRemainingMs() > 0) {
+        schedulePumpAfterBlock()
+        break
+      }
       const next = [...tasks.values()].find((item) => item.task.status === 'pending')
       if (!next) break
       const { task } = next
@@ -321,6 +328,14 @@ async function pump(): Promise<void> {
         }
         await runDownload(next, resolved.url)
       } catch (error) {
+        if (error instanceof UpstreamError && error.upstreamCode === 104009) {
+          // 风控截断不是任务本身失败：保留待下载状态，窗口结束后继续。
+          task.status = 'pending'
+          task.error = ''
+          touchTask(task)
+          schedulePumpAfterBlock()
+          break
+        }
         task.status = 'failed'
         task.error = error instanceof Error ? error.message : String(error)
         touchTask(task)
@@ -329,6 +344,15 @@ async function pump(): Promise<void> {
   } finally {
     running = false
   }
+}
+
+function schedulePumpAfterBlock(): void {
+  if (blockTimer) return
+  const delay = Math.max(1000, upstreamBlockRemainingMs() + 1000)
+  blockTimer = setTimeout(() => {
+    blockTimer = null
+    schedulePump()
+  }, delay)
 }
 
 function schedulePump(): void {

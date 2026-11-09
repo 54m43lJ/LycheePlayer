@@ -97,16 +97,19 @@ watch(
       </button>
     </div>
 
-    <div v-if="downloads.tasks.some((task) => task.status === 'downloading')" class="download-total">
+    <div
+      v-if="ui.downloadOpen && downloads.tasks.some((task) => task.status === 'downloading')"
+      class="download-total"
+    >
       <div class="download-bar"><span :style="{ width: `${totalProgress}%` }" /></div>
     </div>
 
-    <div v-if="downloads.tasks.length === 0" class="lyrics-empty">
+    <div v-if="ui.downloadOpen && downloads.tasks.length === 0" class="lyrics-empty">
       <AppIcon name="download" :size="26" />
       <span>还没有下载任务</span>
     </div>
 
-    <div v-else class="download-list">
+    <div v-else-if="ui.downloadOpen" class="download-list">
       <section class="download-group">
         <div class="download-group-head">
           <div>

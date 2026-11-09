@@ -19,6 +19,8 @@ export const MUSICU_BUSY_BACKOFF_MS = 500
 export const UPSTREAM_RATE_LIMIT_PER_SECOND = 4
 /** 上游请求突发令牌容量。推荐值 8。 */
 export const UPSTREAM_RATE_LIMIT_BURST = 8
+/** 收到 104009 后全局截断上游请求的时长。推荐值 60_000 ms。 */
+export const UPSTREAM_BLOCK_MS = 60_000
 
 // ---------- 搜索 ----------
 
