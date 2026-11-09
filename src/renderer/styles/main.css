@@ -2576,11 +2576,13 @@ a {
 
 .downloads-head {
   margin: 0;
-  padding: 20px 34px 16px;
+  padding: 24px 34px 16px;
 }
 
 .downloads-progress-count {
-  padding: 4px 34px 0;
+  position: absolute;
+  top: 5px;
+  right: 34px;
   color: var(--muted);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
@@ -2912,7 +2914,7 @@ a {
   }
 
   .downloads-progress-count {
-    padding: 4px 20px 0;
+    right: 20px;
   }
 
   .downloads-content {
@@ -2926,11 +2928,11 @@ a {
 
 @media (max-width: 560px) {
   .downloads-head {
-    padding: 16px 12px 12px;
+    padding: 14px 12px 12px;
   }
 
   .downloads-progress-count {
-    padding: 4px 12px 0;
+    right: 12px;
   }
 
   .downloads-content {
