@@ -4,6 +4,7 @@ import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
 import DownloadDrawer from './components/DownloadDrawer.vue'
+import LyricsOverlay from './components/LyricsOverlay.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ToastStack from './components/ToastStack.vue'
 import { useAuthStore } from './stores/auth'
@@ -62,6 +63,7 @@ function quitApp(): void {
 }
 
 function onSidebarNavigate(): void {
+  ui.closeLyrics()
   ui.closeSidebar()
 }
 
@@ -108,7 +110,12 @@ function onPointerCancel(): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && ui.sidebarOpen) ui.closeSidebar()
+  if (event.key !== 'Escape') return
+  if (ui.lyricsOpen) {
+    ui.closeLyrics()
+    return
+  }
+  if (ui.sidebarOpen) ui.closeSidebar()
 }
 
 onMounted(() => {
@@ -168,6 +175,11 @@ watch(
   (open) => {
     if (open) void playlistStore.validateRecent(true)
   }
+)
+
+watch(
+  () => route.fullPath,
+  () => ui.closeLyrics()
 )
 </script>
 
@@ -280,6 +292,8 @@ watch(
     <main class="main">
       <RouterView />
     </main>
+
+    <LyricsOverlay v-if="ui.lyricsOpen" />
 
     <PlayerBar />
 

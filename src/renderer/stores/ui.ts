@@ -4,6 +4,7 @@ import { ref } from 'vue'
 export const useUiStore = defineStore('ui', () => {
   const queueOpen = ref(false)
   const downloadOpen = ref(false)
+  const lyricsOpen = ref(false)
   const sidebarOpen = ref(false)
 
   function closeOthers(keep: 'queue' | 'download' | 'sidebar'): void {
@@ -44,14 +45,25 @@ export const useUiStore = defineStore('ui', () => {
     if (sidebarOpen.value) closeOthers('sidebar')
   }
 
+  function toggleLyrics(): void {
+    lyricsOpen.value = !lyricsOpen.value
+  }
+
+  function closeLyrics(): void {
+    lyricsOpen.value = false
+  }
+
   return {
     queueOpen,
     downloadOpen,
+    lyricsOpen,
     sidebarOpen,
     toggleQueue,
     closeQueue,
     toggleDownload,
     closeDownload,
+    toggleLyrics,
+    closeLyrics,
     openSidebar,
     closeSidebar,
     toggleSidebar

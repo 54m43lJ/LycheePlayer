@@ -3328,7 +3328,17 @@ a {
   flex-wrap: wrap;
 }
 
-/* ---------- 歌词 / 评论路由页 ---------- */
+/* ---------- 歌词 / 评论弹出层 ---------- */
+
+.lyrics-overlay {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  bottom: var(--player-height);
+  z-index: 25;
+  background: var(--bg);
+}
 
 .lyrics-page {
   display: flex;
