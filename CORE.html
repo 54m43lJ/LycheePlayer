@@ -144,6 +144,7 @@
 <ul class="note">
   <li><code>src/shared/</code> 是 IPC 类型契约的唯一来源，主进程、preload 与渲染进程均从这里导入。</li>
   <li>文件树只列源码、构建配置与资源；文档与文档样式不在其中。</li>
+  <li><code>src/main/audio/</code> 已随 mpv 方案删除，文件树不再保留该目录；<code>src/renderer/audio/</code> 只保留 <code>engine.ts</code>（HTML5 Audio 实现）。</li>
   <li>带链接的文件在 <a href="#c4">§4</a> 有对应的签名小节；其余条目为脚本、配置、资源或纯展示文件。</li>
   <li><code>build/</code> 是 <code>electron-builder.yml</code> 的 <code>buildResources</code>，提供打包图标；<code>resources/</code> 通过 <code>extraResources</code> 复制到 <code>process.resourcesPath</code>；<code>packaging/arch/lychee-player.desktop</code> 由 <code>scripts/package-arch.mjs</code> 写入 tar 顶层。</li>
   <li>测试默认在 Node 环境执行且不触网：导入链经过 Electron / 原生协议时用 <code>vi.mock('electron')</code> 提供最小 <code>app</code> / <code>safeStorage</code> / <code>protocol</code> / <code>net</code>；player 与 playlist 测试 mock <code>AudioEngine</code>、<code>localStorage</code> 和 <code>window.lychee</code>；<code>test/replay.ts</code> 用 <code>Response</code> 替换全局 <code>fetch</code>。</li>
@@ -772,6 +773,7 @@ export async function saveSettings(next: Settings): Promise&lt;void&gt;;
 </code></pre>
 <ul class="note">
   <li>默认值：<code>defaultQuality='auto'</code>、<code>closeToTray=true</code>、<code>theme='dark'</code>、<code>audioCacheEnabled=true</code>、<code>downloadDir=~/Music/Lychee Player</code>；下载目录在模块加载阶段不调用 <code>app.getPath()</code>，由首次懒加载生成。</li>
+  <li><code>createDefaultSettings</code> 与 <code>sanitize</code> 都不再包含 <code>audioEngine</code>；设置模型只保留 HTML5 Audio 引擎，旧字段不读取、不写回。</li>
   <li><code>sanitize</code> 对未知值回退默认：非法音质 / 主题取默认，布尔字段只接受布尔值。</li>
   <li>保存为浅合并后立即写盘，文件权限 <code>0600</code>。</li>
 </ul>

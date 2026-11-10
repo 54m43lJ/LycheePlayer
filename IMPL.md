@@ -79,7 +79,7 @@
 
 状态：已解决。
 
-### 1.3 EVOLVE #13 的实现入口清单不完整
+### 1.3 EVOLVE #13 的实现入口清单不完整 [已解决]
 
 问题描述：`EVOLVE.md` #13 列出了 `mpv.ts`、`remote-engine.ts`、IPC、preload、types、constants、audio-protocol、player store、SettingsView、install.sh，但没有点名 `src/main/index.ts`（`stopMpv` 导入与 `before-quit`）、`src/main/settings.ts`（`audioEngine` 默认值与 sanitize）以及 `src/renderer/stores/settings.ts`（渲染进程默认设置）。如果只按清单逐项删除，类型检查仍会因为残留引用失败，或者设置页加载到已删除字段。
 
@@ -97,6 +97,21 @@
 | `CORE.html` | §1 File tree | 改 | 明确 `src/main/audio/` 删除后不再有目录条目，`src/renderer/audio/` 只保留 `engine.ts`。 |
 | `CORE.html` | §4.6 `settings.ts` | 改 | 明确 `createDefaultSettings` 与 `sanitize` 都删除 `audioEngine`。 |
 | `CORE.html` | §4.5 `main/ipc.ts` | 不动 | 该节不列具体 IPC 通道，mpv handler 清理属于代码侧，见 #13。 |
+
+实际操作（2026-11-10，分支 `doc/core-mpv-cleanup`）：
+
+- `CORE.html` §1 File tree note：明确 `src/main/audio/` 已随 mpv 方案删除、文件树不再保留该目录；`src/renderer/audio/` 只保留 `engine.ts`（HTML5 Audio 实现）。
+- `CORE.html` §4.6 `settings.ts` note：明确 `createDefaultSettings` 与 `sanitize` 都不再包含 `audioEngine`，旧字段不读取、不写回。
+- `CORE.html` §4.5 `main/ipc.ts`：按原表“不动”未处理。
+- `EVOLVE.md`：仓库中已不存在该文件，无法补充 #13 的实现入口清单。
+
+验证：
+
+- `src/main/audio/` 不存在；`src/renderer/audio/` 只有 `engine.ts`。
+- `grep -r "audioEngine\|mpv" src` 无结果；`src/main/settings.ts` 的 `createDefaultSettings` / `sanitize` 不再处理该字段。
+- `CORE.html` §1 note 与 §4.6 note 已写入上述约束。
+
+状态：已解决。
 
 ### 1.4 README.md 的同步约定与本次分支要求冲突
 
