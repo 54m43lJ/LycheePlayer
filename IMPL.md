@@ -1759,3 +1759,147 @@
 | `CORE.html` | §4.65 `composables/availability.ts` 附近 / §4.61 `stores/playlist.ts` | 改 | 说明写后刷新复用 `invalidate` + `poll`，不要在写操作内重复实现刷新或校验。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 添加 / 删除后歌单内容与计数由统一刷新流程更新；重复添加提示“已在歌单中”，未变化删除提示“歌曲不在歌单中”。 |
 | `EVOLVE.md` | #14 | 改 | 补“歌单写后刷新必须复用既有歌单刷新流程，不得在写接口内单独实现扫描 / 读回”的约束。 |
+
+### 4.40 评论区取消正文截断并修复分页游标
+
+问题描述：ISSUES 指出两条评论问题：
+
+- 太长的评论会被省略号截断；
+- 评论区加载更多不起作用。
+
+排查结论：
+
+- 截断来自 `styles/main.css` 后段 v2 覆盖规则：`.comment-text` 使用 `display: -webkit-box` + `-webkit-line-clamp: 2` + `overflow: hidden`，所有正文被强制限制为两行；
+- 加载更多来自分页参数误解：`getComments` 一直把 `PageNum` 当作页码传给 `GetNewCommentList`，但匿名实测 `PageNum = 0 / 1 / 2 / 3` 返回完全相同的第一页；
+- 上游真正的分页方式是 `LastCommentSeqNo` 游标，传入上一页最后一条评论的 `SeqNo` 才会返回下一页；
+- 评论 `SeqNo` 是 19 位整数，超过 `Number.MAX_SAFE_INTEGER`。普通 `JSON.parse` 会丢精度，游标一旦被四舍五入，可能重复返回上一页最后一条评论或产生重叠；
+- 上游单页会包含正文为空的记录，现有过滤逻辑会丢掉这些评论，因此下一页游标必须取原始最后一条评论的 `SeqNo`，不能取过滤后的最后一条。
+
+解决方法：
+
+- 删除 `.comment-text` 的两行 clamp，评论正文完整展示，仍保留自动换行与 `pre-wrap`；
+- 评论分页改为游标：
+  - `CommentPage` 新增可选 `nextCursor`；
+  - `comment.get` 的 IPC 第三参数由 `pageNo` 改为 `cursor`；
+  - `getComments(songId, sort, cursor)` 将游标传入 `LastCommentSeqNo`，`PageNum` 固定 0；
+  - `hasMore` 同时要求上游 `HasMore` 为真且 `nextCursor` 为非空数字；
+  - `CommentsPanel` 用 `cursor` 状态替代 `pageNo`，滚动到底时携带当前游标加载下一页；
+- 防止 `SeqNo` 精度丢失：
+  - `UpstreamRequest` / `MusicuOptions` 新增可选 `stringFields`；
+  - `upstreamRequest` 在 `JSON.parse` 前把指定字段的裸数字字面量改成字符串；
+  - 评论请求传入 `stringFields: ['SeqNo']`，`nextCursor` 始终为精确字符串；
+- 加载更多仍使用现有滚动到底触发，不新增按钮；追加后按评论 `id` 去重，最旧排序继续在合并结果上本地重排。
+
+验证：
+
+- 匿名实测同一歌曲（`BizId=97773`）：
+  - `PageNum = 0 / 1 / 2 / 3` 均返回相同第一页；
+  - `LastCommentSeqNo = 上一页最后一条 SeqNo` 返回下一页；
+  - 游标偏移 +1 会重复返回上一条，说明必须使用精确 `SeqNo`；
+- 新增回放测试：大整数 `SeqNo` 按字符串保留、第一页 `nextCursor` 正确、第二页请求携带 `LastCommentSeqNo`、`PageNum` 固定 0、`hasMore` 正确结束；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 88 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌曲评论行 / §4.3 `QqCommentList` | 改 | 增 `SeqNo` 字段；注明 `PageNum` 不生效，分页必须使用最后一条评论的 `SeqNo` 作为 `LastCommentSeqNo`，且 `SeqNo` 需按字符串保留精度。 |
+| `CORE.html` | §4.1 `types.ts` / §4.2 `ipc.ts` | 改 | `CommentPage` 增 `nextCursor`；`comment.get` 第三参数改为 `cursor`。 |
+| `CORE.html` | §4.15 `api/comment.ts` | 改 | `getComments` 使用 `LastCommentSeqNo` 游标，`PageNum` 固定 0；`hasMore` 需游标非空；`SeqNo` 通过 `stringFields` 保留精度。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 删除 `pageNo`，改用 `nextCursor`；滚动到底携带游标加载下一页；正文不截断。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comment-text` 的 `-webkit-line-clamp` 与 `overflow: hidden`，正文完整展示。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论正文完整展示、不截断；滚动到底加载更多。 |
+| `EVOLVE.md` | #5 | 改 | 补“长评论完整展示”与“使用 `LastCommentSeqNo` 游标分页”的要求。 |
+
+### 4.41 取消最旧排序，改为评论区跳转顶部 / 底部
+
+问题描述：按要求完全取消“最旧”排序，不再保留旧版评论接口与 `nextPage` 分页；评论区顶部只显示“评论”两个字。同时在右下角增加智能出现的独立圆形“跳转到顶部 / 跳转到底部”按钮，使用指向底线的箭头图标。点击“跳转到底部”时先一次性补拉全部剩余评论，再直接滚动到底部。顶部区域下方的分隔线去掉。
+
+解决方法：
+
+- 删除最旧排序：
+  - `CommentSort`、`nextPage`、`pageNo` 与旧版 `fcg_global_comment_h5.fcg` 请求全部移除；
+  - `comment.get` 只保留 `(songId, cursor?)`，继续使用 `LastCommentSeqNo` 游标；
+  - 工具栏删除“最新 / 最旧”切换，左侧替换为“评论”文本；
+- 新增跳转按钮：
+  - 在 `AppIcon` 增加 `to-top` / `to-bottom` 两个“箭头指向底线”的图标；
+  - 评论区右下角绝对定位两个独立圆形按钮，按滚动位置智能显示：
+    - `scrollTop > 120` 显示“跳转到顶部”；
+    - 还有下一页或未滚到底部时显示“跳转到底部”；
+  - 两个按钮分别执行平滑回顶、直接拉到底部；
+- “跳转到底部”补拉逻辑：
+  - 若仍有 `hasMore`，按 `loadMore()` 串行分页，直到没有下一页或达到 `COMMENT_LOAD_ALL_PAGE_MAX = 40` 页（25 × 40 = 1000 条）；
+  - 串行请求天然受全局限速约束，避免并发轰炸上游；
+  - 达到页数上限时提示“评论较多，已加载前 N 条”，避免热门歌曲无限拉取；
+  - 使用现有 `token` 作为取消标记：关闭歌词 / 评论弹出层（组件卸载）、切歌或刷新时立即让循环失效，不再发起后续页请求；
+  - 补拉完成后滚动到底部；按钮在补拉期间显示 spinner 并禁用；
+- 样式：
+  - `.comments-toolbar` 删除 `border-bottom`，去掉顶部区域下方分隔线；
+  - `.comments-title` 提供“评论”文本样式；
+  - `.comments-jump` / `.comments-jump-btn` 提供右下角圆形按钮、阴影与禁用态；
+  - `.comments-scroll` 底部 padding 增加到 72px，避免最后一条评论被按钮遮挡。
+
+验证：
+
+- 源码核对：评论区已无“最旧”分支与旧版评论接口；跳转循环在 `token` 变化后停止；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 88 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.1 `types.ts` / §4.2 `ipc.ts` | 改 | 删除 `CommentSort` / `nextPage` / `pageNo`；`comment.get(songId, cursor?)` 只保留最新评论游标。 |
+| `CORE.html` | §4.15 `api/comment.ts` | 改 | 删除最旧排序与旧版评论接口，只保留 `GetNewCommentList` + `LastCommentSeqNo`。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 工具栏改为“评论”；增加右下角跳转顶部 / 底部圆形按钮；跳转底部串行补拉剩余评论，最多 40 页，卸载 / 切歌 / 刷新时取消。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comments-toolbar` 下边框；增加 `.comments-title`、`.comments-jump`、`.comments-jump-btn`；调整 `.comments-scroll` 底部 padding。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `COMMENT_LOAD_ALL_PAGE_MAX = 40`。 |
+| `PROVIDER.html` | §4.3 `QqCommentList` | 改 | 删除最旧排序 / 旧版接口说明，只保留最新评论游标分页。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 删除最新 / 最旧排序，改为“评论”标题；增加右下角跳转顶部 / 底部按钮与跳转底部的补拉行为。 |
+| `EVOLVE.md` | #5 | 改 | 删除最旧排序要求；补跳转顶部 / 底部交互、补拉上限与取消约束。 |
+
+### 4.42 评论单次拉取上限实测与批量参数调整
+
+问题描述：跳转到底部需要大量补拉评论，原实现每页 20 条、最多 50 页，会发出 50 次上游请求，在 4 req/s 全局限速下明显卡顿。需要确定单次请求能否直接拉 500 条。
+
+实测结论（匿名 `GetNewCommentList`，歌曲 `97773`）：
+
+| `PageSize` | 上游结果 |
+|---:|---|
+| 20 | 正常返回 20 条 |
+| 24 | 正常返回 24 条 |
+| 25 | 正常返回 25 条 |
+| 26 / 30 / 40 / 50 / 100 / 200 / 300 / 500 / 1000 | `req_0.code = 10000`，评论 0 条 |
+
+旧版 `fcg_global_comment_h5.fcg` 的 `pagesize > 25` 虽然返回 `code=0`，但实际只给 10 条，属于不可靠的静默截断，不能用于批量读取。
+
+因此单次上限确定是 **25 条**，无法做到 500 条/页。
+
+解决方法：
+
+- `COMMENT_PAGE_SIZE` 从 20 调整为上游实测上限 **25**；
+- `COMMENT_LOAD_ALL_PAGE_MAX` 从 50 调整为 **40**，保持“跳转到底部”最多约 1000 条；
+- 批量补拉请求数从 50 次降为 40 次（减少 20%），但仍保持串行请求，不绕过全局令牌桶；
+- 跳转底部的取消机制、spinner、达到上限提示不变；
+- 单页变大后普通滚动分页也同步为 25 条/页。
+
+验证：
+
+- 匿名实测 25 成功、26 起返回业务码 10000，500 条/页不可用；
+- 新增测试断言评论请求 `PageSize = 25`；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 88 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌曲评论行 / §4.3 `QqCommentList` | 改 | 明确 `PageSize` 实测上限 25，26 起返回业务码 10000；不要尝试 500 条/页。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | `COMMENT_PAGE_SIZE = 25`；`COMMENT_LOAD_ALL_PAGE_MAX = 40`（约 1000 条）。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 跳转底部最多 40 页、约 1000 条；保持串行请求与取消机制。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论单页 25 条；跳转底部最多约 1000 条。 |
+| `EVOLVE.md` | #5 | 改 | 补评论单页上限 25 与跳转底部 40 页的约束。 |

@@ -110,8 +110,6 @@ export interface Comment {
   liked?: boolean
 }
 
-export type CommentSort = 'latest' | 'oldest'
-
 /** 歌手歌曲排序：上游 order=1 为最热，其余值均为最新。 */
 export type ArtistSongSort = 'hot' | 'latest'
 
@@ -125,8 +123,8 @@ export interface CommentPage {
   comments: Comment[]
   total: number
   hasMore: boolean
-  pageNo?: number
-  sort?: CommentSort
+  /** 下一页游标（上游 LastCommentSeqNo）；为空表示没有下一页。 */
+  nextCursor?: string
 }
 
 export interface SongAvailability {

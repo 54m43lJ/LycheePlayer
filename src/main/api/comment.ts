@@ -1,8 +1,7 @@
 import type {
   Comment,
   CommentLikeResult,
-  CommentPage,
-  CommentSort
+  CommentPage
 } from '../../shared/types'
 import { COMMENT_PAGE_SIZE } from '../../shared/constants'
 import { getCredential } from '../credential'
@@ -10,6 +9,7 @@ import { UpstreamError, musicu } from './client'
 
 interface RawComment {
   CmId?: string | number
+  SeqNo?: string | number
   Nick?: string
   Avatar?: string
   Content?: string
@@ -56,53 +56,52 @@ function toComment(raw: RawComment): Comment {
   }
 }
 
-/** 歌曲评论；songId 为上游数字歌曲 ID。上游只提供最新评论，oldest 在本地重排。 */
+/** 歌曲评论；songId 为上游数字歌曲 ID。 */
 export async function getComments(
   songId: string,
-  sort: CommentSort = 'latest',
-  pageNo = 0
+  cursor = ''
 ): Promise<CommentPage> {
   const id = songId.trim()
   if (!/^\d+$/.test(id)) {
-    return { comments: [], total: 0, hasMore: false, pageNo: 0, sort }
+    return { comments: [], total: 0, hasMore: false }
   }
 
   // 必须携带登录 Cookie，上游才会按当前用户返回 IsPraised；未登录时自动匿名。
+  // SeqNo 可能超过 Number 安全范围，按字符串解析供下一页游标使用。
   const data = await musicu<CommentListData>(
     'music.globalComment.CommentRead',
     'GetNewCommentList',
     {
       PageSize: COMMENT_PAGE_SIZE,
-      PageNum: Math.max(0, Math.floor(pageNo)),
+      PageNum: 0,
       HashTagID: '',
       BizType: 1,
       PicEnable: 1,
-      LastCommentSeqNo: '',
+      LastCommentSeqNo: cursor,
       SelfSeeEnable: 1,
       BizId: id,
       AudioEnable: 1,
       BizSubType: 2
-    }
+    },
+    { stringFields: ['SeqNo'] }
   )
 
   const list = data.CommentList
   if (!list) {
     throw new UpstreamError('UPSTREAM_CHANGED', '评论响应缺少 CommentList')
   }
-  let comments = (list.Comments ?? [])
+  const raw = list.Comments ?? []
+  const nextCursor = String(raw.at(-1)?.SeqNo ?? '')
+  const comments = raw
     .map(toComment)
     .filter((comment) => comment.id.length > 0 && comment.content.trim().length > 0)
     .slice(0, COMMENT_PAGE_SIZE)
-  if (sort === 'oldest') {
-    comments = comments.slice().sort((a, b) => a.createdAtMs - b.createdAtMs)
-  }
 
   return {
     comments,
     total: Number(list.Total ?? comments.length),
-    hasMore: Boolean(list.HasMore),
-    pageNo,
-    sort
+    hasMore: Boolean(list.HasMore) && /^\d+$/.test(nextCursor),
+    nextCursor
   }
 }
 
