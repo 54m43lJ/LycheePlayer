@@ -819,7 +819,6 @@ a {
 }
 
 .song-action {
-  width: 128px;
   text-align: left !important;
 }
 
@@ -2370,10 +2369,6 @@ a {
   .song-table .song-duration-col,
   .song-table .song-duration {
     width: 48px !important;
-  }
-
-  .song-table .song-action {
-    width: 96px !important;
   }
 
   .song-action-inner {
