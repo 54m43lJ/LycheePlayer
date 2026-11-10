@@ -72,7 +72,6 @@ async function toggleTheme(): Promise<void> {
   const theme = settings.settings.theme === 'light' ? 'dark' : 'light'
   try {
     await settings.update({ theme })
-    toast.show(theme === 'light' ? '已切换到浅色模式' : '已切换到深色模式')
   } catch (err) {
     toast.error(err instanceof Error ? err.message : String(err))
   }
@@ -281,13 +280,13 @@ watch(
           <span class="nav-text">退出</span>
         </button>
         <button
-          class="nav-item"
+          class="icon-btn sidebar-theme-toggle"
           type="button"
           :title="`切换到${targetThemeLabel()}模式`"
+          aria-label="切换配色"
           @click="toggleTheme()"
         >
           <AppIcon name="theme" :size="18" />
-          <span class="nav-text">切换配色</span>
         </button>
       </nav>
 
