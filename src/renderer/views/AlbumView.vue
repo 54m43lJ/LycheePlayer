@@ -3,6 +3,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import type { AlbumDetail } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
+import CatalogDescription from '../components/CatalogDescription.vue'
 import CoverArt from '../components/CoverArt.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
@@ -157,7 +158,7 @@ watch(mid, () => void load(), { immediate: true })
         </div>
       </section>
 
-      <p v-if="detail.description" class="catalog-desc">{{ detail.description }}</p>
+      <CatalogDescription v-if="detail.description" :text="detail.description" />
 
       <div class="section-title">
         <span>歌曲</span>
