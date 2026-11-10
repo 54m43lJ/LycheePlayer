@@ -1616,3 +1616,106 @@
 | `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 未知上游错误需保留 `upstreamCode`，供写操作识别 80092 等业务状态。 |
 | `USER.html` | §5.3 错误与通知 | 改 | 80092 在写后读回确认成功时不提示错误；未生效时提示歌曲可能已在歌单中或歌单状态已变化。 |
 | `EVOLVE.md` | #14 | 不动 | 写接口细节由 CORE / PROVIDER 主责，本次仅修正参数契约。 |
+
+### 4.37 原生删除确认替换为应用内确认框
+
+问题描述：歌单删除仍使用 `window.confirm`，样式由操作系统决定，与应用主题和圆角面板不一致；原生弹窗还会阻塞渲染进程，且无法表达危险操作、补充说明和统一键盘行为。
+
+解决方法：
+
+- 新增 `components/ConfirmDialog.vue`：复用现有 `.dialog-backdrop` / `.dialog` 视觉，提供标题、说明、确认文案与危险态；说明支持换行；
+- 打开时默认聚焦“取消”，`Esc`、点击遮罩或关闭按钮都取消，避免破坏性操作被回车误确认；
+- 删除确认统一使用红色危险按钮，新增 `.btn.danger` 与 `.confirm-message` 样式；
+- 替换渲染层全部 `window.confirm`：
+  - 歌单详情删除歌曲；
+  - 我的歌单删除歌单；
+  - 下载中心删除任务、清空下载目录；
+  - 设置页清空下载目录；
+- 各页面只保存待确认对象 / 待执行动作，确认后再调用原有删除或清空逻辑，业务链路不变。
+
+验证：
+
+- `grep window.confirm src/renderer` 无结果；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 87 个用例通过；
+- `npm run build` 通过，产物包含独立 `ConfirmDialog` 分包。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §1 文件树 / §4.36 附近 | 增 | 新增 `components/ConfirmDialog.vue`。 |
+| `CORE.html` | §4.39 `SongTable.vue` / §4.46 `PlaylistView.vue` / §4.48 `SettingsView.vue` / §4.67 `DownloadsView.vue` / §4.68 `LibraryView.vue` | 改 | 删除 / 清空确认统一使用应用内 `ConfirmDialog`，不再调用 `window.confirm`。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.btn.danger`、`.confirm-dialog`、`.confirm-message` 样式。 |
+| `USER.html` | §5.2.8 歌单详情 / §5.2.7 设置页 / §5.2.8 下载中心 | 改 | 确认框为应用内圆角面板，危险操作使用红色确认按钮，Esc / 点击遮罩取消。 |
+| `EVOLVE.md` | — | 增 | 补“不调用原生 `window.confirm`，统一使用应用内确认框”的约束。 |
+
+### 4.38 添加到歌单链路耗时分析与优化
+
+问题描述：添加到歌单从点击目标歌单到出现“已添加到歌单”等待时间很长。按代码链路排查，主要耗时来自写前后的整单成员扫描和重复元数据请求，而不是写入本身。
+
+原链路与请求数（添加 1 首，歌单 N 首）：
+
+1. 渲染层 `PlaylistPicker.isDuplicate` 读取整单缓存（本地 IPC，通常 1–10ms）；
+2. 主进程 `addSongs`：
+   - `readMemberMids` 预先扫描整单，`ceil(N / 50)` 次 `CgiGetDiss`；
+   - `readMeta` 再请求第 0 页，1 次 `CgiGetDiss`；
+   - `fetchTrackIdentities` 逐首请求歌曲详情，1 次 `get_song_detail_yqq`；
+   - `AddSonglist` 写入，1 次；
+   - 写后 `readMemberMids` 再扫描整单，`ceil(N / 50)` 次；
+   - 最后 `readMeta` 再请求第 0 页，1 次；
+3. 合计 `2 × ceil(N / 50) + 4` 次上游请求，耗时随歌单长度线性增长。
+
+实测匿名上游 RTT（本机网络、5 次中位数）：
+
+| 请求 | 中位耗时 |
+|---|---|
+| `CgiGetDiss` 单页 | 294ms |
+| 单曲 `get_song_detail_yqq` | 338ms |
+| 批量 `CgiGetTrackInfo` | 97ms |
+| `PlaylistDetailWrite` | 87ms（匿名被拒，仅测到网络往返） |
+
+按上述 RTT 估算添加 1 首：
+
+| 歌单规模 | 原请求数 | 原估算耗时 | 优化后请求数 | 优化后估算 |
+|---|---|---|---|---|
+| 50 首 | 6 | ≈1.6s | 4 | ≈0.8s |
+| 500 首 | 24 | ≈6.9s | 4 | ≈0.8s |
+| 1000 首 | 44 | ≈12.8s | 4 | ≈0.8s |
+
+实际认证写入可能比匿名的 87ms 更慢，且限流令牌不足时会排队；但主要增长项是整单扫描。
+
+解决方法：
+
+- 删除写入前的整单成员预扫描；重复歌曲由上游 80092 + 写后读回判断，不再为了去重先扫全单；
+- 元数据只读一次，拿到 `dirId`、`tid` 与旧总数；
+- 歌曲身份改为批量详情 `CgiGetTrackInfo`（按 `SONG_DETAIL_BATCH` 分块，缺失歌曲再单曲兜底）；
+- 写后只读取“旧总数之后”的尾部页确认新歌，通常 1 次请求；只有尾部找不到或遇到 80092 时才回退完整扫描；
+- 添加成功后直接使用尾部页返回的最新 `PlaylistMeta`，不再额外请求一次 `readMeta`；
+- 删除歌曲同样去掉写前整单扫描，写后完整扫描一次并复用最后一页的元数据，避免“扫描 → 单页 → 写入 → 扫描 → 单页”的重复路径。
+
+优化后添加 1 首的请求链：
+
+1. `readMeta` 1 次 `CgiGetDiss`；
+2. 批量歌曲身份 1 次 `CgiGetTrackInfo`；
+3. `AddSonglist` 1 次；
+4. 尾部读回 1 次 `CgiGetDiss`。
+
+正常追加场景与歌单长度无关，约 4 次请求；只有重复添加或上游未按尾部追加时才回退完整扫描。
+
+验证：
+
+- 匿名实测各接口 RTT，确认耗时主要来自整单扫描而非写入；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 87 个用例通过（含批量身份、尾部读回与 80092 读回判定）；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 增删歌曲不再写前全量扫描；添加用批量详情 + 尾部读回，重复 / 异常才回退完整扫描；删除写后扫描一次并复用末页元数据。 |
+| `CORE.html` | §4.11 `api/song.ts` | 改 | 歌曲身份统一走批量详情 `CgiGetTrackInfo`，按 50 首分块，缺失再单曲兜底。 |
+| `PROVIDER.html` | §4.1 歌单增删歌曲行 | 改 | 说明 `AddSonglist` 通常追加到末尾；写后读回可只查尾部页，重复 / 异常时再全量扫描；80092 不能单独作为失败依据。 |
+| `USER.html` | §5.2.8 歌单详情 | 改 | 添加到歌单正常应在约 1 秒内完成，且不随歌单长度明显变慢；重复添加直接提示“已在歌单中”。 |
+| `EVOLVE.md` | #14 | 改 | 补“歌单写入确认不得每次全量扫描，优先尾页读回”的性能约束。 |
