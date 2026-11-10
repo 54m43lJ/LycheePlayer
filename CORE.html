@@ -98,7 +98,8 @@
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
 │       │   ├── <a href="#c4-35">toast.ts</a>                  Toast 队列
-│       │   └── <a href="#c4-65">availability.ts</a>           可用性探测调度
+│       │   ├── <a href="#c4-65">availability.ts</a>           可用性探测调度
+│       │   └── <a href="#c4-78">revealer-touch.ts</a>          Revealer 触屏手势
 │       ├── components/
 │       │   ├── <a href="#c4-36">AppIcon.vue</a>               图标集
 │       │   ├── <a href="#c4-37">CoverArt.vue</a>              封面与占位
@@ -1393,6 +1394,8 @@ const emit = defineEmits&lt;{
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
   <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭；点击按钮本身按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换，键盘焦点可打开弹层，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
   <li>音质 revealer：按钮显示 <code>qualityPreference</code> 的短名称（<code>AUTO / 128K / 320K / FLAC</code>），点击调用 <code>player.cycleQualityPreference()</code> 按同一固定顺序循环；悬停 120ms 打开、离开 200ms 关闭，弹层只渲染除当前偏好外的其它档位，顺序与 <code>QUALITY_PREFERENCE_OPTIONS</code> 一致。选择调用 <code>player.updateDefaultQuality()</code>；弹层与播放模式 / 音量弹层互斥。</li>
+  <li>收藏按钮为特殊 revealer：点击按钮调用 <code>playlist-edit.toggleFavorite()</code>；<code>likeWrap</code> 悬停 / 聚焦 120ms 打开、离开 200ms 关闭，弹层只有一个“加入歌单”图标按钮，点击后通过 <code>Teleport</code> 渲染 <code>PlaylistPicker</code> 并传入当前曲目 mid；没有模式切换。</li>
+  <li><code>useRevealerTouch</code> 为播放模式、音质与收藏三个 revealer 提供触屏手势：从按钮开始纵向滑动超过 8px 才打开弹层并捕获指针，按选项中点与手指 Y 距离高亮最近项；松开确认，取消则关闭；滑动后的 click 在容器捕获阶段抑制。轻点不触发手势，保留原有 click 行为。音量条为特殊个例，不参与该手势。</li>
   <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
 </ul>
 
@@ -2025,6 +2028,27 @@ interface DownloadStore {
   <li>专辑信息使用 <code>music.musichallAlbum.AlbumInfoServer / GetAlbumDetail</code>，参数 <code>{ albumMid }</code>：取 <code>basicInfo.albumName</code> / <code>publishDate</code> / <code>desc</code> 与 <code>singer[]</code>；封面由 <code>mid</code> 拼 <code>https://y.gtimg.cn/music/photo_new/T002R500x500M000&lt;mid&gt;.jpg</code>。</li>
   <li>歌曲使用 <code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code>，参数 <code>{ albumMid, begin: offset, num: 50, order: 0 }</code>；返回 <code>totalNum</code> 与 <code>songList[].songInfo</code>。</li>
   <li><code>mid</code> 为空时返回空详情；失败映射为 <code>UPSTREAM_CHANGED</code> / 现有网络错误，不使用搜索或歌单数据兜底。</li>
+</ul>
+
+<h3 id="c4-78">4.78 src/renderer/composables/revealer-touch.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function useRevealerTouch(options: {
+  container: Ref&lt;HTMLElement | null&gt;;
+  open: () =&gt; void;
+  close: () =&gt; void;
+  confirm: (index: number) =&gt; void;
+}): {
+  highlighted: Ref&lt;number&gt;;
+  onPointerDown(event: PointerEvent): void;
+  onPointerMove(event: PointerEvent): void;
+  onPointerUp(event: PointerEvent): void;
+  onPointerCancel(event: PointerEvent): void;
+  onClickCapture(event: Event): void;
+};
+</code></pre>
+<ul class="note">
+  <li>仅处理 <code>pointerType === 'touch'</code>；纵向移动超过 8px 才进入手势，调用 <code>open()</code> 并捕获指针，因此轻点不会打断按钮原有 click。</li>
+  <li>弹层内带 <code>data-revealer-option</code> 的节点按中点与手指 Y 距离匹配最近项，写入 <code>highlighted</code>；松开确认，取消手势则关闭。</li>
+  <li>滑动后通过容器捕获阶段的 <code>onClickCapture()</code> 抑制紧随其后的 click，避免重复执行按钮动作。</li>
 </ul>
 
 <h3 id="c4-77">4.77 src/renderer/components/PlaylistPicker.vue <a class="backlink" href="#c1">文件树</a></h3>

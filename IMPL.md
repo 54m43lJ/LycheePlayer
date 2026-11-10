@@ -2262,3 +2262,37 @@
 |---|---|---|---|
 | `USER.html` | §5.2.2 侧栏与导航 | 改 | 已更新：应用组“退出”下方提供仅图标、无文字的配色切换按钮，与设置页共用 `Settings.theme`，切换不弹 Toast。 |
 | `CORE.html` | §4.23 `App.vue` | 改 | 已更新：切换配色读取并写回 `Settings.theme`，复用同一 store 与即时应用逻辑。 |
+
+### 4.54 播放条收藏改为特殊 revealer，并为 revealer 增加触屏手势
+
+问题描述：ISSUES 要求把播放条收藏按钮做成特殊 revealer：按钮本身加入 / 取消我喜欢，弹出按钮为“加入歌单”，没有模式切换。同时尝试为所有 revealer 增加触屏交互：从按钮开始上下滑动时保持弹层打开并切换选项，松开确认；鼠标移出范围取消。
+
+实现：
+- 收藏按钮：
+  - 外层改为 `likeWrap`，悬停 / 聚焦 120ms 打开、离开 200ms 关闭，点击外部与 Esc 关闭；
+  - 按钮本身继续调用 `playlist-edit.toggleFavorite()`，不循环切换任何模式；
+  - 弹层只有一个“加入歌单”图标按钮，点击后通过 `Teleport` 打开 `PlaylistPicker`，传入当前歌曲 mid；
+  - 选中歌单后的添加、去重与提示继续由 `PlaylistPicker` / `playlist-edit` 统一处理。
+- 新增 `composables/revealer-touch.ts`：
+  - 仅处理 `pointerType === 'touch'`；纵向移动超过 8px 才打开弹层并捕获指针，轻点不拦截原有 click；
+  - 弹层内带 `data-revealer-option` 的节点按中点与手指 Y 距离匹配最近项，写入 `highlighted`；
+  - 松开确认，`pointercancel` 关闭；滑动后通过容器捕获阶段抑制随后的 click。
+- 播放模式、音质、收藏三个 revealer 接入该手势；音量条仍为特殊个例，不参与纵向选项手势。
+- 相关样式：新增 `like-wrap` / `like-menu` / `like-option`，并让 `.mode-button` / `.quality-chip` / `.like-button` 使用 `touch-action: none`；高亮项使用 `touch-active`。
+- 文档更新：USER §2 revealer 约定补充触屏规则；USER §5.2.3 补充收藏特殊 revealer；CORE §4.40 记录实现，新增 §4.78 `revealer-touch.ts` 签名与手势约束。
+
+验证：
+- 触屏轻点仍走原有 click；滑动超过阈值才进入手势，避免点击被吞；
+- 手势按手指位置高亮并松开确认，取消时关闭；
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 107 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §2 CONVENTIONS · Revealer | 改 | 已更新：补充触屏滑动打开 / 高亮 / 松开确认、轻点保留原行为、鼠标离开取消。 |
+| `USER.html` | §5.2.3 播放条 | 改 | 已更新：收藏为特殊 revealer，弹层仅“加入歌单”。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` / §4.78 `revealer-touch.ts` | 改 | 已更新：收藏 revealer、PlaylistPicker 接入与触屏手势实现。 |
+| `EVOLVE.md` | #5 / #11 | 改 | 补收藏特殊 revealer 与 revealer 触屏手势约束；音量条仍为特殊个例。 |
