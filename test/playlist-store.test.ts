@@ -5,10 +5,12 @@ import type {
   PlaylistCacheEntry,
   PlaylistMeta,
   PlaylistPage,
+  PlaylistSnapshot,
   Song,
   SongAvailability,
   UrlResult
 } from '../src/shared/types'
+import { PLAYLIST_REFRESH_RETRY_MS } from '../src/shared/constants'
 
 const noop = (): void => undefined
 
@@ -81,6 +83,19 @@ function ok<T>(data: T): IpcResult<T> {
   return { ok: true, data }
 }
 
+function snapshot(songs: Song[], sourceTotal = songs.length): PlaylistSnapshot {
+  return {
+    meta: { ...meta, songCount: songs.length },
+    songs,
+    total: songs.length,
+    sourceTotal
+  }
+}
+
+function songs(count: number): Song[] {
+  return Array.from({ length: count }, (_, index) => song(String(index)))
+}
+
 function state(mid: string, playable: boolean): SongAvailability {
   return { songMid: mid, playable, maxQuality: playable ? '320k' : null, checkedAtMs: 1 }
 }
@@ -91,6 +106,8 @@ function pendingUrls(): Promise<IpcResult<UrlResult[]>> {
 
 let getMock: ReturnType<typeof vi.fn>
 let getCachedMock: ReturnType<typeof vi.fn>
+let getSnapshotMock: ReturnType<typeof vi.fn>
+let cancelSnapshotMock: ReturnType<typeof vi.fn>
 let saveCacheMock: ReturnType<typeof vi.fn>
 
 beforeEach(() => {
@@ -102,25 +119,52 @@ beforeEach(() => {
   })
   getMock = vi.fn()
   getCachedMock = vi.fn(() => Promise.resolve(ok(null)))
+  getSnapshotMock = vi.fn()
+  cancelSnapshotMock = vi.fn(() => Promise.resolve(ok(null)))
   saveCacheMock = vi.fn(() => Promise.resolve(ok(null)))
   vi.stubGlobal('window', {
     lychee: {
       playlist: {
         get: getMock,
         getCached: getCachedMock,
+        getSnapshot: getSnapshotMock,
+        cancelSnapshot: cancelSnapshotMock,
         saveCache: saveCacheMock
       },
       player: { sendState: noop, onCommand: () => noop },
       song: { getUrls: () => Promise.resolve(ok([])) },
       mpv: { getState: () => Promise.resolve(ok({ available: false })) }
     },
-    setTimeout
+    setTimeout: (fn: () => void, ms: number) => setTimeout(fn, ms),
+    clearTimeout: (timer: number) => clearTimeout(timer)
   })
 })
 
-describe('playlist feed recovery', () => {
-  it('retries from scratch when the first page failed', async () => {
-    getMock.mockRejectedValueOnce(new Error('network down'))
+describe('playlist feed refresh', () => {
+  it('loads the full snapshot once and writes the whole cache', async () => {
+    getSnapshotMock.mockResolvedValueOnce(ok(snapshot(songs(100))))
+    const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
+    const store = usePlaylistStore()
+
+    await store.load('liked')
+
+    expect(getSnapshotMock).toHaveBeenCalledTimes(1)
+    expect(getMock).not.toHaveBeenCalled()
+    expect(store.feed?.status).toBe('complete')
+    expect(store.feed?.songs).toHaveLength(100)
+    expect(store.feed?.total).toBe(100)
+
+    await vi.waitFor(() => expect(saveCacheMock).toHaveBeenCalled())
+    const lastSave = saveCacheMock.mock.calls.at(-1)
+    expect(lastSave?.[0]).toBe('liked')
+    expect(lastSave?.[1].songs).toHaveLength(100)
+    expect(lastSave?.[1].total).toBe(100)
+    expect(lastSave?.[2]).toBe(true)
+    store.stop('liked')
+  })
+
+  it('retries from scratch after the first full load fails', async () => {
+    getSnapshotMock.mockRejectedValueOnce(new Error('network down'))
     const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
     const store = usePlaylistStore()
 
@@ -128,66 +172,53 @@ describe('playlist feed recovery', () => {
     expect(store.feed?.status).toBe('error')
     expect(store.feed?.meta).toBeNull()
 
-    getMock.mockImplementation(async (_id: string, options: { offset?: number }) =>
-      ok(page(options.offset ?? 0))
-    )
+    getSnapshotMock.mockResolvedValueOnce(ok(snapshot(songs(100))))
     await store.retry()
-    await vi.waitFor(() => expect(store.feed?.status).toBe('complete'))
+    expect(store.feed?.status).toBe('complete')
     expect(store.feed?.songs).toHaveLength(100)
-    expect(saveCacheMock).toHaveBeenCalled()
-    const lastSave = saveCacheMock.mock.calls.at(-1)
-    expect(lastSave?.[0]).toBe('liked')
-    expect(lastSave?.[1].songs).toHaveLength(100)
-    expect(lastSave?.[1].total).toBe(100)
-    expect(lastSave?.[2]).toBe(true)
+    expect(store.feed?.error).toBe('')
+    store.stop('liked')
   })
 
-  it('persists a partial page snapshot before the playlist finishes', async () => {
-    getMock.mockImplementation((_id: string, options: { offset?: number }) => {
-      if ((options.offset ?? 0) === 0) return Promise.resolve(ok(page(0)))
-      return new Promise(() => undefined)
-    })
+  it('keeps the current snapshot when a background refresh fails', async () => {
+    getSnapshotMock.mockResolvedValueOnce(ok(snapshot([song('1'), song('2'), song('3')])))
     const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
     const store = usePlaylistStore()
-
     await store.load('liked')
-    await vi.waitFor(() => expect(saveCacheMock).toHaveBeenCalled())
 
-    const lastSave = saveCacheMock.mock.calls.at(-1)
-    expect(lastSave?.[0]).toBe('liked')
-    expect(lastSave?.[1].songs).toHaveLength(50)
-    expect(lastSave?.[1].total).toBe(100)
-    expect(lastSave?.[2]).toBe(false)
-    expect(store.feed?.status).toBe('partial')
+    getSnapshotMock.mockRejectedValueOnce(new Error('offline'))
+    await store.refresh('liked')
+
+    expect(store.feed?.status).toBe('complete')
+    expect(store.feed?.stale).toBe(true)
+    expect(store.feed?.songs.map((item) => item.songMid)).toEqual(['1', '2', '3'])
+    store.stop('liked')
   })
 
-  it('detects a missing page when the reported total is not reached', async () => {
-    const truncated: PlaylistPage = {
-      meta: { ...meta, songCount: 100 },
-      songs: Array.from({ length: 50 }, (_, index) => song(String(index))),
-      offset: 0,
-      total: 100,
-      hasMore: false
+  it('automatically retries five minutes after a failed refresh', async () => {
+    vi.useFakeTimers()
+    try {
+      getSnapshotMock.mockRejectedValueOnce(new Error('offline'))
+      const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
+      const store = usePlaylistStore()
+
+      await store.load('liked')
+      expect(store.feed?.status).toBe('error')
+      expect(getSnapshotMock).toHaveBeenCalledTimes(1)
+
+      getSnapshotMock.mockResolvedValueOnce(ok(snapshot(songs(4))))
+      await vi.advanceTimersByTimeAsync(PLAYLIST_REFRESH_RETRY_MS)
+
+      expect(getSnapshotMock).toHaveBeenCalledTimes(2)
+      expect(store.feed?.status).toBe('complete')
+      expect(store.feed?.songs).toHaveLength(4)
+      store.stop('liked')
+    } finally {
+      vi.useRealTimers()
     }
-    getMock.mockImplementation((_id: string, options: { offset?: number }) => {
-      const offset = options.offset ?? 0
-      if (offset === 0) return Promise.resolve(ok(truncated))
-      return Promise.resolve(
-        ok({ ...truncated, songs: [], offset, hasMore: false })
-      )
-    })
-    const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
-    const store = usePlaylistStore()
-
-    await store.load('liked')
-    await vi.waitFor(() => expect(store.feed?.status).toBe('error'))
-
-    expect(store.feed?.songs).toHaveLength(50)
-    const lastSave = saveCacheMock.mock.calls.at(-1)
-    expect(lastSave?.[2]).toBe(false)
   })
 
-  it('falls back to the whole cached playlist when the fresh load fails', async () => {
+  it('falls back to the whole cached playlist when the refresh fails', async () => {
     const cached: PlaylistCacheEntry = {
       meta: { ...meta, songCount: 3 },
       songs: [song('1'), song('2'), song('3')],
@@ -196,7 +227,7 @@ describe('playlist feed recovery', () => {
       fetchedAtMs: Date.now()
     }
     getCachedMock.mockResolvedValue(ok(cached))
-    getMock.mockRejectedValue(new Error('offline'))
+    getSnapshotMock.mockRejectedValue(new Error('offline'))
     const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
     const store = usePlaylistStore()
 
@@ -205,9 +236,11 @@ describe('playlist feed recovery', () => {
     expect(store.feed?.status).toBe('complete')
     expect(store.feed?.stale).toBe(true)
     expect(store.feed?.songs.map((item) => item.songMid)).toEqual(['1', '2', '3'])
+    expect(saveCacheMock).not.toHaveBeenCalled()
+    store.stop('liked')
   })
 
-  it('falls back to an incomplete cache as an interrupted feed', async () => {
+  it('keeps an incomplete cache but marks the feed as interrupted', async () => {
     const cached: PlaylistCacheEntry = {
       meta: { ...meta, songCount: 3 },
       songs: [song('1'), song('2')],
@@ -216,7 +249,7 @@ describe('playlist feed recovery', () => {
       fetchedAtMs: Date.now()
     }
     getCachedMock.mockResolvedValue(ok(cached))
-    getMock.mockRejectedValue(new Error('offline'))
+    getSnapshotMock.mockRejectedValue(new Error('offline'))
     const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
     const store = usePlaylistStore()
 
@@ -224,30 +257,59 @@ describe('playlist feed recovery', () => {
 
     expect(store.feed?.status).toBe('error')
     expect(store.feed?.stale).toBe(true)
-    expect(store.feed?.error).toBe('歌单未完整加载')
+    expect(store.feed?.error).toBe('offline')
     expect(store.feed?.songs).toHaveLength(2)
+    store.stop('liked')
   })
 
-  it('resumes a stalled feed after polling the unchanged first page', async () => {
-    getMock.mockImplementation(async (_id: string, options: { offset?: number }) =>
-      ok(page(options.offset ?? 0))
+  it('triggers a new snapshot fetch every time the page is opened', async () => {
+    getSnapshotMock.mockResolvedValueOnce(ok(snapshot([song('1'), song('2'), song('3')])))
+    const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
+    const store = usePlaylistStore()
+    await store.load('liked')
+
+    getSnapshotMock.mockResolvedValueOnce(ok(snapshot([song('4'), song('5')])))
+    await store.load('liked')
+
+    expect(getSnapshotMock).toHaveBeenCalledTimes(2)
+    expect(store.feed?.songs.map((item) => item.songMid)).toEqual(['4', '5'])
+    store.stop('liked')
+  })
+
+  it('cancels the in-flight snapshot when leaving the page', async () => {
+    let resolveSnapshot: (value: IpcResult<PlaylistSnapshot>) => void = () => undefined
+    getSnapshotMock.mockReturnValue(
+      new Promise<IpcResult<PlaylistSnapshot>>((resolve) => {
+        resolveSnapshot = resolve
+      })
     )
     const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
     const store = usePlaylistStore()
-    store.feed = {
-      meta,
-      songs: Array.from({ length: 50 }, (_, index) => song(String(index))),
-      total: 100,
-      status: 'error',
-      stale: false,
-      error: 'network down',
-      loadToken: 0
-    }
 
+    const pending = store.load('liked')
+    await vi.waitFor(() => expect(getSnapshotMock).toHaveBeenCalled())
+    store.stop('liked')
+    expect(cancelSnapshotMock).toHaveBeenCalledWith('liked', expect.any(Number))
+
+    resolveSnapshot(ok(snapshot(songs(1))))
+    await pending
+    expect(store.feed?.songs).toHaveLength(0)
+  })
+
+  it('replaces the feed atomically when polling detects a change', async () => {
+    getSnapshotMock.mockResolvedValueOnce(ok(snapshot(songs(3))))
+    const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
+    const store = usePlaylistStore()
+    await store.load('liked')
+
+    getMock.mockResolvedValueOnce(ok(page(0)))
+    getSnapshotMock.mockResolvedValueOnce(ok(snapshot(songs(100))))
     await store.poll('liked')
-    await vi.waitFor(() => expect(store.feed?.status).toBe('complete'))
+
+    expect(getSnapshotMock).toHaveBeenCalledTimes(2)
+    expect(store.feed?.status).toBe('complete')
     expect(store.feed?.songs).toHaveLength(100)
-    expect(store.feed?.error).toBe('')
+    store.stop('liked')
   })
 })
 

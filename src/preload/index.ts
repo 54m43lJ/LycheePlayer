@@ -91,6 +91,10 @@ const api: LycheeApi = {
   playlist: {
     get: (id: string, options) => invoke<PlaylistPage>('playlist.get', id, options),
     getCached: (id: string) => invoke<PlaylistCacheEntry | null>('playlist.getCached', id),
+    getSnapshot: (id: string, token: number) =>
+      invoke<PlaylistSnapshot>('playlist.getSnapshot', id, token),
+    cancelSnapshot: (id: string, token: number) =>
+      invoke<null>('playlist.cancelSnapshot', id, token),
     saveCache: (id: string, snapshot: PlaylistSnapshot, complete: boolean) =>
       invoke<null>('playlist.saveCache', id, snapshot, complete),
     listMine: () => invoke<PlaylistMeta[]>('playlist.listMine'),

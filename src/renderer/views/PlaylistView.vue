@@ -170,7 +170,8 @@ function retry(): void {
 
 watch(
   id,
-  (value) => {
+  (value, previous) => {
+    if (previous && previous !== value) playlist.stop(previous)
     if (value) void playlist.load(value)
     filterText.value = ''
   },
@@ -213,6 +214,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (pollTimer !== null) window.clearInterval(pollTimer)
+  playlist.stop(id.value)
 })
 </script>
 
