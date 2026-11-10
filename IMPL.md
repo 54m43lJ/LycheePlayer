@@ -1955,3 +1955,62 @@
 | `CORE.html` | §4.73 `ArtistView.vue` / §4.74 `AlbumView.vue` | 改 | 简介折叠逻辑移入 `CatalogDescription`；两个页面只在描述非空时渲染该组件。 |
 | `USER.html` | §5.2.8 页面表 · 专辑页行 | 改 | 专辑简介超过 4 行时折叠并显示“展开”，展开后可“收起”；短简介不显示切换按钮。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 补专辑简介与歌手简介一致的折叠、展开 / 收起要求。 |
+
+### 4.45 歌单改为后台整份刷新、原子替换与本地浏览
+
+问题描述：ISSUES 要求重做歌单刷新：后台异步分页拉完整份歌单并校验，完整才一次性替换当前内容；任一分页失败保持旧内容并进入 5 分钟 timeout 后重试；离开页面终止拉取 / timeout；打开页面立即拉取；浏览分页改为纯本地；同时测试拉取上限、减少 API 调用。旧实现先拉第 0 页，再在后台逐页 `loadPage` 并把每页直接追加进 `feed`，因此浏览期间内容会持续增长、失败时留下半份内容、每页都写缓存，也没有 5 分钟重试；离开页面只能靠 `generation` 忽略结果，无法中止主进程请求。
+
+上游实测（匿名 `CgiGetDiss`，固定 offset）：
+
+| 歌单 | 请求 `song_num` | 返回条数 | 响应 `songnum` |
+|---|---:|---:|---:|
+| 7039749142（99 首） | 50 / 1000 / 5000 | 50 / 99 / 99 | 99 / 99 / 99 |
+| 9744256455（1269 首） | 1000 / 1500 / 2000 | 1000 / 1269 / 1269 | 1269 / 1269 / 1269 |
+| 8707546376（10000 首） | 1000 / 2000 / 5000 / 10000 | 999 / 1995 / 4991 / 9983 | 9999 / 9995 / 9991 / 9983 |
+
+- 单次请求至少可返回约 1 万首，不存在评论接口那种 25 条硬上限；
+- 大歌单会静默省略部分不可用曲目：按固定 offset 2000 拉 5 页，合计 9983 首且无重复，而上游总量约 9995–10000；
+- 若按“已返回条数”递增 offset（0 → 1995 → 3992 → …），最后一页会与前面重叠，不能这样分页；
+- 因此采用固定 offset 2000、最多 10 页（约 2 万首），并允许 2% / 至少 10 首的缺失容差。
+
+解决方法：
+
+- `shared/constants.ts`：新增 `PLAYLIST_FETCH_PAGE_SIZE = 2000`、`PLAYLIST_FETCH_PAGE_MAX = 10`、`PLAYLIST_REFRESH_RETRY_MS = 5 * 60_000`、`PLAYLIST_FETCH_MISSING_RATIO = 0.02` / `PLAYLIST_FETCH_MISSING_MIN = 10`；删除只服务旧逐页补全的 `PLAYLIST_PAGE_RETRY_*`；`PLAYLIST_PAGE_SIZE = 50` 保留给最近歌单校验 / 轮询首页。
+- `api/playlist.ts`：新增 `fetchPlaylistSnapshot(id, signal)`：
+  - 固定 `song_begin = 0, 2000, 4000, …` 逐页拉取，直到覆盖上游 `songnum` 或达到页数上限；
+  - 任一页抛错、offset 小于 total 时返回空页、或最终条数低于容差，都整次失败；跨页重复 mid 直接去重，避免重叠页写进快照；
+  - 成功后返回 `sourceTotal`（上游总数）与 `total = songs.length`（实际可展示条数），并把 `meta.songCount` 对齐到实际条数；
+  - `requestPage` 增加 `pageSize` 与 `AbortSignal`，`musicu` / `upstreamRequest` 把调用方 signal 透传到 `fetch`，取消时立即中止当前网络请求。
+- `main/ipc.ts`：新增 `playlist.getSnapshot(id, token)` / `playlist.cancelSnapshot(id, token)`；主进程按歌单 ID 保存 `{ token, AbortController }`，只允许匹配 token 的取消操作中止对应请求；新请求会先中止同歌单的旧请求。
+- `preload` / `shared/ipc.ts` / `shared/types.ts`：暴露两个新方法；`PlaylistSnapshot` 增加可选 `sourceTotal`。
+- `stores/playlist.ts` 重写刷新链路：
+  - `load(id)` 进入页面时先读缓存并立即触发一次后台完整刷新；同一时刻只允许一个进行中的刷新；
+  - 只有 `getSnapshot` 成功才调用 `replaceFeed` 一次性替换 `songs` / `total` / `meta`；旧内容在刷新失败时原样保留，完整缓存标记 `stale`，不完整缓存标记为中断；
+  - 失败后安排 `PLAYLIST_REFRESH_RETRY_MS` 定时重试；手动重试、下一次打开或轮询触发刷新时清除旧 timer；
+  - `stop(id)` 在离开页面时清除 timer、递增刷新序号并调用 `cancelSnapshot`，未完成的快照不会替换内容也不会写缓存；
+  - 只在完整快照成功后写整份缓存；删除逐页 `loadPage` / `complete` / 部分快照落盘 / 旧重试退避；
+  - 浏览不再发起分页请求，`feed.songs` 即完整本地列表；
+  - `poll(id)` 仍用第 0 页轻量比较名称、封面、首屏顺序与总量（带容差），变化或 `stale` 时才触发一次完整刷新。
+- `views/PlaylistView.vue`：切换歌单或卸载时调用 `playlist.stop()`；轮询、重试、筛选仍复用原有入口。
+
+验证：
+
+- 上游实测见上表：单请求可拉 1 万首；固定 offset 0/2000/4000/6000/8000 五个有效分页合计 9983 首且无重复；
+- 新增 `fetchPlaylistSnapshot` 用例：2500 首分两页、100 首单请求、少量缺歌通过、静默截断拒绝、中间空页拒绝、已取消 signal 不再发请求；
+- 新增歌单 store 用例：完整快照单次替换并只写完整缓存、失败保持旧内容、5 分钟后自动重试、缓存回退、重复打开重新拉取、离开页面取消、轮询变化原子替换；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 97 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌单详情行 / §4.3 `QqPlaylist*` | 改 | 记录 `CgiGetDiss` 的 `song_num` 单次可返回约 1 万首；大歌单会静默省略不可用曲目；分页必须用固定 `song_begin` 递增，不能按返回条数累加。 |
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | 新增 `fetchPlaylistSnapshot`：2000 首/页、固定 offset、最多 10 页、空页 / 截断 / 重复校验、`sourceTotal` 与 `AbortSignal`。 |
+| `CORE.html` | §4.5 `main/ipc.ts` | 改 | 新增 `playlist.getSnapshot` / `cancelSnapshot`；按歌单 ID + token 管理 `AbortController`，只取消匹配请求。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 更新歌单常量：`PLAYLIST_FETCH_PAGE_SIZE = 2000`、`PLAYLIST_FETCH_PAGE_MAX = 10`、`PLAYLIST_REFRESH_RETRY_MS = 5 分钟`、缺失容差 2% / 10 首；删除 `PLAYLIST_PAGE_RETRY_*`。 |
+| `CORE.html` | §4.61 `stores/playlist.ts` | 改 | 改为后台整份刷新 + 原子替换 + 失败 5 分钟重试；`stop` 取消；浏览纯本地；仅完整快照写缓存；轮询变化再整份刷新。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 切换歌单与卸载时调用 `playlist.stop(id)`，终止进行中的完整刷新与重试 timer。 |
+| `USER.html` | §5.2.8 页面表 · 歌单详情行 | 改 | 打开时立即后台刷新，完整后一次性更新；失败保留当前内容并 5 分钟后自动重试；滚动 / 筛选不再触发上游分页。 |
+| `EVOLVE.md` | #5 歌单 / #14 接口 | 改 | 补“整份快照原子替换、失败 5 分钟重试、离开页面取消、浏览纯本地、大页拉取与固定 offset”的约束。 |
