@@ -330,14 +330,14 @@
 
 状态：已解决。
 
-### 2.6 MV 降档后的 `quality` 语义与搜索分页未定义
+### 2.6 MV 降档后的 `quality` 语义与搜索分页未定义 [已解决]
 
 问题描述：文档要求“默认最高清晰度，不可用时按 `fhd → hd → sd` 降档”，但没有说明返回的 `MvStream.quality` 表示请求档还是实际档；也没说明 MV 搜索与歌曲搜索是否共用 `pageNo`。如果返回请求档，UI 会高亮一个实际没取到的清晰度；如果分页各自为政，搜索页页码会错乱。
 
 
 解决方法：
 - `getMvStream` 返回实际采用的清晰度；`MvView` 的清晰度按钮跟随实际值高亮；
-- 请求档不可用时在 API 内降档，`url: null` 表示该档及以上都不可用；
+- 请求档不可用时在 API 内降档，`url: null` 表示从请求档起向下所有档位都不可用；
 - MV 搜索复用歌曲搜索的页码与每页条数，搜索结果只合并 `mvs`，不影响歌曲分页。
 
 修订建议：
@@ -347,6 +347,21 @@
 | `CORE.html` | §4.56 `api/mv.ts` | 改 | 明确 `MvStream.quality` 为实际档，`url:null` 的语义与降档顺序。 |
 | `CORE.html` | §4.69 `MvView.vue` | 改 | 补按钮跟随实际清晰度与空流重试。 |
 | `USER.html` | §5.2.8 MV 播放 | 不动 | 用户交互由 #14 维护，见 CORE 两行。 |
+
+实际操作（2026-11-10，分支 `doc/mv-quality-semantics`）：
+
+- `CORE.html` §4.56 `api/mv.ts`：明确成功时 `MvStream.quality` 是实际采用的档位，不是请求档；全部失败时返回请求档并令 `url: null`，表示从请求档起向下所有档位都不可用；补 MV 搜索与歌曲搜索共用页码 / 每页条数，搜索结果只合并 `mvs`。
+- `CORE.html` §4.69 `MvView.vue`：明确清晰度按钮跟随 `stream.quality` 实际档高亮，不跟随请求档；`url: null` 时展示失败重试。
+- `CORE.html` §4.70 `stores/mv.ts`：明确 `quality` 写回 `MvStream.quality`，成功为实际档、失败为请求档。
+- `USER.html` §5.2.8：按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/mv.ts`：`QUALITY_ORDER = fhd → hd → sd`，命中地址时返回 `{ quality: candidate, url }`，全部失败返回 `{ quality, url: null }`；`searchMv` 复用 `pageNo` 与搜索页大小。
+- 对照 `src/renderer/stores/mv.ts`：`quality.value = result.quality`。
+- `MvView` 的清晰度高亮条件为 `mv.quality === quality.value`。
+
+状态：已解决。
 
 ### 2.7 最近歌单校验失败分类与 `stale` 字段未定义
 

@@ -1641,10 +1641,10 @@ export function getMvDetail(mvId: string): Promise&lt;MvDetail&gt;;
 export function getMvStream(mvId: string, quality: MvStream['quality']): Promise&lt;MvStream&gt;;
 </code></pre>
 <ul class="note">
-  <li>搜索复用 <code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code> 并传 <code>search_type: 4</code>；结果取 <code>body.mv.list[]</code> 的 <code>v_id</code> / <code>mv_name</code> / <code>mv_pic_url</code> / <code>singer_list</code> / <code>duration</code> / <code>publish_date</code>，映射为 <code>SearchResult.mvs</code>。</li>
+  <li>搜索复用 <code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code> 并传 <code>search_type: 4</code>；结果取 <code>body.mv.list[]</code> 的 <code>v_id</code> / <code>mv_name</code> / <code>mv_pic_url</code> / <code>singer_list</code> / <code>duration</code> / <code>publish_date</code>，映射为 <code>SearchResult.mvs</code>。MV 搜索与歌曲搜索共用页码与每页条数，搜索结果只合并 <code>mvs</code>，不重置歌曲分页。</li>
   <li>详情：<code>MvService.MvInfoProServer / GetMvInfoList</code>，参数 <code>{ vidlist: [mvId] }</code>；取 <code>mvlist[0]</code> 的 <code>cover_pic</code> / <code>desc</code> / <code>duration</code> / <code>singers</code> / <code>pubdate</code> / <code>playcnt</code>。</li>
   <li>取流：<code>gosrf.Stream.MvUrlProxy / GetMvUrls</code>，参数 <code>{ vids: [mvId], from: 'h5.playsong' }</code>；<code>data[mvId].mp4[]</code> 的 <code>filetype</code> 10 / 20 / 30 对应 <code>sd</code> / <code>hd</code> / <code>fhd</code>，可播地址取条目的 <code>freeflow_url</code>；<code>filetype</code> 0 / 40 / 50 无地址时按档位降级。</li>
-  <li>默认请求 <code>fhd</code>，不可用时按 <code>fhd → hd → sd</code> 降档；全部不可用映射 <code>NO_PERMISSION</code> / <code>NO_STREAM</code>，结构缺失映射 <code>UPSTREAM_CHANGED</code>。MV 播放与音频播放互不影响。</li>
+  <li>默认请求 <code>fhd</code>，不可用时按 <code>fhd → hd → sd</code> 降档。成功时 <code>MvStream.quality</code> 返回实际采用的档位，而不是请求档；全部失败时返回请求档并令 <code>url: null</code>，表示从请求档起向下所有档位都不可用，调用方应展示重试 / 错误，不得把请求档当作已取到。结构缺失映射 <code>UPSTREAM_CHANGED</code>。MV 播放与音频播放互不影响。</li>
 </ul>
 
 <h3 id="c4-57">4.57 src/main/cache/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1936,7 +1936,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 <pre><code>// 无 props / emits；路由参数 mvId。
 </code></pre>
 <ul class="note">
-  <li>加载详情与取流，默认最高清晰度 <code>fhd</code>，打开后自动播放；请求档位不可用时按 <code>fhd → hd → sd</code> 自动降档并同步清晰度按钮。</li>
+  <li>加载详情与取流，默认最高清晰度 <code>fhd</code>，打开后自动播放；请求档位不可用时按 <code>fhd → hd → sd</code> 自动降档。清晰度按钮跟随 <code>stream.quality</code> 的实际档位高亮，不跟随请求档；<code>url: null</code> 时展示失败重试，不把请求档当作已取到。</li>
   <li>视频使用原生 <code>&lt;video controls&gt;</code>，提供清晰度切换、全屏与失败重试；退出全屏恢复普通页面布局并保持播放位置与播放状态，不实现离开页面后的续播。</li>
   <li>MV 播放与音频播放互不影响；MV 页面不修改播放条状态。</li>
 </ul>
@@ -1954,7 +1954,7 @@ interface MvStore {
 }
 </code></pre>
 <ul class="note">
-  <li>默认 <code>quality = 'fhd'</code>；<code>load</code> 先取详情再取流，取流失败按 <code>fhd → hd → sd</code> 降档，全部失败保留详情并提示。</li>
+  <li>默认 <code>quality = 'fhd'</code>；<code>load</code> 先取详情再取流，取流失败按 <code>fhd → hd → sd</code> 降档，全部失败保留详情并提示。成功或失败后 <code>quality</code> 都写回 <code>MvStream.quality</code>；成功时为实际档，失败时为请求档。</li>
   <li>请求带自增序号，避免切换 MV 后旧响应覆盖新状态；MV 状态与播放器 store 完全独立。</li>
 </ul>
 
