@@ -22,7 +22,9 @@ export interface IpcError {
 export type IpcResult<T> = { ok: true; data: T } | { ok: false; error: IpcError }
 
 export interface Singer {
+  /** 歌手页 mid；官方存在无歌手页但仍有名称的歌手，此时为空字符串。 */
   mid: string
+  /** 可能为空；渲染时跳过空名称。 */
   name: string
 }
 
@@ -51,11 +53,23 @@ export type PlaylistKind = 'normal' | 'favorites'
 
 export interface PlaylistMeta {
   id: string
+  /** 当前账号下的歌单目录 ID（写入接口的 dirId）；公开歌单可能没有。 */
+  dirId?: number
   name: string
   coverUrl: string
   songCount: number
   kind: PlaylistKind
   editable: boolean
+}
+
+/** 歌单加删歌曲的写入结果；是否需要刷新由渲染层统一触发。 */
+export interface PlaylistMutationResult {
+  changed: boolean
+}
+
+export interface RecentPlaylist extends PlaylistMeta {
+  visitedAtMs: number
+  stale?: boolean
 }
 
 export interface PlaylistDetail {
@@ -93,12 +107,24 @@ export interface Comment {
   likedCount: number
   replyCount: number
   createdAtMs: number
+  liked?: boolean
+}
+
+/** 歌手歌曲排序：上游 order=1 为最热，其余值均为最新。 */
+export type ArtistSongSort = 'hot' | 'latest'
+
+export interface CommentLikeResult {
+  commentId: string
+  liked: boolean
+  likedCount?: number
 }
 
 export interface CommentPage {
   comments: Comment[]
   total: number
   hasMore: boolean
+  /** 下一页游标（上游 LastCommentSeqNo）；为空表示没有下一页。 */
+  nextCursor?: string
 }
 
 export interface SongAvailability {
@@ -116,6 +142,8 @@ export interface PlaylistSnapshot {
   meta: PlaylistMeta
   songs: Song[]
   total: number
+  /** 上游声明的曲目总数；展示总数以实际拉到的 songs 为准。 */
+  sourceTotal?: number
 }
 
 export interface PlaylistCacheEntry extends PlaylistSnapshot {
@@ -153,6 +181,36 @@ export interface PlaylistEditResult {
   songs?: Song[]
 }
 
+export interface ArtistDetail {
+  mid: string
+  name: string
+  description: string
+  coverUrl: string
+  songCount: number
+  albumCount: number
+  songs: Song[]
+  total: number
+  hasMore: boolean
+}
+
+export interface ArtistSongPage {
+  songs: Song[]
+  total: number
+  hasMore: boolean
+}
+
+export interface AlbumDetail {
+  mid: string
+  name: string
+  coverUrl: string
+  description: string
+  publishDate: string
+  singers: Singer[]
+  songs: Song[]
+  total: number
+  hasMore: boolean
+}
+
 export interface MvSummary {
   mvId: string
   name: string
@@ -171,6 +229,8 @@ export interface MvStream {
   url: string | null
 }
 
+export type DownloadSource = 'network' | 'cache'
+
 export interface DownloadTask {
   id: string
   songMid: string
@@ -182,18 +242,32 @@ export interface DownloadTask {
   receivedBytes: number
   totalBytes: number
   error: string
+  source: DownloadSource
 }
 
-export interface MpvState {
-  available: boolean
-  version: string | null
-  playing: boolean
+/** 每首歌的本机资产状态：缓存档位、下载档位、最高可用档与当前任务。 */
+export interface SongAssetState {
+  songMid: string
+  cachedQuality: Quality | null
+  downloadedQuality: Quality | null
+  maxQuality: Quality | null
+  taskStatus: DownloadTask['status'] | null
 }
 
-export interface MpvEvent {
-  type: 'time' | 'duration' | 'play' | 'pause' | 'loaded' | 'ended' | 'error'
-  positionMs?: number
-  durationMs?: number
+/** 主进程收到 104009 后进入全局上游截断窗口的通知。 */
+export interface UpstreamBlockedEvent {
+  /** 截断结束时间（Unix 毫秒）；此前所有上游请求立即失败。 */
+  untilMs: number
+  reason: string
+}
+
+/** 主进程上报的边播边缓存进度。 */
+export interface AudioCacheProgress {
+  songMid: string
+  quality: Quality
+  receivedBytes: number
+  totalBytes: number
+  complete: boolean
 }
 
 /** 登录凭证；完整字段与转换见 PROVIDER §4.3。仅主进程持有。 */
@@ -222,8 +296,8 @@ export interface Settings {
   closeToTray: boolean
   theme: 'dark' | 'light'
   audioCacheEnabled: boolean
-  /** 音频引擎选择；mpv 缺失时回退 HTML5。 */
-  audioEngine?: 'auto' | 'html5' | 'mpv'
+  /** 播放缓存上限（字节），取值限定为 128M / 256M / 512M / 1G / 1.5G / 2G。 */
+  audioCacheMaxBytes: number
   /** 下载目录；缺省为 ~/Music/Lychee Player。 */
   downloadDir?: string
 }

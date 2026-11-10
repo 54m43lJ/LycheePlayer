@@ -1,17 +1,21 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { FlagsFile, Settings } from '@shared/types'
+import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
+import { useDownloadStore } from '../stores/download'
 import { usePlayerStore } from '../stores/player'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore, QUALITY_PREFERENCE_OPTIONS } from '../stores/settings'
 import { formatBytes } from '../utils/format'
 
 const settings = useSettingsStore()
 const auth = useAuthStore()
+const downloads = useDownloadStore()
 const player = usePlayerStore()
 const router = useRouter()
 const toast = useToast()
@@ -36,30 +40,36 @@ const expiryText = computed(() => {
   })
 })
 
-const QUALITIES: Array<{ value: Settings['defaultQuality']; label: string }> = [
-  { value: 'auto', label: '自动' },
-  { value: '128k', label: '标准' },
-  { value: '320k', label: '高品质' },
-  { value: 'flac', label: '无损' }
-]
-
 const THEMES: Array<{ value: Settings['theme']; label: string }> = [
   { value: 'dark', label: '深色' },
   { value: 'light', label: '浅色' }
 ]
 
-const ENGINES: Array<{ value: 'auto' | 'html5' | 'mpv'; label: string }> = [
-  { value: 'auto', label: '自动' },
-  { value: 'html5', label: 'HTML5' },
-  { value: 'mpv', label: 'mpv' }
-]
+const CACHE_LIMIT_STEPS = AUDIO_CACHE_LIMIT_STEPS_BYTES.map((bytes) => ({
+  bytes,
+  label: bytes >= 1024 * 1024 * 1024 ? `${bytes / (1024 * 1024 * 1024)}G` : `${bytes / (1024 * 1024)}M`
+}))
 
-const engineLabel = computed(() => {
-  const engine = settings.settings.audioEngine ?? 'auto'
-  if (engine === 'mpv') return 'mpv'
-  if (engine === 'html5') return 'HTML5 Audio'
-  return '自动（优先 mpv）'
-})
+function cacheLimitIndexFor(bytes: number): number {
+  const index = CACHE_LIMIT_STEPS.findIndex((step) => step.bytes === bytes)
+  return index >= 0 ? index : CACHE_LIMIT_STEPS.length - 1
+}
+
+const cacheLimitIndex = ref(cacheLimitIndexFor(settings.settings.audioCacheMaxBytes))
+const cacheLimitStep = computed(() => CACHE_LIMIT_STEPS[cacheLimitIndex.value])
+const cacheLimitFill = computed(
+  () => `${(cacheLimitIndex.value / (CACHE_LIMIT_STEPS.length - 1)) * 100}%`
+)
+
+watch(
+  () => settings.settings.audioCacheMaxBytes,
+  (value) => {
+    cacheLimitIndex.value = cacheLimitIndexFor(value)
+  },
+  { immediate: true }
+)
+
+let cacheLimitSaveTimer: number | null = null
 
 async function loadFlags(): Promise<void> {
   try {
@@ -94,10 +104,10 @@ async function saveFlags(): Promise<void> {
 async function chooseQuality(quality: Settings['defaultQuality']): Promise<void> {
   if (quality === settings.settings.defaultQuality) return
   try {
-    await settings.update({ defaultQuality: quality })
-    player.applySettings()
-    if (player.current) player.setQuality(player.defaultQuality)
-    toast.show(`默认音质已切换为 ${QUALITIES.find((item) => item.value === quality)?.label}`)
+    await player.updateDefaultQuality(quality)
+    toast.show(
+      `默认音质已切换为 ${QUALITY_PREFERENCE_OPTIONS.find((item) => item.value === quality)?.label}`
+    )
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -121,33 +131,44 @@ async function toggleAudioCache(): Promise<void> {
   }
 }
 
+function onCacheLimitInput(event: Event): void {
+  const index = Number((event.target as HTMLInputElement).value)
+  if (Number.isInteger(index) && index >= 0 && index < CACHE_LIMIT_STEPS.length) {
+    cacheLimitIndex.value = index
+    scheduleCacheLimitSave()
+  }
+}
+
+function scheduleCacheLimitSave(): void {
+  if (cacheLimitSaveTimer !== null) window.clearTimeout(cacheLimitSaveTimer)
+  cacheLimitSaveTimer = window.setTimeout(() => {
+    cacheLimitSaveTimer = null
+    void saveCacheLimit()
+  }, 200)
+}
+
+async function saveCacheLimit(): Promise<void> {
+  if (cacheLimitSaveTimer !== null) {
+    window.clearTimeout(cacheLimitSaveTimer)
+    cacheLimitSaveTimer = null
+  }
+  const step = CACHE_LIMIT_STEPS[cacheLimitIndex.value]
+  if (!step || step.bytes === settings.settings.audioCacheMaxBytes) return
+  try {
+    await settings.update({ audioCacheMaxBytes: step.bytes })
+    await loadStorage()
+    toast.show(`播放缓存上限已调整为 ${step.label}`)
+  } catch (err) {
+    cacheLimitIndex.value = cacheLimitIndexFor(settings.settings.audioCacheMaxBytes)
+    toast.error(describeError(err))
+  }
+}
+
 async function chooseTheme(theme: Settings['theme']): Promise<void> {
   if (theme === settings.settings.theme) return
   try {
     await settings.update({ theme })
     toast.show(theme === 'light' ? '已切换到浅色模式' : '已切换到深色模式')
-  } catch (err) {
-    toast.error(describeError(err))
-  }
-}
-
-async function chooseEngine(engine: 'auto' | 'html5' | 'mpv'): Promise<void> {
-  try {
-    if (engine === 'mpv') {
-      const state = unwrap(await window.lychee.mpv.getState())
-      if (!state.available) {
-        toast.error('未检测到 mpv，已回退 HTML5 Audio')
-        await settings.update({ audioEngine: 'html5' })
-        player.applySettings()
-        return
-      }
-      unwrap(await window.lychee.mpv.setEnabled(true))
-    } else if (engine === 'html5') {
-      unwrap(await window.lychee.mpv.setEnabled(false))
-    }
-    await settings.update({ audioEngine: engine })
-    player.applySettings()
-    toast.show(`音频引擎已切换为 ${ENGINES.find((item) => item.value === engine)?.label}`)
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -170,6 +191,28 @@ async function chooseDownloadDir(): Promise<void> {
     await settings.update({ downloadDir: path })
     await loadStorage()
     toast.show('下载目录已更新')
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
+
+const confirmClearDir = ref(false)
+
+function clearDownloadDir(): void {
+  confirmClearDir.value = true
+}
+
+const clearDirMessage = computed(() => {
+  const directory = storage.value?.directory ?? settings.settings.downloadDir ?? '下载目录'
+  return `确定清空下载目录「${directory}」？\n将删除目录内的全部文件与下载记录（包括其他账号在同目录的下载）；播放缓存不受影响。`
+})
+
+async function confirmClearDownloadDir(): Promise<void> {
+  confirmClearDir.value = false
+  try {
+    await downloads.clearDirectory()
+    await loadStorage()
+    toast.show('下载目录已清空')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -205,6 +248,14 @@ onMounted(() => {
   void loadFlags()
   void loadStorage()
 })
+
+onBeforeUnmount(() => {
+  if (cacheLimitSaveTimer !== null) {
+    window.clearTimeout(cacheLimitSaveTimer)
+    cacheLimitSaveTimer = null
+    void saveCacheLimit()
+  }
+})
 </script>
 
 <template>
@@ -223,7 +274,7 @@ onMounted(() => {
           <div class="panel-body">
             <div class="quality-options">
               <button
-                v-for="quality in QUALITIES"
+                v-for="quality in QUALITY_PREFERENCE_OPTIONS"
                 :key="quality.value"
                 class="quality-option"
                 :class="{ active: settings.settings.defaultQuality === quality.value }"
@@ -264,16 +315,6 @@ onMounted(() => {
                 @click="toggleCloseToTray()"
               />
             </div>
-            <div class="setting-row">
-              <div>
-                <div class="setting-name">退出应用</div>
-                <div class="setting-desc">不受“关闭到托盘”影响，直接结束进程</div>
-              </div>
-              <button class="btn ghost small" @click="quitApp()">
-                <AppIcon name="power" :size="14" />
-                退出
-              </button>
-            </div>
           </div>
         </section>
 
@@ -303,7 +344,7 @@ onMounted(() => {
           <div class="panel-body">
             <div class="setting-row">
               <div>
-                <div class="setting-name">播放缓存</div>
+                <div class="setting-name">播放缓存（不影响已下载）</div>
                 <div class="setting-desc">
                   {{ storage ? `${formatBytes(storage.cacheBytes ?? 0)} · ${storage.cacheFiles ?? 0} 个文件` : '统计中' }}
                 </div>
@@ -318,15 +359,54 @@ onMounted(() => {
                 />
               </div>
             </div>
+            <div class="setting-row cache-limit-row">
+              <div class="cache-limit-body">
+                <div class="cache-limit-head">
+                  <div>
+                    <div class="setting-name">播放缓存上限</div>
+                    <div class="setting-desc">超出后按最久未使用自动清理</div>
+                  </div>
+                  <span class="cache-limit-value">{{ cacheLimitStep.label }}</span>
+                </div>
+                <div class="cache-slider-wrap">
+                  <input
+                    class="cache-slider"
+                    type="range"
+                    min="0"
+                    :max="CACHE_LIMIT_STEPS.length - 1"
+                    step="1"
+                    :value="cacheLimitIndex"
+                    :style="{ '--cache-fill': cacheLimitFill }"
+                    aria-label="播放缓存上限"
+                    @input="onCacheLimitInput"
+                    @change="saveCacheLimit"
+                  />
+                  <div class="cache-slider-nodes" aria-hidden="true">
+                    <span
+                      v-for="(step, index) in CACHE_LIMIT_STEPS"
+                      :key="step.bytes"
+                      :class="{ active: index <= cacheLimitIndex }"
+                      :style="{ left: `${(index / (CACHE_LIMIT_STEPS.length - 1)) * 100}%` }"
+                    >
+                      <i />
+                      <em>{{ step.label }}</em>
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
             <div class="setting-row">
               <div>
                 <div class="setting-name">下载目录</div>
                 <div class="setting-desc mono">{{ storage?.directory ?? settings.settings.downloadDir ?? '默认目录' }}</div>
                 <div class="setting-desc" v-if="storage">
-                  已用 {{ formatBytes(storage.bytes) }} · 剩余 {{ formatBytes(storage.freeBytes) }}
+                  下载占用 {{ formatBytes(storage.bytes) }} · 剩余 {{ formatBytes(storage.freeBytes) }}
                 </div>
               </div>
-              <button class="btn small" @click="chooseDownloadDir()">选择</button>
+              <div class="panel-actions">
+                <button class="btn ghost small" @click="clearDownloadDir()">清空目录</button>
+                <button class="btn small" @click="chooseDownloadDir()">选择</button>
+              </div>
             </div>
           </div>
         </section>
@@ -374,36 +454,38 @@ onMounted(() => {
           <div class="panel-head"><h2>关于</h2></div>
           <div class="panel-body">
             <div class="setting-row"><span class="setting-name">版本</span><span class="mono faint">{{ appVersion }}</span></div>
-            <div class="setting-row"><span class="setting-name">音频引擎</span><span class="faint">{{ engineLabel }}</span></div>
+            <div class="setting-row"><span class="setting-name">音频引擎</span><span class="faint">HTML5 Audio</span></div>
             <div class="setting-row"><span class="setting-name">许可证</span><span class="faint">{{ appLicense }}</span></div>
           </div>
         </section>
 
         <section class="panel">
-          <div class="panel-head"><h2>音频引擎</h2></div>
+          <div class="panel-head"><h2>应用</h2></div>
           <div class="panel-body">
-            <div class="quality-options">
-              <button
-                v-for="engine in ENGINES"
-                :key="engine.value"
-                class="quality-option"
-                :class="{ active: (settings.settings.audioEngine ?? 'auto') === engine.value }"
-                @click="chooseEngine(engine.value)"
-              >
-                <strong>{{ engine.label }}</strong>
+            <div class="setting-row">
+              <div>
+                <div class="setting-name">退出应用</div>
+                <div class="setting-desc">不受“关闭到托盘”影响，直接结束进程</div>
+              </div>
+              <button class="btn ghost small" @click="quitApp()">
+                <AppIcon name="power" :size="14" />
+                退出
               </button>
-            </div>
-            <div class="setting-row">
-              <span class="setting-name">EQ</span>
-              <span class="faint">仅 mpv 引擎生效</span>
-            </div>
-            <div class="setting-row">
-              <span class="setting-name">响度归一</span>
-              <span class="faint">仅 mpv 引擎生效</span>
             </div>
           </div>
         </section>
+
       </div>
     </div>
+
+    <ConfirmDialog
+      :open="confirmClearDir"
+      title="清空下载目录"
+      :message="clearDirMessage"
+      confirm-label="清空"
+      danger
+      @confirm="confirmClearDownloadDir()"
+      @cancel="confirmClearDir = false"
+    />
   </div>
 </template>

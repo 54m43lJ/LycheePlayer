@@ -1,9 +1,10 @@
 import { app } from 'electron'
-import { copyFile, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises'
+import { copyFile, link, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import type { Quality } from '../../shared/types'
-import { AUDIO_CACHE_DIR, AUDIO_CACHE_MAX_BYTES } from '../../shared/constants'
+import { AUDIO_CACHE_DIR } from '../../shared/constants'
+import { getSettings } from '../settings'
 import { getCredential } from '../credential'
 
 function cacheRoot(): string {
@@ -30,6 +31,31 @@ function filePath(songMid: string, quality: Quality): string {
 export function getCachedAudio(songMid: string, quality: Quality): string | null {
   const path = filePath(songMid, quality)
   return existsSync(path) ? path : null
+}
+
+/** 返回该歌曲已有的最高缓存档位；无缓存返回 null。 */
+export function getCachedAudioInfo(songMid: string): Quality | null {
+  for (const quality of ['flac', '320k', '128k'] as Quality[]) {
+    if (existsSync(filePath(songMid, quality))) return quality
+  }
+  return null
+}
+
+/** 把缓存文件复制/硬链接到下载文件；返回实际使用的源文件。 */
+export async function linkCachedAudio(
+  songMid: string,
+  quality: Quality,
+  targetPath: string
+): Promise<string | null> {
+  const source = getCachedAudio(songMid, quality)
+  if (!source) return null
+  await mkdir(dirname(targetPath), { recursive: true })
+  try {
+    await link(source, targetPath)
+  } catch {
+    await copyFile(source, targetPath)
+  }
+  return source
 }
 
 async function totalBytes(): Promise<number> {
@@ -59,8 +85,9 @@ async function totalBytes(): Promise<number> {
 }
 
 async function enforceLimit(): Promise<void> {
+  const limit = getSettings().audioCacheMaxBytes
   let bytes = await totalBytes()
-  if (bytes <= AUDIO_CACHE_MAX_BYTES) return
+  if (bytes <= limit) return
   const files: Array<{ path: string; size: number; mtimeMs: number }> = []
   async function walk(dir: string): Promise<void> {
     let entries
@@ -86,10 +113,15 @@ async function enforceLimit(): Promise<void> {
   await walk(cacheRoot())
   files.sort((a, b) => a.mtimeMs - b.mtimeMs)
   for (const file of files) {
-    if (bytes <= AUDIO_CACHE_MAX_BYTES) break
+    if (bytes <= limit) break
     await rm(file.path, { force: true })
     bytes -= file.size
   }
+}
+
+/** 按当前设置的上限清理缓存；设置页下调上限后立即生效。 */
+export async function enforceAudioCacheLimit(): Promise<void> {
+  await enforceLimit()
 }
 
 /** 将已下载的音频体写入缓存，并按 LRU 清理。 */

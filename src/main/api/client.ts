@@ -1,6 +1,7 @@
-import type { Credential, ErrorCode, IpcError } from '../../shared/types'
+import type { Credential, ErrorCode, IpcError, UpstreamBlockedEvent } from '../../shared/types'
 import {
   MUSICU_BUSY_BACKOFF_MS,
+  UPSTREAM_BLOCK_MS,
   UPSTREAM_NETWORK_BACKOFF_MS,
   UPSTREAM_QUOTA_BACKOFF_MS,
   UPSTREAM_RATE_LIMIT_BURST,
@@ -15,6 +16,50 @@ const USER_AGENT =
 
 /** 进程级稳定 GUID，播放链接请求使用。 */
 const GUID = String(Math.floor(1_000_000_000 + Math.random() * 8_000_000_000))
+
+const BLOCK_REASON = 'QQ 音乐拒绝了播放链接请求（104009），可能是网络 / VPN / 代理出口或临时风控'
+
+let blockedUntilMs = 0
+let blockNotifier: ((event: UpstreamBlockedEvent) => void) | null = null
+
+/** 注册全局截断通知；主进程通过 IPC 广播给渲染层展示 toast。 */
+export function setUpstreamBlockNotifier(
+  notifier: ((event: UpstreamBlockedEvent) => void) | null
+): void {
+  blockNotifier = notifier
+}
+
+/** 返回全局截断的剩余时长；0 表示当前可以请求上游。 */
+export function upstreamBlockRemainingMs(): number {
+  return Math.max(0, blockedUntilMs - Date.now())
+}
+
+/**
+ * 收到 104009 后进入全局截断窗口：窗口内所有上游请求立即失败，避免继续触发风控。
+ * 已经处于截断窗口时不重复通知，避免并发失败刷出多条 toast。
+ */
+export function tripUpstreamBlock(reason = BLOCK_REASON): void {
+  const wasBlocked = upstreamBlockRemainingMs() > 0
+  const untilMs = Date.now() + UPSTREAM_BLOCK_MS
+  blockedUntilMs = Math.max(blockedUntilMs, untilMs)
+  if (!wasBlocked) blockNotifier?.({ untilMs, reason })
+}
+
+/** 仅测试使用：清除截断状态。 */
+export function resetUpstreamBlock(): void {
+  blockedUntilMs = 0
+}
+
+export function assertUpstreamAvailable(): void {
+  const remaining = upstreamBlockRemainingMs()
+  if (remaining <= 0) return
+  throw new UpstreamError(
+    'UPSTREAM_NETWORK',
+    `上游请求已暂停（104009），请 ${Math.ceil(remaining / 1000)} 秒后重试`,
+    false,
+    104009
+  )
+}
 
 export class UpstreamError extends Error {
   readonly code: ErrorCode
@@ -56,6 +101,10 @@ export interface UpstreamRequest {
   body?: string
   credential?: Credential | null
   timeoutMs?: number
+  /** 调用方取消时同时中止网络请求。 */
+  signal?: AbortSignal
+  /** 解析前把指定字段的数字字面量转成字符串，避免超过 Number 安全范围时丢精度。 */
+  stringFields?: string[]
 }
 
 function cookieHeader(credential: Credential | null): Record<string, string> {
@@ -103,6 +152,8 @@ export function throttleUpstream(): Promise<void> {
 }
 
 async function fetchOnce(req: UpstreamRequest): Promise<Response> {
+  assertUpstreamAvailable()
+  req.signal?.throwIfAborted()
   const credential = req.credential === undefined ? getCredential() : req.credential
   const url = new URL(req.path, req.host)
   for (const [key, value] of Object.entries(req.params)) {
@@ -110,7 +161,11 @@ async function fetchOnce(req: UpstreamRequest): Promise<Response> {
   }
 
   await throttleUpstream()
+  // 排队取令牌期间可能刚好收到 104009，取到令牌后再检查一次。
+  assertUpstreamAvailable()
+  req.signal?.throwIfAborted()
 
+  const timeout = AbortSignal.timeout(req.timeoutMs ?? UPSTREAM_TIMEOUT_MS)
   let response: Response
   try {
     response = await fetch(url, {
@@ -123,9 +178,10 @@ async function fetchOnce(req: UpstreamRequest): Promise<Response> {
         ...req.headers
       },
       body: req.body,
-      signal: AbortSignal.timeout(req.timeoutMs ?? UPSTREAM_TIMEOUT_MS)
+      signal: req.signal ? AbortSignal.any([req.signal, timeout]) : timeout
     })
   } catch (error) {
+    if (req.signal?.aborted) throw new UpstreamError('UPSTREAM_NETWORK', '上游请求已取消')
     // 连接失败 / 超时不重试。
     const message =
       error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
@@ -147,6 +203,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** 把指定字段的裸数字改为字符串，保留超过 Number.MAX_SAFE_INTEGER 的精度。 */
+function stringifyNumberFields(text: string, fields: string[]): string {
+  let next = text
+  for (const field of fields) {
+    const pattern = new RegExp(`("${field}"\\s*:\\s*)(-?\\d+)`, 'g')
+    next = next.replace(pattern, '$1"$2"')
+  }
+  return next
+}
+
 /** 统一上游请求入口：Cookie 注入、超时与退避都在此完成。 */
 export async function upstreamRequest<T>(req: UpstreamRequest): Promise<T> {
   let lastError: unknown
@@ -160,7 +226,10 @@ export async function upstreamRequest<T>(req: UpstreamRequest): Promise<T> {
         throw new UpstreamError('UPSTREAM_NETWORK', '读取上游响应失败')
       }
       try {
-        return JSON.parse(text) as T
+        const parsed = req.stringFields?.length
+          ? stringifyNumberFields(text, req.stringFields)
+          : text
+        return JSON.parse(parsed) as T
       } catch {
         throw new UpstreamError('UPSTREAM_CHANGED', '上游响应不是合法 JSON')
       }
@@ -197,11 +266,15 @@ interface MusicuResponse<T> {
   }
 }
 
-/** 部分接口把具体错误放在 data.retcode，而 req_0.code 统一为 1000。 */
+/** 部分接口把具体错误放在 data.retcode / data.code，而 req_0.code 统一为 0 或 1000。 */
 function dataErrorCode(data: unknown): number | null {
   if (!data || typeof data !== 'object') return null
-  const code = Number((data as Record<string, unknown>).retcode)
-  return Number.isFinite(code) && code !== 0 ? code : null
+  const record = data as Record<string, unknown>
+  const retcode = Number(record.retcode)
+  if (Number.isFinite(retcode) && retcode !== 0) return retcode
+  // 歌单不存在等场景使用顶层负数码（如 -100006），不能只看 retcode。
+  const code = Number(record.code)
+  return Number.isFinite(code) && code < 0 ? code : null
 }
 
 export interface MusicuOptions {
@@ -209,6 +282,12 @@ export interface MusicuOptions {
   comm?: Record<string, unknown> | false
   /** undefined 使用当前登录态，null 强制匿名。 */
   credential?: Credential | null
+  /** vkey 需要先尝试备用入口，104009 由调用方在两次失败后统一触发截断。 */
+  deferBlock?: boolean
+  /** 调用方取消时中止当前及后续重试。 */
+  signal?: AbortSignal
+  /** 解析前把指定字段的数字字面量转成字符串。 */
+  stringFields?: string[]
 }
 
 /** 调用 musicu.fcg 的单个 req_0 请求，返回其 data。 */
@@ -236,23 +315,30 @@ export async function musicu<T>(
   if (comm) payload.comm = comm
 
   for (let attempt = 0; attempt < UPSTREAM_RETRY_ATTEMPTS; attempt += 1) {
+    options.signal?.throwIfAborted()
     const response = await upstreamRequest<MusicuResponse<T>>({
       host: 'https://u.y.qq.com',
       path: '/cgi-bin/musicu.fcg',
       params: { data: JSON.stringify(payload) },
-      credential
+      credential,
+      signal: options.signal,
+      stringFields: options.stringFields
     })
 
     const node = response.req_0
     const baseCode = response.code !== 0 ? response.code : (node?.code ?? 0)
     const specificCode = dataErrorCode(node?.data)
-    const code = baseCode === 1000 && specificCode !== null ? specificCode : baseCode
+    const code =
+      specificCode !== null && (baseCode === 0 || baseCode === 1000)
+        ? specificCode
+        : baseCode
     if (code !== 0) {
       // 2001 / 104604 为上游瞬时繁忙，短退避后重试；其余错误码直接映射。
       if ((code === 2001 || code === 104604) && attempt < UPSTREAM_RETRY_ATTEMPTS - 1) {
         await sleep(MUSICU_BUSY_BACKOFF_MS * 2 ** attempt)
         continue
       }
+      if (code === 104009 && !options.deferBlock) tripUpstreamBlock()
       throw mapUpstreamCode(code, `${module}.${method}`)
     }
     if (!node) {
@@ -294,6 +380,9 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError {
   if (code === 403) {
     return new UpstreamError('NO_PERMISSION', '当前账号无权执行该操作')
   }
+  if (code === -100006) {
+    return new UpstreamError('NO_PERMISSION', '歌单不存在或已失效', false, code)
+  }
   const loginMessages: Record<number, string> = {
     20261: '登录参数错误',
     20271: '验证码错误',
@@ -307,5 +396,5 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError {
   if (loginMessages[code]) {
     return new UpstreamError('AUTH_EXPIRED', loginMessages[code])
   }
-  return new UpstreamError('UPSTREAM_CHANGED', `上游返回错误码 ${code}（${context}）`)
+  return new UpstreamError('UPSTREAM_CHANGED', `上游返回错误码 ${code}（${context}）`, false, code)
 }

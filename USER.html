@@ -27,11 +27,15 @@
   </tr>
   <tr>
     <td>歌手（Singer）</td>
-    <td>歌曲的表演者，一首歌可有多位。界面以“ / ”连接展示。</td>
+    <td>歌曲的表演者，一首歌可有多位，界面以“ / ”连接展示。歌手名可能没有对应的歌手页（<code>mid</code> 为空）：有名字无 <code>mid</code> 时只显示纯文本、不生成链接；名字为空时界面不渲染任何歌手文本，也不显示“未知歌手”占位。</td>
   </tr>
   <tr>
     <td>专辑（Album）</td>
     <td>歌曲所属专辑；用于列表展示、播放条信息与封面地址推导。</td>
+  </tr>
+  <tr>
+    <td>歌手页 / 专辑页</td>
+    <td>按歌手 / 专辑 <code>mid</code> 打开的信息页：展示名称、封面、简介与歌曲列表，可从歌曲表、播放条与搜索结果进入。歌手名或专辑名缺少 <code>mid</code> 时不生成对应页面链接。</td>
   </tr>
   <tr>
     <td>歌单（Playlist）</td>
@@ -55,7 +59,7 @@
   </tr>
   <tr>
     <td>播放模式（PlayMode）</td>
-    <td><code>sequence</code> 顺序播放 · <code>repeat-all</code> 列表循环 · <code>repeat-one</code> 单曲循环 · <code>shuffle</code> 随机播放。</td>
+    <td><code>sequence</code> 顺序播放 · <code>repeat-all</code> 列表循环 · <code>repeat-one</code> 单曲循环 · <code>shuffle</code> 随机播放。菜单中四项按此固定相对顺序排列，当前模式固定在菜单底部并高亮。</td>
   </tr>
   <tr>
     <td>音质（Quality）</td>
@@ -86,6 +90,10 @@
     <td>当前账号固定的收藏歌单，不依赖列表位置；详情页统一显示名称“我喜欢”。</td>
   </tr>
   <tr>
+    <td>从歌单删除</td>
+    <td>把歌曲从当前普通歌单的成员中移除；不删除本机文件、不改变播放队列与当前播放。仅当前账号可编辑的普通歌单显示该入口，“我喜欢”的移除仍走收藏按钮。</td>
+  </tr>
+  <tr>
     <td>不可播标记 / 最高可用音质</td>
     <td>歌单中每首歌的可用性标记：不可播，或当前账号可用的最高音质档位；未知状态按可播处理。</td>
   </tr>
@@ -94,12 +102,24 @@
     <td>歌单先显示第一页，后续歌曲自动补齐；加载期间队列可以为空，当前歌曲单独显示。</td>
   </tr>
   <tr>
-    <td>播放缓存</td>
-    <td>已播放音频在本机保存的副本，用于再次播放时减少下载；按账号隔离，可清空。</td>
+    <td>最近歌单</td>
+    <td>按账号保存的最近访问歌单列表，最多 5 条，作为“我的歌单”下的快捷入口；当前正在播放的歌单在列表中高亮。</td>
   </tr>
   <tr>
-    <td>每日推荐 / 专属雷达 / 猜你喜欢（待探测）</td>
-    <td>“发现”页的三类推荐内容；上游接口尚未验证，当前页面展示空状态，验证后再补真实内容。</td>
+    <td>播放缓存</td>
+    <td>已播放音频在本机保存的副本，用于再次播放时减少下载；按账号隔离，可清空。缓存可有多个音质档位，缓存达到该曲最高可用档时可直接转为下载（本地转移）；删除下载不删除缓存。</td>
+  </tr>
+  <tr>
+    <td>已缓存 / 已下载</td>
+    <td>两种本机资产：缓存是播放过程中自动写入、供播放复用的音频副本；下载是用户显式保留、记录在下载索引中的离线文件。二者可同时存在；界面同时存在时显示“已下载”，tooltip 补充缓存档位。</td>
+  </tr>
+  <tr>
+    <td>缓存进度</td>
+    <td>当前歌曲音频体写入本机缓存的完成比例，不等于下载任务进度；缓存完成后显示满格 / 对勾。</td>
+  </tr>
+  <tr>
+    <td>每日推荐 / 专属雷达 / 猜你喜欢</td>
+    <td>“发现”页的三个推荐分区：每日推荐取当天动态歌单的 30 首；专属雷达按页取个性化推荐；猜你喜欢为连续推荐流。三者各自刷新、各自缓存 24 小时；未登录显示登录引导。</td>
   </tr>
   <tr>
     <td>逐字歌词</td>
@@ -107,19 +127,15 @@
   </tr>
   <tr>
     <td>收藏 / 歌单管理 / 可编辑歌单</td>
-    <td>收藏歌曲已可用；歌单创建、改名、删除与增删歌曲的上游接口仍在探测，当前为占位并提示暂不可用。公开歌单只读。</td>
+    <td>收藏歌曲与“我喜欢”可写；当前账号创建的普通歌单可创建、改名、删除与增删歌曲；公开歌单与他人歌单只读。可编辑歌单指当前账号自建、非“我喜欢”的普通歌单。</td>
   </tr>
   <tr>
-    <td>MV / MV 清晰度（待探测）</td>
-    <td>MV 搜索 / 详情 / 取流接口尚未验证；当前搜索返回空结果，详情与播放提示待探测。MV 播放与音频播放状态相互独立。</td>
+    <td>MV / MV 清晰度</td>
+    <td>MV 可搜索、查看详情并取流播放；清晰度分 <code>sd</code> / <code>hd</code> / <code>fhd</code>，默认最高档，档位不可用时自动降档。MV 播放与音频播放状态相互独立。</td>
   </tr>
   <tr>
     <td>下载任务 / 下载中心</td>
-    <td>下载当前账号可播歌曲到本机的任务，以及管理进度、暂停 / 继续、删除的侧栏抽屉。</td>
-  </tr>
-  <tr>
-    <td>播放引擎 / gapless / EQ / 响度归一</td>
-    <td>实际输出音频的引擎；<code>Settings.audioEngine</code> 为预留字段（未正式上线），当前仅保留持久化契约，未知值回退 <code>auto</code>。HTML5 Audio 为实际默认引擎；mpv 的无缝播放 / EQ / 响度归一等能力尚未作为已交付承诺。</td>
+    <td>下载当前账号可播歌曲到本机的任务，以及管理进度、暂停 / 继续、删除的侧栏抽屉。一次整单下载对应一个批次，批次可暂停 / 继续 / 删除 / 重试失败；单任务与批次共用同一状态机。</td>
   </tr>
   <tr>
     <td>评论（Comment）</td>
@@ -145,12 +161,34 @@
     <td>请求档位无权限或无链接时静默回退，不弹提示，实际音质显示在播放条；实际音质可能高于或低于请求档位；全部档位无链接时提示不可播。回退规则见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。</td>
   </tr>
   <tr>
+    <td>歌手名缺失</td>
+    <td>有名字且有 <code>mid</code>：显示歌手名并可进入歌手页；有名字但 <code>mid</code> 为空：只显示纯文本，不生成链接；名字为空：不渲染任何歌手文本，不显示“未知歌手”占位。多条歌手按“ / ”拼接，空名称成员跳过。列表、播放条与详情页共用同一规则。</td>
+  </tr>
+  <tr>
+    <td>Revealer 统一交互与样式</td>
+    <td>
+      除特别说明外，所有 revealer 遵循同一交互与呈现：
+      <br />
+      交互：按钮本身点击按固定顺序循环切换选项；悬停或键盘聚焦展开弹层，离开 / 失焦关闭；Esc 或点击外部关闭；同一时间只展开一个弹层。弹层按固定顺序列出除当前项外的其它选项，按钮本身始终表示并高亮当前项。
+      <br />
+      呈现：弹层从按钮底部向上展开，宽度与按钮一致并左右对齐；按钮位于弹层底部、始终可见且层级高于弹层；当前项不在弹层内重复出现。弹层使用面板底色与向上阴影；所有 revealer 按钮不带边框；弹层选项悬停背景统一使用 <code>--subtle-bg</code>。
+      <br />
+      触屏：从按钮开始上下滑动时保持弹层打开，并按手指位置高亮最近的选项；松开确认高亮项，取消手势则关闭。轻点仍执行按钮原有行为；开始滑动后抑制随后的 click。鼠标移出 revealer 范围按离开处理并取消。
+      <br />
+      特殊个例在对应组件章节单独说明，不在本约定中列举。
+    </td>
+  </tr>
+  <tr>
     <td>播放模式切换</td>
-    <td>按 <code>sequence → repeat-all → repeat-one → shuffle</code> 循环切换，并通过 Toast 显示当前模式。</td>
+    <td>按 Revealer 统一交互执行，固定顺序为 <code>sequence → repeat-all → repeat-one → shuffle</code>；点击按钮按该顺序循环，悬停 / 键盘聚焦展开其余选项。切换立即生效且不弹 Toast。</td>
+  </tr>
+  <tr>
+    <td>页面加载与离开</td>
+    <td>页面先渲染骨架与分区占位，再异步填充内容；离开页面后，该页未完成的加载不再继续占用网络。后台任务是否继续由对应功能章节说明。</td>
   </tr>
   <tr>
     <td>歌单加载与后台刷新</td>
-    <td>再次进入已打开歌单时先显示整份缓存；第一页成功即显示；加载中断可重试并自动续传；歌单页可见时每 15 秒轮询一次（页面不可见时跳过）。刷新失败保留已显示内容并提示；退出登录清空本机歌单数据。不再预取“我喜欢”第一页。</td>
+    <td>打开歌单无论内容是否变化、是否有写操作，都先显示该歌单最近一次缓存，并在后台静默拉取完整快照；成功才一次性替换，失败保留缓存且不提示。心跳只在页面挂载且可见时运行（隐藏 / 离开即停止，恢复可见时立即检查一次）；心跳发现名称、封面、首屏顺序或数量显著变化时立即刷新，并取消待执行的 5 分钟重试。只有非心跳的刷新失败（主要是切换歌单）才进入 5 分钟 timeout。退出登录清空本机歌单数据。</td>
   </tr>
   <tr>
     <td>收藏后刷新</td>
@@ -169,6 +207,14 @@
     <td>第一页成功即显示；后续页自动补齐；最终队列快照要求完整加载、非 stale 且元数据探测完成。完成前允许一次临时快照顶替；已知不可播歌曲在进入快照前剔除。</td>
   </tr>
   <tr>
+    <td>最近歌单</td>
+    <td>按账号保存的最近访问歌单列表，最多 5 条，作为“我的歌单”下的快捷入口；当前正在播放的歌单在列表中高亮。</td>
+  </tr>
+  <tr>
+    <td>最近歌单</td>
+    <td>最多 5 条，按账号持久化；进入歌单页时更新并置顶，超出淘汰最旧。登录后与每次展开窄屏侧栏时校验（宽屏首次渲染也校验一次），校验带 5 秒节流与单飞。已删除或无权限的歌单从列表移除且不补位；校验失败保留条目并标记失效。当前正在播放的歌单高亮，与当前路由无关。</td>
+  </tr>
+  <tr>
     <td>播放缓存</td>
     <td>按账号隔离；有容量上限、可手动清空；退出登录不清空；缓存内容仅本机播放；不做下一首预解析。</td>
   </tr>
@@ -178,11 +224,15 @@
   </tr>
   <tr>
     <td>乐观更新与回滚</td>
-    <td>收藏、歌单编辑等写操作先更新界面；失败时回滚并提示。</td>
+    <td>收藏、歌单创建 / 改名 / 删除、添加歌曲与从歌单删除等写操作先更新界面或写后刷新；失败时回滚并提示。从歌单删除失败时恢复被删行与歌曲数；添加到歌单重复时不重复提交并提示。</td>
+  </tr>
+  <tr>
+    <td>缓存与下载</td>
+    <td>点击下载先检查缓存：缓存档位达到该曲最高可用档时走本地转移登记为下载（优先硬链接，失败回退复制），否则按最高可用档新建下载；已有同曲任务时聚焦任务而不重复创建。</td>
   </tr>
   <tr>
     <td>下载限制</td>
-    <td>仅下载当前账号可播内容；失败不自动无限重试；下载文件仅供本机个人使用。</td>
+    <td>仅下载当前账号可播内容；批次按歌单顺序建任务，每首按 <code>flac → 320k → 128k</code> 选择最高可用档；下载并发固定为 1；已下载同档跳过，缓存达到最高档时本地转移；失败不自动无限重试；下载文件仅供本机个人使用。</td>
   </tr>
   <tr>
     <td>登录凭证边界</td>
@@ -198,7 +248,7 @@
   </tr>
   <tr>
     <td>页面 / URL 跳转</td>
-    <td>页面与跳转关系见 <a href="#u3-4">§3.4</a>；Hash 路由，切换路由自动关闭歌词 / 评论面板。</td>
+    <td>页面与跳转关系见 <a href="#u3-4">§3.4</a>；Hash 路由。歌词 / 评论为普通路由页 <code>/lyrics</code>：返回优先 <code>router.back()</code>，无历史时回 <code>/search</code>；页面由路由直接渲染。</td>
   </tr>
 </table>
 
@@ -237,7 +287,7 @@
 <ul class="note">
   <li>节点为页面，边为跳转关系；根路径 <code>/</code> 重定向到 <code>/search</code>。</li>
   <li>歌单详情的返回入口指向 <code>/library</code>；登录成功后进入 <code>/library</code>。</li>
-  <li>“发现”为 <code>/discover</code>，MV 播放页为 <code>/mv/:id</code>；下载中心为侧栏抽屉，不占独立路由。</li>
+  <li>“发现”为 <code>/discover</code>，MV 播放页为 <code>/mv/:id</code>；歌词 / 评论为 <code>/lyrics</code>，入口是任意页面播放条的封面；歌手页 / 专辑页为 <code>/artist/:mid</code> / <code>/album/:mid</code>；下载中心为侧栏抽屉，不占独立路由。</li>
   <li>页面结构与视觉契约见 <a href="#u5-2-8">§5.2.8</a>。</li>
 </ul>
 
@@ -323,15 +373,14 @@
 <table>
   <tr><th>项目</th><th>契约</th></tr>
   <tr><td>默认窗口</td><td>1280×820；不设置 <code>BrowserWindow.minWidth</code> / <code>minHeight</code>；无系统菜单栏。</td></tr>
-  <tr><td>主网格</td><td>两列：侧栏 + 内容区；底部播放条通栏；内容区独立滚动，播放条常驻贴底。布局最小阈值统一为 <code>--layout-min-width: 420px</code> 与 <code>--layout-min-height: var(--player-height) + 170px</code>。</td></tr>
+  <tr><td>主网格</td><td>宽屏两列：侧栏 + 内容区；底部播放条通栏；内容区独立滚动，播放条常驻贴底。≤900px 时侧栏脱离网格成为覆盖式抽屉，内容区占满宽度。布局最小阈值统一为 <code>--layout-min-width: 420px</code> 与 <code>--layout-min-height: var(--player-height) + 170px</code>。</td></tr>
   <tr><td>低于阈值</td><td>布局停止压缩，<code>body</code> 出现整窗纵向 / 横向滚动条；侧栏、账号入口与播放条仍可到达；导航先内部纵向滚动，内容区保持独立滚动。</td></tr>
-  <tr><td>侧栏宽度</td><td>224px；≤900px 为 64px 图标栏；≤560px 为 56px。</td></tr>
+  <tr><td>侧栏宽度</td><td>224px；≤900px 改为同宽 224px 的覆盖式抽屉，默认隐藏。</td></tr>
   <tr><td>内容区</td><td>铺满可用宽度（不设最大宽度）；页面内边距 28/34/40px（上/左右/下）。</td></tr>
   <tr><td>播放条高度</td><td>92px；≤900px 为 84px；≤560px 为 116px 双行。</td></tr>
-  <tr><td>歌词 / 评论面板</td><td>覆盖侧栏与播放条以外的主区域；左右两列各占 50%，左歌词、右评论；与播放队列面板互斥。</td></tr>
-  <tr><td>播放队列面板</td><td>右侧固定浮层，宽 390px，底部让出播放条高度；≤560px 全宽；与歌词 / 评论面板互斥，同时只打开一个。</td></tr>
+  <tr><td>播放队列面板</td><td>右侧固定浮层，宽 390px，底部让出播放条高度；≤560px 全宽；同一时间只打开一个。</td></tr>
   <tr><td>登录组件占位</td><td>高度 332px；宽度 100%，最大宽度 800px（暂定，按实现调整）；≤560px 保持 100%；主进程 <code>WebContentsView</code> 按该矩形定位。</td></tr>
-  <tr><td>响应式断点</td><td>900px：侧栏收窄、设置页单列、歌曲列表隐藏专辑列、音量改为弹出式；560px：播放条双行、歌词 / 评论仍各占 50%、音质 / 主题选项单列。</td></tr>
+  <tr><td>响应式断点</td><td>900px：侧栏改为默认隐藏的覆盖式抽屉（左边缘 revealer / 拖拽打开）、设置页单列、歌曲列表隐藏专辑列、音量改为弹出式；560px：播放条双行、歌词 / 评论仍各占 50%、音质 / 主题选项单列。</td></tr>
 </table>
 
 <div class="ui-proto-wrap">
@@ -339,46 +388,54 @@
   <aside class="u-region u-region-side"><b>侧栏</b><span>品牌 · 导航 · 账号入口</span><a href="#u5-2-2">→ 侧栏</a></aside>
   <main class="u-region u-region-main"><b>内容区</b><span>页面头部 / 标签 / 列表或卡片（随路由）</span><a href="#u5-2-8">→ 页面结构</a></main>
   <footer class="u-region u-region-player"><b>播放条</b><span>常驻贴底</span><a href="#u5-2-3">→ 播放条</a></footer>
-  <div class="u-region u-region-overlay"><b>歌词 / 评论面板</b><span>浮层，左右各半，可关闭</span><a href="#u5-2-5">→ 歌词 / 评论</a></div>
 </div>
 </div>
 <ul class="note">
-  <li>总体骨架：侧栏、内容区、播放条三块固定关系；歌词 / 评论面板覆盖侧栏与播放条以外的主区域。</li>
-  <li>内容区按路由切换：搜索、我的歌单、歌单详情、设置、登录。</li>
+  <li>总体骨架：侧栏、内容区、播放条三块固定关系；歌词 / 评论是内容区内的普通路由页，不覆盖侧栏与播放条。</li>
+  <li>内容区按路由切换：搜索、我的歌单、歌单详情、歌词 / 评论、设置、登录。</li>
   <li>滚动层级：窗口低于布局阈值时由 <code>body</code> 承担整窗滚动；正常尺寸下侧栏导航在高度不足时内部滚动、账号入口固定，内容区独立滚动，播放条始终位于网格第二行。</li>
   <li>歌曲表操作单元格不得使用 <code>td display: flex</code>；按钮排列放在单元格内部容器中，行分隔线挂在 <code>tr</code>，避免行线断开与列宽异常。</li>
+  <li>窄屏抽屉层级：主界面在前、侧栏在后，抽屉左侧用少量阴影表现 revealer；主界面可向右拖动显示抽屉、向左拖动隐藏，松手按位移 / 速度吸附。抽屉打开时主内容轻微右移，关闭后复位。</li>
 </ul>
 
 <h4 id="u5-2-2">5.2.2 侧栏与导航</h4>
 <div class="ui-proto-wrap">
 <div style="display: flex; gap: 18px; align-items: flex-start">
-  <div class="ui-proto u-side" style="width: 224px; height: 400px; border-radius: 10px; border-right: 1px solid var(--p-line)">
+  <div class="ui-proto u-side" style="width: 224px; height: 470px; border-radius: 10px; border-right: 1px solid var(--p-line)">
     <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>QQ Music · Linux</small></span></div>
     <div class="u-nav-label">浏览</div>
     <div class="u-nav-item active">搜索</div>
     <div class="u-nav-item">发现</div>
     <div class="u-nav-item">我的歌单</div>
+    <div class="u-nav-item" style="padding-left: 28px; opacity: .85">我喜欢的音乐</div>
+    <div class="u-nav-item" style="padding-left: 28px; opacity: .85">华语流行</div>
+    <div class="u-nav-item" style="padding-left: 28px; opacity: .85">夜跑</div>
     <div class="u-nav-label">应用</div>
     <div class="u-nav-item">下载</div>
     <div class="u-nav-item">设置</div>
     <div class="u-nav-item">退出</div>
     <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>已登录 · 0123456789</small></span></div>
   </div>
-  <div class="ui-proto u-side narrow" style="height: 400px; border-radius: 10px">
-    <span class="u-mark">♪</span>
-    <div class="u-nav-item active" style="padding: 8px 10px">⌕</div>
-    <div class="u-nav-item" style="padding: 8px 10px">≡</div>
-    <div class="u-nav-item" style="padding: 8px 10px">⚙</div>
-    <div class="u-pill" style="margin-top: auto; padding: 6px"><span class="u-avatar" style="width: 20px; height: 20px">L</span></div>
+  <div class="ui-proto u-side" style="width: 224px; height: 470px; border-radius: 10px; box-shadow: 6px 0 18px rgba(0,0,0,.35)">
+    <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>窄屏抽屉 · 默认隐藏</small></span></div>
+    <div class="u-nav-label">浏览</div>
+    <div class="u-nav-item active">搜索</div>
+    <div class="u-nav-item">发现</div>
+    <div class="u-nav-item">我的歌单</div>
+    <div class="u-nav-item" style="padding-left: 28px; opacity: .85">华语流行 <span class="u-qmark">播放中</span></div>
+    <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>已登录 · 0123456789</small></span></div>
   </div>
 </div>
 </div>
 <ul class="note">
-  <li>宽态：品牌区、分组导航（浏览：“搜索 / 发现 / 我的歌单”；应用：“下载 / 设置 / 退出”）与底部账号 pill；账号 pill 未登录时进入登录页，已登录时进入设置页。</li>
-  <li>“下载”打开右侧下载中心抽屉，不跳转页面；抽屉与歌词 / 评论、播放队列面板互斥。“退出”直接结束应用进程，不受“关闭到托盘”影响。</li>
-  <li>≤900px：收为 64px 图标栏，仅保留图标与头像；≤560px 收为 56px。</li>
-  <li>导航项激活态使用 accent 软填充与强调文字；悬停态只改变背景与文字颜色。</li>
-  <li>高度不足时导航区先内部纵向滚动（<code>flex: 1; min-height: 0; overflow-y: auto</code>），底部账号入口固定（<code>flex: 0 0 auto</code>）；低于整窗最小高度后按 §5.2.1 随页滚动，账号入口与播放条仍可到达。</li>
+  <li>宽屏（&gt;900px）固定侧栏 224px：品牌、浏览组（“搜索 / 发现 / 我的歌单”）、应用组（“下载 / 设置 / 退出” + 配色切换图标）与底部账号 pill；导航项激活态使用 accent 软填充与强调文字，悬停态只改变背景与文字颜色。</li>
+  <li>“我的歌单”下最多显示 5 条最近访问歌单作为子条目；点击进入对应歌单。进入歌单页时更新该条目并置顶，超过 5 条淘汰最旧的一条；已删除或无权限的歌单在校验后移除，且不从第 6 条补位；歌单信息变化时更新名称 / 封面 / 歌曲数。</li>
+  <li>当前正在播放的歌单在最近列表中高亮，播放与暂停状态都高亮，与当前路由无关；手动队列（无歌单来源）不高亮。</li>
+  <li>≤900px：侧栏改为覆盖式抽屉，默认隐藏；主界面在前、抽屉在后，抽屉左侧带少量阴影形成 revealer 效果。左边缘把手指针可打开；主界面向右拖动显示、向左拖动隐藏，松手按位移 / 速度吸附；Esc、点击外部关闭；<code>prefers-reduced-motion</code> 时取消动画。抽屉打开时焦点进入侧栏，关闭后回到触发点。</li>
+  <li>最近列表的校验时机：登录后、窄屏每次展开侧栏时，以及宽屏首次渲染；带 5 秒节流与单飞（前一次未完成不重复触发）。优先读整份缓存，再用歌单详情刷新名称 / 封面 / 歌曲数；删除或无权限则移除条目，校验失败保留条目并标记失效，避免误删。</li>
+  <li>退出登录清空当前账号的最近列表；切换账号加载对应列表。最近列表不进入“我的歌单”主卡片。</li>
+  <li>“下载”打开右侧下载中心抽屉，不跳转页面；抽屉与播放队列面板互斥。“退出”直接结束应用进程，不受“关闭到托盘”影响；“退出”下方有一个仅图标、无文字的配色切换按钮：浅色模式显示太阳图标，深色模式显示月亮图标；点击在深色 / 浅色之间切换，与设置页主题选项共用 <code>Settings.theme</code> 并即时生效；切换不弹 Toast。</li>
+  <li>高度不足时导航区先内部纵向滚动（<code>flex: 1; min-height: 0; overflow-y: auto</code>），底部账号入口固定（<code>flex: 0 0 auto</code>）；低于整窗最小高度后按 <a href="#u5-2-1">§5.2.1</a> 随页滚动，账号入口与播放条仍可到达。账号 pill 未登录进入登录页，已登录进入设置页。</li>
 </ul>
 
 <h4 id="u5-2-3">5.2.3 播放条</h4>
@@ -393,12 +450,13 @@
 </div>
 </div>
 <ul class="note">
-  <li>左：封面 54px + 标题 + 实际音质标记（金色小标签）+「歌手 · 专辑」行；点击封面打开歌词 / 评论面板。标题与歌手行超宽时跑马灯滚动，音质标记固定最右。</li>
+  <li>左：封面 54px + 标题 + 实际音质标记（金色小标签）+「歌手 · 专辑」行；点击封面导航到 <code>/lyrics</code> 歌词 / 评论页。标题与歌手行超宽时跑马灯滚动，音质标记固定最右。歌手与专辑名可点击进入对应信息页；歌手名缺失时按 <a href="#u2">§2</a> 的“歌手名缺失”规则降级：有名字无歌手页只显示纯文本，名字为空不渲染。</li>
   <li>中：播放模式、上一首、播放 / 暂停（38px 圆形主按钮）、下一首、播放队列入口；下方进度条（gold 填充）与时间。播放队列入口打开 <a href="#u5-2-9">§5.2.9</a> 面板。</li>
-  <li>右：收藏、下载、请求音质芯片（点击弹出 128k / 320k / flac 菜单，选择后立即重载当前曲目）+ 音量；≤900px 音量改为点击弹出竖直滑块。收藏按钮按状态显示实心 <code>heart-filled</code>（已收藏）或空心 <code>heart</code>（未收藏），tooltip 在“收藏 / 取消收藏”间切换。</li>
+  <li>播放模式按钮悬停 120ms 向上弹出仅图标的菜单，离开 200ms 关闭；点击按钮本身按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换（不展开菜单），键盘聚焦可打开弹层，Esc / 点击外部关闭。当前模式固定在菜单底部，用与菜单同圆角、无空隙的矩形高亮（accent 软填充 + 强调色）并带对勾；其余三项按同一固定顺序从上到下排列，tooltip 补文字。空状态下菜单仍可打开，选择不产生播放副作用。触屏从按钮开始上下滑动可打开菜单并按手指位置高亮选项，松开确认；轻点仍循环切换。</li>
+  <li>右：收藏、下载、请求音质芯片（显示当前偏好；点击按 自动 → 128K → 320K → FLAC 固定顺序循环切换，悬停弹出其余档位，选择后立即重载当前曲目；无歌曲时只影响下次播放）+ 音量；音量按钮点击切换静音，宽屏常驻滑块，≤900px 悬停弹出竖直滑块；触屏在音量按钮上纵向拖动时按拖动距离的 delta 调节音量（120px 覆盖 0–1），不按手指绝对位置定位，轻点仍切换静音。收藏是特殊 revealer：点击按钮加入 / 取消我喜欢；悬停或键盘聚焦弹出仅含“加入歌单”图标的弹层，点击打开歌单选择对话框；没有模式切换。收藏按钮按状态显示实心 <code>heart-filled</code>（已收藏）或空心 <code>heart</code>（未收藏），tooltip 在“收藏 / 取消收藏”间切换。下载按钮使用统一三态图标：普通图标 = 未缓存未下载；普通图标加外框 = 已缓存；实心背景 + 空心图标 = 已下载。tooltip 显示“已缓存 FLAC / 已下载 320K / 下载”等状态，二者同时存在时按“已下载”显示。</li>
   <li>音质菜单与音量弹层在点击外部时关闭，且不阻断被点击目标的点击；实现使用 document 捕获阶段监听与容器 ref，不使用遮罩。两个弹层同时只打开一个。</li>
   <li>播放条只对当前歌曲与队列负责；不可播处理见 <a href="#u5-2-9">§5.2.9</a>，其他加载失败按现有规则停止；链接过期时最多每 30 秒自动重取一次并保留位置。</li>
-  <li>无歌曲时播放条显示“还没有播放中的歌曲”；不可播歌曲仍显示在播放条，播放按钮置灰不可点击。</li>
+  <li>播放条始终渲染。无当前歌曲时封面用 <code>muted</code> 占位、歌名与歌手留空，播放 / 上一首 / 下一首 / 喜欢 / 下载全部禁用，进度与缓存进度为 0 并隐藏，不显示文字占位；此时点击封面不导航。音质按钮保持可用，切换只影响下次播放。不可播歌曲仍显示在播放条，播放按钮置灰不可点击。</li>
 </ul>
 
 <h4 id="u5-2-4">5.2.4 歌曲列表</h4>
@@ -406,53 +464,68 @@
 <div class="ui-proto" style="width: 760px; padding: 14px">
   <div class="u-table">
     <div class="u-th with-action"><span>#</span><span>标题</span><span>专辑</span><span>操作</span><span>时长</span></div>
-    <div class="u-tr with-action active"><span class="u-idx">▶</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">晴天 <span class="u-badge gold">VIP</span></span><small>周杰伦</small></span></span><span>叶惠美</span><span><span class="u-tab">♥ ⊖ ＋</span></span><span class="u-muted">4:29</span></div>
-    <div class="u-tr with-action"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年 <span class="u-badge">数字专辑</span></span><small>五月天</small></span></span><span>自传</span><span><span class="u-tab">♡ ⊖ ＋</span></span><span class="u-muted">4:28</span></div>
-    <div class="u-tr with-action"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span>启示录</span><span><span class="u-tab">♡ ⊖ ＋</span></span><span class="u-muted">4:41</span></div>
-    <div class="u-tr with-action"><span class="u-idx">4</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span>孤勇者</span><span><span class="u-tab">♡ ⊖ ＋</span></span><span class="u-muted">4:16</span></div>
+    <div class="u-tr with-action active"><span class="u-idx">▶</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">晴天 <span class="u-badge gold">VIP</span></span><small>周杰伦</small></span></span><span>叶惠美</span><span><span class="u-tab">♥ ⊖ ↑ ＋ ✕</span></span><span class="u-muted">4:29</span></div>
+    <div class="u-tr with-action"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年 <span class="u-badge">数字专辑</span></span><small>五月天</small></span></span><span>自传</span><span><span class="u-tab">♡ ⊖ ↑ ＋ ✕</span></span><span class="u-muted">4:28</span></div>
+    <div class="u-tr with-action"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span>启示录</span><span><span class="u-tab">♡ ⊖ ↑ ＋ ✕</span></span><span class="u-muted">4:41</span></div>
+    <div class="u-tr with-action"><span class="u-idx">4</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span>孤勇者</span><span><span class="u-tab">♡ ⊖ ↑ ＋ ✕</span></span><span class="u-muted">4:16</span></div>
   </div>
 </div>
 </div>
 <ul class="note">
-  <li>列顺序固定为 # / 标题 / 专辑 / 操作 / 时长；所有表头与操作 / 时长单元格左对齐。标题单元格含 38px 封面、歌名与下一行的歌手，专辑为独立列。序号与播放按钮共用 26px 居中槽。</li>
+  <li>列顺序固定为 # / 标题 / 专辑 / 操作 / 时长；所有表头与操作 / 时长单元格左对齐。标题单元格含 38px 封面、歌名与下一行的歌手，专辑为独立列。序号与播放按钮共用 26px 居中槽。歌手名与专辑名渲染为链接，点击进入对应信息页且不触发行播放。</li>
+  <li>歌名、歌手、专辑超长时使用跑马灯压缩，只在溢出时滚动；≤900px 隐藏专辑列，操作列保留。</li>
   <li>双击行播放并替换队列；悬停或当前播放行在 # 列显示播放 / 暂停按钮，其余显示从 1 开始的序号文本；当前播放行以 accent 底色标记。</li>
-  <li>点击非当前行的播放按钮即单曲播放，与双击一样替换播放队列；当前行的按钮切换暂停 / 继续。操作列的加号图标按钮执行“下一首播放”，只把歌曲插入队列头，不改变当前歌曲。</li>
-  <li>权限角标：VIP / 数字专辑 / 付费；歌单加载后会追加不可播标记与最高可用音质标签（如 FLAC / 320K / 128K）。标题拆为可压缩歌名与常驻徽标：窄窗口优先省略歌名，VIP / 音质徽标不被裁掉；不可播行禁用播放与“下一首播放”入口；未知状态按可播处理。≤900px 隐藏专辑列，操作列保留。</li>
-  <li>操作列包含收藏、下载与加号按钮；收藏按当前账号状态显示实心 / 空心爱心与“收藏 / 取消收藏” tooltip，下载只对当前账号可播内容可用。操作按钮放在单元格内部容器中，不能把 <code>td</code> 改成 flex，行线挂 <code>tr</code>。</li>
+  <li>点击非当前行的播放按钮即单曲播放，与双击一样替换播放队列；当前行的按钮切换暂停 / 继续。操作列的“横线 + 上箭头”图标执行“下一首播放”，只把歌曲插入队列头，不改变当前歌曲；简单加号图标把歌曲添加到所选歌单。</li>
+  <li>权限角标：VIP / 数字专辑 / 付费；歌单加载后会追加不可播标记与最高可用音质标签（如 FLAC / 320K / 128K）。标题拆为可压缩歌名与常驻徽标：窄窗口优先省略歌名，VIP / 音质徽标不被裁掉；不可播行禁用播放与“下一首播放”入口；未知状态按可播处理。≤900px 隐藏专辑列，操作列保留。歌手单元格按 <a href="#u2">§2</a> 的“歌手名缺失”规则降级：名字为空不渲染歌手文本，有名字无 <code>mid</code> 只显示纯文本。</li>
+  <li>操作列基础结构为收藏、下载、下一首播放（横线 + 上箭头）、添加到歌单（简单加号）与从歌单删除五个图标按钮；收藏按当前账号状态显示实心 / 空心爱心与“收藏 / 取消收藏” tooltip。下载按钮按缓存 / 下载状态切换同一套三态图标（未缓存未下载 / 已缓存 / 已下载），tooltip 补充档位，只对当前账号可播内容可用。操作按钮放在单元格内部容器中，不能把 <code>td</code> 改成 flex，行线挂 <code>tr</code>。</li>
+  <li>“添加到歌单”对所有登录后的歌曲表可用：点击打开选择器，列出当前账号可编辑的普通歌单（排除“我喜欢”），并提供“新建歌单”；选择后加入目标歌单，成功 Toast 并刷新目标歌单；歌曲已在歌单中时提示“已在歌单中”。</li>
+  <li>“从歌单删除”只在当前账号可编辑的普通歌单显示；“我喜欢”不显示删除按钮（取消收藏继续走收藏按钮）。点击后先确认歌曲名与歌单名，确认后移除该行并更新歌曲数；失败恢复行与计数并提示。删除只改变歌单成员，不影响当前播放与播放队列。</li>
+  <li>歌单详情在歌曲表上方提供筛选输入框：按歌名 / 歌手 / 专辑做本地、不区分大小写匹配；只影响展示，不改变播放队列与播放顺序；显示匹配数 / 总数与清除按钮。</li>
+  <li>≤900px 时五个按钮收为一个“…”按钮，弹出“图标 + 文字”菜单；菜单项按收藏、下载、下一首播放、添加到歌单、从歌单删除排列，点击菜单不触发行播放，点击外部或按 Esc 关闭。</li>
 </ul>
 
 <h4 id="u5-2-5">5.2.5 歌词与评论</h4>
 <div class="ui-proto-wrap">
-<div class="ui-proto" style="width: 780px; padding: 14px; display: flex; gap: 14px">
-  <div class="u-lyrics" style="width: 50%; height: 420px">
-    <div class="u-lyrics-head"><div><h5>歌词</h5><small>晴天 · 周杰伦</small></div><span class="u-ctl">×</span></div>
-    <div class="u-lyrics-body">
-      <div class="u-lyric">故事的小黄花</div>
-      <div class="u-lyric active">从出生那年就飘着<small>The little yellow flower of the story</small></div>
-      <div class="u-lyric">童年的荡秋千</div>
-      <div class="u-lyric">随记忆一直晃到现在</div>
-      <div class="u-lyric">Re So So Si Do Si La</div>
-      <div class="u-lyric">So La Si Si Si Si La Si La So</div>
-    </div>
+<div class="ui-proto" style="width: 860px; padding: 0">
+  <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px">
+    <span class="u-tab">← 返回</span>
+    <span><b>晴天</b> <small>周杰伦 · 叶惠美</small></span>
+    <span style="width: 48px"></span>
   </div>
-  <div class="u-lyrics" style="width: 50%; height: 420px">
-    <div class="u-lyrics-head"><div><h5>评论</h5><small>33.9 万 条</small></div><span class="u-ctl">↻</span></div>
-    <div class="u-lyrics-body">
-      <div class="u-lyric"><b>WHAT?!</b><small>今天太阳好舒服</small></div>
-      <div class="u-lyric"><b>顾有铭</b><small>受不了了，太好听了。</small></div>
-      <div class="u-lyric"><b>桨桨</b><small>周杰伦的《晴天》真的是青春里最难忘的一首歌。</small></div>
-      <div class="u-lyric"><b>飞行管线</b><small>一次一个感觉</small></div>
+  <div style="display: flex; border-top: 1px solid var(--p-line)">
+    <div class="u-lyrics" style="width: 50%; height: 420px">
+      <div class="u-lyrics-body">
+        <div class="u-lyric">故事的小黄花</div>
+        <div class="u-lyric active">从出生那年就飘着<small>The little yellow flower of the story</small></div>
+        <div class="u-lyric">童年的荡秋千</div>
+        <div class="u-lyric">随记忆一直晃到现在</div>
+        <div class="u-lyric">Re So So Si Do Si La</div>
+        <div class="u-lyric">So La Si Si Si Si La Si La So</div>
+      </div>
+    </div>
+    <div style="width: 1px; background: var(--p-line)"></div>
+    <div class="u-lyrics" style="width: 50%; height: 420px">
+      <div class="u-lyrics-head">
+        <div class="u-opts"><div class="u-opt active"><b>评论</b></div></div>
+        <span class="u-ctl" title="刷新评论">↻</span>
+      </div>
+      <div class="u-lyrics-body">
+        <div class="u-lyric"><b>WHAT?!</b><small>今天太阳好舒服</small><small>2 小时前 · ♥ 12</small></div>
+        <div class="u-lyric"><b>顾有铭</b><small>受不了了，太好听了。</small><small>3 小时前 · ♥ 8</small></div>
+        <div class="u-lyric"><b>桨桨</b><small>周杰伦的《晴天》真的是青春里最难忘的一首歌。</small><small>昨天 · ♥</small></div>
+      </div>
     </div>
   </div>
 </div>
 </div>
 <ul class="note">
-  <li>入口为播放条封面；再次点击封面或点击面板关闭按钮收起。面板覆盖侧栏与播放条以外的主区域，左右两列各占 50%：左歌词，右评论；路由切换时关闭，规则见 <a href="#u2">§2</a>。</li>
-  <li>歌词：当前行只改变字重、颜色、左侧强调线与背景，字号与行高固定（14px / 1.7）；有逐字歌词数据时按字 / 词时间轴高亮，没有时回退整行高亮；已有翻译时按相同时间戳合并显示在原文下一行；面板打开时自动滚到活动行，点击行跳转播放进度。</li>
+  <li>歌词 / 评论为可路由页面 <code>/lyrics</code>，入口是播放条封面；页面占满内容区，不设“歌词 / 评论”标题行，左右两列各占 50%，中间保留分隔线。</li>
+  <li>左上角为返回按钮，优先 <code>router.back()</code>，无历史时回 <code>/search</code>；顶部持续显示当前歌曲的歌名、歌手与专辑，歌手 / 专辑可点击进入对应信息页。</li>
+  <li>歌词：当前行变色并放大，始终居中；上下边缘渐隐。支持滚轮、左键拖拽与点击行定位播放进度；有逐字数据时按词高亮。无歌词、加载中与加载失败分别显示空状态 / spinner / 错误重试。</li>
+  <li>评论：顶部只显示“评论”标题、总数与刷新入口，不再提供“最新 / 最旧”排序切换。滚动到底自动加载下一页；右下角按滚动位置智能显示两个独立圆形按钮：“跳转到顶部”和“跳转到底部”。点击跳转到底部会先补拉剩余评论（受上游单页 25 条上限，最多 40 页 / 约 1000 条，补拉期间按钮显示加载态），完成后直接滚到底部；关闭歌词 / 评论弹出层或切歌会立即停止后续补拉。</li>
+  <li>评论行为两行布局：第一行头像 + 昵称 + 正文（完整展示，不截断），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮、不显示数字。点赞先乐观更新，失败回滚并提示。</li>
+  <li>无当前歌曲时歌词与评论均显示空状态，不发起请求。≤900px 仍保持左右各 50%，只收窄内边距；≤560px 继续保持各占 50%（与 <a href="#u5-2-1">§5.2.1</a> 的断点一致）。</li>
   <li>本应用不提供桌面歌词窗口、桌面歌词设置或相关入口。</li>
-  <li>歌词无内容或加载失败时显示空状态，加载中显示 spinner。</li>
-  <li>评论：顶部显示评论总数与刷新按钮；列表展示头像、昵称、正文与点赞数。加载中显示 spinner；无评论显示空状态；加载失败显示错误与重试。</li>
-  <li>没有当前歌曲时不展示评论列表。</li>
 </ul>
 
 <h4 id="u5-2-6">5.2.6 登录页</h4>
@@ -517,27 +590,16 @@
       <div class="u-rowline"><span>音频引擎</span><span>HTML5 Audio</span></div>
       <div class="u-rowline"><span>许可证</span><span>GPL-3.0-only</span></div>
     </div>
-    <div class="u-panel">
-      <h5>音频引擎（预留 / 未上线）</h5>
-      <div class="u-opts">
-        <div class="u-opt active"><b>自动</b></div>
-        <div class="u-opt"><b>HTML5</b></div>
-        <div class="u-opt"><b>mpv</b></div>
-      </div>
-      <div class="u-rowline"><span>EQ</span><span class="u-switch"></span></div>
-      <div class="u-rowline"><span>响度归一</span><span class="u-switch"></span></div>
-    </div>
   </div>
 </div>
 </div>
 <ul class="note">
-  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口 / 启动参数 / 缓存与下载，右列账号 / 关于 / 音频引擎。</li>
+  <li>两列排布（≤900px 单列）：左列播放 / 外观 / 窗口 / 启动参数 / 缓存与下载，右列账号 / 关于。</li>
   <li>启动参数展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
-  <li>缓存与下载区展示缓存开关、当前占用、清理；下载目录、容量与剩余空间提示。</li>
-  <li><code>Settings</code> 的确切持久化字段为 <code>defaultQuality</code>、<code>closeToTray</code>、<code>theme</code>、<code>audioCacheEnabled</code>、<code>audioEngine?</code>、<code>downloadDir?</code>。<code>downloadDir</code> 缺省为 <code>~/Music/Lychee Player</code>；未知值由主进程回退默认。</li>
-  <li><code>audioEngine</code> 为预留 / 未上线字段：当前只保留持久化契约（<code>auto</code> / <code>html5</code> / <code>mpv</code>，未知值回退 <code>auto</code>），不作为已交付的引擎切换能力描述；EQ / 响度归一同样未上线。</li>
+  <li>缓存与下载区分别展示播放缓存占用与下载占用：缓存开关、清理只作用于缓存，不删除下载文件；下载目录、容量与剩余空间提示；“清除已完成”只清除下载记录，不删除磁盘文件。</li>
+  <li><code>Settings</code> 的确切持久化字段为 <code>defaultQuality</code>、<code>closeToTray</code>、<code>theme</code>、<code>audioCacheEnabled</code>、<code>downloadDir?</code>。<code>downloadDir</code> 缺省为 <code>~/Music/Lychee Player</code>；未知值由主进程回退默认。</li>
   <li>关于区展示版本、音频引擎与许可证；版本与许可证以构建配置为准。</li>
-  <li>音质四档，默认“自动”；回退静默，不弹提示。</li>
+  <li>音质四档，默认“自动”；与播放条共用同一持久化偏好，任一处修改即时同步；回退静默，不弹提示。</li>
   <li>关闭到托盘默认开启；窗口区另提供“退出应用”，直接结束进程；账号区展示到期时间，手动 Cookie 凭证禁用“立即续期”。</li>
   <li>修改设置即写盘，无保存按钮；播放中切换音质会立即重载当前曲目。</li>
 </ul>
@@ -551,23 +613,31 @@
   </tr>
   <tr>
     <td>我的歌单</td>
-    <td>登录后：账号资料带 + 歌单卡片网格；未登录：空状态 + “去登录”。卡片显示封面、名称与歌曲数；收藏成功后监听收藏版本自动重新拉取，不需要手动刷新。</td>
+    <td>登录后：账号资料带 + 歌单卡片网格；未登录：空状态 + “去登录”。卡片显示封面、名称与歌曲数；收藏成功后监听收藏版本自动重新拉取，不需要手动刷新。提供新建歌单入口；当前账号自建的普通歌单卡片提供改名与删除菜单，删除需确认；公开 / 他人歌单只读。</td>
   </tr>
   <tr>
     <td>歌单详情</td>
-    <td>歌单头图（封面 180px、名称、歌曲数 / 歌单 ID / 已载入数、播放全部）+ 歌曲表；再次进入先显示整份缓存快照，第一页渲染后底部显示加载 / 重试与已载入 / 总数；加载中断可重试并自动续传，不完整缓存显示为中断状态。页面可见时每 15 秒轮询歌单变化；底部 spinner 正常显示。队列可先用缓存临时顶替，最终快照就绪后替换。</td>
+    <td>歌单头图（封面 180px、名称、歌曲数 / 歌单 ID / 已载入数、播放全部、下载全部）+ 歌曲表；打开即显示最近缓存并触发后台静默刷新，成功一次性替换，失败保留缓存且不提示；非心跳失败（主要是切换歌单）进入 5 分钟 timeout。心跳只在页面可见时每 15 秒检查首页，发现变动立即刷新并优先于 timeout。歌曲区显示已下载数量与筛选数量。队列可先用缓存临时顶替，最终快照就绪后替换。“下载全部”按歌单顺序把可播歌曲加入一个批次，按钮显示完成 / 总数 / 失败；全部完成显示“已全部下载”，部分失败提示到下载中心重试。</td>
   </tr>
   <tr>
-    <td>发现（待探测）</td>
-    <td>“每日推荐 / 专属雷达 / 猜你喜欢”三个分区；接口验证前三个分区为空状态；未登录显示登录引导。</td>
+    <td>歌手页 / 专辑页</td>
+    <td>路由 <code>/artist/:mid</code> / <code>/album/:mid</code>；展示名称、封面、简介（上游返回时）、歌曲数与歌曲表。分页加载，支持播放、下一首播放、收藏、下载与加入歌单；歌手页的歌曲可直接进入专辑页，专辑页的歌手可进入歌手页；加载中、空状态与失败重试；返回优先历史。</td>
   </tr>
   <tr>
-    <td>MV 播放（待探测）</td>
-    <td>视频播放器 + 标题 / 歌手 / 清晰度选择；接口验证前搜索为空、详情与取流提示待探测；支持全屏与退出恢复。</td>
+    <td>歌词 / 评论页</td>
+    <td><code>/lyrics</code> 路由页：顶部返回与歌名 / 歌手 / 专辑，无独立标题行；左右各 50%，中间分隔线；左歌词当前行居中高亮、上下渐隐、支持拖拽 / 滚轮 / 点击定位；右评论默认最新排序，右上仅刷新评论，滚动分页与点赞；无当前歌曲时为空状态。</td>
+  </tr>
+  <tr>
+    <td>发现</td>
+    <td>“每日推荐 / 专属雷达 / 猜你喜欢”三个分区，各自提供刷新入口；先渲染三个分区骨架，再按顺序异步填充，单个分区失败只影响该区并显示重试。每区固定高度显示 3 行、上下滚动，条目固定宽度（封面图标 + 上方歌名、下方歌手，超长走马灯）。未登录显示登录引导；分区空结果显示空状态。离开页面后未完成的加载不再继续。</td>
+  </tr>
+  <tr>
+    <td>MV 播放</td>
+    <td>视频播放器 + 标题 / 歌手 / 清晰度选择；搜索结果中的 MV 卡片进入本页。默认最高清晰度并自动播放，档位不可用时按 <code>fhd → hd → sd</code> 降档；使用原生视频控制，支持全屏与退出全屏恢复（保持播放位置与状态，不做离开页面后的续播）。</td>
   </tr>
   <tr>
     <td>下载中心</td>
-    <td>右侧抽屉；展示任务进度、失败原因、存储占用，提供打开目录、暂停 / 继续 / 删除；不新增路由。</td>
+    <td>右侧抽屉；按批次分组，显示批次汇总、任务来源（缓存转移 / 网络下载）、缓存转移标记、按账号索引；提供批次级暂停 / 继续 / 删除 / 重试失败与单任务操作；筛选切换同一行右侧提供“全部开始”，继续所有暂停任务；“清除已完成”只清记录，删除批次 / 单任务才删文件；不新增路由。顶部整体进度条为不占布局的 overlay，常驻内容区顶端且不显示数字指示。下载任务由后台继续执行，离开页面不影响进度。</td>
   </tr>
   <tr>
     <td>Toast</td>
@@ -582,17 +652,18 @@
   <div class="u-rowline" style="padding: 10px 0"><span>正在播放<br /><small>晴天 · 周杰伦</small></span></div>
   <div class="u-table">
     <div class="u-th"><span>#</span><span>标题</span><span>操作</span></div>
-    <div class="u-tr"><span class="u-idx">1</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年</span><small>五月天</small></span></span><span><span class="u-tab">移除</span></span></div>
-    <div class="u-tr"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span><span class="u-tab">移除</span></span></div>
-    <div class="u-tr"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span><span class="u-tab">移除</span></span></div>
+    <div class="u-tr"><span class="u-idx">1</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">盛夏光年</span><small>五月天</small></span></span><span><span class="u-tab" title="从队列移除">✕</span></span></div>
+    <div class="u-tr"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span><span class="u-tab" title="从队列移除">✕</span></span></div>
+    <div class="u-tr"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span><span class="u-tab" title="从队列移除">✕</span></span></div>
   </div>
   <div class="u-rowline" style="padding-top: 10px"><span class="u-tab">清空队列</span></div>
 </div>
 </div>
 <ul class="note">
-  <li>入口为播放条上的“播放队列”按钮；面板固定于内容区右侧，与歌词 / 评论面板互斥，同时只打开一个。</li>
-  <li>当前歌曲单独显示在面板顶部并标注“正在播放”，不计入队列；下方只列当前歌曲之后的待播放歌曲，顺序即实际播放顺序。队列行只显示序号、封面、歌名 / 歌手与移除按钮，<strong>不显示专辑名</strong>；网格为 <code>20px 38px minmax(0, 1fr) 40px</code>，歌名单行省略。</li>
-  <li>队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲。“下一首播放”是手动加入队列的唯一入口，把歌曲插入队列头，当前歌曲不变。</li>
+  <li>入口为播放条上的“播放队列”按钮；面板固定于内容区右侧，同一时间只打开一个。</li>
+  <li>当前歌曲单独显示在面板顶部并标注“正在播放”，不计入队列；下方只列当前歌曲之后的待播放歌曲，顺序即实际播放顺序。队列行只显示序号、封面、歌名 / 歌手与移除图标按钮，<strong>不显示专辑名</strong>；网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略。</li>
+  <li>面板顶部提供筛选输入框：按歌名 / 歌手 / 专辑做本地、不区分大小写匹配；过滤后保留原始序号，移除操作作用于真实队列项；筛选不改变随机顺序与队列快照。</li>
+  <li>队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲、播放历史与队列顺序。移除按钮为图标按钮，tooltip 与无障碍标签均为“从队列移除”，点击不触发播放；键盘 Enter / Space 可用，最后一列宽 32px 与图标对齐。“下一首播放”是手动加入队列的唯一入口，把歌曲插入队列头，当前歌曲不变。</li>
   <li>队列快照：播放开始时若歌单尚未完整加载，允许一次临时快照顶替（优先整份缓存，缓存没有当前曲时用已载入页）；歌单完整、非 stale 且 VIP / 音质 / 可用性探测完成后生成最终快照，签名不同才替换。当前曲、进度与播放历史保持不变；手动插入的歌曲在替换时保留。</li>
   <li>已知不可播歌曲在进入快照前剔除，当前曲除外；队列本身不做检测或清理。播放时仍独立校验取流，当前曲不可播时沿队列向后尝试到可播或队列空；连续 10 首不可播即停止，避免登录失效或风控时无限切歌。</li>
   <li>上一首按播放历史回退；播放历史只记录本次播放开始后实际播放过的歌曲，重建队列时清空。</li>
@@ -617,21 +688,26 @@
   <li>音频加载失败时先自动重取一次链接（同一歌曲 30 秒内只重试一次）并保留播放位置；再次失败才显示“音频加载失败，可能链接已过期”。</li>
   <li>收藏成功只以写后读回与成员可见性为准；业务码成功、状态接口为 true 或总数增加都不单独显示成功，避免出现官方歌单 / 手机端看不到的“假成功”。</li>
   <li>歌单可用性标记获取失败时静默保留未知状态，不弹错误；播放失败仍按本表提示。</li>
+  <li>“从歌单删除”失败时按 <code>NO_PERMISSION</code> / 网络错误提示并恢复被删行与歌曲数；删除只改变歌单成员，不改变当前播放与队列。</li>
+  <li>下载：本地转移失败自动回退为正常下载，不新增错误码；删除批次需确认，删除单任务 / 批次才删文件，“清除已完成”只清记录。缓存清理与下载删除互不影响。</li>
   <li>登录流程中的具体失败原因（验证码、设备限制等）由上游返回；界面是否展示原始原因取决于错误映射策略。</li>
+  <li>歌词 / 评论页的数据加载失败使用页内错误区与重试；滚动分页失败保留已加载内容并提示；右上刷新只影响评论。点赞失败回滚并 Toast；这些都不新增错误码，复用现有映射。</li>
+  <li>推荐分区失败只影响该区，保留其余分区并提示重试；MV 详情 / 取流失败显示页内错误与重试；歌单创建 / 改名 / 删除 / 添加歌曲失败保留原状态并提示，<code>AUTH_EXPIRED</code> 引导重新登录，<code>NO_PERMISSION</code> 提示不可编辑。</li>
 </ul>
 
 <h3 id="u5-4">5.4 托盘</h3>
 <table>
   <tr><th>菜单项</th><th>行为</th></tr>
   <tr><td>显示主窗口</td><td>恢复并聚焦主窗口；单击托盘图标同样触发。</td></tr>
-  <tr><td>播放 / 暂停</td><td>向渲染进程发送 <code>toggle</code> 命令。</td></tr>
+  <tr><td>播放 / 暂停</td><td>按最新播放状态解析为明确的播放或暂停命令，单击一次即生效。</td></tr>
   <tr><td>上一首 / 下一首</td><td>向渲染进程发送 <code>previous</code> / <code>next</code> 命令。</td></tr>
   <tr><td>退出 Lychee Player</td><td>结束应用进程，不受“关闭到托盘”影响。</td></tr>
 </table>
 <ul class="note">
   <li>托盘菜单、启用状态与 tooltip 随播放状态更新；无当前歌曲时播放控制项禁用。托盘图标不随播放 / 暂停切换（当前没有两套图标资源）。</li>
   <li>单击托盘图标只显示主窗口，不切换隐藏；关闭窗口行为沿用“关闭到托盘”设置。</li>
-  <li>GNOME 需要 AppIndicator 扩展，托盘图标可能被桌面隐藏；扩展不随应用打包。托盘初始化失败时静默降级。</li>
+  <li>托盘“播放 / 暂停”保证单次点击生效：命令基于最新播放状态解析为明确的播放或暂停；短时间重复点击只保留最新一条。窗口隐藏、菜单重建后首次点击同样生效。</li>
+  <li>GNOME 需要 AppIndicator 扩展，托盘图标可能被桌面隐藏；部分桌面的 AppIndicator 会延迟首次点击响应，这是外部限制，应用侧已做状态解析与去重兜底。扩展不随应用打包；托盘初始化失败时静默降级。</li>
 </ul>
 
 </body>

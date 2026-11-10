@@ -4,9 +4,21 @@ import type {
   PlaylistPage,
   PlaylistSnapshot
 } from '../../shared/types'
-import { PLAYLIST_PAGE_MAX, PLAYLIST_PAGE_SIZE } from '../../shared/constants'
+import {
+  FAVORITES_PLAYLIST_ID,
+  PLAYLIST_FETCH_MISSING_MIN,
+  PLAYLIST_FETCH_MISSING_RATIO,
+  PLAYLIST_FETCH_PAGE_MAX,
+  PLAYLIST_FETCH_PAGE_SIZE,
+  PLAYLIST_PAGE_MAX,
+  PLAYLIST_PAGE_SIZE
+} from '../../shared/constants'
 import { getCredential } from '../credential'
-import { readPlaylistCache, writePlaylistCache } from '../cache/playlist'
+import {
+  invalidatePlaylistCache,
+  readPlaylistCache,
+  writePlaylistCache
+} from '../cache/playlist'
 import { UpstreamError, musicu } from './client'
 import { rawSongToSong } from './song'
 
@@ -37,6 +49,10 @@ interface PlaylistData {
     title?: string
     picurl?: string
     songnum?: number
+    dirid?: string | number
+    owndir?: string | number
+    host_uin?: string | number
+    creator?: { musicid?: string | number }
   }
   songlist?: unknown[]
 }
@@ -46,7 +62,6 @@ interface MineData {
   total?: number
 }
 
-const FAVORITES_ID = 'liked'
 const FAVORITES_NAME = '我喜欢'
 
 function cacheScope(): string {
@@ -59,14 +74,15 @@ function normalizeCover(value: string | undefined): string {
 }
 
 function isFavoritesId(id: string): boolean {
-  return id === FAVORITES_ID
+  return id === FAVORITES_PLAYLIST_ID
 }
 
 function toMeta(raw: RawPlaylistItem, editable: boolean): PlaylistMeta {
   const dirId = Number(raw.dirId ?? raw.dirid ?? 0)
   const favorites = dirId === 201
   return {
-    id: favorites ? FAVORITES_ID : String(raw.dissid ?? raw.disstid ?? raw.tid ?? raw.dirId ?? raw.id ?? ''),
+    id: favorites ? FAVORITES_PLAYLIST_ID : String(raw.dissid ?? raw.disstid ?? raw.tid ?? raw.dirId ?? raw.id ?? ''),
+    dirId: dirId > 0 ? dirId : undefined,
     name: favorites ? FAVORITES_NAME : (raw.dissname ?? raw.name ?? raw.title ?? raw.dirName ?? ''),
     coverUrl: normalizeCover(raw.imgurl ?? raw.picurl ?? raw.cover ?? raw.bigpicUrl),
     songCount: Number(raw.song_count ?? raw.songnum ?? raw.songNum ?? raw.song_cnt ?? 0),
@@ -81,23 +97,44 @@ function validId(id: string): boolean {
   return Number.isFinite(playlistId) && playlistId > 0
 }
 
-async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
+/** 判断歌单详情是否属于当前账号：优先使用上游 owndir 标记，缺失时回退创建者 ID。 */
+function canEdit(data: PlaylistData): boolean {
+  const credential = getCredential()
+  if (!credential) return false
+  if (Number(data.dirinfo?.owndir ?? 0) === 1) return true
+  const owner = Number(data.dirinfo?.creator?.musicid ?? data.dirinfo?.host_uin ?? 0)
+  const me = Number(credential.musicid)
+  return Number.isSafeInteger(me) && me > 0 && owner === me
+}
+
+async function requestPage(
+  id: string,
+  offset: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<PlaylistPage> {
   const favorites = isFavoritesId(id)
-  const data = await musicu<PlaylistData>('music.srfDissInfo.DissInfo', 'CgiGetDiss', {
-    disstid: favorites ? 0 : Number(id),
-    dirid: favorites ? 201 : 0,
-    tag: true,
-    song_begin: offset,
-    song_num: PLAYLIST_PAGE_SIZE,
-    userinfo: true,
-    orderlist: true,
-    onlysonglist: false
-  })
+  const data = await musicu<PlaylistData>(
+    'music.srfDissInfo.DissInfo',
+    'CgiGetDiss',
+    {
+      disstid: favorites ? 0 : Number(id),
+      dirid: favorites ? 201 : 0,
+      tag: true,
+      song_begin: offset,
+      song_num: pageSize,
+      userinfo: true,
+      orderlist: true,
+      onlysonglist: false
+    },
+    { signal }
+  )
 
   const total = Number(data.dirinfo?.songnum ?? 0)
   const meta: PlaylistMeta = favorites
     ? {
-        id: FAVORITES_ID,
+        id: FAVORITES_PLAYLIST_ID,
+        dirId: 201,
         name: FAVORITES_NAME,
         coverUrl: normalizeCover(data.dirinfo?.picurl),
         songCount: total,
@@ -106,11 +143,12 @@ async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
       }
     : {
         id: String(data.dirinfo?.id ?? id),
+        dirId: Number(data.dirinfo?.dirid ?? 0) > 0 ? Number(data.dirinfo?.dirid) : undefined,
         name: data.dirinfo?.title ?? '',
         coverUrl: normalizeCover(data.dirinfo?.picurl),
         songCount: total,
         kind: 'normal',
-        editable: false
+        editable: canEdit(data)
       }
   if (!data.dirinfo && !favorites) {
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单响应缺少 dirinfo')
@@ -123,12 +161,16 @@ async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
     offset,
     total: total || offset + songs.length,
     hasMore:
-      songs.length === PLAYLIST_PAGE_SIZE && (total === 0 || offset + songs.length < total)
+      total === 0 ? songs.length >= pageSize : offset + pageSize < total
   }
 }
 
 /** 拉取歌单分页；分页只服务加载，缓存始终是整份歌单。 */
-export async function fetchPlaylistPage(id: string, offset: number): Promise<PlaylistPage> {
+export async function fetchPlaylistPage(
+  id: string,
+  offset: number,
+  signal?: AbortSignal
+): Promise<PlaylistPage> {
   if (!validId(id)) {
     throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
   }
@@ -136,7 +178,81 @@ export async function fetchPlaylistPage(id: string, offset: number): Promise<Pla
   if (start > PLAYLIST_PAGE_MAX * PLAYLIST_PAGE_SIZE) {
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单分页超出上限')
   }
-  return requestPage(id, start)
+  try {
+    return await requestPage(id, start, PLAYLIST_PAGE_SIZE, signal)
+  } catch (err) {
+    if (err instanceof UpstreamError && err.code === 'NO_PERMISSION') {
+      await invalidatePlaylistCache(id)
+    }
+    throw err
+  }
+}
+
+/**
+ * 后台拉取完整歌单快照：固定 offset 大页扫描，全部成功且覆盖足够后才返回。
+ * 任一分页失败、出现空页、超出页数上限或数量校验不通过都会抛错，调用方保留旧内容。
+ */
+export async function fetchPlaylistSnapshot(
+  id: string,
+  signal?: AbortSignal
+): Promise<PlaylistSnapshot> {
+  if (!validId(id)) {
+    throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
+  }
+  const songs: PlaylistSnapshot['songs'] = []
+  const seen = new Set<string>()
+  let meta: PlaylistMeta | null = null
+  let total = 0
+  let offset = 0
+  let pages = 0
+  try {
+    for (;;) {
+      signal?.throwIfAborted()
+      if (pages >= PLAYLIST_FETCH_PAGE_MAX) {
+        throw new UpstreamError('UPSTREAM_CHANGED', '歌单拉取页数超出上限')
+      }
+      const page = await requestPage(id, offset, PLAYLIST_FETCH_PAGE_SIZE, signal)
+      pages += 1
+      meta = page.meta
+      total = page.total
+      if (page.songs.length === 0 && offset < total) {
+        throw new UpstreamError('UPSTREAM_CHANGED', `歌单分页为空（${offset}/${total}）`)
+      }
+      for (const song of page.songs) {
+        // 固定 offset 分页理论上不重叠；重复 mid 直接跳过，避免把重叠页写进快照。
+        if (song.songMid && seen.has(song.songMid)) continue
+        if (song.songMid) seen.add(song.songMid)
+        songs.push(song)
+      }
+      offset += PLAYLIST_FETCH_PAGE_SIZE
+      if (offset >= total) break
+    }
+  } catch (err) {
+    // 歌单已删除 / 无权访问时清掉旧缓存，避免侧栏与缓存长期保留失效条目。
+    if (err instanceof UpstreamError && err.code === 'NO_PERMISSION') {
+      await invalidatePlaylistCache(id)
+    }
+    throw err
+  }
+  if (!meta) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '歌单响应缺少 dirinfo')
+  }
+  const tolerance = Math.max(
+    PLAYLIST_FETCH_MISSING_MIN,
+    Math.ceil(total * PLAYLIST_FETCH_MISSING_RATIO)
+  )
+  if (total > 0 && songs.length + tolerance < total) {
+    throw new UpstreamError(
+      'UPSTREAM_CHANGED',
+      `歌单拉取不完整（${songs.length}/${total}）`
+    )
+  }
+  return {
+    meta: { ...meta, songCount: songs.length },
+    songs,
+    total: songs.length,
+    sourceTotal: total
+  }
 }
 
 /** 读取整份歌单缓存；不完整快照通过 complete=false 标记。 */
@@ -168,6 +284,7 @@ export async function savePlaylistSnapshot(
     meta,
     songs: snapshot.songs,
     total: snapshot.total,
+    sourceTotal: snapshot.sourceTotal,
     complete,
     fetchedAtMs: Date.now()
   })

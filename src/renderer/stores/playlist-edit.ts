@@ -47,18 +47,34 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
     })
   }
 
-  async function addSongs(id: string, mids: string[]): Promise<void> {
-    await run(async () => {
-      unwrap(await window.lychee.playlist.addSongs(id, mids))
-      toast.show('已添加到歌单')
-    })
+  async function addSongs(id: string, mids: string[]): Promise<boolean> {
+    busy.value = true
+    try {
+      const result = unwrap(await window.lychee.playlist.addSongs(id, mids))
+      refreshAfterWrite(id)
+      toast.show(result.changed ? '已添加到歌单' : '已在歌单中')
+      return result.changed
+    } finally {
+      busy.value = false
+    }
   }
 
-  async function removeSongs(id: string, mids: string[]): Promise<void> {
-    await run(async () => {
-      unwrap(await window.lychee.playlist.removeSongs(id, mids))
-      toast.show('已从歌单移除')
-    })
+  async function removeSongs(id: string, mids: string[]): Promise<boolean> {
+    busy.value = true
+    try {
+      const result = unwrap(await window.lychee.playlist.removeSongs(id, mids))
+      refreshAfterWrite(id)
+      toast.show(result.changed ? '已从歌单移除' : '歌曲不在歌单中')
+      return result.changed
+    } finally {
+      busy.value = false
+    }
+  }
+
+  /** 写入后统一走现有歌单刷新流程：当前页立即 poll，其他页面只失效缓存。 */
+  function refreshAfterWrite(id: string): void {
+    playlist.invalidate(id)
+    void playlist.poll(id)
   }
 
   async function loadFavorites(mids: string[]): Promise<void> {

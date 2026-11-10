@@ -3,7 +3,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 const router = createRouter({
   history: createWebHashHistory(),
   routes: [
-    { path: '/', redirect: '/search' },
+    { path: '/', redirect: '/discover' },
     {
       path: '/search',
       name: 'search',
@@ -20,6 +20,16 @@ const router = createRouter({
       component: () => import('../views/PlaylistView.vue')
     },
     {
+      path: '/artist/:mid',
+      name: 'artist',
+      component: () => import('../views/ArtistView.vue')
+    },
+    {
+      path: '/album/:mid',
+      name: 'album',
+      component: () => import('../views/AlbumView.vue')
+    },
+    {
       path: '/mv/:id',
       name: 'mv',
       component: () => import('../views/MvView.vue')
@@ -28,6 +38,11 @@ const router = createRouter({
       path: '/library',
       name: 'library',
       component: () => import('../views/LibraryView.vue')
+    },
+    {
+      path: '/downloads',
+      name: 'downloads',
+      component: () => import('../views/DownloadsView.vue')
     },
     {
       path: '/login',

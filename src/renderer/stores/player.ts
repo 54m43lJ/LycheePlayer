@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw } from 'vue'
-import type { MprisCommand, PlayerState, Quality, Song } from '@shared/types'
+import type { MprisCommand, PlayerState, Quality, Settings, Song } from '@shared/types'
 import {
   NO_STREAM_SKIP_LIMIT,
   PLAYER_STATE_THROTTLE_MS,
@@ -9,10 +9,9 @@ import {
 } from '@shared/constants'
 import { IpcCallError, describeError, unwrap } from '../api'
 import { createAudioEngine, type AudioEngine, type AudioEngineHandlers } from '../audio/engine'
-import { createRemoteEngine } from '../audio/remote-engine'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from './auth'
-import { useSettingsStore } from './settings'
+import { useSettingsStore, QUALITY_PREFERENCE_OPTIONS } from './settings'
 
 export type PlayMode = 'sequence' | 'repeat-all' | 'repeat-one' | 'shuffle'
 
@@ -42,6 +41,7 @@ export const usePlayerStore = defineStore('player', () => {
   const status = ref<'stopped' | 'playing' | 'paused'>('stopped')
   const positionMs = ref(0)
   const durationMs = ref(0)
+  const bufferedMs = ref(0)
   const volume = ref(clampVolume(Number(localStorage.getItem('lychee.volume') ?? 0.8)))
   const mode = ref<PlayMode>('sequence')
   const quality = ref<Quality>('320k')
@@ -58,7 +58,6 @@ export const usePlayerStore = defineStore('player', () => {
   let noStreamStreak = 0
   let seekWatch: number | null = null
   let engine: AudioEngine
-  let engineKind: 'html5' | 'mpv' = 'html5'
 
   function clampVolume(value: number): number {
     if (!Number.isFinite(value)) return 0.8
@@ -70,6 +69,10 @@ export const usePlayerStore = defineStore('player', () => {
     if (pref !== 'auto') return pref
     return auth.loggedIn ? 'flac' : '320k'
   })
+  /** 用户偏好（可能为 auto）；播放条与设置页共用。 */
+  const qualityPreference = computed<Settings['defaultQuality']>(
+    () => settings.settings.defaultQuality
+  )
 
   const queue = computed(() =>
     index.value >= 0 ? playOrder.value.slice(index.value + 1) : playOrder.value.slice()
@@ -126,6 +129,9 @@ export const usePlayerStore = defineStore('player', () => {
     onDurationChange(duration) {
       durationMs.value = duration
     },
+    onBufferChange(buffered) {
+      bufferedMs.value = buffered
+    },
     onPlay() {
       if (status.value !== 'playing') {
         status.value = 'playing'
@@ -162,45 +168,8 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
-  function createEngine(kind: 'html5' | 'mpv'): AudioEngine {
-    engineKind = kind
-    return kind === 'mpv' ? createRemoteEngine(handlers) : createAudioEngine(handlers)
-  }
-
-  engine = createEngine('html5')
+  engine = createAudioEngine(handlers)
   engine.setVolume(volume.value)
-
-  function switchEngine(kind: 'html5' | 'mpv'): void {
-    if (kind === engineKind) return
-    const resumeSong = current.value
-    engine.stop()
-    engine = createEngine(kind)
-    engine.setVolume(volume.value)
-    if (resumeSong) void loadAndPlay(resumeSong, requestedQuality.value)
-  }
-
-  function applyEngine(): void {
-    const preference = settings.settings.audioEngine ?? 'auto'
-    if (preference === 'html5') {
-      switchEngine('html5')
-      return
-    }
-    void window.lychee.mpv
-      .getState()
-      .then((state) => {
-        if (!state.ok) {
-          switchEngine('html5')
-          return
-        }
-        if (!state.data.available) {
-          if (preference === 'mpv') toast.error('未检测到 mpv，已回退 HTML5 Audio')
-          switchEngine('html5')
-          return
-        }
-        switchEngine('mpv')
-      })
-      .catch(() => switchEngine('html5'))
-  }
 
   function shuffleUpcoming(): void {
     const start = index.value + 1
@@ -240,6 +209,7 @@ export const usePlayerStore = defineStore('player', () => {
     playable.value = true
     positionMs.value = 0
     durationMs.value = song.durationMs
+    bufferedMs.value = 0
     sendState()
 
     try {
@@ -534,6 +504,26 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  /**
+   * 设置默认音质偏好（含 auto）；设置页与播放条共用此入口，
+   * 持久化后立即作用于当前曲目或下一次播放。
+   */
+  async function updateDefaultQuality(next: Settings['defaultQuality']): Promise<void> {
+    if (settings.settings.defaultQuality === next) return
+    await settings.update({ defaultQuality: next })
+    applySettings()
+    if (current.value) setQuality(defaultQuality.value)
+  }
+
+  /** revealer 按钮点击：按共享选项的固定顺序循环切换音质偏好。 */
+  async function cycleQualityPreference(): Promise<void> {
+    const index = QUALITY_PREFERENCE_OPTIONS.findIndex(
+      (option) => option.value === settings.settings.defaultQuality
+    )
+    const next = QUALITY_PREFERENCE_OPTIONS[(index + 1) % QUALITY_PREFERENCE_OPTIONS.length]
+    if (next) await updateDefaultQuality(next.value)
+  }
+
   function setLoopStatus(nextStatus: 'None' | 'Track' | 'Playlist'): void {
     if (nextStatus === 'Track') mode.value = 'repeat-one'
     else if (nextStatus === 'None') mode.value = 'sequence'
@@ -553,18 +543,21 @@ export const usePlayerStore = defineStore('player', () => {
     sendState()
   }
 
+  function setMode(next: PlayMode): void {
+    if (next === mode.value) return
+    mode.value = next
+    if (next === 'shuffle') shuffleUpcoming()
+    sendState()
+  }
+
   function cycleMode(): void {
     const currentIndex = MODES.indexOf(mode.value)
-    mode.value = MODES[(currentIndex + 1) % MODES.length]
-    if (mode.value === 'shuffle') shuffleUpcoming()
-    toast.show(PLAY_MODE_LABEL[mode.value])
-    sendState()
+    setMode(MODES[(currentIndex + 1) % MODES.length])
   }
 
   function applySettings(): void {
     requestedQuality.value = defaultQuality.value
     if (!current.value) quality.value = requestedQuality.value
-    applyEngine()
   }
 
   function handleCommand(command: MprisCommand): void {
@@ -597,10 +590,12 @@ export const usePlayerStore = defineStore('player', () => {
     status,
     positionMs,
     durationMs,
+    bufferedMs,
     volume,
     mode,
     quality,
     requestedQuality,
+    qualityPreference,
     defaultQuality,
     loading,
     canPlay,
@@ -622,8 +617,11 @@ export const usePlayerStore = defineStore('player', () => {
     seek,
     setVolume,
     setQuality,
+    updateDefaultQuality,
+    cycleQualityPreference,
     setLoopStatus,
     setShuffle,
+    setMode,
     cycleMode,
     applySettings,
     handleCommand,

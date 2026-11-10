@@ -3,7 +3,13 @@ import { createDecipheriv } from 'node:crypto'
 import { inflateSync } from 'node:zlib'
 import type { LycheeApi } from '../shared/ipc'
 import type {
+  AlbumDetail,
+  ArtistDetail,
+  ArtistSongPage,
+  ArtistSongSort,
+  AudioCacheProgress,
   AuthStatus,
+  CommentLikeResult,
   CommentPage,
   DownloadStorageInfo,
   DownloadTask,
@@ -12,13 +18,12 @@ import type {
   IpcResult,
   Lyric,
   MprisCommand,
-  MpvEvent,
-  MpvState,
   MvDetail,
   MvStream,
   PlayerState,
   PlaylistCacheEntry,
   PlaylistMeta,
+  PlaylistMutationResult,
   PlaylistPage,
   PlaylistSnapshot,
   Quality,
@@ -26,7 +31,9 @@ import type {
   SearchRequest,
   SearchResult,
   Settings,
+  SongAssetState,
   SongAvailability,
+  UpstreamBlockedEvent,
   UrlResult,
   UserProfile
 } from '../shared/types'
@@ -66,6 +73,15 @@ const api: LycheeApi = {
   search: {
     byType: (req: SearchRequest) => invoke<SearchResult>('search.byType', req)
   },
+  artist: {
+    get: (mid: string, offset?: number, sort?: ArtistSongSort) =>
+      invoke<ArtistDetail>('artist.get', mid, offset, sort),
+    getSongs: (mid: string, offset?: number, sort?: ArtistSongSort) =>
+      invoke<ArtistSongPage>('artist.getSongs', mid, offset, sort)
+  },
+  album: {
+    get: (mid: string, offset?: number) => invoke<AlbumDetail>('album.get', mid, offset)
+  },
   song: {
     getUrls: (mids: string[], quality: Quality) =>
       invoke<UrlResult[]>('song.getUrls', mids, quality),
@@ -75,6 +91,10 @@ const api: LycheeApi = {
   playlist: {
     get: (id: string, options) => invoke<PlaylistPage>('playlist.get', id, options),
     getCached: (id: string) => invoke<PlaylistCacheEntry | null>('playlist.getCached', id),
+    getSnapshot: (id: string, token: number) =>
+      invoke<PlaylistSnapshot>('playlist.getSnapshot', id, token),
+    cancelSnapshot: (id: string, token: number) =>
+      invoke<null>('playlist.cancelSnapshot', id, token),
     saveCache: (id: string, snapshot: PlaylistSnapshot, complete: boolean) =>
       invoke<null>('playlist.saveCache', id, snapshot, complete),
     listMine: () => invoke<PlaylistMeta[]>('playlist.listMine'),
@@ -82,17 +102,20 @@ const api: LycheeApi = {
     rename: (id: string, name: string) => invoke<PlaylistMeta>('playlist.rename', id, name),
     remove: (id: string) => invoke<null>('playlist.remove', id),
     addSongs: (id: string, mids: string[]) =>
-      invoke<PlaylistMeta>('playlist.addSongs', id, mids),
+      invoke<PlaylistMutationResult>('playlist.addSongs', id, mids),
     removeSongs: (id: string, mids: string[]) =>
-      invoke<PlaylistMeta>('playlist.removeSongs', id, mids)
+      invoke<PlaylistMutationResult>('playlist.removeSongs', id, mids)
   },
   favorite: {
     get: (mids: string[]) => invoke<FavoriteState[]>('favorite.get', mids),
     toggle: (songMid: string) => invoke<FavoriteState>('favorite.toggle', songMid)
   },
   recommend: {
-    get: () => invoke<RecommendFeed>('recommend.get'),
-    refresh: () => invoke<RecommendFeed>('recommend.refresh')
+    get: (sectionId: string | null, token: number) =>
+      invoke<RecommendFeed>('recommend.get', sectionId, token),
+    refresh: (sectionId: string | null, token: number) =>
+      invoke<RecommendFeed>('recommend.refresh', sectionId, token),
+    cancel: (token: number) => invoke<null>('recommend.cancel', token)
   },
   mv: {
     search: (keyword: string, pageNo: number) =>
@@ -103,32 +126,22 @@ const api: LycheeApi = {
   },
   download: {
     list: () => invoke<DownloadTask[]>('download.list'),
+    assetStates: (songMids: string[]) =>
+      invoke<SongAssetState[]>('download.assetStates', songMids),
     start: (songMid: string, quality: Quality) =>
       invoke<DownloadTask>('download.start', songMid, quality),
+    startMany: (songMids: string[], quality: Quality) =>
+      invoke<DownloadTask[]>('download.startMany', songMids, quality),
     pause: (id: string) => invoke<DownloadTask>('download.pause', id),
     resume: (id: string) => invoke<DownloadTask>('download.resume', id),
+    resumeAll: () => invoke<DownloadTask[]>('download.resumeAll'),
     remove: (id: string) => invoke<null>('download.remove', id),
     clearCompleted: () => invoke<null>('download.clearCompleted'),
+    clearDirectory: () => invoke<null>('download.clearDirectory'),
     storage: () => invoke<DownloadStorageInfo>('download.storage'),
     openFolder: () => invoke<null>('download.openFolder'),
     chooseFolder: () => invoke<string | null>('download.chooseFolder'),
     clearCache: () => invoke<null>('download.clearCache')
-  },
-  mpv: {
-    getState: () => invoke<MpvState>('mpv.getState'),
-    setEnabled: (enabled: boolean) => invoke<MpvState>('mpv.setEnabled', enabled),
-    loadAndPlay: (url: string) => invoke<null>('mpv.loadAndPlay', url),
-    play: () => invoke<null>('mpv.play'),
-    pause: () => invoke<null>('mpv.pause'),
-    stop: () => invoke<null>('mpv.stop'),
-    seek: (positionMs: number) => invoke<null>('mpv.seek', positionMs),
-    setVolume: (volume: number) => invoke<null>('mpv.setVolume', volume),
-    onEvent: (callback) => {
-      const listener = (_event: Electron.IpcRendererEvent, event: MpvEvent): void =>
-        callback(event)
-      ipcRenderer.on('mpv:event', listener)
-      return () => ipcRenderer.removeListener('mpv:event', listener)
-    }
   },
   user: {
     getProfile: () => invoke<UserProfile>('user.getProfile')
@@ -138,7 +151,20 @@ const api: LycheeApi = {
     decryptQrc
   },
   comment: {
-    get: (songId: string) => invoke<CommentPage>('comment.get', songId)
+    get: (songId: string, cursor?: string) =>
+      invoke<CommentPage>('comment.get', songId, cursor),
+    like: (commentId: string) => invoke<CommentLikeResult>('comment.like', commentId),
+    unlike: (commentId: string) => invoke<CommentLikeResult>('comment.unlike', commentId)
+  },
+  audioCache: {
+    onProgress: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        progress: AudioCacheProgress
+      ): void => callback(progress)
+      ipcRenderer.on('audioCache:progress', listener)
+      return () => ipcRenderer.removeListener('audioCache:progress', listener)
+    }
   },
   settings: {
     get: () => invoke<Settings>('settings.get'),
@@ -151,6 +177,16 @@ const api: LycheeApi = {
         callback(command)
       ipcRenderer.on('player:command', listener)
       return () => ipcRenderer.removeListener('player:command', listener)
+    }
+  },
+  upstream: {
+    onBlocked: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        blocked: UpstreamBlockedEvent
+      ): void => callback(blocked)
+      ipcRenderer.on('upstream:blocked', listener)
+      return () => ipcRenderer.removeListener('upstream:blocked', listener)
     }
   }
 }

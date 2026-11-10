@@ -3,14 +3,14 @@ import { join } from 'node:path'
 import { SESSION_REFRESH_INTERVAL_MS } from '../shared/constants'
 import { loadCredential } from './credential'
 import { refreshIfNeeded } from './api/login'
-import { registerIpc, sendPlayerCommand } from './ipc'
+import { registerIpc, sendPlayerCommand, sendPlaybackToggle } from './ipc'
+import { flushDownloads } from './download/manager'
 import { initMpris, publishState } from './integration/mpris'
 import { destroyTray, initTray } from './integration/tray'
 import { getSettings, loadSettings, saveSettings } from './settings'
 import { disposeEmbedView, isAllowedHost } from './api/web-login'
 import { registerAudioProtocol } from './media/audio-protocol'
 import { applyFlagsFromDisk } from './startup-flags'
-import { stopMpv } from './audio/mpv'
 
 let mainWindow: BrowserWindow | null = null
 let quitting = false
@@ -132,7 +132,7 @@ export async function bootstrap(): Promise<void> {
   initMpris(sendPlayerCommand)
   initTray({
     onShow: showMainWindow,
-    onToggle: () => sendPlayerCommand('toggle'),
+    onToggle: sendPlaybackToggle,
     onNext: () => sendPlayerCommand('next'),
     onPrevious: () => sendPlayerCommand('previous'),
     onQuit: () => app.quit()
@@ -175,7 +175,7 @@ if (!hasLock) {
     publishState(null)
     destroyTray()
     disposeEmbedView()
-    void stopMpv()
     void saveSettings(getSettings())
+    flushDownloads()
   })
 }

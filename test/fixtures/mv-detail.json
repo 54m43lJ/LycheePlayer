@@ -1,0 +1,62 @@
+{
+  "code": 0,
+  "ts": 1794130267448,
+  "start_ts": 1794130267430,
+  "traceid": "0877aa843577a96d",
+  "req_0": {
+    "code": 0,
+    "data": {
+      "mvlist": [
+        {
+          "cover_pic": "http://y.gtimg.cn/music/photo_new/T015R640x360M10300061J2t0b0PPW.jpg",
+          "desc": "",
+          "duration": 317,
+          "fileid": "qmmv_0b6bsyaakaaa2yai4pbahrrfjfqaawlaabka",
+          "filesize": {
+            "hls": [
+              16545128,
+              34890920,
+              61915356,
+              128391592
+            ],
+            "mp4": [
+              14342755,
+              28316109,
+              59634794,
+              124654265
+            ]
+          },
+          "msg": "",
+          "mv_cp": 1,
+          "mv_switch": 1807,
+          "mvid": 293791,
+          "name": "晴天",
+          "ori_vid": "w0026q7f01a",
+          "pay": 0,
+          "pay_info": {
+            "list": [],
+            "type": 0
+          },
+          "playcnt": 120540106,
+          "pubdate": 1059408000,
+          "singers": [
+            {
+              "id": 4558,
+              "mid": "0025NhlN2yWrP4",
+              "name": "周杰伦",
+              "picurl": "http://y.gtimg.cn/music/photo_new/T001R150x150M0000025NhlN2yWrP4_11.jpg"
+            }
+          ],
+          "uploader_headurl": "",
+          "uploader_nick": "",
+          "vid": "w0026q7f01a",
+          "video": {
+            "code": -1,
+            "expire": 36000,
+            "filetype": 0
+          }
+        }
+      ]
+    }
+  }
+}

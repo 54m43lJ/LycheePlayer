@@ -3,16 +3,18 @@ import { ref } from 'vue'
 import type {
   PlaylistCacheEntry,
   PlaylistMeta,
-  PlaylistPage,
   PlaylistSnapshot,
+  RecentPlaylist,
   Song,
   SongAvailability
 } from '@shared/types'
 import {
-  PLAYLIST_PAGE_RETRY_ATTEMPTS,
-  PLAYLIST_PAGE_RETRY_BACKOFF_MS
+  PLAYLIST_REFRESH_RETRY_MS,
+  RECENT_PLAYLIST_LIMIT,
+  RECENT_PLAYLIST_VALIDATE_MS
 } from '@shared/constants'
-import { unwrap } from '../api'
+import { IpcCallError, unwrap } from '../api'
+import { useAuthStore } from './auth'
 import { filterQueueSnapshot } from '../utils/queue'
 import { usePlayerStore } from './player'
 
@@ -20,23 +22,21 @@ export interface PlaylistFeed {
   meta: PlaylistMeta | null
   songs: Song[]
   total: number
+  /** 上游声明的曲目总数，用于轮询比较；展示总数以实际 songs 为准。 */
+  sourceTotal?: number
   status: 'idle' | 'loading' | 'partial' | 'complete' | 'error'
   stale: boolean
   error: string
   loadToken: number
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms))
-}
-
 export const usePlaylistStore = defineStore('playlist', () => {
   const feed = ref<PlaylistFeed | null>(null)
+  const recent = ref<RecentPlaylist[]>([])
   const availability = ref<Record<string, SongAvailability>>({})
   const availabilityLoading = ref(false)
   let requestedId = ''
   let generation = 0
-  let completingToken: number | null = null
   // idle → temporary（未加载/未探测完时只顶替一次）→ final（完整歌单与元数据就绪后替换）。
   let cachedSnapshot: PlaylistCacheEntry | null = null
   let queueSourceId = ''
@@ -45,11 +45,118 @@ export const usePlaylistStore = defineStore('playlist', () => {
   let temporaryMids = new Set<string>()
   let savingCache = false
   let cachePending = false
-  let cacheDirty = false
-  let cacheVersion = 0
-  let loadingId = ''
+  let polling = false
+  let refreshSeq = 0
+  let activeRefresh: { id: string; seq: number } | null = null
+  let retryTimer: number | null = null
+
+  function recentKey(): string {
+    const auth = useAuthStore()
+    return `lychee:recent-playlists:${auth.musicid ?? 'anonymous'}`
+  }
+
+  function persistRecent(): void {
+    try {
+      localStorage.setItem(recentKey(), JSON.stringify(recent.value))
+    } catch {
+      // localStorage 不可用时仅保留当前会话。
+    }
+  }
+
+  function loadRecent(): void {
+    try {
+      const raw = JSON.parse(localStorage.getItem(recentKey()) ?? '[]') as RecentPlaylist[]
+      recent.value = Array.isArray(raw)
+        ? raw
+            .filter((item) => item && typeof item.id === 'string' && item.id)
+            .slice(0, RECENT_PLAYLIST_LIMIT)
+        : []
+    } catch {
+      recent.value = []
+    }
+  }
+
+  function visit(meta: PlaylistMeta): void {
+    if (!meta.id || meta.kind === 'favorites') return
+    const next = recent.value.filter((item) => item.id !== meta.id)
+    next.unshift({ ...meta, visitedAtMs: Date.now() })
+    recent.value = next.slice(0, RECENT_PLAYLIST_LIMIT)
+    persistRecent()
+  }
+
+  let validating = false
+  let lastValidatedAt = 0
+
+  /** 登录后与每次展开侧栏校验最近歌单；节流 + 单飞，删除项不补位。 */
+  async function validateRecent(force = false): Promise<void> {
+    const now = Date.now()
+    if (validating) return
+    if (!force && now - lastValidatedAt < RECENT_PLAYLIST_VALIDATE_MS) return
+    if (recent.value.length === 0) return
+    validating = true
+    lastValidatedAt = now
+    try {
+      const kept: RecentPlaylist[] = []
+      for (const item of recent.value) {
+        let cachedMeta: PlaylistMeta | null = null
+        try {
+          cachedMeta = unwrap(await window.lychee.playlist.getCached(item.id))?.meta ?? null
+        } catch {
+          cachedMeta = null
+        }
+        try {
+          const page = unwrap(await window.lychee.playlist.get(item.id, { offset: 0 }))
+          kept.push({ ...page.meta, visitedAtMs: item.visitedAtMs, stale: false })
+        } catch (err) {
+          if (
+            err instanceof IpcCallError &&
+            (err.code === 'NO_PERMISSION' ||
+              err.code === 'AUTH_EXPIRED' ||
+              err.code === 'UPSTREAM_CHANGED')
+          ) {
+            // 歌单已删除或无权限：移除条目，不用第 6 条补位。
+            continue
+          }
+          // 网络等临时失败保留条目并标记 stale，避免误删。
+          kept.push({ ...(cachedMeta ?? item), visitedAtMs: item.visitedAtMs, stale: true })
+        }
+      }
+      recent.value = kept
+      persistRecent()
+    } finally {
+      validating = false
+    }
+  }
+
+  function clearRecent(): void {
+    recent.value = []
+    try {
+      localStorage.removeItem(recentKey())
+    } catch {
+      // 忽略。
+    }
+  }
+
+  function clearRetry(): void {
+    if (retryTimer !== null) {
+      window.clearTimeout(retryTimer)
+      retryTimer = null
+    }
+  }
+
+  function cancelActiveRefresh(): void {
+    const active = activeRefresh
+    if (!active) return
+    activeRefresh = null
+    refreshSeq += 1
+    void window.lychee.playlist
+      .cancelSnapshot(active.id, active.seq)
+      .catch(() => undefined)
+  }
 
   function reset(): void {
+    clearRetry()
+    cancelActiveRefresh()
     feed.value = null
     availability.value = {}
     availabilityLoading.value = false
@@ -62,9 +169,7 @@ export const usePlaylistStore = defineStore('playlist', () => {
     temporaryMids = new Set()
     savingCache = false
     cachePending = false
-    cacheDirty = false
-    cacheVersion += 1
-    loadingId = ''
+    polling = false
   }
 
   function currentQueueSong(): Song | null {
@@ -122,7 +227,7 @@ export const usePlaylistStore = defineStore('playlist', () => {
     return JSON.stringify(songs)
   }
 
-  function applySnapshot(final: boolean): void {
+  function applyQueueSnapshot(final: boolean): void {
     const song = currentQueueSong()
     const player = usePlayerStore()
     if (!song) return
@@ -157,10 +262,10 @@ export const usePlaylistStore = defineStore('playlist', () => {
     if (queueSourceId !== current.meta.id) return
     if (queuePhase === 'final') return
     if (finalSnapshotReady()) {
-      applySnapshot(true)
+      applyQueueSnapshot(true)
       return
     }
-    if (queuePhase === 'idle') applySnapshot(false)
+    if (queuePhase === 'idle') applyQueueSnapshot(false)
   }
 
   function beginQueueBuild(): void {
@@ -177,32 +282,34 @@ export const usePlaylistStore = defineStore('playlist', () => {
     maybeFinalizeQueue()
   }
 
-  /** 每页加载后都写整份快照；complete 标记是否已完整加载。 */
+  /** IPC 使用结构化克隆，响应式 Proxy 会导致 DataCloneError，缓存快照必须是纯对象。 */
+  function plainSong(song: Song): Song {
+    return {
+      ...song,
+      singers: song.singers.map((singer) => ({ ...singer })),
+      album: { ...song.album },
+      pay: { ...song.pay }
+    }
+  }
+
+  /** 完整歌单成功后写整份缓存；写入串行化，避免旧快照覆盖新快照。 */
   async function persistCache(): Promise<void> {
     const current = feed.value
-    if (!current?.meta || current.stale) return
-    if (current.songs.length === 0 && current.status !== 'complete') return
-    if (!cacheDirty) return
+    if (!current?.meta || current.status !== 'complete' || current.stale) return
     if (savingCache) {
       cachePending = true
       return
     }
     savingCache = true
-    const version = cacheVersion
-    const complete = current.status === 'complete'
     const snapshot: PlaylistSnapshot = {
-      meta: current.meta,
-      songs: current.songs.slice(),
-      total: current.total
+      meta: { ...current.meta },
+      songs: current.songs.map(plainSong),
+      total: current.total,
+      sourceTotal: current.sourceTotal
     }
     try {
-      unwrap(
-        await window.lychee.playlist.saveCache(current.meta.id, snapshot, complete)
-      )
-      if (version === cacheVersion) {
-        cachedSnapshot = { ...snapshot, complete, fetchedAtMs: Date.now() }
-        cacheDirty = false
-      }
+      unwrap(await window.lychee.playlist.saveCache(current.meta.id, snapshot, true))
+      cachedSnapshot = { ...snapshot, complete: true, fetchedAtMs: Date.now() }
     } catch {
       // 缓存写入失败不阻塞歌单展示。
     } finally {
@@ -214,83 +321,186 @@ export const usePlaylistStore = defineStore('playlist', () => {
     }
   }
 
-  function applyPageStatus(current: PlaylistFeed, page: PlaylistPage): void {
-    current.status = page.hasMore ? 'partial' : 'complete'
-    if (!page.hasMore && current.total > 0 && current.songs.length < current.total) {
-      current.status = 'error'
-      current.error = '歌单未完整加载'
-    } else if (page.hasMore) {
-      current.error = ''
+  /** 完整快照一次性替换当前歌单；这是唯一会改变浏览内容的入口。 */
+  function replaceFeed(snapshot: PlaylistSnapshot): void {
+    const songs = snapshot.songs.slice()
+    const sourceTotal = snapshot.sourceTotal ?? snapshot.total
+    const meta = { ...snapshot.meta, songCount: songs.length }
+    feed.value = {
+      meta,
+      songs,
+      total: songs.length,
+      sourceTotal,
+      status: 'complete',
+      stale: false,
+      error: '',
+      loadToken: generation
     }
-  }
-
-  async function loadPage(id: string, offset: number, token: number): Promise<void> {
-    const page: PlaylistPage = unwrap(await window.lychee.playlist.get(id, { offset }))
-    if (token !== generation) return
-    const current = feed.value
-    if (!current) return
-    current.meta = page.meta
-    current.total = page.total
-    if (offset === 0) {
-      current.songs = page.songs.slice()
-      current.stale = false
-    } else {
-      current.songs.push(...page.songs)
+    cachedSnapshot = {
+      meta,
+      songs: songs.slice(),
+      total: songs.length,
+      sourceTotal,
+      complete: true,
+      fetchedAtMs: Date.now()
     }
-    applyPageStatus(current, page)
-    cacheDirty = true
-    cacheVersion += 1
     maybeFinalizeQueue()
     void persistCache()
   }
 
-  async function complete(id: string, startOffset: number, token: number): Promise<void> {
-    if (completingToken === token) return
-    completingToken = token
-    try {
-      let offset = startOffset
-      for (;;) {
-        if (token !== generation) return
-        const current = feed.value
-        if (!current || !current.meta || current.meta.id !== id) return
-        if (offset >= current.total && current.status === 'complete') return
-        let attempt = 0
-        for (;;) {
-          try {
-            await loadPage(id, offset, token)
-            break
-          } catch (err) {
-            attempt += 1
-            if (attempt >= PLAYLIST_PAGE_RETRY_ATTEMPTS) {
-              current.error = err instanceof Error ? err.message : String(err)
-              current.status = 'error'
-              void persistCache()
-              return
-            }
-            await sleep(PLAYLIST_PAGE_RETRY_BACKOFF_MS * 2 ** (attempt - 1))
-          }
-        }
-        const next = feed.value
-        if (!next || next.meta?.id !== id) return
-        if (next.songs.length >= next.total) {
-          next.status = 'complete'
-          next.error = ''
-          maybeFinalizeQueue()
-          void persistCache()
-          return
-        }
-        if (next.status === 'complete') return
-        if (next.songs.length === offset) {
-          next.status = 'error'
-          next.error = '歌单加载停滞'
-          void persistCache()
-          return
-        }
-        offset = next.songs.length
-      }
-    } finally {
-      if (completingToken === token) completingToken = null
+  function showCached(cached: PlaylistCacheEntry): void {
+    feed.value = {
+      meta: cached.meta,
+      songs: cached.songs.slice(),
+      total: cached.total,
+      sourceTotal: cached.sourceTotal,
+      status: cached.complete ? 'complete' : 'partial',
+      stale: true,
+      error: '',
+      loadToken: generation
     }
+    cachedSnapshot = cached
+    maybeFinalizeQueue()
+  }
+
+  function scheduleRetry(id: string): void {
+    clearRetry()
+    const seq = refreshSeq
+    retryTimer = window.setTimeout(() => {
+      retryTimer = null
+      if (requestedId === id && refreshSeq === seq) void refresh(id)
+    }, PLAYLIST_REFRESH_RETRY_MS)
+  }
+
+  /** 后台完整刷新：成功才一次性替换 feed，失败保持旧内容并安排 5 分钟后重试。 */
+  async function refresh(id: string): Promise<void> {
+    if (!id || requestedId !== id) return
+    cancelActiveRefresh()
+    const seq = ++refreshSeq
+    activeRefresh = { id, seq }
+    clearRetry()
+    const token = generation
+    try {
+      const snapshot = unwrap(await window.lychee.playlist.getSnapshot(id, seq))
+      if (seq !== refreshSeq || token !== generation || requestedId !== id) return
+      replaceFeed(snapshot)
+    } catch (err) {
+      if (seq !== refreshSeq || token !== generation || requestedId !== id) return
+      const current = feed.value
+      if (current) {
+        current.stale = true
+        if (current.songs.length === 0 || current.status === 'partial') {
+          current.status = 'error'
+          current.error = err instanceof Error ? err.message : String(err)
+        }
+      }
+      scheduleRetry(id)
+    } finally {
+      if (activeRefresh?.seq === seq) activeRefresh = null
+    }
+  }
+
+  /** 进入歌单页：立即展示缓存并触发一次后台完整刷新。 */
+  async function load(id: string): Promise<void> {
+    if (!id) return
+    const same = feed.value?.meta?.id === id
+    if (same && activeRefresh?.id === id) {
+      requestedId = id
+      return
+    }
+    if (same) {
+      requestedId = id
+      await refresh(id)
+      return
+    }
+    clearRetry()
+    cancelActiveRefresh()
+    generation += 1
+    const token = generation
+    requestedId = id
+    cachedSnapshot = null
+    feed.value = {
+      meta: null,
+      songs: [],
+      total: 0,
+      status: 'loading',
+      stale: false,
+      error: '',
+      loadToken: token
+    }
+    let cached: PlaylistCacheEntry | null = null
+    try {
+      cached = unwrap(await window.lychee.playlist.getCached(id))
+    } catch {
+      cached = null
+    }
+    if (token !== generation || requestedId !== id) return
+    if (cached) showCached(cached)
+    await refresh(id)
+  }
+
+  /** 离开歌单页：终止进行中的拉取与 5 分钟重试，未完成的快照不会落盘。 */
+  function stop(id?: string): void {
+    const target = id ?? requestedId
+    if (!target) return
+    if (requestedId === target) requestedId = ''
+    clearRetry()
+    if (activeRefresh?.id === target) cancelActiveRefresh()
+  }
+
+  /** 每 15 秒轮询一次首页，检测歌单名称 / 顺序 / 数量变化；变化时整份刷新。 */
+  async function poll(id: string): Promise<void> {
+    const before = feed.value
+    if (!id || !before?.meta || before.meta.id !== id) return
+    if (activeRefresh?.id === id) return
+    if (polling) return
+    if (before.stale) {
+      await refresh(id)
+      return
+    }
+    polling = true
+    const token = generation
+    try {
+      const result = unwrap(await window.lychee.playlist.get(id, { offset: 0 }))
+      if (token !== generation || requestedId !== id) return
+      const current = feed.value
+      if (!current?.meta || current.meta.id !== id) return
+      const sourceTotal = current.sourceTotal ?? current.meta.songCount
+      const tolerance = Math.max(10, Math.ceil(sourceTotal * 0.02))
+      const changed =
+        result.meta.name !== current.meta.name ||
+        result.meta.coverUrl !== current.meta.coverUrl ||
+        Math.abs(result.meta.songCount - sourceTotal) > tolerance ||
+        result.songs.some(
+          (song, index) => song.songMid !== current.songs[index]?.songMid
+        )
+      if (changed || current.status === 'error') {
+        await refresh(id)
+      }
+    } catch {
+      // 轮询失败保持当前内容，等下一次或 5 分钟重试。
+    } finally {
+      polling = false
+    }
+  }
+
+  /** 从歌单移除成员后的本地更新：行、计数与缓存；失败由调用方回滚。 */
+  function removeMembers(id: string, mids: string[]): void {
+    const current = feed.value
+    if (!current?.meta || current.meta.id !== id) return
+    const removed = new Set(mids)
+    const before = current.songs.length
+    current.songs = current.songs.filter((song) => !removed.has(song.songMid))
+    const delta = before - current.songs.length
+    current.total = Math.max(0, current.total - delta)
+    current.meta = {
+      ...current.meta,
+      songCount: Math.max(0, current.meta.songCount - delta)
+    }
+    if (current.sourceTotal !== undefined) {
+      current.sourceTotal = Math.max(0, current.sourceTotal - delta)
+    }
+    void persistCache()
   }
 
   /** 收藏等外部写操作后，让已打开的歌单在下次进入时重新验证。 */
@@ -298,169 +508,29 @@ export const usePlaylistStore = defineStore('playlist', () => {
     if (feed.value?.meta?.id === id) feed.value.stale = true
   }
 
-  async function load(id: string, options: { force?: boolean } = {}): Promise<void> {
-    if (!id) return
-    const same = feed.value?.meta?.id === id
-    const force = options.force === true || (same && feed.value?.stale === true)
-    if (same && completingToken === generation) return
-    if (same && feed.value?.status === 'complete' && !feed.value.stale && !force) return
-    if (loadingId === id) return
-    loadingId = id
-    try {
-      await runLoad(id)
-    } finally {
-      if (loadingId === id) loadingId = ''
-    }
-  }
-
-  async function runLoad(id: string): Promise<void> {
-    const same = feed.value?.meta?.id === id
-    if (!same) {
-      generation += 1
-      requestedId = id
-      cachedSnapshot = null
-      cacheDirty = false
-      cacheVersion += 1
-      feed.value = {
-        meta: null,
-        songs: [],
-        total: 0,
-        status: 'loading',
-        stale: false,
-        error: '',
-        loadToken: generation
-      }
-    }
-    const token = generation
-    let cached: PlaylistCacheEntry | null = null
-    try {
-      cached = unwrap(await window.lychee.playlist.getCached(id))
-    } catch {
-      cached = null
-    }
-    if (token !== generation) return
-    cachedSnapshot = cached
-    if (cached && (cached.songs.length > 0 || cached.complete)) {
-      feed.value = {
-        meta: cached.meta,
-        songs: cached.songs.slice(),
-        total: cached.total,
-        status: cached.complete ? 'complete' : 'partial',
-        stale: true,
-        error: '',
-        loadToken: generation
-      }
-      cacheDirty = false
-      maybeFinalizeQueue()
-    }
-    try {
-      await loadPage(id, 0, token)
-      if (token !== generation) return
-      const current = feed.value
-      if (!current) return
-      maybeFinalizeQueue()
-      if (current.status !== 'complete') {
-        void complete(id, current.songs.length, token)
-      }
-    } catch (err) {
-      const current = feed.value
-      if (current && token === generation) {
-        if (cachedSnapshot) {
-          feed.value = {
-            meta: cachedSnapshot.meta,
-            songs: cachedSnapshot.songs.slice(),
-            total: cachedSnapshot.total,
-            status: cachedSnapshot.complete ? 'complete' : 'error',
-            stale: true,
-            error: cachedSnapshot.complete ? '' : '歌单未完整加载',
-            loadToken: generation
-          }
-          maybeFinalizeQueue()
-        } else {
-          current.status = current.songs.length > 0 ? 'partial' : 'error'
-          current.error = err instanceof Error ? err.message : String(err)
-          void persistCache()
-        }
-      }
-    }
-  }
-
-  let polling = false
-
-  /** 每 15 秒轮询一次首页，检测歌单名称 / 数量 / 顺序是否变化。 */
-  async function poll(id: string): Promise<void> {
-    const before = feed.value
-    if (polling || completingToken === generation || !before?.meta || before.meta.id !== id) return
-    polling = true
-    if (before.stale) {
-      try {
-        await load(id, { force: true })
-      } finally {
-        polling = false
-      }
-      return
-    }
-    const token = generation
-    try {
-      const result = unwrap(await window.lychee.playlist.get(id, { offset: 0 }))
-      if (token !== generation) return
-      const current = feed.value
-      if (!current || current.meta?.id !== id) return
-      const changed =
-        result.total !== current.total ||
-        result.meta.songCount !== current.meta.songCount ||
-        result.songs.some(
-          (song, index) => song.songMid !== current.songs[index]?.songMid
-        )
-      current.meta = result.meta
-      current.total = result.total
-      current.stale = false
-      if (changed) {
-        current.songs = result.songs.slice()
-        applyPageStatus(current, result)
-        cacheDirty = true
-        cacheVersion += 1
-        void persistCache()
-        if (result.hasMore) void complete(id, current.songs.length, generation)
-      } else if (current.status === 'error' || current.status === 'partial') {
-        current.error = ''
-        current.status = current.songs.length >= current.total ? 'complete' : 'partial'
-        if (current.status === 'partial') {
-          void complete(id, current.songs.length, generation)
-        } else {
-          void persistCache()
-        }
-      } else if (current.status === 'complete') {
-        void persistCache()
-      }
-      maybeFinalizeQueue()
-    } catch {
-      // 轮询失败保持当前内容，等下一次。
-    } finally {
-      polling = false
-    }
-  }
-
   async function retry(): Promise<void> {
     const current = feed.value
     const id = current?.meta?.id ?? requestedId
     if (!id) return
-    if (current) current.error = ''
-    if (current?.meta && current.songs.length > 0 && !current.stale) {
-      current.status = 'partial'
-      await complete(id, current.songs.length, generation)
-      return
-    }
-    if (current) current.status = current.songs.length > 0 ? 'partial' : 'loading'
-    await load(id, { force: true })
+    clearRetry()
+    if (current && current.status === 'error') current.error = ''
+    await refresh(id)
   }
 
   return {
     feed,
+    recent,
+    loadRecent,
+    visit,
+    validateRecent,
+    clearRecent,
     load,
+    stop,
     retry,
     poll,
+    refresh,
     invalidate,
+    removeMembers,
     reset,
     requestedId,
     beginQueueBuild,

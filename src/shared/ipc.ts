@@ -1,5 +1,11 @@
 import type {
+  AlbumDetail,
+  ArtistDetail,
+  ArtistSongPage,
+  ArtistSongSort,
+  AudioCacheProgress,
   AuthStatus,
+  CommentLikeResult,
   CommentPage,
   DownloadStorageInfo,
   DownloadTask,
@@ -9,13 +15,12 @@ import type {
   IpcResult,
   Lyric,
   MprisCommand,
-  MpvEvent,
-  MpvState,
   MvDetail,
   MvStream,
   PlayerState,
   PlaylistCacheEntry,
   PlaylistMeta,
+  PlaylistMutationResult,
   PlaylistPage,
   PlaylistSnapshot,
   ProbeOptions,
@@ -24,7 +29,9 @@ import type {
   SearchRequest,
   SearchResult,
   Settings,
+  SongAssetState,
   SongAvailability,
+  UpstreamBlockedEvent,
   UrlResult,
   UserProfile
 } from './types'
@@ -50,6 +57,21 @@ export interface LycheeApi {
   search: {
     byType(req: SearchRequest): Promise<IpcResult<SearchResult>>
   }
+  artist: {
+    get(
+      mid: string,
+      offset?: number,
+      sort?: ArtistSongSort
+    ): Promise<IpcResult<ArtistDetail>>
+    getSongs(
+      mid: string,
+      offset?: number,
+      sort?: ArtistSongSort
+    ): Promise<IpcResult<ArtistSongPage>>
+  }
+  album: {
+    get(mid: string, offset?: number): Promise<IpcResult<AlbumDetail>>
+  }
   song: {
     getUrls(mids: string[], quality: Quality): Promise<IpcResult<UrlResult[]>>
     probe(mids: string[], options?: ProbeOptions): Promise<IpcResult<SongAvailability[]>>
@@ -57,6 +79,8 @@ export interface LycheeApi {
   playlist: {
     get(id: string, options?: { offset?: number }): Promise<IpcResult<PlaylistPage>>
     getCached(id: string): Promise<IpcResult<PlaylistCacheEntry | null>>
+    getSnapshot(id: string, token: number): Promise<IpcResult<PlaylistSnapshot>>
+    cancelSnapshot(id: string, token: number): Promise<IpcResult<null>>
     saveCache(
       id: string,
       snapshot: PlaylistSnapshot,
@@ -66,16 +90,17 @@ export interface LycheeApi {
     create(name: string): Promise<IpcResult<PlaylistMeta>>
     rename(id: string, name: string): Promise<IpcResult<PlaylistMeta>>
     remove(id: string): Promise<IpcResult<null>>
-    addSongs(id: string, mids: string[]): Promise<IpcResult<PlaylistMeta>>
-    removeSongs(id: string, mids: string[]): Promise<IpcResult<PlaylistMeta>>
+    addSongs(id: string, mids: string[]): Promise<IpcResult<PlaylistMutationResult>>
+    removeSongs(id: string, mids: string[]): Promise<IpcResult<PlaylistMutationResult>>
   }
   favorite: {
     get(mids: string[]): Promise<IpcResult<FavoriteState[]>>
     toggle(songMid: string): Promise<IpcResult<FavoriteState>>
   }
   recommend: {
-    get(): Promise<IpcResult<RecommendFeed>>
-    refresh(): Promise<IpcResult<RecommendFeed>>
+    get(sectionId: string | null, token: number): Promise<IpcResult<RecommendFeed>>
+    refresh(sectionId: string | null, token: number): Promise<IpcResult<RecommendFeed>>
+    cancel(token: number): Promise<IpcResult<null>>
   }
   mv: {
     search(keyword: string, pageNo: number): Promise<IpcResult<SearchResult>>
@@ -84,26 +109,19 @@ export interface LycheeApi {
   }
   download: {
     list(): Promise<IpcResult<DownloadTask[]>>
+    assetStates(songMids: string[]): Promise<IpcResult<SongAssetState[]>>
     start(songMid: string, quality: Quality): Promise<IpcResult<DownloadTask>>
+    startMany(songMids: string[], quality: Quality): Promise<IpcResult<DownloadTask[]>>
     pause(id: string): Promise<IpcResult<DownloadTask>>
     resume(id: string): Promise<IpcResult<DownloadTask>>
+    resumeAll(): Promise<IpcResult<DownloadTask[]>>
     remove(id: string): Promise<IpcResult<null>>
     clearCompleted(): Promise<IpcResult<null>>
+    clearDirectory(): Promise<IpcResult<null>>
     storage(): Promise<IpcResult<DownloadStorageInfo>>
     openFolder(): Promise<IpcResult<null>>
     chooseFolder(): Promise<IpcResult<string | null>>
     clearCache(): Promise<IpcResult<null>>
-  }
-  mpv: {
-    getState(): Promise<IpcResult<MpvState>>
-    setEnabled(enabled: boolean): Promise<IpcResult<MpvState>>
-    loadAndPlay(url: string): Promise<IpcResult<null>>
-    play(): Promise<IpcResult<null>>
-    pause(): Promise<IpcResult<null>>
-    stop(): Promise<IpcResult<null>>
-    seek(positionMs: number): Promise<IpcResult<null>>
-    setVolume(volume: number): Promise<IpcResult<null>>
-    onEvent(callback: (event: MpvEvent) => void): () => void
   }
   user: {
     getProfile(): Promise<IpcResult<UserProfile>>
@@ -114,7 +132,12 @@ export interface LycheeApi {
     decryptQrc(ciphertext: string): string
   }
   comment: {
-    get(songId: string): Promise<IpcResult<CommentPage>>
+    get(songId: string, cursor?: string): Promise<IpcResult<CommentPage>>
+    like(commentId: string): Promise<IpcResult<CommentLikeResult>>
+    unlike(commentId: string): Promise<IpcResult<CommentLikeResult>>
+  }
+  audioCache: {
+    onProgress(callback: (progress: AudioCacheProgress) => void): () => void
   }
   settings: {
     get(): Promise<IpcResult<Settings>>
@@ -123,5 +146,9 @@ export interface LycheeApi {
   player: {
     sendState(state: PlayerState): void
     onCommand(callback: (command: MprisCommand) => void): () => void
+  }
+  upstream: {
+    /** 收到 104009 进入全局截断窗口时通知渲染层展示提示。 */
+    onBlocked(callback: (event: UpstreamBlockedEvent) => void): () => void
   }
 }

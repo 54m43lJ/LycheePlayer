@@ -1,8 +1,14 @@
 import type { PayInfo, Quality, Song, UrlResult } from '../../shared/types'
-import { IPC_SONG_MIDS_MAX, PROBE_DETAIL_CONCURRENCY, PROBE_VKEY_BATCH } from '../../shared/constants'
+import {
+  IPC_SONG_MIDS_MAX,
+  PROBE_DETAIL_CONCURRENCY,
+  PROBE_VKEY_BATCH,
+  SONG_DETAIL_BATCH
+} from '../../shared/constants'
 import { getCredential } from '../credential'
+import { resolveDownloadedAudio } from '../download/registry'
 import { audioStreamUrl } from '../media/audio-protocol'
-import { mapUpstreamCode, UpstreamError, getGuid, musicu } from './client'
+import { mapUpstreamCode, tripUpstreamBlock, UpstreamError, getGuid, musicu } from './client'
 import { isVipUser } from './user'
 
 interface RawSong {
@@ -78,14 +84,18 @@ function toSong(raw: RawSong): Song {
   const pay = raw.pay ?? {}
   const albumOnly = Number(pay.price_album ?? 0) > 0
   const vip = pay.pay_play === 1 && !albumOnly
+  // 标题优先使用 title：官方客户端展示的版本标签（Explicit / Remix 等）在 title 中；
+  // name 是去掉标签的基础名，可能带尾部空白，需 trim 后再兜底。
+  const name = (raw.title ?? '').trim() || (raw.name ?? '').trim()
   return {
     songMid: raw.mid ?? '',
     songId: String(raw.id ?? ''),
-    name: raw.name ?? raw.title ?? '',
+    name,
+    // 官方客户端存在“有名字但没有歌手页”的歌手：mid 可为空，名称仍需保留。
     singers: (raw.singer ?? [])
-      .filter((singer) => Boolean(singer.mid))
-      .map((singer) => ({ mid: singer.mid ?? '', name: singer.name ?? '' })),
-    album: { mid: raw.album?.mid ?? '', name: raw.album?.name ?? '' },
+      .map((singer) => ({ mid: singer.mid ?? '', name: (singer.name ?? '').trim() }))
+      .filter((singer) => singer.name.length > 0 || singer.mid.length > 0),
+    album: { mid: raw.album?.mid ?? '', name: (raw.album?.name ?? '').trim() },
     durationMs: Math.max(0, Number(raw.interval ?? 0)) * 1000,
     pay: {
       free: pay.pay_play === 0 && !albumOnly,
@@ -95,6 +105,14 @@ function toSong(raw: RawSong): Song {
   }
 }
 
+function trackMeta(raw: RawTrackInfo, fallbackMid: string): TrackMeta {
+  return {
+    mediaMid: raw.file?.media_mid ?? fallbackMid,
+    pay: toSong(raw).pay
+  }
+}
+
+/** 单曲详情兜底：批量详情缺少某首歌时再单独请求。 */
 async function fetchTrack(mid: string): Promise<RawTrackInfo> {
   const data = await musicu<{ track_info?: RawTrackInfo }>(
     'music.pf_song_detail_svr',
@@ -109,6 +127,45 @@ async function fetchTrack(mid: string): Promise<RawTrackInfo> {
     trackMetaCache.set(mid, { mediaMid, pay: toSong(data.track_info).pay })
   }
   return data.track_info
+}
+
+/** 一次请求取回多首歌曲详情；按 mid 建立索引，响应顺序不影响结果。 */
+async function fetchTrackBatch(mids: string[]): Promise<Map<string, RawTrackInfo>> {
+  const result = new Map<string, RawTrackInfo>()
+  for (let start = 0; start < mids.length; start += SONG_DETAIL_BATCH) {
+    const batch = mids.slice(start, start + SONG_DETAIL_BATCH)
+    const data = await musicu<{ tracks?: RawTrackInfo[] }>(
+      'music.trackInfo.UniformRuleCtrl',
+      'CgiGetTrackInfo',
+      {
+        types: batch.map(() => 0),
+        modify_stamp: batch.map(() => 0),
+        ctx: 0,
+        client: 1,
+        mids: batch
+      }
+    )
+    if (!Array.isArray(data.tracks)) {
+      throw new UpstreamError('UPSTREAM_CHANGED', '批量歌曲详情响应缺少 tracks')
+    }
+    for (const track of data.tracks) {
+      if (track.mid) result.set(track.mid, track)
+    }
+  }
+  return result
+}
+
+/** 批量详情 + 缺口单曲兜底，返回按 mid 索引的原始歌曲。 */
+async function fetchTracksById(mids: string[]): Promise<Map<string, RawTrackInfo>> {
+  const unique = [...new Set(mids.filter(Boolean))]
+  if (unique.length === 0) return new Map()
+  const result = await fetchTrackBatch(unique)
+  const missing = unique.filter((mid) => !result.has(mid))
+  if (missing.length > 0) {
+    const fallback = await mapLimit(missing, PROBE_DETAIL_CONCURRENCY, fetchTrack)
+    missing.forEach((mid, index) => result.set(mid, fallback[index]))
+  }
+  return result
 }
 
 async function mapLimit<T, R>(
@@ -132,8 +189,14 @@ async function mapLimit<T, R>(
 /** 按 songMid 批量取详情，供歌单/播放器补齐非搜索来源的歌曲。 */
 export async function getDetail(mids: string[]): Promise<Song[]> {
   const unique = [...new Set(mids.filter(Boolean))]
-  const tracks = await mapLimit(unique, PROBE_DETAIL_CONCURRENCY, (mid) => fetchTrack(mid))
-  return tracks.map(toSong)
+  if (unique.length === 0) return []
+  const tracks = await fetchTracksById(unique)
+  return unique.map((mid) => {
+    const raw = tracks.get(mid)
+    if (!raw) throw new UpstreamError('UPSTREAM_CHANGED', `歌曲详情缺少 track_info：${mid}`)
+    trackMetaCache.set(mid, trackMeta(raw, mid))
+    return toSong(raw)
+  })
 }
 
 function buildStreamUrl(purl: string): string {
@@ -158,15 +221,20 @@ async function requestQuality(
 
     let data: VkeyData
     try {
-      data = await musicu<VkeyData>('vkey.GetVkeyServer', 'CgiGetVkey', {
-        guid: getGuid(),
-        songmid,
-        songtype,
-        filename,
-        uin,
-        loginflag: 1,
-        platform: '20'
-      })
+      data = await musicu<VkeyData>(
+        'vkey.GetVkeyServer',
+        'CgiGetVkey',
+        {
+          guid: getGuid(),
+          songmid,
+          songtype,
+          filename,
+          uin,
+          loginflag: 1,
+          platform: '20'
+        },
+        { deferBlock: true }
+      )
       // 有些响应把具体错误放在 data.retcode，而 req_0.code 为 0。
       const retcode = Number(data.retcode)
       if (Number.isFinite(retcode) && retcode !== 0) {
@@ -175,17 +243,30 @@ async function requestQuality(
     } catch (err) {
       // 经典接口返回 104009 invalidq 时，尝试当前维护的 UrlGetVkey 接口。
       if (!(err instanceof UpstreamError) || err.upstreamCode !== 104009) throw err
-      data = await musicu<VkeyData>('music.vkey.GetVkey', 'UrlGetVkey', {
-        uin,
-        filename,
-        guid: getGuid(),
-        songmid,
-        songtype,
-        ctx: 0
-      })
-      const retcode = Number(data.retcode)
-      if (Number.isFinite(retcode) && retcode !== 0) {
-        throw mapUpstreamCode(retcode, 'music.vkey.GetVkey.UrlGetVkey')
+      try {
+        data = await musicu<VkeyData>(
+          'music.vkey.GetVkey',
+          'UrlGetVkey',
+          {
+            uin,
+            filename,
+            guid: getGuid(),
+            songmid,
+            songtype,
+            ctx: 0
+          },
+          { deferBlock: true }
+        )
+        const retcode = Number(data.retcode)
+        if (Number.isFinite(retcode) && retcode !== 0) {
+          throw mapUpstreamCode(retcode, 'music.vkey.GetVkey.UrlGetVkey')
+        }
+      } catch (fallbackError) {
+        // 两个 vkey 入口都拒绝时，说明不是单曲问题；进入全局 60 秒截断窗口。
+        if (fallbackError instanceof UpstreamError && fallbackError.upstreamCode === 104009) {
+          tripUpstreamBlock()
+        }
+        throw fallbackError
       }
     }
 
@@ -205,15 +286,18 @@ async function resolveStreams(mids: string[], requested: Quality): Promise<Resol
   const failures = new Map<string, StreamFailure>()
   if (unique.length === 0) return { urls, failures }
 
-  const tracks = await mapLimit(unique, PROBE_DETAIL_CONCURRENCY, async (mid) => {
-    const cached = trackMetaCache.get(mid)
-    if (cached) return { songMid: mid, ...cached }
-    const track = await fetchTrack(mid)
-    const meta: TrackMeta = {
-      mediaMid: track.file?.media_mid ?? mid,
-      pay: toSong(track).pay
+  const missing = unique.filter((mid) => !trackMetaCache.has(mid))
+  if (missing.length > 0) {
+    const fetched = await fetchTracksById(missing)
+    for (const mid of missing) {
+      const raw = fetched.get(mid)
+      if (!raw) throw new UpstreamError('UPSTREAM_CHANGED', `歌曲详情缺少 track_info：${mid}`)
+      trackMetaCache.set(mid, trackMeta(raw, mid))
     }
-    trackMetaCache.set(mid, meta)
+  }
+  const tracks: PendingTrack[] = unique.map((mid) => {
+    const meta = trackMetaCache.get(mid)
+    if (!meta) throw new UpstreamError('UPSTREAM_CHANGED', `歌曲详情缺少 track_info：${mid}`)
     return { songMid: mid, ...meta }
   })
 
@@ -265,8 +349,25 @@ export async function getStreamUrls(mids: string[], quality: Quality): Promise<U
   const unique = [...new Set(mids.filter(Boolean))].slice(0, IPC_SONG_MIDS_MAX)
   if (unique.length === 0) return []
 
-  const { urls, failures } = await resolveStreams(unique, quality)
+  // 已下载到本机的歌曲直接走本地文件，不再请求上游链接。
+  const downloaded = new Map<string, { filePath: string; quality: Quality }>()
+  const remoteMids: string[] = []
+  for (const mid of unique) {
+    const local = await resolveDownloadedAudio(mid, quality)
+    if (local) downloaded.set(mid, local)
+    else remoteMids.push(mid)
+  }
+
+  const { urls, failures } = await resolveStreams(remoteMids, quality)
   const results = unique.map<UrlResult>((mid) => {
+    const local = downloaded.get(mid)
+    if (local) {
+      return {
+        songMid: mid,
+        url: audioStreamUrl('', mid, local.quality, local.filePath),
+        quality: local.quality
+      }
+    }
     const item = urls.get(mid)
     return {
       songMid: mid,

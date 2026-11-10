@@ -1,0 +1,52 @@
+{
+  "create": {
+    "code": 0,
+    "req_0": {
+      "code": 0,
+      "data": {
+        "retCode": 0,
+        "result": {
+          "dirId": 0,
+          "tid": 0,
+          "dirName": "fixture"
+        }
+      }
+    }
+  },
+  "rename": {
+    "code": 0,
+    "req_0": {
+      "code": 0,
+      "data": {
+        "retCode": 0
+      }
+    }
+  },
+  "delete": {
+    "code": 0,
+    "req_0": {
+      "code": 0,
+      "data": {
+        "retCode": 0
+      }
+    }
+  },
+  "addSongs": {
+    "code": 0,
+    "req_0": {
+      "code": 0,
+      "data": {
+        "retCode": 0
+      }
+    }
+  },
+  "removeSongs": {
+    "code": 0,
+    "req_0": {
+      "code": 0,
+      "data": {
+        "retCode": 0
+      }
+    }
+  }
+}

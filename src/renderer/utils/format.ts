@@ -24,7 +24,11 @@ export function songCover(song: Song | null, size = 300): string {
 }
 
 export function singerNames(song: Song): string {
-  return song.singers.map((singer) => singer.name).join(' / ') || '未知歌手'
+  // 名称为空的成员跳过；全部为空时返回空字符串，界面不渲染歌手文本。
+  return song.singers
+    .map((singer) => singer.name.trim())
+    .filter((name) => name.length > 0)
+    .join(' / ')
 }
 
 export function playlistSubtitle(playlist: PlaylistMeta): string {

@@ -9,15 +9,27 @@ skinparam shadowing false
 [我的歌单\n/library] as LIBRARY
 [歌单详情\n/playlist/:id] as PLAYLIST
 [MV 播放\n/mv/:id] as MV
+[歌词 / 评论\n/lyrics] as LYRICS
+[歌手\n/artist/:mid] as ARTIST
+[专辑\n/album/:mid] as ALBUM
 [登录\n/login] as LOGIN
 [设置\n/settings] as SETTINGS
 
 ROOT --> SEARCH : 重定向
 SEARCH --> PLAYLIST : 点击歌单
 SEARCH --> MV : 点击 MV
+SEARCH --> LYRICS : 点击播放条封面
+SEARCH --> ARTIST : 点击歌手
+SEARCH --> ALBUM : 点击专辑
 DISCOVER --> PLAYLIST : 打开歌单
 DISCOVER --> MV : 播放 MV
 LIBRARY --> PLAYLIST : 打开歌单
+PLAYLIST --> LYRICS : 点击播放条封面
+PLAYLIST --> ARTIST : 点击歌手
+PLAYLIST --> ALBUM : 点击专辑
 PLAYLIST --> LIBRARY : 返回我的歌单
 LOGIN --> LIBRARY : 登录成功
+LYRICS --> SEARCH : 返回（无历史）
+ARTIST --> ALBUM : 打开专辑
+ALBUM --> ARTIST : 打开歌手
 @enduml

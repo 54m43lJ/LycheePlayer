@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { PROBE_VKEY_BATCH } from '../../src/shared/constants'
 import type { Credential } from '../../src/shared/types'
 
 vi.mock('electron', () => ({
@@ -8,10 +9,14 @@ vi.mock('electron', () => ({
   net: { fetch: () => Promise.reject(new Error('network disabled')) }
 }))
 
-const { musicuMock, vipMock, credentialState } = vi.hoisted(() => ({
+const { musicuMock, vipMock, tripBlockMock, credentialState, downloadedState } = vi.hoisted(() => ({
   musicuMock: vi.fn(),
   vipMock: vi.fn(),
-  credentialState: { value: null as Credential | null }
+  tripBlockMock: vi.fn(),
+  credentialState: { value: null as Credential | null },
+  downloadedState: {
+    value: null as { filePath: string; quality: '128k' | '320k' | 'flac' } | null
+  }
 }))
 
 vi.mock('../../src/main/api/client', () => {
@@ -31,6 +36,7 @@ vi.mock('../../src/main/api/client', () => {
   return {
     UpstreamError,
     musicu: musicuMock,
+    tripUpstreamBlock: tripBlockMock,
     getGuid: () => 'test-guid',
     upstreamRequest: vi.fn(),
     mapUpstreamCode: (code: number, context: string) =>
@@ -49,6 +55,10 @@ vi.mock('../../src/main/credential', () => ({
   getCredential: () => credentialState.value
 }))
 
+vi.mock('../../src/main/download/registry', () => ({
+  resolveDownloadedAudio: async () => downloadedState.value
+}))
+
 vi.mock('../../src/main/media/audio-protocol', () => ({
   audioStreamUrl: (url: string, songMid: string) => `lychee-audio://stream/${songMid}`
 }))
@@ -62,18 +72,22 @@ function vkeyResult(result: number, purl = ''): unknown {
 beforeEach(() => {
   musicuMock.mockReset()
   vipMock.mockReset()
+  tripBlockMock.mockReset()
   credentialState.value = { musicid: '42', musickey: 'key', expiredAtMs: null }
+  downloadedState.value = null
   musicuMock.mockImplementation(async (module: string) => {
-    if (module === 'music.pf_song_detail_svr') {
+    if (module === 'music.trackInfo.UniformRuleCtrl') {
       return {
-        track_info: {
-          mid: 'song-mid',
-          id: 1,
-          name: 'song',
-          interval: 180,
-          file: { media_mid: 'media-mid' },
-          pay: { pay_play: 0, price_album: 0 }
-        }
+        tracks: [
+          {
+            mid: 'song-mid',
+            id: 1,
+            name: 'song',
+            interval: 180,
+            file: { media_mid: 'media-mid' },
+            pay: { pay_play: 0, price_album: 0 }
+          }
+        ]
       }
     }
     return vkeyResult(104003)
@@ -81,6 +95,20 @@ beforeEach(() => {
 })
 
 describe('api/song stream failures', () => {
+  it('uses an already downloaded local file without requesting an upstream url', async () => {
+    downloadedState.value = { filePath: '/tmp/song.flac', quality: 'flac' }
+    const { getStreamUrls } = await import('../../src/main/api/song')
+
+    const result = await getStreamUrls(['song-mid'], 'flac')
+
+    expect(result[0]).toMatchObject({
+      songMid: 'song-mid',
+      url: 'lychee-audio://stream/song-mid',
+      quality: 'flac'
+    })
+    expect(musicuMock).not.toHaveBeenCalled()
+  })
+
   it('reports 104003 as an authorization problem instead of removal for a VIP account', async () => {
     vipMock.mockResolvedValue(true)
     const { getStreamUrls } = await import('../../src/main/api/song')
@@ -150,6 +178,7 @@ describe('api/song stream failures', () => {
       quality: '128k'
     })
     expect(musicuMock.mock.calls.map((call) => call[0])).toContain('music.vkey.GetVkey')
+    expect(tripBlockMock).not.toHaveBeenCalled()
   })
 
   it('reports 104009 from both vkey endpoints as a network / proxy problem', async () => {
@@ -180,5 +209,49 @@ describe('api/song stream failures', () => {
       code: 'UPSTREAM_NETWORK',
       message: expect.stringContaining('104009')
     })
+    expect(tripBlockMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('requests a 50-song vkey batch in one upstream call', async () => {
+    const mids = Array.from({ length: PROBE_VKEY_BATCH }, (_, index) => `mid-${index}`)
+    const vkeyParams: Array<{ songmid: string[]; filename: string[] }> = []
+    musicuMock.mockImplementation(
+      async (module: string, _method: string, param: Record<string, unknown>) => {
+        if (module === 'music.trackInfo.UniformRuleCtrl') {
+          const batch = param.mids as string[]
+          return {
+            tracks: batch.map((mid) => ({
+              mid,
+              id: 1,
+              name: mid,
+              interval: 100,
+              file: { media_mid: `media-${mid}` },
+              pay: { pay_play: 0, price_album: 0 }
+            }))
+          }
+        }
+        if (module === 'vkey.GetVkeyServer') {
+          const batch = param as { songmid: string[]; filename: string[] }
+          vkeyParams.push(batch)
+          return {
+            midurlinfo: batch.songmid.map((mid) => ({
+              songmid: mid,
+              purl: `purl-${mid}`,
+              result: 0
+            }))
+          }
+        }
+        throw new Error(`unexpected module ${module}`)
+      }
+    )
+    const { getStreamUrls } = await import('../../src/main/api/song')
+
+    const results = await getStreamUrls(mids, 'flac')
+
+    expect(results).toHaveLength(PROBE_VKEY_BATCH)
+    expect(vkeyParams).toHaveLength(1)
+    expect(vkeyParams[0].songmid).toHaveLength(PROBE_VKEY_BATCH)
+    expect(vkeyParams[0].filename).toHaveLength(PROBE_VKEY_BATCH)
+    expect(results.every((result) => result.url !== null)).toBe(true)
   })
 })

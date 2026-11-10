@@ -2,23 +2,13 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 
 export const useUiStore = defineStore('ui', () => {
-  const lyricsOpen = ref(false)
   const queueOpen = ref(false)
-  const downloadOpen = ref(false)
+  const lyricsOpen = ref(false)
+  const sidebarOpen = ref(false)
 
-  function closeOthers(keep: 'lyrics' | 'queue' | 'download'): void {
-    if (keep !== 'lyrics') lyricsOpen.value = false
+  function closeOthers(keep: 'queue' | 'sidebar'): void {
     if (keep !== 'queue') queueOpen.value = false
-    if (keep !== 'download') downloadOpen.value = false
-  }
-
-  function toggleLyrics(): void {
-    lyricsOpen.value = !lyricsOpen.value
-    if (lyricsOpen.value) closeOthers('lyrics')
-  }
-
-  function closeLyrics(): void {
-    lyricsOpen.value = false
+    if (keep !== 'sidebar') sidebarOpen.value = false
   }
 
   function toggleQueue(): void {
@@ -30,30 +20,38 @@ export const useUiStore = defineStore('ui', () => {
     queueOpen.value = false
   }
 
-  function toggleDownload(): void {
-    downloadOpen.value = !downloadOpen.value
-    if (downloadOpen.value) closeOthers('download')
+  function openSidebar(): void {
+    sidebarOpen.value = true
+    closeOthers('sidebar')
   }
 
-  function closeDownload(): void {
-    downloadOpen.value = false
+  function closeSidebar(): void {
+    sidebarOpen.value = false
   }
 
-  function closePanels(): void {
+  function toggleSidebar(): void {
+    sidebarOpen.value = !sidebarOpen.value
+    if (sidebarOpen.value) closeOthers('sidebar')
+  }
+
+  function toggleLyrics(): void {
+    lyricsOpen.value = !lyricsOpen.value
+  }
+
+  function closeLyrics(): void {
     lyricsOpen.value = false
-    queueOpen.value = false
   }
 
   return {
-    lyricsOpen,
     queueOpen,
-    downloadOpen,
-    toggleLyrics,
-    closeLyrics,
+    lyricsOpen,
+    sidebarOpen,
     toggleQueue,
     closeQueue,
-    toggleDownload,
-    closeDownload,
-    closePanels
+    toggleLyrics,
+    closeLyrics,
+    openSidebar,
+    closeSidebar,
+    toggleSidebar
   }
 })

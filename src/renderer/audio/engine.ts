@@ -1,11 +1,13 @@
 /**
  * 渲染进程播放引擎边界：播放器 store 只依赖 AudioEngine 接口。
- * 当前实现为 HTML5 Audio；替换为 mpv 等引擎时实现同一接口即可。
+ * 唯一实现为 HTML5 Audio。
  */
 
 export interface AudioEngineHandlers {
   onTimeUpdate(positionMs: number): void
   onDurationChange(durationMs: number): void
+  /** 已缓冲到的媒体时间；用于进度条的缓冲 overlay。 */
+  onBufferChange?(bufferedMs: number): void
   onPlay(): void
   onPause(): void
   onEnded(): void
@@ -28,6 +30,17 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine {
   const audio = new Audio()
   audio.preload = 'auto'
 
+  function reportBuffered(): void {
+    if (!handlers.onBufferChange) return
+    const ranges = audio.buffered
+    let end = 0
+    for (let index = 0; index < ranges.length; index += 1) {
+      const value = ranges.end(index)
+      if (Number.isFinite(value)) end = Math.max(end, value)
+    }
+    handlers.onBufferChange(Math.max(0, end * 1000))
+  }
+
   audio.addEventListener('timeupdate', () => {
     handlers.onTimeUpdate(Number.isFinite(audio.currentTime) ? audio.currentTime * 1000 : 0)
   })
@@ -36,6 +49,11 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine {
       handlers.onDurationChange(audio.duration * 1000)
     }
   })
+  audio.addEventListener('progress', reportBuffered)
+  audio.addEventListener('loadedmetadata', reportBuffered)
+  audio.addEventListener('canplay', reportBuffered)
+  audio.addEventListener('seeked', reportBuffered)
+  audio.addEventListener('emptied', () => handlers.onBufferChange?.(0))
   audio.addEventListener('play', () => handlers.onPlay())
   audio.addEventListener('pause', () => handlers.onPause())
   audio.addEventListener('ended', () => handlers.onEnded())

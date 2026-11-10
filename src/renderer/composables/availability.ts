@@ -1,4 +1,4 @@
-import { ref, watch, type Ref } from 'vue'
+import { onScopeDispose, ref, watch, type Ref } from 'vue'
 import type { Song, SongAvailability } from '@shared/types'
 import {
   PROBE_EMPTY_BATCH_LIMIT,
@@ -63,10 +63,12 @@ export function useAvailability(songs: Ref<Song[]>): {
         }
       }
     } catch (err) {
-      // 可用性获取失败时静默保留未知状态；限流或鉴权异常则暂停探测，避免继续轰炸上游。
+      // 可用性获取失败时静默保留未知状态；限流、鉴权或网络拒绝则暂停探测，避免继续轰炸上游。
       if (
         err instanceof IpcCallError &&
-        (err.code === 'QUOTA_LIMITED' || err.code === 'AUTH_EXPIRED')
+        (err.code === 'QUOTA_LIMITED' ||
+          err.code === 'AUTH_EXPIRED' ||
+          err.code === 'UPSTREAM_NETWORK')
       ) {
         suspended = true
       }
@@ -135,6 +137,16 @@ export function useAvailability(songs: Ref<Song[]>): {
     suspended = false
     await runProbe(true)
   }
+
+  // 离开歌单页后立即取消待执行的探测，并让进行中的批次在下一批前停止。
+  onScopeDispose(() => {
+    generation += 1
+    if (scheduled) {
+      if (typeof window.cancelIdleCallback === 'function') window.cancelIdleCallback(scheduled)
+      else window.clearTimeout(scheduled)
+      scheduled = 0
+    }
+  })
 
   return { availability, loading, refresh }
 }

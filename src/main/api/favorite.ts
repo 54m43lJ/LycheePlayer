@@ -2,8 +2,13 @@ import { createCipheriv, createHash, randomBytes } from 'node:crypto'
 import type { Credential, FavoriteState } from '../../shared/types'
 import { FAVORITE_STATUS_CACHE_MS, UPSTREAM_TIMEOUT_MS } from '../../shared/constants'
 import { getCredential } from '../credential'
-import { invalidatePlaylistCache } from '../cache/playlist'
-import { throttleUpstream, UpstreamError, musicu, upstreamRequest } from './client'
+import {
+  assertUpstreamAvailable,
+  throttleUpstream,
+  UpstreamError,
+  musicu,
+  upstreamRequest
+} from './client'
 import { hash33 } from './hash'
 
 // 红心 201 目录的 AddSonglist / DelSonglist 需要官网 zzc 签名 + ag-1 加密通道；
@@ -181,6 +186,7 @@ async function signedPlaylistWrite(
     url.searchParams.set('sign', webSign(body))
 
     await throttleUpstream()
+    assertUpstreamAvailable()
     let response: Response
     try {
       response = await fetch(url, {
@@ -341,6 +347,5 @@ export async function toggleFavorite(songMid: string): Promise<FavoriteState> {
     expiresAtMs: Date.now() + FAVORITE_STATUS_CACHE_MS,
     statuses
   }
-  await invalidatePlaylistCache('liked')
   return { songMid, favorited: target }
 }

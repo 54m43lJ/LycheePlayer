@@ -12,12 +12,20 @@ const { musicuMock, cacheState } = vi.hoisted(() => ({
   musicuMock: vi.fn(),
   cacheState: {
     entry: null as PlaylistCacheEntry | null,
-    writes: [] as PlaylistCacheEntry[]
+    writes: [] as PlaylistCacheEntry[],
+    invalidated: [] as string[]
   }
 }))
 
 vi.mock('../../src/main/api/client', () => ({
-  UpstreamError: class UpstreamError extends Error {},
+  UpstreamError: class UpstreamError extends Error {
+    readonly code: string
+
+    constructor(code: string, message: string) {
+      super(message)
+      this.code = code
+    }
+  },
   musicu: musicuMock
 }))
 
@@ -26,6 +34,9 @@ vi.mock('../../src/main/cache/playlist', () => ({
   writePlaylistCache: async (_scope: string, entry: PlaylistCacheEntry) => {
     cacheState.writes.push(entry)
     cacheState.entry = entry
+  },
+  invalidatePlaylistCache: async (id: string) => {
+    cacheState.invalidated.push(id)
   }
 }))
 
@@ -62,6 +73,7 @@ beforeEach(() => {
   musicuMock.mockReset()
   cacheState.entry = null
   cacheState.writes = []
+  cacheState.invalidated = []
 })
 
 describe('api/playlist cache', () => {
@@ -131,5 +143,151 @@ describe('api/playlist cache', () => {
       Array.from({ length: 50 }, (_, index) => `upstream-${index}`)
     )
     expect(cacheState.writes).toHaveLength(0)
+  })
+
+  it('marks normal playlists editable only when the upstream says the account owns them', async () => {
+    const { fetchPlaylistPage } = await import('../../src/main/api/playlist')
+
+    musicuMock.mockResolvedValueOnce({
+      dirinfo: { id: '123', dirid: 456, title: '我的歌单', songnum: 1, owndir: 1 },
+      songlist: []
+    })
+    await expect(fetchPlaylistPage('123', 0)).resolves.toMatchObject({
+      meta: { editable: true, dirId: 456 }
+    })
+
+    musicuMock.mockResolvedValueOnce({
+      dirinfo: { id: '456', title: '公开歌单', songnum: 1, owndir: 0, creator: { musicid: 99 } },
+      songlist: []
+    })
+    await expect(fetchPlaylistPage('456', 0)).resolves.toMatchObject({
+      meta: { editable: false }
+    })
+
+    musicuMock.mockResolvedValueOnce({
+      dirinfo: { id: '789', title: '缺少 owndir', songnum: 1, creator: { musicid: '42' } },
+      songlist: []
+    })
+    await expect(fetchPlaylistPage('789', 0)).resolves.toMatchObject({
+      meta: { editable: true }
+    })
+  })
+})
+
+describe('api/playlist full snapshot', () => {
+  it('fetches a large playlist with 2000 songs per request', async () => {
+    musicuMock.mockImplementation(
+      async (_module: string, _method: string, param: Record<string, unknown>) => {
+        const begin = Number(param.song_begin)
+        const size = Number(param.song_num)
+        const total = 2500
+        const count = Math.min(size, total - begin)
+        return {
+          dirinfo: { id: '123', title: '大歌单', songnum: total },
+          songlist: Array.from({ length: count }, (_, index) => rawSong(`s${begin + index}`))
+        }
+      }
+    )
+    const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
+    const result = await fetchPlaylistSnapshot('123')
+
+    expect(musicuMock).toHaveBeenCalledTimes(2)
+    expect(musicuMock.mock.calls[0][2]).toMatchObject({ song_begin: 0, song_num: 2000 })
+    expect(musicuMock.mock.calls[1][2]).toMatchObject({ song_begin: 2000, song_num: 2000 })
+    expect(result.songs).toHaveLength(2500)
+    expect(result.total).toBe(2500)
+    expect(result.sourceTotal).toBe(2500)
+    expect(result.meta.songCount).toBe(2500)
+  })
+
+  it('uses one request for playlists that fit in a single page', async () => {
+    musicuMock.mockResolvedValue({
+      dirinfo: { id: '123', title: '小歌单', songnum: 100 },
+      songlist: Array.from({ length: 100 }, (_, index) => rawSong(`s${index}`))
+    })
+    const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
+    const result = await fetchPlaylistSnapshot('123')
+
+    expect(musicuMock).toHaveBeenCalledTimes(1)
+    expect(result.songs).toHaveLength(100)
+  })
+
+  it('tolerates a small number of tracks omitted by upstream', async () => {
+    musicuMock.mockResolvedValue({
+      dirinfo: { id: '123', title: '缺歌歌单', songnum: 1000 },
+      songlist: Array.from({ length: 990 }, (_, index) => rawSong(`s${index}`))
+    })
+    const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
+    const result = await fetchPlaylistSnapshot('123')
+
+    expect(result.songs).toHaveLength(990)
+    expect(result.sourceTotal).toBe(1000)
+    expect(result.total).toBe(990)
+  })
+
+  it('rejects a silently truncated playlist', async () => {
+    musicuMock.mockResolvedValue({
+      dirinfo: { id: '123', title: '被截断', songnum: 10000 },
+      songlist: Array.from({ length: 50 }, (_, index) => rawSong(`s${index}`))
+    })
+    const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
+    await expect(fetchPlaylistSnapshot('123')).rejects.toThrow('歌单拉取不完整')
+  })
+
+  it('rejects an empty middle page instead of replacing with partial content', async () => {
+    musicuMock.mockImplementation(
+      async (_module: string, _method: string, param: Record<string, unknown>) => {
+        const begin = Number(param.song_begin)
+        return begin === 0
+          ? {
+              dirinfo: { id: '123', title: '中间空页', songnum: 3000 },
+              songlist: Array.from({ length: 2000 }, (_, index) => rawSong(`s${index}`))
+            }
+          : {
+              dirinfo: { id: '123', title: '中间空页', songnum: 3000 },
+              songlist: []
+            }
+      }
+    )
+    const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
+    await expect(fetchPlaylistSnapshot('123')).rejects.toThrow('歌单分页为空')
+  })
+
+  it('stops immediately when the caller aborts', async () => {
+    const controller = new AbortController()
+    controller.abort()
+    const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
+    await expect(fetchPlaylistSnapshot('123', controller.signal)).rejects.toThrow()
+    expect(musicuMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('api/playlist missing playlist cache cleanup', () => {
+  it('removes the cached entry when upstream reports the playlist no longer exists', async () => {
+    const { UpstreamError } = await import('../../src/main/api/client')
+    musicuMock.mockRejectedValueOnce(
+      new UpstreamError('NO_PERMISSION', '歌单不存在或已失效')
+    )
+    const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
+
+    await expect(fetchPlaylistSnapshot('999999999')).rejects.toMatchObject({
+      code: 'NO_PERMISSION'
+    })
+    expect(cacheState.invalidated).toEqual(['999999999'])
+  })
+})
+
+describe('api/playlist recent validation missing playlist cleanup', () => {
+  it('removes the cached entry when a lightweight page request reports missing', async () => {
+    const { UpstreamError } = await import('../../src/main/api/client')
+    musicuMock.mockRejectedValueOnce(
+      new UpstreamError('NO_PERMISSION', '歌单不存在或已失效')
+    )
+    const { fetchPlaylistPage } = await import('../../src/main/api/playlist')
+
+    await expect(fetchPlaylistPage('999999999', 0)).rejects.toMatchObject({
+      code: 'NO_PERMISSION'
+    })
+    expect(cacheState.invalidated).toEqual(['999999999'])
   })
 })

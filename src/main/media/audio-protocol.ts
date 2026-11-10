@@ -1,9 +1,9 @@
-import { app, net, protocol } from 'electron'
-import { mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { app, BrowserWindow, net, protocol } from 'electron'
+import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { randomUUID } from 'node:crypto'
 import { extname, join } from 'node:path'
 import type { Quality } from '../../shared/types'
-import { AUDIO_PROTOCOL_SCHEME } from '../../shared/constants'
+import { AUDIO_PROTOCOL_SCHEME, CACHE_PROGRESS_THROTTLE_MS } from '../../shared/constants'
 import { getSettings } from '../settings'
 import { getCachedAudio, putCachedAudio } from '../cache/audio'
 
@@ -11,6 +11,8 @@ interface StreamSource {
   url: string
   songMid: string
   quality: Quality
+  /** 已下载到本机的文件；存在时优先直接读取，不再访问上游。 */
+  filePath?: string
 }
 
 const streams = new Map<string, StreamSource>()
@@ -38,10 +40,34 @@ export function audioProtocolUrl(filePath: string): string {
 }
 
 /** 注册一个上游音频流并返回主进程代理 URL；渲染进程不直接访问上游。 */
-export function audioStreamUrl(url: string, songMid: string, quality: Quality): string {
+export function audioStreamUrl(
+  url: string,
+  songMid: string,
+  quality: Quality,
+  filePath?: string
+): string {
   const token = randomUUID()
-  streams.set(token, { url, songMid, quality })
+  streams.set(token, { url, songMid, quality, filePath })
   return `${AUDIO_PROTOCOL_SCHEME}://stream/${token}`
+}
+
+function reportCacheProgress(
+  source: StreamSource,
+  receivedBytes: number,
+  totalBytes: number,
+  complete: boolean
+): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) {
+      window.webContents.send('audioCache:progress', {
+        songMid: source.songMid,
+        quality: source.quality,
+        receivedBytes,
+        totalBytes,
+        complete
+      })
+    }
+  }
 }
 
 async function cacheChunks(source: StreamSource, chunks: Uint8Array[]): Promise<void> {
@@ -133,34 +159,27 @@ async function handleFile(url: URL, request: Request): Promise<Response> {
   return fileResponse(filePath, request)
 }
 
-/** 把主进程音频协议 URL 解析为 mpv 可加载的本地路径或上游地址。 */
-export function resolveProtocolSource(protocolUrl: string): string | null {
-  try {
-    const url = new URL(protocolUrl)
-    if (url.protocol !== `${AUDIO_PROTOCOL_SCHEME}:`) return null
-    const segment = url.pathname.replace(/^\/+/, '')
-    if (url.hostname === 'file') {
-      return Buffer.from(segment, 'base64url').toString('utf8')
-    }
-    if (url.hostname === 'stream') {
-      const source = streams.get(segment)
-      if (!source) return null
-      return getCachedAudio(source.songMid, source.quality) ?? source.url
-    }
-    return null
-  } catch {
-    return null
-  }
-}
-
 async function handleStream(url: URL, request: Request): Promise<Response> {
   const token = url.pathname.replace(/^\/+/, '')
   const source = streams.get(token)
   if (!source) return new Response('音频流不存在', { status: 404 })
 
+  // 取源优先级固定为：本机下载文件 > 播放缓存 > 网络。下载命中时不得再读缓存。
+  if (source.filePath) {
+    const size = await stat(source.filePath).then((info) => info.size).catch(() => 0)
+    if (size > 0) {
+      reportCacheProgress(source, size, size, true)
+      return fileResponse(source.filePath, request)
+    }
+  }
+
   if (getSettings().audioCacheEnabled) {
     const cached = getCachedAudio(source.songMid, source.quality)
-    if (cached) return fileResponse(cached, request)
+    if (cached) {
+      const size = await stat(cached).then((info) => info.size).catch(() => 0)
+      reportCacheProgress(source, size, size, true)
+      return fileResponse(cached, request)
+    }
   }
 
   const rangeHeader = request.headers.get('range')
@@ -221,6 +240,16 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
 
     const chunks: Uint8Array[] = []
     const reader = body.getReader()
+    const expectedTotal = Number(contentLength ?? 0)
+    let received = 0
+    let lastReportAt = 0
+    const progress = (complete: boolean): void => {
+      if (!getSettings().audioCacheEnabled) return
+      const now = Date.now()
+      if (!complete && now - lastReportAt < CACHE_PROGRESS_THROTTLE_MS) return
+      lastReportAt = now
+      reportCacheProgress(source, received, expectedTotal || received, complete)
+    }
     const stream = new ReadableStream<Uint8Array>({
       async pull(controller) {
         try {
@@ -228,10 +257,13 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
           if (done) {
             controller.close()
             await cacheChunks(source, chunks)
+            progress(true)
             return
           }
           if (value) {
             chunks.push(value)
+            received += value.byteLength
+            progress(false)
             controller.enqueue(value)
           }
         } catch (error) {
@@ -240,7 +272,9 @@ async function handleStream(url: URL, request: Request): Promise<Response> {
       },
       cancel(reason) {
         abortUpstream()
-        void reader.cancel(reason)
+        // abort 后连接可能已关闭，reader.cancel 会以 ERR_CONNECTION_CLOSED 拒绝；
+        // 这是取消路径的预期结果，必须吞掉，否则会变成进程级未处理拒绝。
+        reader.cancel(reason).catch(() => undefined)
       }
     })
     return new Response(request.method === 'HEAD' ? null : stream, {

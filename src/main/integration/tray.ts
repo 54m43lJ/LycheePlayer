@@ -22,6 +22,18 @@ function iconPath(): string {
     : join(app.getAppPath(), 'resources/tray.png')
 }
 
+/**
+ * 托盘图标固定使用 22×22 全彩 PNG，不在运行时缩放。
+ * 对 32×32 图标调用 resize 会在高 DPI 下生成额外的 2x 表示，
+ * Electron 导出 StatusNotifierItem IconPixmap 时会采用 44×44；
+ * 部分 Linux 托盘宿主只按 22×22 解析该 pixmap，会渲染成黑色。
+ */
+function loadTrayImage() {
+  const image = nativeImage.createFromPath(iconPath())
+  image.setTemplateImage(false)
+  return image
+}
+
 function buildMenu(): Menu {
   const hasSong = Boolean(lastState?.song)
   const playing = lastState?.status === 'playing'
@@ -47,7 +59,12 @@ function menuKey(state: PlayerState | null): string {
 export function initTray(handlers: TrayActions): void {
   try {
     actions = handlers
-    const image = nativeImage.createFromPath(iconPath()).resize({ width: 22, height: 22 })
+    const image = loadTrayImage()
+    if (image.isEmpty()) {
+      console.warn(`[tray] 托盘图标加载失败：${iconPath()}`)
+      tray = null
+      return
+    }
     tray = new Tray(image)
     lastTooltip = 'Lychee Player'
     lastMenuKey = menuKey(null)
