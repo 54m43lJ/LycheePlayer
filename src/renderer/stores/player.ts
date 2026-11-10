@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref, toRaw } from 'vue'
-import type { MprisCommand, PlayerState, Quality, Song } from '@shared/types'
+import type { MprisCommand, PlayerState, Quality, Settings, Song } from '@shared/types'
 import {
   NO_STREAM_SKIP_LIMIT,
   PLAYER_STATE_THROTTLE_MS,
@@ -69,6 +69,10 @@ export const usePlayerStore = defineStore('player', () => {
     if (pref !== 'auto') return pref
     return auth.loggedIn ? 'flac' : '320k'
   })
+  /** 用户偏好（可能为 auto）；播放条与设置页共用。 */
+  const qualityPreference = computed<Settings['defaultQuality']>(
+    () => settings.settings.defaultQuality
+  )
 
   const queue = computed(() =>
     index.value >= 0 ? playOrder.value.slice(index.value + 1) : playOrder.value.slice()
@@ -500,6 +504,17 @@ export const usePlayerStore = defineStore('player', () => {
     }
   }
 
+  /**
+   * 设置默认音质偏好（含 auto）；设置页与播放条共用此入口，
+   * 持久化后立即作用于当前曲目或下一次播放。
+   */
+  async function updateDefaultQuality(next: Settings['defaultQuality']): Promise<void> {
+    if (settings.settings.defaultQuality === next) return
+    await settings.update({ defaultQuality: next })
+    applySettings()
+    if (current.value) setQuality(defaultQuality.value)
+  }
+
   function setLoopStatus(nextStatus: 'None' | 'Track' | 'Playlist'): void {
     if (nextStatus === 'Track') mode.value = 'repeat-one'
     else if (nextStatus === 'None') mode.value = 'sequence'
@@ -571,6 +586,7 @@ export const usePlayerStore = defineStore('player', () => {
     mode,
     quality,
     requestedQuality,
+    qualityPreference,
     defaultQuality,
     loading,
     canPlay,
@@ -592,6 +608,7 @@ export const usePlayerStore = defineStore('player', () => {
     seek,
     setVolume,
     setQuality,
+    updateDefaultQuality,
     setLoopStatus,
     setShuffle,
     setMode,

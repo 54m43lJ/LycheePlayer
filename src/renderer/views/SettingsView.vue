@@ -9,7 +9,7 @@ import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
 import { usePlayerStore } from '../stores/player'
-import { useSettingsStore } from '../stores/settings'
+import { useSettingsStore, QUALITY_PREFERENCE_OPTIONS } from '../stores/settings'
 import { formatBytes } from '../utils/format'
 
 const settings = useSettingsStore()
@@ -38,13 +38,6 @@ const expiryText = computed(() => {
     minute: '2-digit'
   })
 })
-
-const QUALITIES: Array<{ value: Settings['defaultQuality']; label: string }> = [
-  { value: 'auto', label: '自动' },
-  { value: '128k', label: '标准' },
-  { value: '320k', label: '高品质' },
-  { value: 'flac', label: '无损' }
-]
 
 const THEMES: Array<{ value: Settings['theme']; label: string }> = [
   { value: 'dark', label: '深色' },
@@ -110,10 +103,10 @@ async function saveFlags(): Promise<void> {
 async function chooseQuality(quality: Settings['defaultQuality']): Promise<void> {
   if (quality === settings.settings.defaultQuality) return
   try {
-    await settings.update({ defaultQuality: quality })
-    player.applySettings()
-    if (player.current) player.setQuality(player.defaultQuality)
-    toast.show(`默认音质已切换为 ${QUALITIES.find((item) => item.value === quality)?.label}`)
+    await player.updateDefaultQuality(quality)
+    toast.show(
+      `默认音质已切换为 ${QUALITY_PREFERENCE_OPTIONS.find((item) => item.value === quality)?.label}`
+    )
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -276,7 +269,7 @@ onBeforeUnmount(() => {
           <div class="panel-body">
             <div class="quality-options">
               <button
-                v-for="quality in QUALITIES"
+                v-for="quality in QUALITY_PREFERENCE_OPTIONS"
                 :key="quality.value"
                 class="quality-option"
                 :class="{ active: settings.settings.defaultQuality === quality.value }"

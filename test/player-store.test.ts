@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
 import type { Song } from '../src/shared/types'
+import { defaultSettings } from '../src/renderer/stores/settings'
 
 const noop = (): void => undefined
 
@@ -61,10 +62,15 @@ describe('player queue', () => {
       lychee: {
         player: { sendState: noop, onCommand: () => noop },
         song: { getUrls: () => Promise.resolve({ ok: true, data: [] }) },
+        settings: {
+          set: (patch: Record<string, unknown>) =>
+            Promise.resolve({ ok: true, data: { ...defaultSettings(), ...patch } })
+        },
         mpv: { getState: () => Promise.resolve({ ok: true, data: { available: false } }) }
       },
       setTimeout
     })
+    vi.stubGlobal('document', { documentElement: { dataset: {} } })
   })
 
   it('keeps the remaining songs in the queue after playList', async () => {
@@ -110,8 +116,24 @@ describe('player queue', () => {
     expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
   })
 
-  it('cycles play modes in the preset order', async () => {
+  it('shares the quality preference between the player bar and settings', async () => {
     const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const { useSettingsStore } = await import('../src/renderer/stores/settings')
+    const player = usePlayerStore()
+    const settings = useSettingsStore()
+
+    await player.updateDefaultQuality('flac')
+    expect(settings.settings.defaultQuality).toBe('flac')
+    expect(player.qualityPreference).toBe('flac')
+    expect(player.requestedQuality).toBe('flac')
+
+    await player.updateDefaultQuality('auto')
+    expect(settings.settings.defaultQuality).toBe('auto')
+    expect(player.qualityPreference).toBe('auto')
+    expect(player.requestedQuality).toBe(player.defaultQuality)
+  })
+
+  it('cycles play modes in the preset order', async () => {    const { usePlayerStore } = await import('../src/renderer/stores/player')
     const player = usePlayerStore()
     expect(player.mode).toBe('sequence')
     player.cycleMode()

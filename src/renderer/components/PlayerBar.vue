@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import type { AudioCacheProgress, Quality } from '@shared/types'
+import type { AudioCacheProgress, Settings } from '@shared/types'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
 import { usePlayerStore, PLAY_MODE_LABEL, type PlayMode } from '../stores/player'
+import { QUALITY_PREFERENCE_OPTIONS } from '../stores/settings'
 import { useUiStore } from '../stores/ui'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
@@ -25,6 +26,7 @@ const {
   mode,
   quality,
   requestedQuality,
+  qualityPreference,
   positionMs,
   durationMs,
   bufferedMs,
@@ -97,11 +99,8 @@ const bufferLabel = computed(() => {
   return `缓冲 ${Math.round(bufferPercent.value)}%`
 })
 
-const qualityOptions: Array<{ value: Quality; label: string }> = [
-  { value: '128k', label: '128K' },
-  { value: '320k', label: '320K' },
-  { value: 'flac', label: 'FLAC' }
-]
+const qualityOptions: Array<{ value: Settings['defaultQuality']; label: string; short: string }> =
+  QUALITY_PREFERENCE_OPTIONS
 
 const qualityLabel = computed(() => (quality.value === 'flac' ? 'FLAC' : quality.value.toUpperCase()))
 const favorited = computed(() =>
@@ -110,9 +109,19 @@ const favorited = computed(() =>
 const requestedQualityLabel = computed(() =>
   requestedQuality.value === 'flac' ? 'FLAC' : requestedQuality.value.toUpperCase()
 )
+const qualityPreferenceLabel = computed(
+  () =>
+    qualityOptions.find((option) => option.value === qualityPreference.value)?.short ?? 'AUTO'
+)
+const qualityTitle = computed(() => {
+  const hint = hasSong.value ? '音质（本次请求档位）' : '音质（下次播放生效）'
+  return qualityPreference.value === 'auto'
+    ? `${hint}：自动（当前 ${requestedQualityLabel.value}）`
+    : hint
+})
 /** 弹出层只展示“其它档位”；当前档位由常驻按钮本身表示。 */
 const otherQualities = computed(() =>
-  qualityOptions.filter((option) => option.value !== requestedQuality.value)
+  qualityOptions.filter((option) => option.value !== qualityPreference.value)
 )
 const asset = computed(() =>
   current.value ? download.assets[current.value.songMid] : undefined
@@ -203,9 +212,13 @@ function closeMenus(): void {
   modeMenu.value = false
 }
 
-function chooseQuality(next: Quality): void {
+async function chooseQuality(next: Settings['defaultQuality']): Promise<void> {
   closeMenus()
-  player.setQuality(next)
+  try {
+    await player.updateDefaultQuality(next)
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err))
+  }
 }
 
 function openModeMenu(): void {
@@ -512,20 +525,21 @@ watch(
       >
         <button
           class="quality-chip"
-          :title="hasSong ? '音质（本次请求档位）' : '音质（下次播放生效）'"
+          :title="qualityTitle"
           aria-haspopup="true"
           :aria-expanded="qualityMenu"
           @click.stop="toggleQualityMenu()"
         >
-          {{ requestedQualityLabel }}
+          {{ qualityPreferenceLabel }}
         </button>
         <div v-if="qualityMenu" class="quality-menu" @click.stop>
           <button
             v-for="option in otherQualities"
             :key="option.value"
+            :title="option.label"
             @click="chooseQuality(option.value)"
           >
-            {{ option.label }}
+            {{ option.short }}
           </button>
         </div>
       </div>
