@@ -1652,6 +1652,8 @@
 
 ### 4.38 添加到歌单链路耗时分析与优化
 
+> 后续修正：§4.39 已把写后读回 / 整单扫描移出写 API，改为渲染层触发统一的歌单刷新流程。本节保留原问题分析、实测耗时与优化背景，最终职责划分以 §4.39 为准。
+
 问题描述：添加到歌单从点击目标歌单到出现“已添加到歌单”等待时间很长。按代码链路排查，主要耗时来自写前后的整单成员扫描和重复元数据请求，而不是写入本身。
 
 原链路与请求数（添加 1 首，歌单 N 首）：
@@ -1719,3 +1721,41 @@
 | `PROVIDER.html` | §4.1 歌单增删歌曲行 | 改 | 说明 `AddSonglist` 通常追加到末尾；写后读回可只查尾部页，重复 / 异常时再全量扫描；80092 不能单独作为失败依据。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 添加到歌单正常应在约 1 秒内完成，且不随歌单长度明显变慢；重复添加直接提示“已在歌单中”。 |
 | `EVOLVE.md` | #14 | 改 | 补“歌单写入确认不得每次全量扫描，优先尾页读回”的性能约束。 |
+
+### 4.39 纠正：写后刷新应复用歌单刷新流程
+
+问题描述：§4.38 把“写后读回 / 整单扫描”定义在 `api/playlist-write.ts` 内部，误解了职责边界。添加 / 删除写接口只应负责写入，写后歌单内容与计数的确认必须触发现有歌单刷新流程，由同一份代码统一处理；否则每个写操作都会重复实现一套“扫描 + 校验”，既慢又容易与轮询 / 缓存逻辑漂移。
+
+解决方法：
+
+- `api/playlist-write.ts` 的 `addSongs` / `removeSongs` 只负责写入：
+  - 读取一次歌单元数据拿到 `dirId` / `tid`；
+  - 批量取歌曲身份并提交 `AddSonglist` / `DelSonglist`；
+  - 成功返回 `{ changed: true }`，`80092` 视为“状态未变化”返回 `{ changed: false }`；
+  - 删除 `readMembers`、尾部读回、整单扫描与写后元数据读取，不再在写 API 内定义刷新逻辑；
+- 新增共享类型 `PlaylistMutationResult`，IPC 的 `playlist.addSongs` / `playlist.removeSongs` 返回 `{ changed }`；
+- 渲染层在 `stores/playlist-edit.ts` 统一处理写后刷新：
+  - 新增 `refreshAfterWrite(id)`：`playlist.invalidate(id)` 后立即 `playlist.poll(id)`；
+  - `addSongs` / `removeSongs` 共用该函数，不再各自实现刷新；
+  - 当前打开该歌单时 `poll` 会走已有的 `load(force)` 分页加载流程；未打开时只失效缓存，下次进入重新加载；
+- `PlaylistPicker` 改为调用 `playlistEdit.addSongs`，由 store 统一提示与刷新；移除播放选择器里基于返回 `songCount` 的重复判断；
+- `PlaylistView` 删除歌曲后不再额外提示，避免与 store 提示重复；乐观移除仍保留，统一刷新负责最终对齐；
+- `createAndAdd` 也复用同一个 `addSongs` 入口。
+
+验证：
+
+- 源码核对：`api/playlist-write.ts` 不再包含 `readMembers` / 整单扫描；`playlist-edit.ts` 的添加与删除共用 `refreshAfterWrite`；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 87 个用例通过（`playlist-write` 用例改为校验只写入与 `{ changed }` 结果）；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 明确写接口只负责写入并返回 `PlaylistMutationResult`；不得在写 API 内做写后读回或整单扫描。 |
+| `CORE.html` | §4.31 `stores/playlist-edit.ts` | 改 | `addSongs` / `removeSongs` 写后统一调用 `refreshAfterWrite(id)`：`invalidate(id)` + `poll(id)`；当前页走已有分页加载，未打开只失效缓存。 |
+| `CORE.html` | §4.2 `ipc.ts` / §4.1 `types.ts` | 改 | `playlist.addSongs` / `playlist.removeSongs` 返回 `PlaylistMutationResult { changed }`。 |
+| `CORE.html` | §4.65 `composables/availability.ts` 附近 / §4.61 `stores/playlist.ts` | 改 | 说明写后刷新复用 `invalidate` + `poll`，不要在写操作内重复实现刷新或校验。 |
+| `USER.html` | §5.2.8 歌单详情 | 改 | 添加 / 删除后歌单内容与计数由统一刷新流程更新；重复添加提示“已在歌单中”，未变化删除提示“歌曲不在歌单中”。 |
+| `EVOLVE.md` | #14 | 改 | 补“歌单写后刷新必须复用既有歌单刷新流程，不得在写接口内单独实现扫描 / 读回”的约束。 |
