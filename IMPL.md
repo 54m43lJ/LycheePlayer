@@ -1435,3 +1435,81 @@
 | `USER.html` | §3.4 页面表 / §5.2.8 下载中心 | 改 | 下载中心改为侧栏可进入的完整页面；页面最顶部为左右通栏进度条，`(完成/总数)` 与失败数绝对定位在进度条下方右对齐；标题区与设置 / 我的歌单页使用相同的页面留白与背景；条目区面板边框内顶部提供“全部 / 进行中 / 已完成 / 未成功”过滤；任务按新到旧展示。 |
 | `USER.html` | §5.2.2 侧栏 | 改 | “下载”改为路由入口，指向 `/downloads`；不再打开右侧抽屉。 |
 | `EVOLVE.md` | — | 改 | 下载中心由抽屉改为完整页面，补充顶部操作区与整体进度栏要求。 |
+
+### 4.32 无歌曲时播放条按钮状态与音质弹出
+
+问题描述：ISSUES 指出没有歌曲在播放时，播放条的喜欢 / 下载按钮没有变灰；同时切换音质按钮失效。要求音质切换改为类似播放模式的弹出：按钮本身表示当前档位，弹层只列出其它档位并与按钮一体化。后续新增子项：播放条与设置页的音质设置没有对齐，播放条不能选“自动”，两边配置没有联动；两者应共用内部 API 与状态。
+
+解决方法：
+
+- 喜欢 / 下载按钮原本已有 `:disabled="!hasSong"`，但 `.icon-btn` 缺少禁用态样式；补充全局 `.icon-btn:disabled`（使用 `faint` 色、降低透明度、禁用 hover 高亮），上一首 / 下一首 / 播放按钮也同步获得一致的灰化表现；
+- 移除音质按钮的 `:disabled="!hasSong"`，无歌曲时仍可切换档位，实际值由 `player.setQuality()` 写入 `requestedQuality`，下次播放生效；
+- 音质按钮改为与播放模式一致的 revealer：
+  - 按钮保留当前档位文本并常驻高亮；
+  - 弹层只渲染“其它档位”，当前档位不再重复出现；
+  - 鼠标悬停打开、离开延迟关闭，点击按钮仍可切换；展开时按钮位于弹层底部并与弹层左右 / 下边缘对齐；
+  - 档位文案压缩为 `128K / 320K / FLAC`，弹层宽度与按钮一致，避免窄按钮配宽弹层；
+- 弹层打开时关闭音量 / 播放模式弹层，并补齐对应定时器清理与 Esc / 点击外部关闭逻辑。
+- 播放条与设置页音质共用状态：
+  - `stores/settings.ts` 导出 `QUALITY_PREFERENCE_OPTIONS`（自动 / 128K / 320K / FLAC），设置页与播放条共用这组选项；
+  - `settings.settings.defaultQuality` 作为唯一持久化偏好，播放条新增 `qualityPreference` 只读状态；
+  - `player.updateDefaultQuality(pref)` 作为两者共用的写入入口：更新设置、应用 `requestedQuality`，当前有歌曲时重新加载；
+  - 播放条按钮显示偏好档位（`AUTO / 128K / 320K / FLAC`），弹层包含“自动”及其它档位；`auto` 按登录态解析为 FLAC 或 320K，tooltip 同时显示当前实际请求档位；
+  - 设置页删除本地音质选项常量，改用同一组选项并调用 `player.updateDefaultQuality()`，两处状态即时联动。
+
+验证：
+
+- `npm run typecheck` 通过；
+- `npx vitest run` 22 个测试文件 / 77 个用例通过（含播放条与设置页共用音质偏好的用例）；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 喜欢 / 下载按钮禁用态灰化；音质改为按钮即当前偏好的 revealer，弹层包含自动与其它档位，悬停展开、关闭时清理定时器；无歌曲时仍可切换档位。 |
+| `CORE.html` | §4.31 `stores/settings.ts` / `stores/player.ts` | 改 | 导出 `QUALITY_PREFERENCE_OPTIONS`；`defaultQuality` 为唯一持久化偏好，播放条暴露 `qualityPreference`；`updateDefaultQuality()` 作为设置页与播放条共用写入入口。 |
+| `CORE.html` | §4.44 `SettingsView.vue` | 改 | 删除本地音质选项，改用共享选项并调用 `player.updateDefaultQuality()`，与播放条状态联动。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 补 `.icon-btn:disabled` 灰化样式；音质弹层与播放模式共用向上 reveal 的定位 / 动画约定。 |
+| `USER.html` | §5.2.2 播放条 / §5.2.7 设置页 | 改 | 无歌曲时喜欢 / 下载 / 上一首 / 下一首 / 播放按钮灰化不可用；音质按钮始终可用，按钮显示当前偏好（含“自动”），悬停弹出其它档位；设置页与播放条共用同一份音质偏好并即时联动。 |
+| `EVOLVE.md` | — | 改 | 补充音质切换与播放模式一致的 revealer 交互要求。 |
+
+### 4.33 Revealer 统一交互
+
+问题描述：ISSUES 要求所有 revealer 统一设计模式：按钮本身点击按固定顺序切换选项、弹层按固定顺序列出除当前项外的其余选项、按钮始终高亮当前项；音量条作为特殊个例单独说明。排查后唯一缺口是播放条音质切换按钮仍为点击展开 / 关闭弹层，而不是点击循环切换。
+
+解决方法：
+
+- `stores/player.ts` 新增 `cycleQualityPreference()`：按 `QUALITY_PREFERENCE_OPTIONS` 的固定顺序 `auto → 128k → 320k → flac → auto` 调用共享的 `updateDefaultQuality()`；
+- `PlayerBar.vue` 音质按钮点击改为 `cycleQuality()`：关闭当前弹层并循环切换偏好；悬停仍按 120ms / 200ms 展开其余档位；
+- 弹层继续只显示除当前偏好外的档位，顺序与共享选项一致；按钮本身显示当前偏好（`AUTO / 128K / 320K / FLAC`）并保持高亮；
+- 播放模式按钮已符合规则（点击 `cycleMode()` 循环，悬停展开其余模式）；音量条保持特殊个例：点击切换静音、悬停展开音量条、≤900px 才启用弹出滑块。
+- 样式约束同步：
+  - USER §2 将 Revealer 约定扩展为交互与样式两部分：统一描述弹层向上展开、与按钮同宽对齐、按钮位于弹层底部并高于弹层、当前项由按钮表示、弹层使用面板底色与向上阴影、选项悬停使用 `--subtle-bg`、按钮不带边框；只描述行为 / 呈现，不写具体数值，也不规定悬停延迟；
+  - 音质 revealer 移除按钮边框；音质选项 hover 背景由 `--subtle-bg-strong` 改为 `--subtle-bg`，与播放模式一致。
+
+文档同步：
+
+- `USER.html` §2 新增 Revealer 统一交互约定，并修正播放模式 / 音质的点击行为；§5.2.2 播放条与 §5.2.7 设置页补充音质共享偏好与空状态可用性；
+- `CORE.html` §4.29 / §4.30 / §4.40 补充 `QUALITY_PREFERENCE_OPTIONS`、`qualityPreference`、`updateDefaultQuality`、`cycleQualityPreference` 与音质 revealer 行为；
+- `EVOLVE.md` 新增 #15 统一 revealer 交互需求；
+- `README.html` 播放行同步“点击循环、悬停展开”的交互描述。
+
+验证：
+
+- `test/player-store.test.ts` 新增音质偏好按固定顺序循环的用例；
+- `npm run typecheck` 通过；
+- `npx vitest run` 22 个测试文件 / 78 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §2 CONVENTIONS · Revealer 统一交互与样式 | 增 | 统一描述 revealer 的行为 / 呈现；按钮不带边框，弹层选项 hover 使用 `--subtle-bg`；悬停延迟不规定。 |
+| `USER.html` | §2 播放模式切换 / §5.2.2 播放条 / §5.2.7 设置页 | 改 | 点击循环切换；音质包含自动档并与设置页共用偏好；空状态下音质仍可用。 |
+| `CORE.html` | §4.29 `stores/player.ts` / §4.30 `stores/settings.ts` | 改 | 增加共享音质选项、`qualityPreference`、`updateDefaultQuality`、`cycleQualityPreference` 与固定顺序约定。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放模式与音质按钮点击循环；音质弹层只列其余档位；revealer 样式契约引用 USER §2。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 音质按钮移除边框；音质选项 hover 改用 `--subtle-bg`，与模式选项一致。 |
+| `EVOLVE.md` | #15 | 增 | 记录统一 revealer 交互需求与音量特例。 |
+| `README.html` | §2 用户交互 · 播放行 | 改 | 描述点击循环、悬停展开与音质偏好共享。 |

@@ -14,6 +14,22 @@ export function defaultSettings(): Settings {
   }
 }
 
+export interface QualityPreferenceOption {
+  value: Settings['defaultQuality']
+  /** 设置页等宽布局使用的完整名称。 */
+  label: string
+  /** 播放条等窄空间使用的短名称。 */
+  short: string
+}
+
+/** 设置页与播放条共用同一组音质偏好选项。 */
+export const QUALITY_PREFERENCE_OPTIONS: QualityPreferenceOption[] = [
+  { value: 'auto', label: '自动', short: 'AUTO' },
+  { value: '128k', label: '标准', short: '128K' },
+  { value: '320k', label: '高品质', short: '320K' },
+  { value: 'flac', label: '无损', short: 'FLAC' }
+]
+
 export const useSettingsStore = defineStore('settings', () => {
   const settings = ref<Settings>(defaultSettings())
   const loaded = ref(false)

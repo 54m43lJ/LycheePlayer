@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
-import type { AudioCacheProgress, Quality } from '@shared/types'
+import type { AudioCacheProgress, Settings } from '@shared/types'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
 import { usePlayerStore, PLAY_MODE_LABEL, type PlayMode } from '../stores/player'
+import { QUALITY_PREFERENCE_OPTIONS } from '../stores/settings'
 import { useUiStore } from '../stores/ui'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
@@ -25,6 +26,7 @@ const {
   mode,
   quality,
   requestedQuality,
+  qualityPreference,
   positionMs,
   durationMs,
   bufferedMs,
@@ -43,6 +45,8 @@ const lastVolume = ref(0.8)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 let modeOpenTimer: number | null = null
 let modeCloseTimer: number | null = null
+let qualityOpenTimer: number | null = null
+let qualityCloseTimer: number | null = null
 let volumeOpenTimer: number | null = null
 let volumeCloseTimer: number | null = null
 let offCacheProgress: (() => void) | null = null
@@ -95,11 +99,8 @@ const bufferLabel = computed(() => {
   return `缓冲 ${Math.round(bufferPercent.value)}%`
 })
 
-const qualityOptions: Array<{ value: Quality; label: string }> = [
-  { value: '128k', label: '标准 128k' },
-  { value: '320k', label: '高品质 320k' },
-  { value: 'flac', label: '无损 FLAC' }
-]
+const qualityOptions: Array<{ value: Settings['defaultQuality']; label: string; short: string }> =
+  QUALITY_PREFERENCE_OPTIONS
 
 const qualityLabel = computed(() => (quality.value === 'flac' ? 'FLAC' : quality.value.toUpperCase()))
 const favorited = computed(() =>
@@ -107,6 +108,20 @@ const favorited = computed(() =>
 )
 const requestedQualityLabel = computed(() =>
   requestedQuality.value === 'flac' ? 'FLAC' : requestedQuality.value.toUpperCase()
+)
+const qualityPreferenceLabel = computed(
+  () =>
+    qualityOptions.find((option) => option.value === qualityPreference.value)?.short ?? 'AUTO'
+)
+const qualityTitle = computed(() => {
+  const hint = hasSong.value ? '音质（本次请求档位）' : '音质（下次播放生效）'
+  return qualityPreference.value === 'auto'
+    ? `${hint}：自动（当前 ${requestedQualityLabel.value}）`
+    : hint
+})
+/** 弹出层只展示“其它档位”；当前档位由常驻按钮本身表示。 */
+const otherQualities = computed(() =>
+  qualityOptions.filter((option) => option.value !== qualityPreference.value)
 )
 const asset = computed(() =>
   current.value ? download.assets[current.value.songMid] : undefined
@@ -134,12 +149,38 @@ function visibleSingers(): Array<{ mid: string; name: string }> {
   return (current.value?.singers ?? []).filter((singer) => singer.name.trim().length > 0)
 }
 
-function toggleQualityMenu(): void {
-  qualityMenu.value = !qualityMenu.value
-  if (qualityMenu.value) {
+async function cycleQuality(): Promise<void> {
+  closeMenus()
+  try {
+    await player.cycleQualityPreference()
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err))
+  }
+}
+
+function openQualityMenu(): void {
+  if (qualityCloseTimer !== null) {
+    window.clearTimeout(qualityCloseTimer)
+    qualityCloseTimer = null
+  }
+  if (qualityMenu.value) return
+  qualityOpenTimer = window.setTimeout(() => {
+    qualityMenu.value = true
+    qualityOpenTimer = null
     volumeOpen.value = false
     modeMenu.value = false
+  }, 120)
+}
+
+function scheduleCloseQualityMenu(): void {
+  if (qualityOpenTimer !== null) {
+    window.clearTimeout(qualityOpenTimer)
+    qualityOpenTimer = null
   }
+  qualityCloseTimer = window.setTimeout(() => {
+    qualityMenu.value = false
+    qualityCloseTimer = null
+  }, 200)
 }
 
 function closeMenus(): void {
@@ -150,6 +191,14 @@ function closeMenus(): void {
   if (modeCloseTimer !== null) {
     window.clearTimeout(modeCloseTimer)
     modeCloseTimer = null
+  }
+  if (qualityOpenTimer !== null) {
+    window.clearTimeout(qualityOpenTimer)
+    qualityOpenTimer = null
+  }
+  if (qualityCloseTimer !== null) {
+    window.clearTimeout(qualityCloseTimer)
+    qualityCloseTimer = null
   }
   if (volumeOpenTimer !== null) {
     window.clearTimeout(volumeOpenTimer)
@@ -164,9 +213,13 @@ function closeMenus(): void {
   modeMenu.value = false
 }
 
-function chooseQuality(next: Quality): void {
+async function chooseQuality(next: Settings['defaultQuality']): Promise<void> {
   closeMenus()
-  player.setQuality(next)
+  try {
+    await player.updateDefaultQuality(next)
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err))
+  }
 }
 
 function openModeMenu(): void {
@@ -306,6 +359,8 @@ onBeforeUnmount(() => {
   if (mediaListener) compactQuery.removeEventListener('change', mediaListener)
   if (modeOpenTimer !== null) window.clearTimeout(modeOpenTimer)
   if (modeCloseTimer !== null) window.clearTimeout(modeCloseTimer)
+  if (qualityOpenTimer !== null) window.clearTimeout(qualityOpenTimer)
+  if (qualityCloseTimer !== null) window.clearTimeout(qualityCloseTimer)
   if (volumeOpenTimer !== null) window.clearTimeout(volumeOpenTimer)
   if (volumeCloseTimer !== null) window.clearTimeout(volumeCloseTimer)
   offCacheProgress?.()
@@ -370,6 +425,8 @@ watch(
           :class="{ open: modeMenu }"
           @mouseenter="openModeMenu()"
           @mouseleave="scheduleCloseModeMenu()"
+          @focusin="openModeMenu()"
+          @focusout="scheduleCloseModeMenu()"
         >
           <button
             class="mode-button"
@@ -462,23 +519,32 @@ watch(
       >
         <AppIcon :name="downloadIcon" :size="17" />
       </button>
-      <div ref="qualityWrap" class="quality-wrap">
+      <div
+        ref="qualityWrap"
+        class="quality-wrap"
+        :class="{ open: qualityMenu }"
+        @mouseenter="openQualityMenu()"
+        @mouseleave="scheduleCloseQualityMenu()"
+        @focusin="openQualityMenu()"
+        @focusout="scheduleCloseQualityMenu()"
+      >
         <button
           class="quality-chip"
-          title="音质（本次请求档位）"
-          :disabled="!hasSong"
-          @click.stop="toggleQualityMenu()"
+          :title="qualityTitle"
+          aria-haspopup="true"
+          :aria-expanded="qualityMenu"
+          @click.stop="cycleQuality()"
         >
-          {{ requestedQualityLabel }}
+          {{ qualityPreferenceLabel }}
         </button>
-        <div v-if="qualityMenu" class="quality-menu">
+        <div v-if="qualityMenu" class="quality-menu" @click.stop>
           <button
-            v-for="option in qualityOptions"
+            v-for="option in otherQualities"
             :key="option.value"
-            :class="{ active: option.value === requestedQuality }"
+            :title="option.label"
             @click="chooseQuality(option.value)"
           >
-            {{ option.label }}
+            {{ option.short }}
           </button>
         </div>
       </div>
