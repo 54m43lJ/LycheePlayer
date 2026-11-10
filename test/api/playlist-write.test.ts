@@ -71,6 +71,10 @@ beforeEach(() => {
   state.members = ['a', 'b']
   musicuMock.mockImplementation(
     async (module: string, method: string, param: Record<string, unknown>) => {
+      if (module === 'music.trackInfo.UniformRuleCtrl' && method === 'CgiGetTrackInfo') {
+        const mids = param.mids as string[]
+        return { tracks: mids.map((mid) => ({ id: 1001, mid, type: 0 })) }
+      }
       if (module === 'music.pf_song_detail_svr' && method === 'get_song_detail_yqq') {
         return { track_info: { id: 1001, type: 0 } }
       }
@@ -128,8 +132,11 @@ describe('api/playlist-write', () => {
     state.members = ['b']
     const { UpstreamError } = await import('../../src/main/api/client')
     musicuMock.mockImplementation(
-      async (module: string, method: string) => {
-        if (module === 'music.pf_song_detail_svr') return { track_info: { id: 1001, type: 0 } }
+      async (module: string, method: string, param: Record<string, unknown>) => {
+        if (module === 'music.trackInfo.UniformRuleCtrl') {
+          const mids = param.mids as string[]
+          return { tracks: mids.map((mid) => ({ id: 1001, mid, type: 0 })) }
+        }
         if (method === 'AddSonglist') {
           state.members = ['b', 'a']
           throw new UpstreamError('UPSTREAM_CHANGED', 'upstream 80092', false, 80092)
@@ -142,9 +149,9 @@ describe('api/playlist-write', () => {
     await expect(addSongs('123', ['a'])).resolves.toMatchObject({ songCount: 2 })
   })
 
-  it('skips the write when the song is not currently a member', async () => {
+  it('returns the current meta without any write when there is nothing to remove', async () => {
     const { removeSongs } = await import('../../src/main/api/playlist-write')
-    const result = await removeSongs('123', ['missing'])
+    const result = await removeSongs('123', [])
 
     expect(result).toMatchObject({ id: '123', songCount: 2 })
     expect(

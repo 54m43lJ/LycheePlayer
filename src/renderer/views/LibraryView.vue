@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { PlaylistMeta } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
 import PlaylistEditDialog from '../components/PlaylistEditDialog.vue'
 import { describeError, unwrap } from '../api'
@@ -71,8 +72,16 @@ async function submitDialog(name: string): Promise<void> {
   }
 }
 
-async function removePlaylist(playlist: PlaylistMeta): Promise<void> {
-  if (!window.confirm(`确定删除歌单「${playlist.name}」？`)) return
+const pendingRemove = ref<PlaylistMeta | null>(null)
+
+function removePlaylist(playlist: PlaylistMeta): void {
+  pendingRemove.value = playlist
+}
+
+async function confirmRemove(): Promise<void> {
+  const playlist = pendingRemove.value
+  pendingRemove.value = null
+  if (!playlist) return
   try {
     await edit.remove(playlist.id)
     await load()
@@ -199,6 +208,16 @@ watch(
       :playlist="editingPlaylist"
       @close="dialogOpen = false"
       @submit="submitDialog"
+    />
+
+    <ConfirmDialog
+      :open="pendingRemove !== null"
+      title="删除歌单"
+      :message="`确定删除歌单「${pendingRemove?.name ?? ''}」？此操作会从账号中移除该歌单。`"
+      confirm-label="删除"
+      danger
+      @confirm="confirmRemove()"
+      @cancel="pendingRemove = null"
     />
   </div>
 </template>

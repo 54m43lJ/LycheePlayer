@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
@@ -113,22 +114,35 @@ async function downloadAll(): Promise<void> {
   }
 }
 
-async function removeAt(index: number): Promise<void> {
+const removeTarget = ref<{ songMid: string; name: string } | null>(null)
+
+function removeAt(index: number): void {
   const song = filteredSongs.value[index]
   if (!song || !meta.value || !removable.value) return
-  if (!window.confirm(`确定从歌单「${meta.value.name}」删除「${song.name}」？`)) return
+  removeTarget.value = song
+}
+
+async function confirmRemove(): Promise<void> {
+  const target = removeTarget.value
+  const currentMeta = meta.value
+  if (!target || !currentMeta || !removable.value) {
+    removeTarget.value = null
+    return
+  }
+  removeTarget.value = null
   const snapshot = songs.value.slice()
-  playlist.removeMembers(id.value, [song.songMid])
+  playlist.removeMembers(id.value, [target.songMid])
   try {
-    await playlistEdit.removeSongs(id.value, [song.songMid])
+    await playlistEdit.removeSongs(id.value, [target.songMid])
     toast.show('已从歌单删除')
   } catch (err) {
     if (feed.value) {
       feed.value.songs = snapshot
       feed.value.total = Math.max(feed.value.total, snapshot.length)
-      feed.value.meta = meta.value
-        ? { ...meta.value, songCount: Math.max(meta.value.songCount, snapshot.length) }
-        : meta.value
+      feed.value.meta = {
+        ...currentMeta,
+        songCount: Math.max(currentMeta.songCount, snapshot.length)
+      }
     }
     toast.error(describeError(err))
   }
@@ -312,5 +326,15 @@ onBeforeUnmount(() => {
         @added="onPickerAdded"
       />
     </template>
+
+    <ConfirmDialog
+      :open="removeTarget !== null"
+      title="从歌单删除"
+      :message="`确定从歌单「${meta?.name ?? ''}」删除「${removeTarget?.name ?? ''}」？`"
+      confirm-label="删除"
+      danger
+      @confirm="confirmRemove()"
+      @cancel="removeTarget = null"
+    />
   </div>
 </template>

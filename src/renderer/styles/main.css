@@ -447,6 +447,17 @@ a {
   background: var(--accent-strong);
 }
 
+.btn.danger {
+  border-color: transparent;
+  background: var(--danger);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn.danger:hover {
+  background: color-mix(in srgb, var(--danger) 86%, var(--text));
+}
+
 .btn.ghost {
   border-color: transparent;
   background: transparent;
@@ -2896,6 +2907,19 @@ a {
 
 .dialog-body {
   padding: 20px;
+}
+
+.confirm-dialog {
+  width: min(440px, 100%);
+}
+
+.confirm-message {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
 }
 
 .dialog-foot {

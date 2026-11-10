@@ -1,4 +1,5 @@
-import type { PlaylistMeta } from '../../shared/types'
+import type { PlaylistMeta, PlaylistPage } from '../../shared/types'
+import { PLAYLIST_PAGE_SIZE, SONG_DETAIL_BATCH } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu } from './client'
 import { fetchPlaylistPage } from './playlist'
@@ -80,19 +81,42 @@ async function fetchTrackIdentities(
 ): Promise<Array<{ songId: number; songType: number }>> {
   const unique = [...new Set(mids.filter(Boolean))]
   const result: Array<{ songId: number; songType: number }> = []
-  for (const mid of unique) {
-    const data = await musicu<{ track_info?: TrackInfo }>(
-      'music.pf_song_detail_svr',
-      'get_song_detail_yqq',
-      { song_mid: mid }
+  for (let start = 0; start < unique.length; start += SONG_DETAIL_BATCH) {
+    const batch = unique.slice(start, start + SONG_DETAIL_BATCH)
+    // 批量详情一次取回，避免逐首详情把写操作拖慢；缺失歌曲再走单曲兜底。
+    const data = await musicu<{ tracks?: TrackInfo[] }>(
+      'music.trackInfo.UniformRuleCtrl',
+      'CgiGetTrackInfo',
+      {
+        types: batch.map(() => 0),
+        modify_stamp: batch.map(() => 0),
+        ctx: 0,
+        client: 1,
+        mids: batch
+      }
     )
-    const info = data.track_info
-    const songId = String(info?.id ?? '')
-    const songType = Number(info?.type ?? 0)
-    if (!info || !/^\d+$/.test(songId) || !Number.isSafeInteger(songType) || songType < 0) {
-      throw new UpstreamError('UPSTREAM_CHANGED', '无法确认歌曲 ID，写操作已取消')
+    if (!Array.isArray(data.tracks)) {
+      throw new UpstreamError('UPSTREAM_CHANGED', '批量歌曲详情响应缺少 tracks')
     }
-    result.push({ songId: Number(songId), songType })
+    const byMid = new Map<string, TrackInfo>()
+    for (const track of data.tracks) if (track.mid) byMid.set(track.mid, track)
+    for (const mid of batch) {
+      let info = byMid.get(mid)
+      if (!info) {
+        const fallback = await musicu<{ track_info?: TrackInfo }>(
+          'music.pf_song_detail_svr',
+          'get_song_detail_yqq',
+          { song_mid: mid }
+        )
+        info = fallback.track_info
+      }
+      const songId = String(info?.id ?? '')
+      const songType = Number(info?.type ?? 0)
+      if (!info || !/^\d+$/.test(songId) || !Number.isSafeInteger(songType) || songType < 0) {
+        throw new UpstreamError('UPSTREAM_CHANGED', '无法确认歌曲 ID，写操作已取消')
+      }
+      result.push({ songId: Number(songId), songType })
+    }
   }
   return result
 }
@@ -121,17 +145,23 @@ async function writeDetail(
   assertWrite(data, action)
 }
 
-/** 读取歌单成员 mid 用于写后读回校验；最多读取 20 页。 */
-async function readMemberMids(id: string): Promise<Set<string>> {
+/** 从指定偏移读取成员 mid 与最新元数据；最多读取 20 页。 */
+async function readMembers(
+  id: string,
+  startOffset = 0
+): Promise<{ mids: Set<string>; meta: PlaylistMeta }> {
   const mids = new Set<string>()
-  let offset = 0
+  let offset = Math.max(0, Math.floor(startOffset / PLAYLIST_PAGE_SIZE) * PLAYLIST_PAGE_SIZE)
+  let meta: PlaylistMeta | null = null
   for (let page = 0; page < 20; page += 1) {
-    const result = await fetchPlaylistPage(id, offset)
+    const result: PlaylistPage = await fetchPlaylistPage(id, offset)
+    meta = result.meta
     for (const song of result.songs) if (song.songMid) mids.add(song.songMid)
     if (!result.hasMore || result.songs.length === 0) break
     offset += result.songs.length
   }
-  return mids
+  if (!meta) throw new UpstreamError('UPSTREAM_CHANGED', '歌单响应缺少元数据')
+  return { mids, meta }
 }
 
 export async function createPlaylist(name: string): Promise<PlaylistMeta> {
@@ -187,9 +217,9 @@ export async function removePlaylist(id: string): Promise<void> {
 }
 
 export async function addSongs(id: string, mids: string[]): Promise<PlaylistMeta> {
-  const before = await readMemberMids(id)
-  const target = [...new Set(mids.filter((mid) => mid && !before.has(mid)))]
   const meta = await readMeta(id)
+  const target = [...new Set(mids.filter(Boolean))]
+  if (target.length === 0) return meta
   let writeError: unknown = null
   try {
     await writeDetail('AddSonglist', meta.id, playlistDirId(meta), target, '添加歌曲')
@@ -198,8 +228,16 @@ export async function addSongs(id: string, mids: string[]): Promise<PlaylistMeta
     if (err instanceof UpstreamError && err.upstreamCode === 80092) writeError = err
     else throw err
   }
-  const after = await readMemberMids(id)
-  const missing = target.filter((mid) => !after.has(mid))
+  // 新歌通常追加在末尾：先只读回旧总数之后的尾部，避免为了确认一首歌重扫整单。
+  const tail = await readMembers(id, meta.songCount)
+  let missing = target.filter((mid) => !tail.mids.has(mid))
+  let confirmed = tail.meta
+  if (missing.length > 0) {
+    // 未在尾部找到（或 80092 表示重复）时再退回完整扫描。
+    const full = await readMembers(id, 0)
+    missing = target.filter((mid) => !full.mids.has(mid))
+    confirmed = full.meta
+  }
   if (missing.length > 0) {
     if (writeError) {
       throw new UpstreamError(
@@ -211,13 +249,13 @@ export async function addSongs(id: string, mids: string[]): Promise<PlaylistMeta
     }
     throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认添加结果，请稍后刷新')
   }
-  return readMeta(id)
+  return confirmed
 }
 
 export async function removeSongs(id: string, mids: string[]): Promise<PlaylistMeta> {
-  const before = await readMemberMids(id)
-  const target = [...new Set(mids.filter((mid) => mid && before.has(mid)))]
   const meta = await readMeta(id)
+  const target = [...new Set(mids.filter(Boolean))]
+  if (target.length === 0) return meta
   let writeError: unknown = null
   try {
     await writeDetail('DelSonglist', meta.id, playlistDirId(meta), target, '移除歌曲')
@@ -226,8 +264,8 @@ export async function removeSongs(id: string, mids: string[]): Promise<PlaylistM
     if (err instanceof UpstreamError && err.upstreamCode === 80092) writeError = err
     else throw err
   }
-  const after = await readMemberMids(id)
-  const remaining = target.filter((mid) => after.has(mid))
+  const after = await readMembers(id, 0)
+  const remaining = target.filter((mid) => after.mids.has(mid))
   if (remaining.length > 0) {
     if (writeError) {
       throw new UpstreamError(
@@ -239,7 +277,7 @@ export async function removeSongs(id: string, mids: string[]): Promise<PlaylistM
     }
     throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认移除结果，请稍后刷新')
   }
-  return readMeta(id)
+  return after.meta
 }
 
 /** 供收藏等需要真实 songType 的模块复用。 */
