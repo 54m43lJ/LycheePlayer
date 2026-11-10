@@ -315,6 +315,35 @@ describe('playlist feed refresh', () => {
     expect(store.feed?.songs).toHaveLength(0)
   })
 
+  it('prioritizes a heartbeat change over the five-minute retry timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      getSnapshotMock.mockResolvedValueOnce(ok(snapshot(songs(3))))
+      const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
+      const store = usePlaylistStore()
+      await store.load('liked')
+
+      getSnapshotMock.mockRejectedValueOnce(new Error('offline'))
+      await store.refresh('liked')
+      expect(store.feed?.stale).toBe(true)
+      expect(getSnapshotMock).toHaveBeenCalledTimes(2)
+
+      getSnapshotMock.mockResolvedValueOnce(ok(snapshot(songs(5))))
+      await store.poll('liked')
+
+      expect(getSnapshotMock).toHaveBeenCalledTimes(3)
+      expect(store.feed?.status).toBe('complete')
+      expect(store.feed?.stale).toBe(false)
+      expect(store.feed?.songs).toHaveLength(5)
+
+      await vi.advanceTimersByTimeAsync(PLAYLIST_REFRESH_RETRY_MS)
+      expect(getSnapshotMock).toHaveBeenCalledTimes(3)
+      store.stop('liked')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('replaces the feed atomically when polling detects a change', async () => {
     getSnapshotMock.mockResolvedValueOnce(ok(snapshot(songs(3))))
     const { usePlaylistStore } = await import('../src/renderer/stores/playlist')

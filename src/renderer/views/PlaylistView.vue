@@ -231,6 +231,30 @@ watch(
 
 let pollTimer: number | null = null
 
+function stopPolling(): void {
+  if (pollTimer === null) return
+  window.clearInterval(pollTimer)
+  pollTimer = null
+}
+
+function startPolling(): void {
+  if (pollTimer !== null) return
+  pollTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible' && id.value) {
+      void playlist.poll(id.value)
+    }
+  }, PLAYLIST_POLL_INTERVAL_MS)
+}
+
+function onVisibilityChange(): void {
+  if (document.visibilityState === 'visible') {
+    if (id.value) void playlist.poll(id.value)
+    startPolling()
+  } else {
+    stopPolling()
+  }
+}
+
 onMounted(() => {
   scrollRoot = pageRef.value?.closest<HTMLElement>('.main') ?? null
   scrollRoot?.addEventListener('scroll', updateJumpVisibility, { passive: true })
@@ -239,15 +263,13 @@ onMounted(() => {
     contentObserver.observe(pageRef.value)
   }
   updateJumpVisibility()
-  pollTimer = window.setInterval(() => {
-    if (document.visibilityState === 'visible' && id.value) {
-      void playlist.poll(id.value)
-    }
-  }, PLAYLIST_POLL_INTERVAL_MS)
+  document.addEventListener('visibilitychange', onVisibilityChange)
+  if (document.visibilityState === 'visible') startPolling()
 })
 
 onBeforeUnmount(() => {
-  if (pollTimer !== null) window.clearInterval(pollTimer)
+  stopPolling()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   scrollRoot?.removeEventListener('scroll', updateJumpVisibility)
   scrollRoot = null
   contentObserver?.disconnect()

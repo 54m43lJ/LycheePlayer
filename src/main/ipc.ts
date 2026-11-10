@@ -316,33 +316,25 @@ export function registerIpc(): void {
   })
   handle('playlist.listMine', async () => listMine())
   handle('playlist.create', async (name: unknown) => createPlaylist(stringArg(name, '歌单名', 128)))
-  handle('playlist.rename', async (id: unknown, name: unknown) => {
-    const result = await renamePlaylist(stringArg(id, '歌单 ID'), stringArg(name, '歌单名', 128))
-    await invalidatePlaylistCache(String(id))
-    return result
-  })
+  handle('playlist.rename', async (id: unknown, name: unknown) =>
+    renamePlaylist(stringArg(id, '歌单 ID'), stringArg(name, '歌单名', 128))
+  )
   handle('playlist.remove', async (id: unknown) => {
     await removePlaylist(stringArg(id, '歌单 ID'))
     await invalidatePlaylistCache(String(id))
     return null
   })
-  handle('playlist.addSongs', async (id: unknown, mids: unknown) => {
-    const result = await addSongs(stringArg(id, '歌单 ID'), midArray(mids))
-    await invalidatePlaylistCache(String(id))
-    return result
-  })
-  handle('playlist.removeSongs', async (id: unknown, mids: unknown) => {
-    const result = await removeSongs(stringArg(id, '歌单 ID'), midArray(mids))
-    await invalidatePlaylistCache(String(id))
-    return result
-  })
+  handle('playlist.addSongs', async (id: unknown, mids: unknown) =>
+    addSongs(stringArg(id, '歌单 ID'), midArray(mids))
+  )
+  handle('playlist.removeSongs', async (id: unknown, mids: unknown) =>
+    removeSongs(stringArg(id, '歌单 ID'), midArray(mids))
+  )
 
   handle('favorite.get', async (mids: unknown) => getFavoriteStates(midArray(mids)))
-  handle('favorite.toggle', async (mid: unknown) => {
-    const result = await toggleFavorite(stringArg(mid, '歌曲 mid'))
-    await invalidatePlaylistCache('liked')
-    return result
-  })
+  handle('favorite.toggle', async (mid: unknown) =>
+    toggleFavorite(stringArg(mid, '歌曲 mid'))
+  )
 
   handle('recommend.get', async (sectionId: unknown, token: unknown) =>
     runRecommendFetch(false, sectionId, token)
