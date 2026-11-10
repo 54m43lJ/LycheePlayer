@@ -31,7 +31,8 @@ async function centerActive(): Promise<void> {
 }
 
 watch(activeIndex, (index) => {
-  if (index >= 0 && !dragging.value) void centerActive()
+  // 按住歌词准备点击或拖拽时，不自动回中，避免和用户的手势抢滚动位置。
+  if (index >= 0 && !dragging.value && !pressing) void centerActive()
 })
 
 watch(
@@ -40,7 +41,8 @@ watch(
 )
 
 function onPointerDown(event: PointerEvent): void {
-  if (event.button !== 0 || !listRef.value) return
+  // 触屏交给原生滚动，保留惯性；自定义拖拽只处理鼠标 / 触控笔。
+  if (event.button !== 0 || event.pointerType === 'touch' || !listRef.value) return
   pressing = true
   dragging.value = false
   moved = 0
