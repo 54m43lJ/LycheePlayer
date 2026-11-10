@@ -1812,3 +1812,51 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comment-text` 的 `-webkit-line-clamp` 与 `overflow: hidden`，正文完整展示。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 评论正文完整展示、不截断；滚动到底加载更多。 |
 | `EVOLVE.md` | #5 | 改 | 补“长评论完整展示”与“使用 `LastCommentSeqNo` 游标分页”的要求。 |
+
+### 4.41 取消最旧排序，改为评论区跳转顶部 / 底部
+
+问题描述：按要求完全取消“最旧”排序，不再保留旧版评论接口与 `nextPage` 分页；评论区顶部只显示“评论”两个字。同时在右下角增加智能出现的独立圆形“跳转到顶部 / 跳转到底部”按钮，使用指向底线的箭头图标。点击“跳转到底部”时先一次性补拉全部剩余评论，再直接滚动到底部。顶部区域下方的分隔线去掉。
+
+解决方法：
+
+- 删除最旧排序：
+  - `CommentSort`、`nextPage`、`pageNo` 与旧版 `fcg_global_comment_h5.fcg` 请求全部移除；
+  - `comment.get` 只保留 `(songId, cursor?)`，继续使用 `LastCommentSeqNo` 游标；
+  - 工具栏删除“最新 / 最旧”切换，左侧替换为“评论”文本；
+- 新增跳转按钮：
+  - 在 `AppIcon` 增加 `to-top` / `to-bottom` 两个“箭头指向底线”的图标；
+  - 评论区右下角绝对定位两个独立圆形按钮，按滚动位置智能显示：
+    - `scrollTop > 120` 显示“跳转到顶部”；
+    - 还有下一页或未滚到底部时显示“跳转到底部”；
+  - 两个按钮分别执行平滑回顶、直接拉到底部；
+- “跳转到底部”补拉逻辑：
+  - 若仍有 `hasMore`，按 `loadMore()` 串行分页，直到没有下一页或达到 `COMMENT_LOAD_ALL_PAGE_MAX = 50` 页（约 1000 条）；
+  - 串行请求天然受全局限速约束，避免并发轰炸上游；
+  - 达到页数上限时提示“评论较多，已加载前 N 条”，避免热门歌曲无限拉取；
+  - 使用现有 `token` 作为取消标记：关闭歌词 / 评论弹出层（组件卸载）、切歌或刷新时立即让循环失效，不再发起后续页请求；
+  - 补拉完成后滚动到底部；按钮在补拉期间显示 spinner 并禁用；
+- 样式：
+  - `.comments-toolbar` 删除 `border-bottom`，去掉顶部区域下方分隔线；
+  - `.comments-title` 提供“评论”文本样式；
+  - `.comments-jump` / `.comments-jump-btn` 提供右下角圆形按钮、阴影与禁用态；
+  - `.comments-scroll` 底部 padding 增加到 72px，避免最后一条评论被按钮遮挡。
+
+验证：
+
+- 源码核对：评论区已无“最旧”分支与旧版评论接口；跳转循环在 `token` 变化后停止；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 88 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.1 `types.ts` / §4.2 `ipc.ts` | 改 | 删除 `CommentSort` / `nextPage` / `pageNo`；`comment.get(songId, cursor?)` 只保留最新评论游标。 |
+| `CORE.html` | §4.15 `api/comment.ts` | 改 | 删除最旧排序与旧版评论接口，只保留 `GetNewCommentList` + `LastCommentSeqNo`。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 工具栏改为“评论”；增加右下角跳转顶部 / 底部圆形按钮；跳转底部串行补拉剩余评论，最多 50 页，卸载 / 切歌 / 刷新时取消。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comments-toolbar` 下边框；增加 `.comments-title`、`.comments-jump`、`.comments-jump-btn`；调整 `.comments-scroll` 底部 padding。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `COMMENT_LOAD_ALL_PAGE_MAX = 50`。 |
+| `PROVIDER.html` | §4.3 `QqCommentList` | 改 | 删除最旧排序 / 旧版接口说明，只保留最新评论游标分页。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 删除最新 / 最旧排序，改为“评论”标题；增加右下角跳转顶部 / 底部按钮与跳转底部的补拉行为。 |
+| `EVOLVE.md` | #5 | 改 | 删除最旧排序要求；补跳转顶部 / 底部交互、补拉上限与取消约束。 |

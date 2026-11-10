@@ -362,14 +362,11 @@ export interface CommentLikeResult {
   likedCount: number;
 }
 
-export type CommentSort = 'hot' | 'latest' | 'oldest';
-
 export interface CommentPage {
   comments: Comment[];
   total: number;
   hasMore: boolean;
-  pageNo: number;
-  sort: CommentSort;
+  nextCursor?: string;
 }
 
 export interface ArtistDetail {
@@ -706,7 +703,7 @@ export interface FlagsFile {
     decryptQrc(ciphertext: string): string;
   };
   comment: {
-    get(songId: string, sort?: CommentSort, pageNo?: number): Promise&lt;IpcResult&lt;CommentPage&gt;&gt;;
+    get(songId: string, cursor?: string): Promise&lt;IpcResult&lt;CommentPage&gt;&gt;;
     like(commentId: string): Promise&lt;IpcResult&lt;CommentLikeResult&gt;&gt;;
     unlike(commentId: string): Promise&lt;IpcResult&lt;CommentLikeResult&gt;&gt;;
   };
@@ -911,16 +908,15 @@ export function isVipUser(): Promise&lt;boolean&gt;;
 <h3 id="c4-15">4.15 src/main/api/comment.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getComments(
   songId: string,
-  sort: CommentSort,
-  pageNo: number
+  cursor?: string
 ): Promise&lt;CommentPage&gt;;
 export function likeComment(commentId: string): Promise&lt;CommentLikeResult&gt;;
 export function unlikeComment(commentId: string): Promise&lt;CommentLikeResult&gt;;
 
 </code></pre>
 <ul class="note">
-  <li>评论读取固定匿名发送，不携带当前登录凭证；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
-  <li><code>latest</code> 使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）；<code>hot</code> 使用同模块 <code>GetHotCommentList</code>；<code>oldest</code> 在已加载评论上按 <code>createdAtMs</code> 升序本地重排。分页固定每页 20 条（上游单页上限 25，超过返回业务码 10000）。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。</li>
+  <li>评论读取未登录时匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>。<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
+  <li><code>latest</code> 使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。分页固定每页 20 条（上游单页上限 25，超过返回业务码 10000）。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留“最新”读取，不提供“最旧”排序。</li>
   <li>点赞使用 <code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code>，参数 <code>{ comment_id, type: 3 | 4, uin }</code>（3 点赞、4 取消）；需要登录，响应的 <code>data.code</code> / <code>msg</code> / <code>subcode</code> 全为 0 才算成功。成功后以读回评论的 <code>IsPraised</code> / <code>PraiseNum</code> 校正本地状态；失败抛错由渲染层回滚。</li>
 </ul>
 
@@ -1401,8 +1397,8 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li><a href="#c4-72">LyricsView</a> 右列的评论区；监听当前歌曲与路由激活状态，存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
-  <li>排序为 <code>hot</code> / <code>latest</code> / <code>oldest</code>，默认 <code>latest</code>；切换时若上游支持排序直接请求对应排序，否则在已加载评论上按 <code>createdAtMs</code> 本地重排。刷新只重载评论，不触发歌词重载。</li>
-  <li>分页每页 20 条；列表滚动到底且 <code>hasMore=true</code> 时加载下一页，追加后按当前排序重新整理。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
+  <li>顶部只显示“评论”标题、总数与刷新入口，不再提供“最新 / 最旧”排序切换。刷新只重载评论，不触发歌词重载。</li>
+  <li>分页每页 20 条，滚动到底且 <code>hasMore=true</code> 时按游标追加下一页。右下角按滚动位置显示独立圆形“跳转到顶部 / 底部”按钮：顶部按钮在 <code>scrollTop &gt; 120</code> 时出现；底部按钮在仍有下一页或未滚到底时出现。点击“跳转到顶部”平滑回顶；点击“跳转到底部”先串行补拉剩余评论（最多 <code>COMMENT_LOAD_ALL_PAGE_MAX = 50</code> 页），再直接滚到底部。补拉期间按钮显示 spinner；组件卸载、切歌或刷新时通过 token 立即取消后续页。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
   <li>评论行两行布局：第一行头像 + 昵称 + 正文（完整展示，不截断），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
 </ul>
 
@@ -1471,7 +1467,7 @@ const emit = defineEmits&lt;{
   <li>歌单底部 <code>.feed-footer</code> 使用 flex，<code>.spinner</code> 为 <code>inline-block</code> 且 <code>flex: none</code>；播放队列行网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，不包含专辑列，最后一列只容纳图标按钮。</li>
   <li>歌曲表操作列四个图标按钮在 <code>.song-action-inner</code> 内等距排列；≤900px 隐藏图标按钮、只显示 <code>more</code> 触发按钮。操作菜单为绝对定位浮层，项内“图标 + 文字”横排，点击外部或 Esc 关闭。</li>
   <li>播放模式菜单向上定位（<code>bottom: 100%</code>），当前模式项与菜单同圆角、与底部无空隙：高亮块由 <code>--accent-soft</code> 背景 + <code>--accent-strong</code> 文字构成，菜单项为纯图标按钮并保留 tooltip。</li>
-  <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。评论列表使用两行网格，正文完整展示、不使用行数截断。</li>
+  <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。评论列表使用两行网格，正文完整展示、不使用行数截断；<code>.comments-toolbar</code> 不画下边框，右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，滚动区底部留出按钮空间。</li>
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
   <li>≤900px 侧栏抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code> 平移，左侧阴影表现 revealer；打开时主内容按抽屉宽度右移。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
   <li>播放进度条下方叠加一条 2px 缓存进度线，位于播放进度与时间之间；使用独立的 accent 弱色，完成态显示满格 / 对勾，关闭缓存时整条隐藏；不改变播放进度线样式。</li>
@@ -1535,6 +1531,7 @@ export declare const LOGIN_ALLOWED_DOMAINS: readonly string[]; // qq.com / gtimg
 export declare const FAVORITE_STATUS_CACHE_MS: number;      // 30_000 ms
 export declare const VIP_CACHE_MS: number;                  // 5 × 60_000 ms
 export declare const COMMENT_PAGE_SIZE: number;             // 20；上游上限 25
+export declare const COMMENT_LOAD_ALL_PAGE_MAX: number;     // 50；跳转底部最多补拉 1000 条
 export declare const AUDIO_CACHE_MAX_BYTES: number;         // 2 GiB
 export declare const AUDIO_CACHE_DIR: string;               // 'audio'
 export declare const STARTUP_FLAGS_MAX_BYTES: number;       // 8 × 1024
