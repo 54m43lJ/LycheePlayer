@@ -666,7 +666,7 @@
 
 状态：已解决。
 
-### 3.8 筛选后的索引映射容易误删 / 误播
+### 3.8 筛选后的索引映射容易误删 / 误播 [已解决]
 
 问题描述：歌单筛选和队列筛选都会改变展示数组的下标。`SongTable` 的 emit 使用的是筛选后下标；如果把该下标直接传给播放队列或 `removeFromQueue`，会操作到真实队列里的另一首歌。队列筛选还要求“保留原始序号”，否则用户看到的序号会跳变。
 
@@ -683,6 +683,20 @@
 | `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 补筛选下标到歌曲对象 / 队列构建的映射规则。 |
 | `CORE.html` | §4.23 `App.vue` | 改 | 明确队列筛选保留原始 index 与移除语义。 |
 | `USER.html` | §5.2.9 播放队列 | 不动 | 移除行为由 #6 维护，见该节。 |
+
+实际操作（2026-11-11，分支 `doc/filter-index-mapping`）：
+
+- `CORE.html` §4.46 `PlaylistView.vue`：新增筛选下标映射规则：`SongTable` 的 `play` / `play-next` / `favorite` / `download` / `remove` / `add-to-playlist` 都回传筛选后下标，处理器必须先用 `filteredSongs.value[index]` 解析歌曲对象，再按对象调用 player / download / playlist-edit，禁止把筛选下标当作 `feed.songs` 或 `playOrder` 下标；“播放全部”只从筛选结果选起始歌曲，队列仍按完整歌单快照构建。
+- `CORE.html` §4.23 `App.vue`：补充 `filteredQueue` 的 `{ song, index }` 结构与下标语义：`index` 是当前曲之后的队列下标（显示为 `index + 1`），不是 `playOrder` 绝对下标；`removeFromQueue(queueIndex)` 负责加回当前曲偏移后删除 `playOrder` 中的正确歌曲，筛选不改变 `playOrder`、随机顺序与队列快照。
+- `USER.html` §5.2.9：按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/views/PlaylistView.vue`：`filteredSongs` 只用于展示；`startAt` / `addNextAt` / `toggleFavorite` / `downloadAt` / `removeAt` / `pickerMids` 均先经 `filteredSongs.value[index]` 取歌曲对象。
+- 对照 `src/renderer/App.vue` 与 `src/renderer/stores/player.ts`：`filteredQueue` 映射 `{ song, index }`；`removeFromQueue(queueIndex)` 按 `index.value + 1 + queueIndex` 删除，筛选态下不会误删其他歌曲。
+- `grep` 确认 §4.46 / §4.23 已写入上述映射与移除规则，`USER.html` §5.2.9 未改。
+
+状态：已解决。
 
 ### 3.9 评论“最旧”排序分页追加后会失去全局顺序（该排序后由 §4.41 取消）
 
