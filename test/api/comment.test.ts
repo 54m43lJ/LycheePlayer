@@ -126,6 +126,7 @@ describe('api/comment', () => {
 
     const { getComments } = await import('../../src/main/api/comment')
     const first = await getComments('123', '')
+    expect(params[0]?.PageSize).toBe(25)
     expect(first.nextCursor).toBe('1701807071952960512')
     expect(first.hasMore).toBe(true)
 
