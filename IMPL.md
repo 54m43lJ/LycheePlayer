@@ -185,7 +185,7 @@
 
 状态：已解决。
 
-### 2.2 下载文件命名与同名覆盖规则未定义
+### 2.2 下载文件命名与同名覆盖规则未定义 [已解决]
 
 > 后续修正：§4.23 已将下载文件命名改为 `downloadFileName()` 的“歌名-歌手-专辑”，仅三者完全相同的文件才会覆盖；本节关于 `safeName(song.name)` 与同名覆盖的规则是当时的临时方案。
 
@@ -204,6 +204,19 @@
 | `BUILD.html` | §11 存储 | 增 | 下载文件命名模板、非法字符处理、同名覆盖规则。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确 `downloadFileName` 的命名规则与仅完全相同曲目覆盖；`safeName` 仅用于入队占位路径。 |
 | `USER.html` | §5.3 错误与通知 | 不动 | 不新增错误码，行为由 #2 维护。 |
+
+实际操作（2026-11-10，分支 `doc/download-naming-template`）：
+
+- `BUILD.html` §11 存储：下载行补文件名模板 `歌名-歌手-专辑.<mp3|flac>`、多歌手顿号连接、缺失片段跳过、非法字符替换与空白压缩、全空回退 `audio`；明确只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖，入队占位路径使用 `songMid`，最终路径在出队时生成；同时把该行残留的批次描述改为单任务模型。
+- `CORE.html` §4.60 `download/manager.ts`：在 `downloadFileName` 说明中补多歌手顿号连接、仅完全相同曲目覆盖，以及 `safeName(songMid)` 只用于入队占位路径、最终路径在出队时生成。
+- `USER.html` §5.3：按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/download/manager.ts`：`downloadFileName` 使用“歌名-歌手-专辑”并用 `-` 连接，`cleanName` 过滤 `\ / : * ? " < > |`，出队时调用 `downloadFileName(resolved.name, resolved.singers, resolved.albumName)`；入队占位路径为 `safeName(songMid)`。
+- `BUILD.html` §11 下载行不再出现批次描述，命名与覆盖规则与代码一致。
+
+状态：已解决。
 
 ### 2.3 歌单写入的读回校验、重复添加与创建 ID 选择未定义
 
