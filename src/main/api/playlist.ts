@@ -166,7 +166,11 @@ async function requestPage(
 }
 
 /** 拉取歌单分页；分页只服务加载，缓存始终是整份歌单。 */
-export async function fetchPlaylistPage(id: string, offset: number): Promise<PlaylistPage> {
+export async function fetchPlaylistPage(
+  id: string,
+  offset: number,
+  signal?: AbortSignal
+): Promise<PlaylistPage> {
   if (!validId(id)) {
     throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
   }
@@ -175,7 +179,7 @@ export async function fetchPlaylistPage(id: string, offset: number): Promise<Pla
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单分页超出上限')
   }
   try {
-    return await requestPage(id, start, PLAYLIST_PAGE_SIZE)
+    return await requestPage(id, start, PLAYLIST_PAGE_SIZE, signal)
   } catch (err) {
     if (err instanceof UpstreamError && err.code === 'NO_PERMISSION') {
       await invalidatePlaylistCache(id)

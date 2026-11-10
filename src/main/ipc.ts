@@ -147,6 +147,32 @@ export function sendPlaybackToggle(): void {
 /** 正在执行的完整歌单拉取；取消时只中止匹配的请求标识。 */
 const playlistFetches = new Map<string, { token: number; controller: AbortController }>()
 
+/** 发现页只有一条推荐加载链；同 token 的成功结束不会删除新请求。 */
+const recommendFetches = new Map<string, { token: number; controller: AbortController }>()
+
+async function runRecommendFetch(
+  force: boolean,
+  sectionId: unknown,
+  token: unknown
+): Promise<unknown> {
+  const requestToken = numberArg(token, '刷新标识')
+  const current = recommendFetches.get('feed')
+  if (current && current.token !== requestToken) current.controller.abort()
+  const controller = new AbortController()
+  recommendFetches.set('feed', { token: requestToken, controller })
+  try {
+    return await fetchRecommendFeed(
+      force,
+      typeof sectionId === 'string' ? sectionId : undefined,
+      controller.signal
+    )
+  } finally {
+    if (recommendFetches.get('feed')?.token === requestToken) {
+      recommendFetches.delete('feed')
+    }
+  }
+}
+
 export function registerIpc(): void {
   // 104009 触发全局截断时，通知渲染层展示 toast；截断本身由上游请求入口执行。
   setUpstreamBlockNotifier((event) => broadcast('upstream:blocked', event))
@@ -318,10 +344,21 @@ export function registerIpc(): void {
     return result
   })
 
-  handle('recommend.get', async () => fetchRecommendFeed())
-  handle('recommend.refresh', async (sectionId: unknown) =>
-    fetchRecommendFeed(true, typeof sectionId === 'string' ? sectionId : undefined)
+  handle('recommend.get', async (sectionId: unknown, token: unknown) =>
+    runRecommendFetch(false, sectionId, token)
   )
+  handle('recommend.refresh', async (sectionId: unknown, token: unknown) =>
+    runRecommendFetch(true, sectionId, token)
+  )
+  handle('recommend.cancel', async (token: unknown) => {
+    const requestToken = numberArg(token, '刷新标识')
+    const current = recommendFetches.get('feed')
+    if (current?.token === requestToken) {
+      current.controller.abort()
+      recommendFetches.delete('feed')
+    }
+    return null
+  })
 
   handle('mv.search', async (keyword: unknown, pageNo: unknown) =>
     searchMv(stringArg(keyword, '关键词', 128), Number(pageNo) || 1)

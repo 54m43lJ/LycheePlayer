@@ -111,9 +111,11 @@ const api: LycheeApi = {
     toggle: (songMid: string) => invoke<FavoriteState>('favorite.toggle', songMid)
   },
   recommend: {
-    get: () => invoke<RecommendFeed>('recommend.get'),
-    refresh: (sectionId?: string) =>
-      invoke<RecommendFeed>('recommend.refresh', sectionId)
+    get: (sectionId: string | null, token: number) =>
+      invoke<RecommendFeed>('recommend.get', sectionId, token),
+    refresh: (sectionId: string | null, token: number) =>
+      invoke<RecommendFeed>('recommend.refresh', sectionId, token),
+    cancel: (token: number) => invoke<null>('recommend.cancel', token)
   },
   mv: {
     search: (keyword: string, pageNo: number) =>

@@ -93,6 +93,13 @@ export const RECENT_PLAYLIST_VALIDATE_MS = 5000
 
 /** 推荐分区缓存时长。推荐值 24 小时。 */
 export const RECOMMEND_CACHE_TTL_MS = 24 * 60 * 60_000
+/** 发现页分区顺序；渲染与主进程共用。 */
+export const RECOMMEND_SECTION_IDS = ['daily', 'radar', 'guess'] as const
+export const RECOMMEND_SECTION_TITLES = {
+  daily: '每日推荐',
+  radar: '专属雷达',
+  guess: '猜你喜欢'
+} as const
 /** 歌手 / 专辑歌曲单页条数；上游上限 100。 */
 export const CATALOG_PAGE_SIZE = 50
 
