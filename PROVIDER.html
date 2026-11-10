@@ -255,7 +255,7 @@
   <tr><td>搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code></td><td>按单曲 / 歌手 / 专辑 / 歌单搜索。单曲结果携带完整 <code>singer[{ mid, name }]</code>；fixture <code>test/fixtures/search-song.json</code> 验证两项字段均存在。</td></tr>
   <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code>、歌曲展示字段与真实 <code>songType</code>；<code>track_info.singer[]</code> 与搜索同结构，可能出现 <code>name</code> 有值而 <code>mid</code> 为空的条目。</td></tr>
   <tr><td>歌手详情</td><td><code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg</code></td><td>按 <code>singermid</code> 获取歌手名、简介、歌曲数与专辑数。</td></tr>
-  <tr><td>歌手歌曲</td><td><code>musichall.song_list_server / GetSingerSongList</code>（顶层节点 <code>singerSongList</code>）</td><td>按 <code>singerMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
+  <tr><td>歌手歌曲</td><td><code>musichall.song_list_server / GetSingerSongList</code></td><td>按 <code>singerMid</code> 分页获取歌曲；<code>musicu</code> 返回的 <code>req_0.data</code> 为扁平 <code>{ totalNum, songList }</code>，<code>singerSongList.data</code> 仅作为外层兼容形状；单页最多 100 首。</td></tr>
   <tr><td>专辑详情</td><td><code>music.musichallAlbum.AlbumInfoServer / GetAlbumDetail</code></td><td>按 <code>albumMid</code> 获取专辑名、发行日期、简介与歌手。</td></tr>
   <tr><td>专辑歌曲</td><td><code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code></td><td>按 <code>albumMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
   <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。</td></tr>
@@ -586,6 +586,9 @@ interface QqArtistInfo {
 }
 
 interface QqArtistSongData {
+  totalNum?: number;
+  songList?: Array&lt;{ songInfo?: QqSong }&gt;;
+  // 兼容外层包裹；其 data 与上面的扁平字段同构。
   singerSongList?: {
     data?: {
       totalNum?: number;
@@ -903,7 +906,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqArtistSongData</code> → <code>ArtistDetail.songs</code></td>
-    <td><code>singerSongList.data.songList[].songInfo</code> → <code>Song</code>；<code>totalNum → total</code>；<code>hasMore</code> 按已载入数与总数比较。</td>
+    <td>优先读取 <code>req_0.data.songList[].songInfo</code> 与扁平 <code>totalNum</code>；缺失时回退 <code>singerSongList.data</code> 包裹；<code>songInfo</code> → <code>Song</code>，<code>totalNum → total</code>；<code>hasMore</code> 按已载入数与总数比较。</td>
   </tr>
   <tr>
     <td><code>QqAlbumDetail</code> → <code>AlbumDetail</code></td>

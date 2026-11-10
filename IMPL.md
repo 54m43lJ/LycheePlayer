@@ -6,7 +6,7 @@
 
 ## 1. 开发中发现文档的错误
 
-### 1.1 歌手歌曲接口的响应层级与 PROVIDER 不一致
+### 1.1 歌手歌曲接口的响应层级与 PROVIDER 不一致 [已解决]
 
 问题描述：`PROVIDER.html` 的 `§4.1` 说歌手歌曲来自 `musichall.song_list_server / GetSingerSongList`，顶层节点是 `singerSongList`；`§4.3` 的 `QqArtistSongData` 又写成 `singerSongList.data.{totalNum,songList}`。但 `test/fixtures/singer-songs.json` 的 `req_0.data` 是扁平的 `{ singerMid, totalNum, songList }`，并没有 `singerSongList` 包裹。如果严格按文档取值，歌手页会永远显示空列表。
 
@@ -22,8 +22,23 @@
 |---|---|---|---|
 | `PROVIDER.html` | §4.1 歌手歌曲行 | 改 | 注明 `musicu` 返回的 `req_0.data` 为扁平 `{songList,totalNum}`，`singerSongList` 仅可能是外层兼容形状。 |
 | `PROVIDER.html` | §4.3 `QqArtistSongData` | 改 | 改为扁平模型，并补一句“兼容 `singerSongList.data` 包裹”。 |
-| `CORE.html` | §4.74 `api/artist.ts` | 改 | 记录双形状解析与 `songInfo` 映射。 |
+| `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录双形状解析与 `songInfo` 映射。 |
 | `EVOLVE.md` | #4 | 不动 | 响应模型以 PROVIDER 为主责，见本表前两行。 |
+
+实际操作（2026-11-10，分支 `docs/artist-song-response-shape`）：
+
+- `PROVIDER.html` §4.1 歌手歌曲行：删除“顶层节点 `singerSongList`”，改为 `req_0.data` 扁平 `{ totalNum, songList }`，并注明 `singerSongList.data` 仅为外层兼容形状。
+- `PROVIDER.html` §4.3 `QqArtistSongData`：改为扁平字段模型，保留可选 `singerSongList.data` 兼容包裹；同步更新 `QqArtistSongData → ArtistDetail.songs` 映射行。
+- `CORE.html` §4.75 `api/artist.ts`（原建议写 §4.74，实际章节为 §4.75）：记录 `const node = data.singerSongList?.data ?? data` 的扁平优先解析，以及 `songList[].songInfo` 统一经 `rawSongToSong` 映射。
+- `CORE.html` §5 歌手页调用树说明：把“歌曲来自 `singerSongList` 顶层节点”同步改为 `req_0.data` 扁平 `songList`，并注明兼容包裹。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/artist.ts`：`ArtistSongData extends ArtistSongNode`，`node = data.singerSongList?.data ?? data`；`songList[].songInfo` 统一走 `rawSongToSong`。
+- `grep singerSongList PROVIDER.html CORE.html` 后仅剩兼容说明，不再把 `singerSongList` 描述为唯一顶层节点。
+
+状态：已解决。
 
 ### 1.2 PROVIDER 的验证状态与 fixture 证据不一致
 
