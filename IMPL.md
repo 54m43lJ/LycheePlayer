@@ -1486,7 +1486,6 @@
 - 播放模式按钮已符合规则（点击 `cycleMode()` 循环，悬停展开其余模式）；音量条保持特殊个例：点击切换静音、悬停展开音量条、≤900px 才启用弹出滑块。
 - 样式约束同步：
   - USER §2 将 Revealer 约定扩展为交互与样式两部分：统一描述弹层向上展开、与按钮同宽对齐、按钮位于弹层底部并高于弹层、当前项由按钮表示、弹层使用面板底色与向上阴影、选项悬停使用 `--subtle-bg`、按钮不带边框；只描述行为 / 呈现，不写具体数值，也不规定悬停延迟；
-  - 明确尺寸（宽高、圆角、边框宽度、内边距、选项高度、间距等）不在约定内定义；
   - 音质 revealer 移除按钮边框；音质选项 hover 背景由 `--subtle-bg-strong` 改为 `--subtle-bg`，与播放模式一致。
 
 文档同步：
@@ -1507,7 +1506,7 @@
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `USER.html` | §2 CONVENTIONS · Revealer 统一交互与样式 | 增 | 统一描述 revealer 的行为 / 呈现；尺寸不定义；按钮不带边框，弹层选项 hover 使用 `--subtle-bg`；悬停延迟不规定。 |
+| `USER.html` | §2 CONVENTIONS · Revealer 统一交互与样式 | 增 | 统一描述 revealer 的行为 / 呈现；按钮不带边框，弹层选项 hover 使用 `--subtle-bg`；悬停延迟不规定。 |
 | `USER.html` | §2 播放模式切换 / §5.2.2 播放条 / §5.2.7 设置页 | 改 | 点击循环切换；音质包含自动档并与设置页共用偏好；空状态下音质仍可用。 |
 | `CORE.html` | §4.29 `stores/player.ts` / §4.30 `stores/settings.ts` | 改 | 增加共享音质选项、`qualityPreference`、`updateDefaultQuality`、`cycleQualityPreference` 与固定顺序约定。 |
 | `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放模式与音质按钮点击循环；音质弹层只列其余档位；revealer 样式契约引用 USER §2。 |
