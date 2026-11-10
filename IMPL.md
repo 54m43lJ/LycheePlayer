@@ -806,7 +806,7 @@
 
 ## 4. ISSUES 未决项修复记录
 
-### 4.1 播放条合并为单轨进度条并补齐缓冲进度
+### 4.1 播放条合并为单轨进度条并补齐缓冲进度 [已解决]
 
 问题描述：ISSUES 第一项指出播放条实际渲染成两条：播放进度用 `<input class="range">` 的渐变背景表示，缓存进度又在其下单独渲染一条 2px 细线，视觉上分成两行。同时该细线只消费主进程 `audioCache:progress` 的完整响应进度；一旦上游对 `Range` 请求返回局部 206，协议层不会上报进度，界面就长期没有缓冲呈现。ISSUES 要求改成同一条进度条：1 个背景 + 2 个 overlay，分别是缓冲进度与播放进度。
 
@@ -832,6 +832,25 @@
 | `CORE.html` | §4.29 `src/renderer/stores/player.ts` | 改 | 补 `bufferedMs` 状态、切歌清零与暴露给播放条。 |
 | `USER.html` | §5.2.3 播放条 · 进度条 | 改 | 描述单条进度条的背景 / 缓冲 / 播放三层结构；tooltip 改为“缓冲 N% / 缓存完成”。 |
 | `EVOLVE.md` | #3 播放条可视化缓存进度 | 改 | 把“进度条下方增加细缓存进度线”改为“在单条进度条内叠加缓冲 overlay”。 |
+
+实际操作（2026-11-11，分支 `doc/single-track-progress`）：
+
+- `CORE.html` §4.40 `PlayerBar.vue`：把原“播放进度条下方增加细缓存进度线”改为单轨 `.progress-track` 说明：背景 + `.progress-buffer` 缓冲 overlay + `.progress-played` 播放 overlay，透明 `.progress-range` 覆盖交互；缓冲取 `max(缓存进度, bufferedMs / totalMs)`，缓存关闭或局部 206 时由 `audio.buffered` 兜底；tooltip 区分“缓冲 N% / 缓存完成”，空状态保留灰轨且不渲染 overlay。
+- `CORE.html` §4.49 `styles/main.css`：删除 `.cache-progress` 细线描述，改为 `.progress-track` / `.progress-buffer` / `.progress-played` / `.progress-range` 单轨样式与 `--buffer` / `--accent` 用色。
+- `CORE.html` §4.27 `audio/engine.ts`：`AudioEngineHandlers` 补可选 `onBufferChange(bufferedMs)`；note 记录 `reportBuffered()` 读取 `audio.buffered` 最大 end，在 `progress` / `loadedmetadata` / `canplay` / `seeked` 上报、`emptied` 清零。
+- `CORE.html` §4.29 `stores/player.ts`：`PlayerStore` 补 `readonly bufferedMs`；note 说明由引擎回调写入、切歌清零，播放条与缓存进度取最大值绘制缓冲。
+- `USER.html` §5.2.3：把进度条描述改为单轨三层结构（背景 / 缓冲 / gold 播放），透明滑块覆盖轨道；tooltip 为“缓冲 N% / 缓存完成”；空状态改为保留 0 进度灰轨、不渲染 overlay。
+- `CORE.html` §5.18 音频缓存进度调用树 / note：把“更新缓存进度线”同步为“更新缓冲 overlay”，并说明已下载歌曲按 100%、下载任务进度不参与缓冲计算。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法处理。
+
+验证：
+
+- 对照 `src/renderer/components/PlayerBar.vue`：`bufferPercent = max(cachePercent, bufferedPercent)`，模板只渲染一个 `.progress-track`，内含 `.progress-buffer` / `.progress-played` 与透明 `.progress-range`；`bufferLabel` 返回“缓存完成”或“缓冲 N%”。
+- 对照 `src/renderer/audio/engine.ts`：`onBufferChange` 可选，`reportBuffered()` 绑定 `progress` / `loadedmetadata` / `canplay` / `seeked`，`emptied` 清零。
+- 对照 `src/renderer/stores/player.ts` 与 `src/renderer/styles/main.css`：`bufferedMs` 在切歌时清零并暴露；CSS 已无 `.cache-progress`，仅保留单轨四类选择器。
+- `grep` 确认 `CORE.html` / `USER.html` 不再把缓存进度描述为独立细线。
+
+状态：已解决。
 
 ### 4.2 播放模式改为“按钮即当前项”的 revealer
 
