@@ -31,7 +31,9 @@ function assertWrite(data: WriteResult, action: string): void {
   }
   throw new UpstreamError(
     'UPSTREAM_CHANGED',
-    `${action}失败：上游返回错误码 ${code}${data.msg ? `（${data.msg}）` : ''}`
+    `${action}失败：上游返回错误码 ${code}${data.msg ? `（${data.msg}）` : ''}`,
+    false,
+    code
   )
 }
 
@@ -39,6 +41,15 @@ function numericId(id: string): number {
   const value = Number(id)
   if (!Number.isFinite(value) || value <= 0) {
     throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
+  }
+  return value
+}
+
+/** 写入接口的 dirId 是当前账号下的目录 ID，与歌单 ID（tid/disstid）不是同一个值。 */
+function playlistDirId(meta: PlaylistMeta): number {
+  const value = Number(meta.dirId ?? 0)
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '无法确认歌单目录 ID，写操作已取消')
   }
   return value
 }
@@ -89,8 +100,8 @@ async function fetchTrackIdentities(
 async function writeDetail(
   method: 'AddSonglist' | 'DelSonglist',
   id: string,
+  dirId: number,
   mids: string[],
-  playlistName: string,
   action: string
 ): Promise<void> {
   const credential = getCredential()
@@ -101,10 +112,9 @@ async function writeDetail(
     'music.musicasset.PlaylistDetailWrite',
     method,
     {
-      dirId: numericId(id),
-      tid: 0,
+      dirId,
+      tid: numericId(id),
       bFmtUtf8: 1,
-      dirName: playlistName,
       v_songInfo: info
     }
   )
@@ -132,12 +142,17 @@ export async function createPlaylist(name: string): Promise<PlaylistMeta> {
   )
   const dirId = Number(data.result?.dirId ?? 0)
   const tid = Number(data.result?.tid ?? 0)
-  const id = String(dirId > 0 ? dirId : tid)
-  if (!/^\d+$/.test(id) || Number(id) <= 0) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '新建歌单响应缺少 dirId')
+  if (
+    !Number.isSafeInteger(dirId) ||
+    dirId <= 0 ||
+    !Number.isSafeInteger(tid) ||
+    tid <= 0
+  ) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '新建歌单响应缺少 dirId / tid')
   }
   return {
-    id,
+    id: String(tid),
+    dirId,
     name: data.result?.dirName || name,
     coverUrl: '',
     songCount: 0,
@@ -147,11 +162,12 @@ export async function createPlaylist(name: string): Promise<PlaylistMeta> {
 }
 
 export async function renamePlaylist(id: string, name: string): Promise<PlaylistMeta> {
+  const meta = await readMeta(id)
   await writeBase(
     'EditPlaylist',
     {
       bFmtUtf8: 1,
-      dirId: numericId(id),
+      dirId: playlistDirId(meta),
       dirNewName: name,
       dirShow: 1,
       mask: 1
@@ -162,9 +178,10 @@ export async function renamePlaylist(id: string, name: string): Promise<Playlist
 }
 
 export async function removePlaylist(id: string): Promise<void> {
+  const meta = await readMeta(id)
   await writeBase(
     'DelPlaylist',
-    { bFmtUtf8: 1, dirId: numericId(id), dirName: '' },
+    { bFmtUtf8: 1, dirId: playlistDirId(meta), dirName: meta.name },
     '删除歌单'
   )
 }
@@ -173,10 +190,25 @@ export async function addSongs(id: string, mids: string[]): Promise<PlaylistMeta
   const before = await readMemberMids(id)
   const target = [...new Set(mids.filter((mid) => mid && !before.has(mid)))]
   const meta = await readMeta(id)
-  await writeDetail('AddSonglist', id, target, meta.name, '添加歌曲')
+  let writeError: unknown = null
+  try {
+    await writeDetail('AddSonglist', meta.id, playlistDirId(meta), target, '添加歌曲')
+  } catch (err) {
+    // 80092：歌曲已存在等业务状态；以写后读回为准。
+    if (err instanceof UpstreamError && err.upstreamCode === 80092) writeError = err
+    else throw err
+  }
   const after = await readMemberMids(id)
   const missing = target.filter((mid) => !after.has(mid))
   if (missing.length > 0) {
+    if (writeError) {
+      throw new UpstreamError(
+        'UPSTREAM_CHANGED',
+        '添加歌曲未生效：上游返回 80092（歌曲可能已在歌单中或歌单状态已变化）',
+        false,
+        80092
+      )
+    }
     throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认添加结果，请稍后刷新')
   }
   return readMeta(id)
@@ -186,10 +218,25 @@ export async function removeSongs(id: string, mids: string[]): Promise<PlaylistM
   const before = await readMemberMids(id)
   const target = [...new Set(mids.filter((mid) => mid && before.has(mid)))]
   const meta = await readMeta(id)
-  await writeDetail('DelSonglist', id, target, meta.name, '移除歌曲')
+  let writeError: unknown = null
+  try {
+    await writeDetail('DelSonglist', meta.id, playlistDirId(meta), target, '移除歌曲')
+  } catch (err) {
+    // 80092：歌曲不存在等业务状态；以写后读回为准。
+    if (err instanceof UpstreamError && err.upstreamCode === 80092) writeError = err
+    else throw err
+  }
   const after = await readMemberMids(id)
   const remaining = target.filter((mid) => after.has(mid))
   if (remaining.length > 0) {
+    if (writeError) {
+      throw new UpstreamError(
+        'UPSTREAM_CHANGED',
+        '移除歌曲未生效：上游返回 80092（歌曲可能已不在歌单中或歌单状态已变化）',
+        false,
+        80092
+      )
+    }
     throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认移除结果，请稍后刷新')
   }
   return readMeta(id)

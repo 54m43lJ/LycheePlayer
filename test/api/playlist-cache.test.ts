@@ -137,11 +137,11 @@ describe('api/playlist cache', () => {
     const { fetchPlaylistPage } = await import('../../src/main/api/playlist')
 
     musicuMock.mockResolvedValueOnce({
-      dirinfo: { id: '123', title: '我的歌单', songnum: 1, owndir: 1 },
+      dirinfo: { id: '123', dirid: 456, title: '我的歌单', songnum: 1, owndir: 1 },
       songlist: []
     })
     await expect(fetchPlaylistPage('123', 0)).resolves.toMatchObject({
-      meta: { editable: true }
+      meta: { editable: true, dirId: 456 }
     })
 
     musicuMock.mockResolvedValueOnce({

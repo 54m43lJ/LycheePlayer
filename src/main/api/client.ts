@@ -358,5 +358,5 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError {
   if (loginMessages[code]) {
     return new UpstreamError('AUTH_EXPIRED', loginMessages[code])
   }
-  return new UpstreamError('UPSTREAM_CHANGED', `上游返回错误码 ${code}（${context}）`)
+  return new UpstreamError('UPSTREAM_CHANGED', `上游返回错误码 ${code}（${context}）`, false, code)
 }
