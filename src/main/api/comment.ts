@@ -1,8 +1,7 @@
 import type {
   Comment,
   CommentLikeResult,
-  CommentPage,
-  CommentSort
+  CommentPage
 } from '../../shared/types'
 import { COMMENT_PAGE_SIZE } from '../../shared/constants'
 import { getCredential } from '../credential'
@@ -57,15 +56,14 @@ function toComment(raw: RawComment): Comment {
   }
 }
 
-/** 歌曲评论；songId 为上游数字歌曲 ID。上游只提供最新评论，oldest 在本地重排。 */
+/** 歌曲评论；songId 为上游数字歌曲 ID。 */
 export async function getComments(
   songId: string,
-  sort: CommentSort = 'latest',
   cursor = ''
 ): Promise<CommentPage> {
   const id = songId.trim()
   if (!/^\d+$/.test(id)) {
-    return { comments: [], total: 0, hasMore: false, sort }
+    return { comments: [], total: 0, hasMore: false }
   }
 
   // 必须携带登录 Cookie，上游才会按当前用户返回 IsPraised；未登录时自动匿名。
@@ -94,20 +92,16 @@ export async function getComments(
   }
   const raw = list.Comments ?? []
   const nextCursor = String(raw.at(-1)?.SeqNo ?? '')
-  let comments = raw
+  const comments = raw
     .map(toComment)
     .filter((comment) => comment.id.length > 0 && comment.content.trim().length > 0)
     .slice(0, COMMENT_PAGE_SIZE)
-  if (sort === 'oldest') {
-    comments = comments.slice().sort((a, b) => a.createdAtMs - b.createdAtMs)
-  }
 
   return {
     comments,
     total: Number(list.Total ?? comments.length),
     hasMore: Boolean(list.HasMore) && /^\d+$/.test(nextCursor),
-    nextCursor,
-    sort
+    nextCursor
   }
 }
 

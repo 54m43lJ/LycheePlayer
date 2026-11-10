@@ -81,6 +81,8 @@ const ICONS: Record<string, string[]> = {
   fullscreen: ['M4 9V4h5', 'M20 9V4h-5', 'M4 15v5h5', 'M20 15v5h-5'],
   edit: ['M4 20h4l11-11-4-4L4 16v4z', 'M13.5 6.5l4 4'],
   speed: ['M12 20a8 8 0 1 1 8-8', 'M12 12l4-4', 'M4 20h16'],
+  'to-top': ['M5 4h14', 'M12 19V8', 'M7 12l5-5 5 5'],
+  'to-bottom': ['M5 20h14', 'M12 5v11', 'M7 11l5 5 5-5'],
   power: ['M12 4v8', 'M7.5 6.5a7 7 0 1 0 9 0']
 }
 

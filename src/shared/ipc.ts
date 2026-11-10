@@ -7,7 +7,6 @@ import type {
   AuthStatus,
   CommentLikeResult,
   CommentPage,
-  CommentSort,
   DownloadStorageInfo,
   DownloadTask,
   EmbedRect,
@@ -129,7 +128,7 @@ export interface LycheeApi {
     decryptQrc(ciphertext: string): string
   }
   comment: {
-    get(songId: string, sort?: CommentSort, cursor?: string): Promise<IpcResult<CommentPage>>
+    get(songId: string, cursor?: string): Promise<IpcResult<CommentPage>>
     like(commentId: string): Promise<IpcResult<CommentLikeResult>>
     unlike(commentId: string): Promise<IpcResult<CommentLikeResult>>
   }

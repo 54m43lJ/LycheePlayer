@@ -20,7 +20,7 @@ function respond(data: unknown): Response {
 }
 
 describe('api/comment', () => {
-  it('uses GetNewCommentList without WithHot and sorts oldest locally', async () => {
+  it('uses GetNewCommentList without WithHot for the latest comments', async () => {
     const requests: Array<{ method: string; param: Record<string, unknown> }> = []
     vi.stubGlobal('fetch', async (url: string | URL) => {
       const data = new URL(String(url)).searchParams.get('data')
@@ -51,14 +51,10 @@ describe('api/comment', () => {
     })
 
     const { getComments } = await import('../../src/main/api/comment')
-    const latest = await getComments('123', 'latest', '')
+    const latest = await getComments('123', '')
     expect(requests[0]?.method).toBe('GetNewCommentList')
     expect(requests[0]?.param.WithHot).toBeUndefined()
     expect(latest.comments.map((comment) => comment.id)).toEqual(['b', 'a'])
-
-    const oldest = await getComments('123', 'oldest', '')
-    expect(requests.at(-1)?.param.WithHot).toBeUndefined()
-    expect(oldest.comments.map((comment) => comment.id)).toEqual(['a', 'b'])
   })
 
   it('maps IsPraised / IsLiked to liked and reads comments with the login cookie', async () => {
@@ -91,7 +87,7 @@ describe('api/comment', () => {
     })
 
     const { getComments } = await import('../../src/main/api/comment')
-    const page = await getComments('123', 'latest', '')
+    const page = await getComments('123', '')
     expect(page.comments.map((comment) => comment.liked)).toEqual([true, true, false])
     expect(uin).toBe(100)
     expect(cookie).toContain('qm_keyst=key')
@@ -129,11 +125,11 @@ describe('api/comment', () => {
     })
 
     const { getComments } = await import('../../src/main/api/comment')
-    const first = await getComments('123', 'latest', '')
+    const first = await getComments('123', '')
     expect(first.nextCursor).toBe('1701807071952960512')
     expect(first.hasMore).toBe(true)
 
-    const second = await getComments('123', 'latest', first.nextCursor ?? '')
+    const second = await getComments('123', first.nextCursor ?? '')
     expect(params[1]?.LastCommentSeqNo).toBe('1701807071952960512')
     expect(params[1]?.PageNum).toBe(0)
     expect(second.comments.map((comment) => comment.id)).toEqual(['b'])
