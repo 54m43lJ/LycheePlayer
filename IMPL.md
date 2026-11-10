@@ -2109,12 +2109,12 @@
   - 单区失败只写 `errors[id]`，保留占位或已有内容；
   - `refreshSection` 只走指定分区；`cancel` 递增会话序号并调用主进程取消当前 token；`reset` 恢复占位。
 - `views/DiscoverView.vue`：登录后监听 `auth.loggedIn` 触发加载；删除整页 loading / 全局错误分支，改为每区骨架、单区错误与重试；顶部“换一批”仍刷新全部；卸载时调用 `recommend.cancel()`。
-- 新增 `components/DiscoverSkeleton.vue` 与 `.skeleton` / `.discover-skeleton*` 样式，按歌曲条与歌单卡片的真实尺寸绘制占位。
+- 新增 `components/DiscoverSkeleton.vue`：占位直接复用真实条目的 `.discover-strip` / `.discover-item` / `.card` / `.card-cover` / `.card-name` / `.card-sub` 布局类，只把内部内容换成 `.skeleton` 线块；歌曲固定 30 条、每日推荐固定 1 张歌单卡，`.discover-strip` 增加 176px 最小高度。此前自定义 skeleton 使用独立尺寸（卡片 150px 无内边距、额外的 margin-top 与不同的行高），所以替换时会出现卡片变窄、行高变化和整块下移；现在标题 / 刷新按钮固定在外层，内容区尺寸与真实内容一致。
 - 文档同步：
   - `GUIDELINES.md` 新增全局约束 #12：CONVENTIONS 只写通用规则，例外写在对应机制章节；
   - `CORE.html` §2 新增“页面请求生命周期”约定；§4.60 下载章节注明下载任务不随页面离开取消，是该约定的例外；
   - `USER.html` §2 新增页面骨架与离开停止加载的用户侧约定，并更新歌单缓存行为；
-  - `CORE.html` §4.53 / §4.62 / §4.68 / §5.13 与 `USER.html` §5.2.8 发现页行同步为骨架、逐区填充与取消行为。
+  - `CORE.html` §4.53 / §4.62 / §4.68 / §5.13 与 `USER.html` §5.2.8 发现页行同步为骨架、逐区填充与取消行为；骨架复用真实布局类，尺寸与内容一致。
 
 验证：
 

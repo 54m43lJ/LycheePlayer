@@ -92,6 +92,7 @@ onBeforeUnmount(() => recommend.cancel())
 
         <DiscoverSkeleton
           v-if="isPlaceholder(section) && !recommend.errors[section.id]"
+          :playlists="section.id === 'daily' ? 1 : 0"
         />
 
         <div v-else-if="isPlaceholder(section)" class="empty compact">
