@@ -1759,3 +1759,56 @@
 | `CORE.html` | §4.65 `composables/availability.ts` 附近 / §4.61 `stores/playlist.ts` | 改 | 说明写后刷新复用 `invalidate` + `poll`，不要在写操作内重复实现刷新或校验。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 添加 / 删除后歌单内容与计数由统一刷新流程更新；重复添加提示“已在歌单中”，未变化删除提示“歌曲不在歌单中”。 |
 | `EVOLVE.md` | #14 | 改 | 补“歌单写后刷新必须复用既有歌单刷新流程，不得在写接口内单独实现扫描 / 读回”的约束。 |
+
+### 4.40 评论区取消正文截断并修复分页游标
+
+问题描述：ISSUES 指出两条评论问题：
+
+- 太长的评论会被省略号截断；
+- 评论区加载更多不起作用。
+
+排查结论：
+
+- 截断来自 `styles/main.css` 后段 v2 覆盖规则：`.comment-text` 使用 `display: -webkit-box` + `-webkit-line-clamp: 2` + `overflow: hidden`，所有正文被强制限制为两行；
+- 加载更多来自分页参数误解：`getComments` 一直把 `PageNum` 当作页码传给 `GetNewCommentList`，但匿名实测 `PageNum = 0 / 1 / 2 / 3` 返回完全相同的第一页；
+- 上游真正的分页方式是 `LastCommentSeqNo` 游标，传入上一页最后一条评论的 `SeqNo` 才会返回下一页；
+- 评论 `SeqNo` 是 19 位整数，超过 `Number.MAX_SAFE_INTEGER`。普通 `JSON.parse` 会丢精度，游标一旦被四舍五入，可能重复返回上一页最后一条评论或产生重叠；
+- 上游单页会包含正文为空的记录，现有过滤逻辑会丢掉这些评论，因此下一页游标必须取原始最后一条评论的 `SeqNo`，不能取过滤后的最后一条。
+
+解决方法：
+
+- 删除 `.comment-text` 的两行 clamp，评论正文完整展示，仍保留自动换行与 `pre-wrap`；
+- 评论分页改为游标：
+  - `CommentPage` 新增可选 `nextCursor`；
+  - `comment.get` 的 IPC 第三参数由 `pageNo` 改为 `cursor`；
+  - `getComments(songId, sort, cursor)` 将游标传入 `LastCommentSeqNo`，`PageNum` 固定 0；
+  - `hasMore` 同时要求上游 `HasMore` 为真且 `nextCursor` 为非空数字；
+  - `CommentsPanel` 用 `cursor` 状态替代 `pageNo`，滚动到底时携带当前游标加载下一页；
+- 防止 `SeqNo` 精度丢失：
+  - `UpstreamRequest` / `MusicuOptions` 新增可选 `stringFields`；
+  - `upstreamRequest` 在 `JSON.parse` 前把指定字段的裸数字字面量改成字符串；
+  - 评论请求传入 `stringFields: ['SeqNo']`，`nextCursor` 始终为精确字符串；
+- 加载更多仍使用现有滚动到底触发，不新增按钮；追加后按评论 `id` 去重，最旧排序继续在合并结果上本地重排。
+
+验证：
+
+- 匿名实测同一歌曲（`BizId=97773`）：
+  - `PageNum = 0 / 1 / 2 / 3` 均返回相同第一页；
+  - `LastCommentSeqNo = 上一页最后一条 SeqNo` 返回下一页；
+  - 游标偏移 +1 会重复返回上一条，说明必须使用精确 `SeqNo`；
+- 新增回放测试：大整数 `SeqNo` 按字符串保留、第一页 `nextCursor` 正确、第二页请求携带 `LastCommentSeqNo`、`PageNum` 固定 0、`hasMore` 正确结束；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 88 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌曲评论行 / §4.3 `QqCommentList` | 改 | 增 `SeqNo` 字段；注明 `PageNum` 不生效，分页必须使用最后一条评论的 `SeqNo` 作为 `LastCommentSeqNo`，且 `SeqNo` 需按字符串保留精度。 |
+| `CORE.html` | §4.1 `types.ts` / §4.2 `ipc.ts` | 改 | `CommentPage` 增 `nextCursor`；`comment.get` 第三参数改为 `cursor`。 |
+| `CORE.html` | §4.15 `api/comment.ts` | 改 | `getComments` 使用 `LastCommentSeqNo` 游标，`PageNum` 固定 0；`hasMore` 需游标非空；`SeqNo` 通过 `stringFields` 保留精度。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 删除 `pageNo`，改用 `nextCursor`；滚动到底携带游标加载下一页；正文不截断。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comment-text` 的 `-webkit-line-clamp` 与 `overflow: hidden`，正文完整展示。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论正文完整展示、不截断；滚动到底加载更多。 |
+| `EVOLVE.md` | #5 | 改 | 补“长评论完整展示”与“使用 `LastCommentSeqNo` 游标分页”的要求。 |
