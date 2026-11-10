@@ -2188,3 +2188,29 @@
 |---|---|---|---|
 | `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 顶部只保留 muted 整体进度条，不显示数字 / 失败数量指示；失败数量仍在任务列表与筛选中体现。 |
 | `CORE.html` | 下载中心对应小节 | 改 | 删除 `.downloads-progress-count` 说明；进度条填充使用 `--muted`。 |
+
+### 4.51 下载页新增“全部开始”继续所有暂停任务
+
+问题描述：补充需求：下载页需要“全部开始”按钮，把所有暂停任务继续，并与任务筛选切换放在同一行右侧。
+
+解决方法：
+- `download/manager.ts` 新增 `resumeAllDownloads()`：遍历任务，只把 `paused` 置为 `pending`、清空错误并 `touchTask`；有变化时 `schedulePump()`，返回被继续任务的快照。`downloading` / `done` / `failed` 不受影响。
+- `ipc` / `preload` / `shared/ipc.ts` 新增 `download.resumeAll`，避免逐条任务 IPC。
+- `stores/download.ts` 新增 `resumeAll()`：一次调用主进程，替换返回的任务快照，并在有任务时启动轮询。
+- `DownloadsView.vue`：工具栏改为左右布局，左侧原筛选切换，右侧“全部开始”按钮；按钮在无暂停任务或请求进行中时禁用，请求中显示 spinner。
+- `styles/main.css`：`.downloads-toolbar` 改为 flex 两端对齐；筛选组去掉旧的上 / 左外边距，与按钮同行垂直居中。
+
+验证：
+- 新增 store 用例：`resumeAll()` 只调用一次 IPC，并把暂停任务更新为 `pending`；
+- `downloads-view` SSR 用例确认页面包含“全部开始”；
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 107 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 筛选切换同行右侧提供“全部开始”，继续所有暂停任务。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 新增 `resumeAllDownloads()`：只把 paused 置为 pending，并调度队列。 |
+| `CORE.html` | 下载中心对应小节 | 改 | 工具栏左筛选、右“全部开始”；无暂停任务时禁用。 |
