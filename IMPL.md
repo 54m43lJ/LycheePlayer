@@ -559,23 +559,43 @@
 
 状态：已解决。
 
-### 3.5 缓存转下载的硬链接会跨设备失败
+### 3.5 缓存转下载的硬链接会跨设备失败 [已解决]
+
+> 后续修正：硬链接方案已弃用。缓存与下载可能跨文件系统，硬链接的收益不足以抵消 `EXDEV` / 回退分支带来的复杂度；现在统一复制，复制失败直接回退网络下载。
 
 问题描述：“缓存达到最高档时本地转移”优先用硬链接。但缓存目录在 `userData`，下载目录可能在另一块磁盘或另一分区，`link()` 会抛 `EXDEV`。如果异常直接冒泡，任务会被标记失败；实际上复制文件即可完成转移。另外缓存文件可能在转移过程中被清理，失败后应回退网络下载而不是让任务停在失败态。
 
 
 解决方法：
-- `linkCachedAudio` 先 `link`，捕获任何失败后 `copyFile`；
-- 缓存转移整体包一层 try/catch，失败时把 `source` 改回 `network` 并继续正常下载；
+- 不再使用硬链接；缓存转下载统一 `copyFile`（`copyCachedAudio`）；
+- 复制失败时把 `source` 改回 `network` 并继续正常下载；
 - 只有网络下载失败才把任务标记 `failed`。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确硬链接失败复制、缓存转移失败回退网络下载。 |
-| `BUILD.html` | §11 存储 | 增 | 缓存与下载可能跨文件系统，说明硬链接优先 / 复制兜底。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确缓存转下载统一复制、不使用硬链接；复制失败回退网络下载。 |
+| `BUILD.html` | §11 存储 | 增 | 缓存与下载可能跨文件系统，说明统一复制 / 复制失败回退网络下载。 |
 | `EVOLVE.md` | #2 | 不动 | 转移规则见 #2，技术细节由 CORE / BUILD 主责。 |
+
+实际操作（2026-11-10，分支 `fix/cache-copy-only`）：
+
+- `src/main/cache/audio.ts`：删除 `link` 导入与硬链接分支；`linkCachedAudio` 重命名为 `copyCachedAudio`，统一 `copyFile`。
+- `src/main/download/manager.ts`：改用 `copyCachedAudio`；复制失败仍把 `source` 改回 `network` 并继续下载。
+- `test/download-manager.test.ts`：同步重命名 mock。
+- `CORE.html` §4.60 / §5.16：改为“统一复制缓存文件，不使用硬链接”。
+- `BUILD.html` §11 存储：改为“统一复制；复制失败时改回网络下载”。
+- `USER.html` §2 CONVENTIONS 缓存与下载：删除“优先硬链接，失败回退复制”，改为“复制缓存文件”。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- `grep -rn "linkCachedAudio\|await link(" src test` 无结果。
+- 对照 `src/main/cache/audio.ts`：`copyCachedAudio` 只调用 `copyFile`；`src/main/download/manager.ts` 在复制异常时把 `source` 改回 `network`。
+- `npm run typecheck` 通过；`npx vitest run test/download-manager.test.ts` 通过。
+
+状态：已解决。
 
 ### 3.6 旧窄屏 64px / 56px 常驻侧栏样式与抽屉冲突
 

@@ -1787,7 +1787,7 @@ export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
 <ul class="note">
   <li>任务状态机：<code>pending → downloading → done</code>；暂停把 <code>downloading</code> 置为 <code>paused</code> 并保留 <code>.part</code>；继续使用 <code>Range: bytes=&lt;已有字节&gt;-</code> 追加；失败置 <code>failed</code>，只允许用户手动继续。任务只带 <code>source: 'network' | 'cache'</code>，没有批次字段。</li>
   <li><code>startDownload</code> / <code>startDownloads</code> 共用 <code>enqueueTask</code>；整单入口按给定顺序去重、截到 <code>DOWNLOAD_QUEUE_MAX</code> 后逐首入队，已有同曲任务直接复用；该上限只作用于整单入队，<code>song.getUrls</code> 等单曲 IPC 仍受 <code>IPC_SONG_MIDS_MAX = 100</code> 限制，<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>。<code>pump</code> 按 <code>DOWNLOAD_CONCURRENCY = 1</code> 出队，歌曲名、歌手、专辑与音质在出队时解析。</li>
-  <li>缓存转移优先硬链接，失败回退复制；转移失败会把来源改回 <code>network</code> 并继续正常下载。播放取源固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”。</li>
+  <li>缓存转下载统一复制文件（<code>copyCachedAudio</code>），不使用硬链接；复制失败会把来源改回 <code>network</code> 并继续正常下载。播放取源固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”。</li>
   <li>下载索引只有 <code>{ tasks: DownloadTask[] }</code>，按账号隔离并放在 <code>downloadDir</code> 下：<code>.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>。只持久化 <code>done</code> / <code>paused</code> 任务；启动时 <code>downloading</code> / <code>pending</code> 统一转为 <code>paused</code>，已丢失文件的 <code>done</code> 任务会被丢弃。</li>
   <li><code>loadedScope</code> 保护未加载下载模块的退出：从未加载时 <code>flushDownloads</code> / <code>saveIndex</code> 直接返回，避免写出空索引覆盖旧记录；切换账号前先清掉旧定时器并把旧账号索引落盘；退出时使用同步 <code>writeFileSync</code> + <code>renameSync</code> 写 <code>.part</code> 后原子替换。</li>
   <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；文件名由 <code>downloadFileName</code> 按“歌名-歌手-专辑”生成，多个歌手用顿号连接，缺失片段跳过，非法字符替换为 <code>_</code>，全空回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队占位路径仍使用 <code>safeName(songMid)</code>，最终路径在出队时生成；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
@@ -2520,7 +2520,7 @@ views/DiscoverView::onBeforeUnmount()
     └── window.lychee.download.start(songMid, quality)
         └── ipc::handle('download.start')
             └── download/manager::startDownload(songMid, quality)
-                ├── 判断缓存达到最高可用档 → 本地转移（硬链接，失败回退复制）
+                ├── 判断缓存达到最高可用档 → 复制缓存文件（copyCachedAudio）
                 ├── 判断已有同曲任务 → 返回现有任务
                 ├── api/song::getStreamUrls([songMid], quality)
                 └── download/manager::writePart(url, filePath)
