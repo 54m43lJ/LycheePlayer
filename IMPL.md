@@ -2296,3 +2296,29 @@
 | `USER.html` | §5.2.3 播放条 | 改 | 已更新：收藏为特殊 revealer，弹层仅“加入歌单”。 |
 | `CORE.html` | §4.40 `PlayerBar.vue` / §4.78 `revealer-touch.ts` | 改 | 已更新：收藏 revealer、PlaylistPicker 接入与触屏手势实现。 |
 | `EVOLVE.md` | #5 / #11 | 改 | 补收藏特殊 revealer 与 revealer 触屏手势约束；音量条仍为特殊个例。 |
+
+### 4.55 音量 revealer 改按拖动距离 delta 调节
+
+问题描述：音量是 revealer 的特殊个例，触屏上不能像模式 / 音质那样按选项定位；需求是拖动音量按钮时按拖动距离的 delta 改变音量，且轻点仍切换静音。
+
+解决：
+- `PlayerBar.vue` 为音量按钮增加独立 Pointer Events 手势（仅 `pointerType === 'touch'`）：
+  - `pointerdown` 记录起始 Y 与起始音量，不立即改动；
+  - 移动超过 4px 才进入手势并捕获指针；窄屏下同步打开音量弹层；
+  - 音量按 `startVolume + (startY - clientY) / VOLUME_DRAG_RANGE` 计算，`VOLUME_DRAG_RANGE = 120` 表示拖动 120px 覆盖 0–1，结果夹紧到 0–1；
+  - 松开 / 取消后关闭窄屏音量弹层；滑动后的 click 在容器捕获阶段抑制，轻点仍切换静音。
+- `.volume-button` 增加 `touch-action: none`，避免手势被原生滚动打断。
+- 音量仍不使用 `useRevealerTouch` 的选项定位逻辑，保持特殊个例。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 107 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.3 播放条 | 改 | 已更新：音量触屏拖动按 delta 调节，120px 覆盖 0–1，轻点仍静音。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` / §4.78 | 改 | 已更新：音量特殊手势与 4px 阈值、delta 计算、click 抑制。 |
+| `EVOLVE.md` | #5 / #11 | 改 | 音量 revealer 的触屏例外改为“拖动距离 delta 调节”，不是无响应或绝对定位。 |

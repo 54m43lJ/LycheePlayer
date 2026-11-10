@@ -58,6 +58,13 @@ let volumeOpenTimer: number | null = null
 let volumeCloseTimer: number | null = null
 let likeOpenTimer: number | null = null
 let likeCloseTimer: number | null = null
+const VOLUME_DRAG_RANGE = 120
+let volumePressing = false
+let volumeActive = false
+let volumeStartY = 0
+let volumeStartValue = 0
+let volumePointerId: number | null = null
+let suppressVolumeClick = false
 let offCacheProgress: (() => void) | null = null
 
 const cache = ref<AudioCacheProgress | null>(null)
@@ -357,19 +364,31 @@ async function downloadCurrent(): Promise<void> {
   }
 }
 
-function openVolumeMenu(): void {
+function openVolumeMenu(immediate = false): void {
   if (!compact.value) return
   if (volumeCloseTimer !== null) {
     window.clearTimeout(volumeCloseTimer)
     volumeCloseTimer = null
   }
   if (volumeOpen.value) return
-  volumeOpenTimer = window.setTimeout(() => {
-    volumeOpen.value = true
+  if (volumeOpenTimer !== null) {
+    window.clearTimeout(volumeOpenTimer)
     volumeOpenTimer = null
-    qualityMenu.value = false
-    modeMenu.value = false
-  }, 120)
+  }
+  if (!immediate) {
+    volumeOpenTimer = window.setTimeout(() => {
+      volumeOpen.value = true
+      volumeOpenTimer = null
+      qualityMenu.value = false
+      modeMenu.value = false
+      likeMenu.value = false
+    }, 120)
+    return
+  }
+  volumeOpen.value = true
+  qualityMenu.value = false
+  modeMenu.value = false
+  likeMenu.value = false
 }
 
 function scheduleCloseVolumeMenu(): void {
@@ -390,6 +409,60 @@ function toggleMute(): void {
   } else {
     player.setVolume(lastVolume.value || 0.8)
   }
+}
+
+function onVolumePointerDown(event: PointerEvent): void {
+  if (event.pointerType !== 'touch') return
+  volumePressing = true
+  volumeActive = false
+  volumeStartY = event.clientY
+  volumeStartValue = volume.value
+  volumePointerId = event.pointerId
+}
+
+function onVolumePointerMove(event: PointerEvent): void {
+  if (!volumePressing || event.pointerId !== volumePointerId) return
+  if (!volumeActive) {
+    if (Math.abs(event.clientY - volumeStartY) <= 4) return
+    volumeActive = true
+    ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
+    openVolumeMenu(true)
+  }
+  const next = Math.min(
+    1,
+    Math.max(0, volumeStartValue + (volumeStartY - event.clientY) / VOLUME_DRAG_RANGE)
+  )
+  player.setVolume(next)
+  event.preventDefault()
+}
+
+function finishVolumeGesture(event: PointerEvent): void {
+  if (!volumePressing) return
+  const active = volumeActive
+  volumePressing = false
+  volumeActive = false
+  volumePointerId = null
+  if (!active) return
+  ;(event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId)
+  suppressVolumeClick = true
+  window.setTimeout(() => {
+    suppressVolumeClick = false
+  }, 0)
+  scheduleCloseVolumeMenu()
+}
+
+function onVolumePointerUp(event: PointerEvent): void {
+  finishVolumeGesture(event)
+}
+
+function onVolumePointerCancel(event: PointerEvent): void {
+  finishVolumeGesture(event)
+}
+
+function onVolumeClickCapture(event: Event): void {
+  if (!suppressVolumeClick) return
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 function toggleLyrics(): void {
@@ -731,6 +804,7 @@ watch(
         :class="{ open: volumeOpen }"
         @mouseenter="openVolumeMenu()"
         @mouseleave="scheduleCloseVolumeMenu()"
+        @click.capture="onVolumeClickCapture"
       >
         <div v-if="compact && volumeOpen" class="volume-menu" @click.stop>
           <div class="volume-slider">
@@ -756,6 +830,10 @@ watch(
           aria-haspopup="true"
           :aria-expanded="volumeOpen"
           @click.stop="toggleMute()"
+          @pointerdown="onVolumePointerDown"
+          @pointermove="onVolumePointerMove"
+          @pointerup="onVolumePointerUp"
+          @pointercancel="onVolumePointerCancel"
         >
           <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="17" />
         </button>

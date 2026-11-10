@@ -1395,7 +1395,8 @@ const emit = defineEmits&lt;{
   <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭；点击按钮本身按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换，键盘焦点可打开弹层，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
   <li>音质 revealer：按钮显示 <code>qualityPreference</code> 的短名称（<code>AUTO / 128K / 320K / FLAC</code>），点击调用 <code>player.cycleQualityPreference()</code> 按同一固定顺序循环；悬停 120ms 打开、离开 200ms 关闭，弹层只渲染除当前偏好外的其它档位，顺序与 <code>QUALITY_PREFERENCE_OPTIONS</code> 一致。选择调用 <code>player.updateDefaultQuality()</code>；弹层与播放模式 / 音量弹层互斥。</li>
   <li>收藏按钮为特殊 revealer：点击按钮调用 <code>playlist-edit.toggleFavorite()</code>；<code>likeWrap</code> 悬停 / 聚焦 120ms 打开、离开 200ms 关闭，弹层只有一个“加入歌单”图标按钮，点击后通过 <code>Teleport</code> 渲染 <code>PlaylistPicker</code> 并传入当前曲目 mid；没有模式切换。</li>
-  <li><code>useRevealerTouch</code> 为播放模式、音质与收藏三个 revealer 提供触屏手势：从按钮开始纵向滑动超过 8px 才打开弹层并捕获指针，按选项中点与手指 Y 距离高亮最近项；松开确认，取消则关闭；滑动后的 click 在容器捕获阶段抑制。轻点不触发手势，保留原有 click 行为。音量条为特殊个例，不参与该手势。</li>
+  <li><code>useRevealerTouch</code> 为播放模式、音质与收藏三个 revealer 提供触屏手势：从按钮开始纵向滑动超过 8px 才打开弹层并捕获指针，按选项中点与手指 Y 距离高亮最近项；松开确认，取消则关闭；滑动后的 click 在容器捕获阶段抑制。轻点不触发手势，保留原有 click 行为。</li>
+  <li>音量条为特殊个例：触屏在音量按钮上纵向拖动超过 4px 后进入手势，按 <code>(startY - clientY) / 120</code> 的 delta 叠加到起始音量并夹紧到 0–1，不按手指绝对位置定位；拖动时在窄屏打开音量弹层，松开后关闭。轻点仍切换静音，滑动后的 click 被抑制。</li>
   <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
 </ul>
 
