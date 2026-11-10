@@ -43,6 +43,8 @@ const lastVolume = ref(0.8)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 let modeOpenTimer: number | null = null
 let modeCloseTimer: number | null = null
+let qualityOpenTimer: number | null = null
+let qualityCloseTimer: number | null = null
 let volumeOpenTimer: number | null = null
 let volumeCloseTimer: number | null = null
 let offCacheProgress: (() => void) | null = null
@@ -96,9 +98,9 @@ const bufferLabel = computed(() => {
 })
 
 const qualityOptions: Array<{ value: Quality; label: string }> = [
-  { value: '128k', label: '标准 128k' },
-  { value: '320k', label: '高品质 320k' },
-  { value: 'flac', label: '无损 FLAC' }
+  { value: '128k', label: '128K' },
+  { value: '320k', label: '320K' },
+  { value: 'flac', label: 'FLAC' }
 ]
 
 const qualityLabel = computed(() => (quality.value === 'flac' ? 'FLAC' : quality.value.toUpperCase()))
@@ -107,6 +109,10 @@ const favorited = computed(() =>
 )
 const requestedQualityLabel = computed(() =>
   requestedQuality.value === 'flac' ? 'FLAC' : requestedQuality.value.toUpperCase()
+)
+/** 弹出层只展示“其它档位”；当前档位由常驻按钮本身表示。 */
+const otherQualities = computed(() =>
+  qualityOptions.filter((option) => option.value !== requestedQuality.value)
 )
 const asset = computed(() =>
   current.value ? download.assets[current.value.songMid] : undefined
@@ -142,6 +148,31 @@ function toggleQualityMenu(): void {
   }
 }
 
+function openQualityMenu(): void {
+  if (qualityCloseTimer !== null) {
+    window.clearTimeout(qualityCloseTimer)
+    qualityCloseTimer = null
+  }
+  if (qualityMenu.value) return
+  qualityOpenTimer = window.setTimeout(() => {
+    qualityMenu.value = true
+    qualityOpenTimer = null
+    volumeOpen.value = false
+    modeMenu.value = false
+  }, 120)
+}
+
+function scheduleCloseQualityMenu(): void {
+  if (qualityOpenTimer !== null) {
+    window.clearTimeout(qualityOpenTimer)
+    qualityOpenTimer = null
+  }
+  qualityCloseTimer = window.setTimeout(() => {
+    qualityMenu.value = false
+    qualityCloseTimer = null
+  }, 200)
+}
+
 function closeMenus(): void {
   if (modeOpenTimer !== null) {
     window.clearTimeout(modeOpenTimer)
@@ -150,6 +181,14 @@ function closeMenus(): void {
   if (modeCloseTimer !== null) {
     window.clearTimeout(modeCloseTimer)
     modeCloseTimer = null
+  }
+  if (qualityOpenTimer !== null) {
+    window.clearTimeout(qualityOpenTimer)
+    qualityOpenTimer = null
+  }
+  if (qualityCloseTimer !== null) {
+    window.clearTimeout(qualityCloseTimer)
+    qualityCloseTimer = null
   }
   if (volumeOpenTimer !== null) {
     window.clearTimeout(volumeOpenTimer)
@@ -306,6 +345,8 @@ onBeforeUnmount(() => {
   if (mediaListener) compactQuery.removeEventListener('change', mediaListener)
   if (modeOpenTimer !== null) window.clearTimeout(modeOpenTimer)
   if (modeCloseTimer !== null) window.clearTimeout(modeCloseTimer)
+  if (qualityOpenTimer !== null) window.clearTimeout(qualityOpenTimer)
+  if (qualityCloseTimer !== null) window.clearTimeout(qualityCloseTimer)
   if (volumeOpenTimer !== null) window.clearTimeout(volumeOpenTimer)
   if (volumeCloseTimer !== null) window.clearTimeout(volumeCloseTimer)
   offCacheProgress?.()
@@ -462,20 +503,26 @@ watch(
       >
         <AppIcon :name="downloadIcon" :size="17" />
       </button>
-      <div ref="qualityWrap" class="quality-wrap">
+      <div
+        ref="qualityWrap"
+        class="quality-wrap"
+        :class="{ open: qualityMenu }"
+        @mouseenter="openQualityMenu()"
+        @mouseleave="scheduleCloseQualityMenu()"
+      >
         <button
           class="quality-chip"
-          title="音质（本次请求档位）"
-          :disabled="!hasSong"
+          :title="hasSong ? '音质（本次请求档位）' : '音质（下次播放生效）'"
+          aria-haspopup="true"
+          :aria-expanded="qualityMenu"
           @click.stop="toggleQualityMenu()"
         >
           {{ requestedQualityLabel }}
         </button>
-        <div v-if="qualityMenu" class="quality-menu">
+        <div v-if="qualityMenu" class="quality-menu" @click.stop>
           <button
-            v-for="option in qualityOptions"
+            v-for="option in otherQualities"
             :key="option.value"
-            :class="{ active: option.value === requestedQuality }"
             @click="chooseQuality(option.value)"
           >
             {{ option.label }}
