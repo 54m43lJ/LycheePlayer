@@ -1662,7 +1662,7 @@ a {
   min-width: 52px;
   height: 24px;
   padding: 0 9px;
-  border: 1px solid var(--accent-line);
+  border: 0;
   border-radius: 6px;
   color: var(--accent-strong);
   background: var(--accent-soft);
@@ -1803,7 +1803,7 @@ a {
 }
 
 .quality-menu button:hover {
-  background: var(--subtle-bg-strong);
+  background: var(--subtle-bg);
   color: var(--text);
 }
 
