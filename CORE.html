@@ -1836,7 +1836,7 @@ export interface PlaylistFeed {
   <li>队列快照：<code>beginQueueBuild()</code> 标记来源；<code>setProbeState()</code> 在每次探测结果变化后尝试推进。最终快照要求 <code>complete &amp;&amp; !stale</code> 且所有歌曲元数据已就绪；之前只生成一次临时快照（优先整份缓存，其次当前已载入页）。最终快照与临时快照签名相同则保留现有队列（含手动插入歌曲），不同则 <code>replacePlaylistQueue</code> 替换。</li>
   <li><code>removeMembers(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code>、<code>sourceTotal</code> 与 <code>meta.songCount</code>，并写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后先调用它做乐观移除，写入失败时由调用方恢复原数组。</li>
   <li><code>recent</code> 按当前账号持久化到 <code>localStorage</code>（key 前缀见 <a href="#c4-50">§4.50</a>），最多 <code>RECENT_PLAYLIST_LIMIT</code> 条。<code>visit(meta)</code> 在进入歌单页时更新 <code>visitedAtMs</code> 并置顶，超出时淘汰最旧一条；<code>removeRecent</code> 移除条目，不补位。</li>
-  <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数；<code>NO_PERMISSION</code> / 歌单不存在时移除条目，其他失败标记 <code>stale</code> 并保留。</li>
+  <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数。<code>NO_PERMISSION</code> / <code>AUTH_EXPIRED</code> / <code>UPSTREAM_CHANGED</code> / 歌单不存在时移除条目且不补位；网络 / 超时等其余失败保留条目并标记 <code>stale</code>，展示缓存元数据。</li>
   <li>当前播放歌单高亮读取 <code>player.queueSource</code>：<code>{ kind: 'playlist', id }</code> 命中即高亮，播放与暂停状态一致；手动队列不高亮。</li>
 </ul>
 
@@ -2555,12 +2555,12 @@ views/DiscoverView::onBeforeUnmount()
     │   └── ipc::handle('playlist.get')
     │       └── api/playlist::fetchPlaylistPage(id, 0)
     │           └── api/client::musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', ...)
-    ├── 判断删除 / NO_PERMISSION → stores/playlist::removeRecent(id)
     ├── 判断成功 → 更新名称 / 封面 / 歌曲数并持久化
-    └── 判断失败 → 标记 stale，保留条目
+    ├── 判断 NO_PERMISSION / AUTH_EXPIRED / UPSTREAM_CHANGED → stores/playlist::removeRecent(id)  // 不补位
+    └── 判断其余失败 → 标记 stale，保留条目并展示缓存元数据
 </code></pre>
 <ul class="note">
-  <li>最近列表按账号隔离，最多 5 条；进入歌单页时 <code>visit(meta)</code> 更新并置顶，超出淘汰最旧一条。已删除或无权限的歌单移除后不从后续条目补位。</li>
+  <li>最近列表按账号隔离，最多 5 条；进入歌单页时 <code>visit(meta)</code> 更新并置顶，超出淘汰最旧一条。已删除、无权限、登录失效或上游结构变化时移除，且不从后续条目补位；网络等临时失败保留并标记 <code>stale</code>。</li>
   <li>校验只读取歌单元数据；优先整份缓存，缓存缺失才请求第一页。节流与单飞避免展开侧栏时重复请求。</li>
   <li>当前正在播放的歌单由播放器 <code>queueSource</code> 驱动高亮，播放 / 暂停都高亮，与当前路由无关。</li>
 </ul>

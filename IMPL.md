@@ -363,7 +363,7 @@
 
 状态：已解决。
 
-### 2.7 最近歌单校验失败分类与 `stale` 字段未定义
+### 2.7 最近歌单校验失败分类与 `stale` 字段未定义 [已解决]
 
 问题描述：文档要求“删除或无权限则移除，校验失败保留条目并标 stale”，但没有定义 `stale` 放在哪个类型字段、`AUTH_EXPIRED` 算删除还是保留、缓存存在但网络失败时用哪份元数据展示。实现若处理不一致，会出现登录过期后最近歌单被永久删掉，或已删除歌单一直残留。
 
@@ -382,6 +382,21 @@
 | `CORE.html` | §4.1 `types.ts` | 改 | `RecentPlaylist.stale?: boolean`。 |
 | `USER.html` | §2 CONVENTIONS 最近歌单 | 改 | 补校验失败时保留 / 移除的用户可见行为。 |
 | `EVOLVE.md` | #11 | 不动 | 实现细节由 CORE / USER 主责，见以上三行。 |
+
+实际操作（2026-11-10，分支 `doc/recent-playlist-stale`）：
+
+- `CORE.html` §4.61 `stores/playlist.ts`：补失败分类：`NO_PERMISSION` / `AUTH_EXPIRED` / `UPSTREAM_CHANGED` / 歌单不存在时移除且不补位；网络 / 超时等其余失败保留并标记 `stale`，展示缓存元数据；保留 5 秒节流 + 单飞。
+- `CORE.html` §4.1 `types.ts`：`RecentPlaylist.stale?: boolean` 已存在，内容与代码一致，无需改动。
+- `CORE.html` §5.17 最近歌单调用树：把移除条件补为 `NO_PERMISSION` / `AUTH_EXPIRED` / `UPSTREAM_CHANGED`，其余失败标记 `stale` 并展示缓存元数据。
+- `USER.html` §2 CONVENTIONS 最近歌单：补用户可见行为：已删除 / 无权限 / 登录失效 / 上游结构变化时移除且不补位；网络 / 超时等临时失败保留并标记失效，继续显示缓存元数据。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/stores/playlist.ts` 的 `validateRecent()`：`NO_PERMISSION` / `AUTH_EXPIRED` / `UPSTREAM_CHANGED` 走 `continue` 移除；其余错误使用 `cachedMeta ?? item` 并置 `stale: true`。
+- `RecentPlaylist.stale?` 与 `src/shared/types.ts` 一致。
+
+状态：已解决。
 
 ### 2.8 运行期依赖的发行版包名映射未定义
 
