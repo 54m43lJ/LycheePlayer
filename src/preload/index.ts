@@ -145,8 +145,8 @@ const api: LycheeApi = {
     decryptQrc
   },
   comment: {
-    get: (songId: string, sort?: CommentSort, pageNo?: number) =>
-      invoke<CommentPage>('comment.get', songId, sort, pageNo),
+    get: (songId: string, sort?: CommentSort, cursor?: string) =>
+      invoke<CommentPage>('comment.get', songId, sort, cursor),
     like: (commentId: string) => invoke<CommentLikeResult>('comment.like', commentId),
     unlike: (commentId: string) => invoke<CommentLikeResult>('comment.unlike', commentId)
   },

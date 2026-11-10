@@ -125,6 +125,8 @@ export interface CommentPage {
   comments: Comment[]
   total: number
   hasMore: boolean
+  /** 下一页游标（上游 LastCommentSeqNo）；为空表示没有下一页。 */
+  nextCursor?: string
   pageNo?: number
   sort?: CommentSort
 }

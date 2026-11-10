@@ -101,6 +101,8 @@ export interface UpstreamRequest {
   body?: string
   credential?: Credential | null
   timeoutMs?: number
+  /** 解析前把指定字段的数字字面量转成字符串，避免超过 Number 安全范围时丢精度。 */
+  stringFields?: string[]
 }
 
 function cookieHeader(credential: Credential | null): Record<string, string> {
@@ -195,6 +197,16 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+/** 把指定字段的裸数字改为字符串，保留超过 Number.MAX_SAFE_INTEGER 的精度。 */
+function stringifyNumberFields(text: string, fields: string[]): string {
+  let next = text
+  for (const field of fields) {
+    const pattern = new RegExp(`("${field}"\\s*:\\s*)(-?\\d+)`, 'g')
+    next = next.replace(pattern, '$1"$2"')
+  }
+  return next
+}
+
 /** 统一上游请求入口：Cookie 注入、超时与退避都在此完成。 */
 export async function upstreamRequest<T>(req: UpstreamRequest): Promise<T> {
   let lastError: unknown
@@ -208,7 +220,10 @@ export async function upstreamRequest<T>(req: UpstreamRequest): Promise<T> {
         throw new UpstreamError('UPSTREAM_NETWORK', '读取上游响应失败')
       }
       try {
-        return JSON.parse(text) as T
+        const parsed = req.stringFields?.length
+          ? stringifyNumberFields(text, req.stringFields)
+          : text
+        return JSON.parse(parsed) as T
       } catch {
         throw new UpstreamError('UPSTREAM_CHANGED', '上游响应不是合法 JSON')
       }
@@ -259,6 +274,8 @@ export interface MusicuOptions {
   credential?: Credential | null
   /** vkey 需要先尝试备用入口，104009 由调用方在两次失败后统一触发截断。 */
   deferBlock?: boolean
+  /** 解析前把指定字段的数字字面量转成字符串。 */
+  stringFields?: string[]
 }
 
 /** 调用 musicu.fcg 的单个 req_0 请求，返回其 data。 */
@@ -290,7 +307,8 @@ export async function musicu<T>(
       host: 'https://u.y.qq.com',
       path: '/cgi-bin/musicu.fcg',
       params: { data: JSON.stringify(payload) },
-      credential
+      credential,
+      stringFields: options.stringFields
     })
 
     const node = response.req_0

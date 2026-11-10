@@ -20,7 +20,7 @@ const SORTS: Array<{ value: CommentSort; label: string }> = [
 const comments = ref<Comment[]>([])
 const total = ref(0)
 const hasMore = ref(false)
-const pageNo = ref(0)
+const cursor = ref('')
 const sort = ref<CommentSort>('latest')
 const loading = ref(false)
 const loadingMore = ref(false)
@@ -50,30 +50,33 @@ async function load(reset = true): Promise<void> {
     const request = ++token
     loading.value = true
     error.value = ''
-    pageNo.value = 0
+    cursor.value = ''
     try {
-      const page = unwrap(await window.lychee.comment.get(id, sort.value, 0))
+      const page = unwrap(await window.lychee.comment.get(id, sort.value, ''))
       if (request !== token) return
       comments.value = page.comments
       total.value = page.total
       hasMore.value = page.hasMore
+      cursor.value = page.nextCursor ?? ''
     } catch (err) {
       if (request !== token) return
       comments.value = []
       total.value = 0
       hasMore.value = false
+      cursor.value = ''
       error.value = describeError(err)
     } finally {
       if (request === token) loading.value = false
     }
     return
   }
-  if (loadingMore.value || !hasMore.value) return
+  if (loadingMore.value || !hasMore.value || !cursor.value) return
   const request = token
   loadingMore.value = true
   try {
-    const nextPage = pageNo.value + 1
-    const page = unwrap(await window.lychee.comment.get(id, sort.value, nextPage))
+    const page = unwrap(
+      await window.lychee.comment.get(id, sort.value, cursor.value)
+    )
     if (request !== token) return
     const known = new Set(comments.value.map((comment) => comment.id))
     comments.value = [
@@ -85,7 +88,7 @@ async function load(reset = true): Promise<void> {
         .slice()
         .sort((a, b) => a.createdAtMs - b.createdAtMs)
     }
-    pageNo.value = nextPage
+    cursor.value = page.nextCursor ?? ''
     hasMore.value = page.hasMore
   } catch (err) {
     if (request === token) toast.error(describeError(err))

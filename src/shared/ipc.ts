@@ -129,7 +129,7 @@ export interface LycheeApi {
     decryptQrc(ciphertext: string): string
   }
   comment: {
-    get(songId: string, sort?: CommentSort, pageNo?: number): Promise<IpcResult<CommentPage>>
+    get(songId: string, sort?: CommentSort, cursor?: string): Promise<IpcResult<CommentPage>>
     like(commentId: string): Promise<IpcResult<CommentLikeResult>>
     unlike(commentId: string): Promise<IpcResult<CommentLikeResult>>
   }

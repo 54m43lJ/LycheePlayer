@@ -51,12 +51,12 @@ describe('api/comment', () => {
     })
 
     const { getComments } = await import('../../src/main/api/comment')
-    const latest = await getComments('123', 'latest', 0)
+    const latest = await getComments('123', 'latest', '')
     expect(requests[0]?.method).toBe('GetNewCommentList')
     expect(requests[0]?.param.WithHot).toBeUndefined()
     expect(latest.comments.map((comment) => comment.id)).toEqual(['b', 'a'])
 
-    const oldest = await getComments('123', 'oldest', 0)
+    const oldest = await getComments('123', 'oldest', '')
     expect(requests.at(-1)?.param.WithHot).toBeUndefined()
     expect(oldest.comments.map((comment) => comment.id)).toEqual(['a', 'b'])
   })
@@ -91,10 +91,53 @@ describe('api/comment', () => {
     })
 
     const { getComments } = await import('../../src/main/api/comment')
-    const page = await getComments('123', 'latest', 0)
+    const page = await getComments('123', 'latest', '')
     expect(page.comments.map((comment) => comment.liked)).toEqual([true, true, false])
     expect(uin).toBe(100)
     expect(cookie).toContain('qm_keyst=key')
+  })
+
+  it('uses LastCommentSeqNo as the next-page cursor and preserves large SeqNo precision', async () => {
+    const params: Array<Record<string, unknown>> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      params.push(payload.req_0?.param ?? {})
+      if (params.length === 1) {
+        return new Response(
+          '{"code":0,"req_0":{"code":0,"data":{"CommentList":{"Comments":[{"CmId":"a","Nick":"A","Content":"first","PubTime":100,"SeqNo":1701807071952960512}],"Total":40,"HasMore":1}}}}',
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      }
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'b', Nick: 'B', Content: 'second', PubTime: 90, SeqNo: '1701807071952960000' }
+              ],
+              Total: 40,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const first = await getComments('123', 'latest', '')
+    expect(first.nextCursor).toBe('1701807071952960512')
+    expect(first.hasMore).toBe(true)
+
+    const second = await getComments('123', 'latest', first.nextCursor ?? '')
+    expect(params[1]?.LastCommentSeqNo).toBe('1701807071952960512')
+    expect(params[1]?.PageNum).toBe(0)
+    expect(second.comments.map((comment) => comment.id)).toEqual(['b'])
+    expect(second.hasMore).toBe(false)
   })
 
   it('maps comment like success', async () => {
