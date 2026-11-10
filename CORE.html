@@ -1049,7 +1049,7 @@ export function destroyTray(): void;
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；展示行保留真实队列序号，移除操作使用真实队列下标。筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
-  <li>侧栏：宽屏固定 224px；≤900px 渲染覆盖式抽屉（<code>UiStore.sidebarOpen</code>），默认隐藏。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
+  <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
   <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），点击进入对应歌单，校验失败条目显示失效态；正在播放的歌单按 <code>player.queueSource</code> 高亮，与路由无关。</li>
 </ul>
 
@@ -1479,7 +1479,7 @@ const emit = defineEmits&lt;{
   <li>播放模式菜单向上定位（<code>bottom: 100%</code>），当前模式项与菜单同圆角、与底部无空隙：高亮块由 <code>--accent-soft</code> 背景 + <code>--accent-strong</code> 文字构成，菜单项为纯图标按钮并保留 tooltip。</li>
   <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。评论列表使用两行网格，正文完整展示、不使用行数截断；<code>.comments-toolbar</code> 不画下边框，右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，滚动区底部留出按钮空间。</li>
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
-  <li>≤900px 侧栏抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code> 平移，左侧阴影表现 revealer；打开时主内容按抽屉宽度右移。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
+  <li>≤900px 侧栏改为单列 grid + 覆盖式抽屉，不再保留 64px / 56px 常驻图标栏；抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code>，默认隐藏，打开时覆盖内容区并显示 backdrop，不压缩主内容。560px 只进一步收窄抽屉宽度。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
   <li>播放进度条下方叠加一条 2px 缓存进度线，位于播放进度与时间之间；使用独立的 accent 弱色，完成态显示满格 / 对勾，关闭缓存时整条隐藏；不改变播放进度线样式。</li>
   <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页每个分区使用 flexbox 横向排列固定宽度条目、纵向 3 行滚动，条目文本溢出时走跑马灯。</li>
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>

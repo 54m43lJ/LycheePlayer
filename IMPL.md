@@ -597,7 +597,9 @@
 
 状态：已解决。
 
-### 3.6 旧窄屏 64px / 56px 常驻侧栏样式与抽屉冲突
+### 3.6 旧窄屏 64px / 56px 常驻侧栏样式与抽屉冲突 [已解决]
+
+> 后续修正：旧的 64px / 56px 常驻图标栏规则已从样式表删除；900px 断点只保留单列 grid + 覆盖式抽屉，560px 只收窄抽屉宽度。
 
 问题描述：`main.css` 原有的 `@media (max-width: 900px)` 把侧栏收成 64px 常驻图标栏，`@media (max-width: 560px)` 又改成 56px，并把 `.nav-item` 的 `font-size` 设为 0。新方案要求窄屏改成默认隐藏的覆盖式抽屉，但旧规则仍会先命中；如果只改组件类名，抽屉会被压成一条图标栏，文字也消失。
 
@@ -605,15 +607,30 @@
 解决方法：
 - 在样式表末尾追加窄屏覆盖块，重新设置 `--sidebar-width: 0`、单列 grid、`position: fixed`、`transform: translateX(...)`；
 - 恢复抽屉内的 `.nav-item` 字号、间距、`.user-meta` 与 `.brand` 文本；
-- 把旧断点规则视为历史残留；当前样式表末尾的窄屏覆盖块仍依赖顺序覆盖 64px / 56px 常驻栏，尚未删除旧规则，后续清理时再收敛为单一 900px 抽屉规则。
+- 删除旧的 64px / 56px 常驻栏、隐藏文本与图标化规则；900px 只保留抽屉规则，560px 只收窄抽屉宽度。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.49 `styles/main.css` | 改 | 说明 900px / 560px 旧断点仍保留 64px / 56px 常驻栏规则，由末尾覆盖块改为抽屉；当前实现依赖样式顺序，删除旧规则需单独清理。 |
-| `CORE.html` | §4.23 `App.vue` | 改 | 补窄屏单列 grid、固定抽屉与 revealer 的组合关系。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 说明 900px / 560px 只保留单列 grid + 覆盖式抽屉；删除 64px / 56px 常驻栏规则。 |
+| `CORE.html` | §4.23 `App.vue` | 改 | 补窄屏单列 grid、固定抽屉与 revealer 的组合关系；抽屉覆盖内容区，不压缩主内容。 |
 | `USER.html` | §5.2.1 窗口与布局 | 不动 | 布局契约由 #11 维护，见 CORE 两行。 |
+
+实际操作（2026-11-10，分支 `doc/sidebar-drawer-rules`）：
+
+- `src/renderer/styles/main.css`：删除 `@media (max-width: 900px)` / `(max-width: 560px)` 中 64px / 56px 常驻图标栏、隐藏品牌文本 / 导航文字、`.nav-item` 字号归零与 `.user-meta` 隐藏规则；保留 560px 的 `.brand-mark` 尺寸与通用页面间距。抽屉规则由末尾覆盖块统一提供。
+- `CORE.html` §4.49：改为“900px 单列 grid + 固定覆盖式抽屉，560px 只收窄抽屉宽度；抽屉覆盖内容区，不压缩主内容”。
+- `CORE.html` §4.23：补单列 grid、固定抽屉、revealer 与覆盖式布局的关系。
+- `USER.html` §5.2.1：按原表“不动”未处理。
+
+验证：
+
+- `grep -n "64px\|56px" src/renderer/styles/main.css` 只剩非侧栏用途（如时长列宽、品牌尺寸等），不再有 `--sidebar-width: 64px/56px` 或 64/56 常驻栏 grid。
+- 末尾 `@media (max-width: 900px)` 设置 `--sidebar-width: 0`、单列 grid、`position: fixed` 抽屉；560px 只设置抽屉宽度与页面间距。
+- `npm run build` 通过。
+
+状态：已解决。
 
 ### 3.7 歌曲表内的链接 / 按钮会触发行双击播放
 
