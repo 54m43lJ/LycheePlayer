@@ -271,6 +271,11 @@ a {
   color: var(--accent-strong);
 }
 
+.sidebar-theme-toggle {
+  align-self: flex-start;
+  margin: 2px 0 0 4px;
+}
+
 .nav-item .badge {
   margin-left: auto;
 }

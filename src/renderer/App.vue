@@ -64,6 +64,19 @@ function quitApp(): void {
   window.lychee.system.quit()
 }
 
+function targetThemeLabel(): string {
+  return settings.settings.theme === 'light' ? '深色' : '浅色'
+}
+
+async function toggleTheme(): Promise<void> {
+  const theme = settings.settings.theme === 'light' ? 'dark' : 'light'
+  try {
+    await settings.update({ theme })
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err))
+  }
+}
+
 function onSidebarNavigate(): void {
   ui.closeLyrics()
   ui.closeSidebar()
@@ -265,6 +278,18 @@ watch(
         <button class="nav-item" type="button" title="退出 Lychee Player" @click="quitApp()">
           <AppIcon name="power" :size="18" />
           <span class="nav-text">退出</span>
+        </button>
+        <button
+          class="icon-btn sidebar-theme-toggle"
+          type="button"
+          :title="`切换到${targetThemeLabel()}模式`"
+          aria-label="切换配色"
+          @click="toggleTheme()"
+        >
+          <AppIcon
+            :name="settings.settings.theme === 'light' ? 'sun' : 'moon'"
+            :size="18"
+          />
         </button>
       </nav>
 
