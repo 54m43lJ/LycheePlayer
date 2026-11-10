@@ -128,10 +128,6 @@ onBeforeUnmount(() => downloads.setVisible(false))
     >
       <span :style="{ width: `${progress.percent}%` }" />
     </div>
-    <div class="downloads-progress-count">
-      ({{ progress.done }}/{{ progress.total }})
-      <template v-if="progress.failed > 0"> · 失败 {{ progress.failed }}</template>
-    </div>
 
     <div class="page">
       <div class="page-head">
