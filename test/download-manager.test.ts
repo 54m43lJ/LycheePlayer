@@ -7,13 +7,13 @@ const {
   getDetailMock,
   resolveStreamUrlsMock,
   getCachedAudioMock,
-  linkCachedAudioMock
+  copyCachedAudioMock
 } = vi.hoisted(() => ({
   downloadDir: '/tmp/opencode/lychee-download-manager-test',
   getDetailMock: vi.fn(),
   resolveStreamUrlsMock: vi.fn(),
   getCachedAudioMock: vi.fn(),
-  linkCachedAudioMock: vi.fn()
+  copyCachedAudioMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
@@ -43,7 +43,7 @@ vi.mock('../src/main/api/availability', () => ({
 vi.mock('../src/main/cache/audio', () => ({
   getCachedAudio: getCachedAudioMock,
   getCachedAudioInfo: () => null,
-  linkCachedAudio: linkCachedAudioMock
+  copyCachedAudio: copyCachedAudioMock
 }))
 
 afterAll(() => {
@@ -90,7 +90,7 @@ describe('download/manager queue', () => {
       new Map([['m9', { url: 'https://example.test/m9.flac', quality: 'flac' }]])
     )
     getCachedAudioMock.mockReturnValue('/tmp/opencode/m9.flac')
-    linkCachedAudioMock.mockImplementation(async (_mid, _quality, target: string) => {
+    copyCachedAudioMock.mockImplementation(async (_mid, _quality, target: string) => {
       mkdirSync(dirname(target), { recursive: true })
       writeFileSync(target, 'audio')
     })

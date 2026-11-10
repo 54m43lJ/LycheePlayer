@@ -2,9 +2,11 @@
 
 本文只记录实现 `doc/evol-2` 蓝图时暴露出的文档问题、未写明细节与技术坑，作为后续修订 `EVOLVE.md` / `PROVIDER.html` / `CORE.html` / `USER.html` / `BUILD.html` 的输入，不改写产品文档本身。
 
+阅读约定：同一事实若前后章节冲突，以较后的章节为准；与实现不一致时以 `src/` 代码为准。受后续修改影响的早期结论已在原节标注“后续修正”，避免把历史方案当成当前实现。
+
 ## 1. 开发中发现文档的错误
 
-### 1.1 歌手歌曲接口的响应层级与 PROVIDER 不一致
+### 1.1 歌手歌曲接口的响应层级与 PROVIDER 不一致 [已解决]
 
 问题描述：`PROVIDER.html` 的 `§4.1` 说歌手歌曲来自 `musichall.song_list_server / GetSingerSongList`，顶层节点是 `singerSongList`；`§4.3` 的 `QqArtistSongData` 又写成 `singerSongList.data.{totalNum,songList}`。但 `test/fixtures/singer-songs.json` 的 `req_0.data` 是扁平的 `{ singerMid, totalNum, songList }`，并没有 `singerSongList` 包裹。如果严格按文档取值，歌手页会永远显示空列表。
 
@@ -20,10 +22,25 @@
 |---|---|---|---|
 | `PROVIDER.html` | §4.1 歌手歌曲行 | 改 | 注明 `musicu` 返回的 `req_0.data` 为扁平 `{songList,totalNum}`，`singerSongList` 仅可能是外层兼容形状。 |
 | `PROVIDER.html` | §4.3 `QqArtistSongData` | 改 | 改为扁平模型，并补一句“兼容 `singerSongList.data` 包裹”。 |
-| `CORE.html` | §4.74 `api/artist.ts` | 改 | 记录双形状解析与 `songInfo` 映射。 |
+| `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录双形状解析与 `songInfo` 映射。 |
 | `EVOLVE.md` | #4 | 不动 | 响应模型以 PROVIDER 为主责，见本表前两行。 |
 
-### 1.2 PROVIDER 的验证状态与 fixture 证据不一致
+实际操作（2026-11-10，分支 `docs/artist-song-response-shape`）：
+
+- `PROVIDER.html` §4.1 歌手歌曲行：删除“顶层节点 `singerSongList`”，改为 `req_0.data` 扁平 `{ totalNum, songList }`，并注明 `singerSongList.data` 仅为外层兼容形状。
+- `PROVIDER.html` §4.3 `QqArtistSongData`：改为扁平字段模型，保留可选 `singerSongList.data` 兼容包裹；同步更新 `QqArtistSongData → ArtistDetail.songs` 映射行。
+- `CORE.html` §4.75 `api/artist.ts`（原建议写 §4.74，实际章节为 §4.75）：记录 `const node = data.singerSongList?.data ?? data` 的扁平优先解析，以及 `songList[].songInfo` 统一经 `rawSongToSong` 映射。
+- `CORE.html` §5 歌手页调用树说明：把“歌曲来自 `singerSongList` 顶层节点”同步改为 `req_0.data` 扁平 `songList`，并注明兼容包裹。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/artist.ts`：`ArtistSongData extends ArtistSongNode`，`node = data.singerSongList?.data ?? data`；`songList[].songInfo` 统一走 `rawSongToSong`。
+- `grep singerSongList PROVIDER.html CORE.html` 后仅剩兼容说明，不再把 `singerSongList` 描述为唯一顶层节点。
+
+状态：已解决。
+
+### 1.2 PROVIDER 的验证状态与 fixture 证据不一致 [已解决]
 
 问题描述：`PROVIDER.html` 顶部 note 仍写着“推荐、歌单创建 / 改名 / 删除与 MV 接口仍未完成 fixture 验证”，但 `§4.1 / §4.3` 已列出真实方法名，`EVOLVE.md` #14 也要求删除该 note。同时现有 fixture 并不能覆盖所有映射：`recommend-anonymous.json` 没有 `subtype:510` 的每日推荐卡片，`mv-search.json` 的 `mv.list` 为空，`mv-url.json` 的 `freeflow_url` / `url` 也都是空。文档同时存在“已落地”和“未验证”两种表述，且缺少对 fixture 覆盖范围的说明。
 
@@ -42,7 +59,27 @@
 | `EVOLVE.md` | #14 实现思路 | 改 | 把“完成 fixture 验证”细化为必须覆盖的字段清单，并允许记录“fixture 为空”的合法结论。 |
 | `CORE.html` | §4.53 / §4.55 / §4.56 | 不动 | 签名按 #14 验证结果维护，见本表前两行。 |
 
-### 1.3 EVOLVE #13 的实现入口清单不完整
+实际操作（2026-11-10，分支 `doc/provider-fixture-coverage`）：
+
+- `PROVIDER.html` §3.4 末尾 note：删除“推荐、歌单创建 / 改名 / 删除与 MV 接口仍未完成 fixture 验证”。
+- `PROVIDER.html` §4.1 note：补充“fixture 只覆盖部分映射、真实可用性以实际请求为准”，并链接到 §4.3 的覆盖说明。
+- `PROVIDER.html` §4.3 note：新增 fixture 覆盖范围、未覆盖字段与空 fixture 处理原则：
+  - 已用于回放测试：`search-song.json`、`singer-detail.json`、`singer-songs.json`、`album-detail.json`、`album-songs.json`、`mv-detail.json`、`comment-like.json`。
+  - 部分覆盖：`recommend-anonymous.json` 只用于 `RecommendFeed` 入口，缺少 `subtype:510` 每日推荐卡，每日推荐映射未覆盖；雷达 / 猜你喜欢由测试内联数据覆盖。
+  - 未覆盖：`mv-search.json` 的 `mv.list` 为空；`mv-url.json` 的 `freeflow_url` / `url` 为空。
+  - 仓库中存在但当前未被回放测试引用：`recommend-shelves.json`、`comment-list.json`、`playlist-write.json`，不计入已验证范围。
+  - 空 fixture 只按合法空结果处理；映射测试只锁定可回放字段，未覆盖字段以真实请求与代码防御分支为准。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+- `CORE.html` §4.53 / §4.55 / §4.56：按原表“不动”未处理。
+
+验证：
+
+- `grep "仍未完成 fixture 验证" PROVIDER.html` 无结果。
+- 对照 `test/api/*.test.ts` 与 `test/fixtures/`：覆盖清单与测试实际引用的 fixture 一致；空列表 / 空 URL 仅作为合法空结果记录。
+
+状态：已解决。
+
+### 1.3 EVOLVE #13 的实现入口清单不完整 [已解决]
 
 问题描述：`EVOLVE.md` #13 列出了 `mpv.ts`、`remote-engine.ts`、IPC、preload、types、constants、audio-protocol、player store、SettingsView、install.sh，但没有点名 `src/main/index.ts`（`stopMpv` 导入与 `before-quit`）、`src/main/settings.ts`（`audioEngine` 默认值与 sanitize）以及 `src/renderer/stores/settings.ts`（渲染进程默认设置）。如果只按清单逐项删除，类型检查仍会因为残留引用失败，或者设置页加载到已删除字段。
 
@@ -61,7 +98,22 @@
 | `CORE.html` | §4.6 `settings.ts` | 改 | 明确 `createDefaultSettings` 与 `sanitize` 都删除 `audioEngine`。 |
 | `CORE.html` | §4.5 `main/ipc.ts` | 不动 | 该节不列具体 IPC 通道，mpv handler 清理属于代码侧，见 #13。 |
 
-### 1.4 README.md 的同步约定与本次分支要求冲突
+实际操作（2026-11-10，分支 `doc/core-mpv-cleanup`）：
+
+- `CORE.html` §1 File tree note：明确 `src/main/audio/` 已随 mpv 方案删除、文件树不再保留该目录；`src/renderer/audio/` 只保留 `engine.ts`（HTML5 Audio 实现）。
+- `CORE.html` §4.6 `settings.ts` note：明确 `createDefaultSettings` 与 `sanitize` 都不再包含 `audioEngine`，旧字段不读取、不写回。
+- `CORE.html` §4.5 `main/ipc.ts`：按原表“不动”未处理。
+- `EVOLVE.md`：仓库中已不存在该文件，无法补充 #13 的实现入口清单。
+
+验证：
+
+- `src/main/audio/` 不存在；`src/renderer/audio/` 只有 `engine.ts`。
+- `grep -r "audioEngine\|mpv" src` 无结果；`src/main/settings.ts` 的 `createDefaultSettings` / `sanitize` 不再处理该字段。
+- `CORE.html` §1 note 与 §4.6 note 已写入上述约束。
+
+状态：已解决。
+
+### 1.4 README.md 的同步约定与本次分支要求冲突 [已解决]
 
 问题描述：`EVOLVE.md` §0 要求 `ABOUT.html` 与 `README.md` 同步，并规定“`README.md` 最终以 `ABOUT.html` 的转换结果为准”，各清单项的文档操作也反复要求“`README.md` 同步生成”。但本次任务明确要求删除 `README.md`；当时仓库里还保留 `convert-about.yml`，只要文档提交就会重新生成该文件。文档约定与分支目标直接冲突。
 
@@ -79,36 +131,70 @@
 | `GUIDELINES.md` | 文档边界 | 改 | 明确 ABOUT 的维护入口，避免各清单项继续要求生成 md。 |
 | `ABOUT.html` | 全文 | 不动 | 产品说明内容不变，只停止生成 Markdown 副本。 |
 
+实际操作（2026-11-10，分支 `doc/about-single-source`）：
+
+- `GUIDELINES.md` 文档边界：删除“`README.md` 是单独维护的项目首页”的表述，改为 `ABOUT.html` 是项目说明的唯一维护入口，本分支不保留 `README.md`。
+- `ABOUT.html`：按原表“不动”，产品说明内容未改。
+- `EVOLVE.md`：仓库中已不存在该文件，无法修改 §0 使用约定。
+- 仓库中 `README.md` 不存在；`.github/workflows/` 只剩 `release.yml`，没有会重新生成 Markdown 的 `convert-about.yml`。
+
+验证：
+
+- `README.md` 不存在。
+- `GUIDELINES.md` 中 `README.md` 只出现在“本分支不保留”的说明里，不再作为独立维护入口。
+- `grep -r "convert-about" .github` 无结果。
+
+状态：已解决。
+
 ## 2. 开发中发现文档没写明的细节
 
-### 2.1 下载任务 / 批次 / 索引缺少精确类型与持久化契约
+### 2.1 下载任务 / 索引缺少精确类型与持久化契约（批次模型后由 §4.15 取消） [已解决]
 
-问题描述：文档描述了 `DownloadTask.batchId`、`playlistId`、`source`、`DownloadBatch`、`SongAssetState` 与“按账号索引”，但没有给出 `source` 的枚举值、批次状态的派生规则、索引 JSON 的字段、哪些状态需要落盘，以及“清除已完成”对批次记录的处理。实现时这些都必须自行决定，否则主进程、preload 与 UI 三端无法对齐。
+> 后续修正：§4.15 已彻底取消下载批次模型，`DownloadBatch`、`batchId` / `playlistId`、`DownloadSource = 'batch'`、索引中的 `batches` 与批次状态派生都不再存在。下载索引只有 `{ tasks }`，任务来源只保留 `network` / `cache`；本节的批次结论以 §4.15 为准。
+
+问题描述：文档描述了 `DownloadTask.batchId`、`playlistId`、`source`、`DownloadBatch`、`SongAssetState` 与“按账号索引”，但没有给出 `source` 的枚举值、索引 JSON 的字段、哪些状态需要落盘，以及“清除已完成”对记录的处理。实现时这些都必须自行决定，否则主进程、preload 与 UI 三端无法对齐。
 
 
 解决方法：
-- 在 `shared/types.ts` 定义 `DownloadSource = 'network' | 'cache' | 'batch'`、`DownloadBatch`、`SongAssetState` 与扩展后的 `DownloadTask`；
-- 索引固定为 `{ tasks, batches }`，只持久化 `done` / `paused` 任务；启动时 `downloading/pending` 统一转为 `paused`；
-- 批次 `total/done/failed` 由实际任务实时重算，批次状态按“有活动任务 / 暂停 / 有失败 / 完成”派生；
-- `clearCompleted` 只删除已完成任务记录，不删除文件，也不删除批次记录本身。
+- 在 `shared/types.ts` 定义 `DownloadSource = 'network' | 'cache'`、`SongAssetState` 与 `DownloadTask`（批次类型后来由 §4.15 删除）；
+- 索引固定为 `{ tasks }`，只持久化 `done` / `paused` 任务；启动时 `downloading/pending` 统一转为 `paused`；
+- `clearCompleted` 只删除已完成任务记录，不删除文件；批次记录已随 §4.15 取消。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.1 `types.ts` | 增 | `DownloadSource`、`DownloadBatch`、`SongAssetState`、索引 JSON 结构。 |
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 补索引字段、批次状态派生、持久化状态与 `clearCompleted` 语义。 |
+| `CORE.html` | §4.1 `types.ts` | 增 | `DownloadSource`、`SongAssetState`、索引 JSON 结构；不再定义 `DownloadBatch`。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 补索引字段、持久化状态与 `clearCompleted` 语义；批次模型已由 §4.15 删除。 |
 | `USER.html` | §1 TERMS 下载任务 / 下载中心 | 不动 | 术语由 #2 维护，见 CORE 两行。 |
 | `EVOLVE.md` | #2 | 不动 | 类型契约以 CORE 为主责，避免与本文重复定义。 |
 
-### 2.2 下载文件命名与同名覆盖规则未定义
+实际操作（2026-11-10，分支 `doc/download-index-contract`）：
+
+- `CORE.html` §4.1 `types.ts`：新增 `DownloadSource = 'network' | 'cache'`、`DownloadIndex { tasks }`；`DownloadTask` 删除 `batchId` / `playlistId`，`source` 改为 `DownloadSource`；删除 `DownloadBatch`；`DownloadStorageInfo` 删除 `batchCount`。
+- `CORE.html` §4.60 `download/manager.ts`：签名改为 `listDownloads(): DownloadTask[]`、`startDownload` / `startDownloads`、`assetStates` 以及 `clearDownloadDirectory` / `findDownloadedAudio` 等当前函数；说明索引只有 `{ tasks }`、只持久化 `done` / `paused`、启动时未完成任务转 `paused`、`loadedScope` 保护、退出同步原子写、`clearCompleted` 只清记录等规则。
+- 为避免删除 `DownloadBatch` 后留下悬空引用，同步把 CORE 中直接依赖批次的章节改为无批次模型：§4.2 `download` IPC、§4.31 download store、§4.46 “下载全部”、§4.50 下载常量、§5.16 下载调用树与文件树注释。
+- `USER.html` §1 TERMS：按原表“不动”未处理。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- `grep "DownloadBatch\|startBatch\|pauseBatch\|resumeBatch\|removeBatch\|retryFailed\|DOWNLOAD_BATCH_MAX" CORE.html` 无结果。
+- `DownloadTask.source`、`DownloadIndex`、`DownloadStorageInfo` 与 `src/shared/types.ts` 一致；`listDownloads` / `startDownloads` / `assetStates` 等签名与 `src/main/download/manager.ts` 一致。
+- 索引只持久化 `done` / `paused`，启动时 `downloading` / `pending` 归一为 `paused`，与 `loadIndex` 实现一致。
+
+状态：已解决。
+
+### 2.2 下载文件命名与同名覆盖规则未定义 [已解决]
+
+> 后续修正：§4.23 已将下载文件命名改为 `downloadFileName()` 的“歌名-歌手-专辑”，仅三者完全相同的文件才会覆盖；本节关于 `safeName(song.name)` 与同名覆盖的规则是当时的临时方案。
 
 问题描述：文档只要求“文件放到 `downloadDir`”，没有规定文件名格式、歌手/歌名如何拼接、同名歌曲如何处理、是否允许覆盖已有文件。实现若直接使用歌名，遇到同名歌曲会互相覆盖；若加随机后缀，又会让用户难以在文件管理器里识别。
 
 
 解决方法：
-- 当前使用 `safeName(song.name) + 扩展名`，过滤文件系统非法字符并压缩空白；
-- 同名文件按覆盖处理，不做静默改名；
+- 当时使用 `safeName(song.name) + 扩展名`，过滤文件系统非法字符并压缩空白；该方案已由 §4.23 的“歌名-歌手-专辑”规则取代；
+- 同名文件按覆盖处理，不做静默改名；§4.23 之后仅“歌名 + 歌手 + 专辑”完全相同的文件才覆盖；
 - 在文档补齐规则前，不引入随机 UUID 后缀，避免下载目录不可读。
 
 修订建议：
@@ -116,35 +202,69 @@
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
 | `BUILD.html` | §11 存储 | 增 | 下载文件命名模板、非法字符处理、同名覆盖规则。 |
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确 `safeName` 规则与同名覆盖行为。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确 `downloadFileName` 的命名规则与仅完全相同曲目覆盖；`safeName` 仅用于入队占位路径。 |
 | `USER.html` | §5.3 错误与通知 | 不动 | 不新增错误码，行为由 #2 维护。 |
 
-### 2.3 歌单写入的读回校验、重复添加与创建 ID 选择未定义
+实际操作（2026-11-10，分支 `doc/download-naming-template`）：
+
+- `BUILD.html` §11 存储：下载行补文件名模板 `歌名-歌手-专辑.<mp3|flac>`、多歌手顿号连接、缺失片段跳过、非法字符替换与空白压缩、全空回退 `audio`；明确只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖，入队占位路径使用 `songMid`，最终路径在出队时生成；同时把该行残留的批次描述改为单任务模型。
+- `CORE.html` §4.60 `download/manager.ts`：在 `downloadFileName` 说明中补多歌手顿号连接、仅完全相同曲目覆盖，以及 `safeName(songMid)` 只用于入队占位路径、最终路径在出队时生成。
+- `USER.html` §5.3：按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/download/manager.ts`：`downloadFileName` 使用“歌名-歌手-专辑”并用 `-` 连接，`cleanName` 过滤 `\ / : * ? " < > |`，出队时调用 `downloadFileName(resolved.name, resolved.singers, resolved.albumName)`；入队占位路径为 `safeName(songMid)`。
+- `BUILD.html` §11 下载行不再出现批次描述，命名与覆盖规则与代码一致。
+
+状态：已解决。
+
+### 2.3 歌单写入的读回校验、重复添加与创建 ID 选择未定义 [已解决]
+
+> 后续修正：§4.35 修正了可编辑判定；§4.36 把 `id`（tid）与 `dirId` 分开，创建时必须同时返回两者；§4.39 又将写后读回 / 整单扫描移出写 API，`addSongs` / `removeSongs` 只返回 `{ changed }`，刷新统一由 `stores/playlist-edit.ts` 的 `refreshAfterWrite` 触发；§4.49 进一步规定内容写操作不删除歌单缓存。本节原有的 20 页读回、重复过滤与 `dirId` 回退 `tid` 等细节均已失效。
 
 问题描述：文档要求“写后读回或成员可见性校验”，但没有说明读回多少页、如何判断重复添加、创建接口同时返回 `dirId` / `tid` 时选哪个、`dirId:0` 时是否回退 `tid`。如果实现只读第一页，新增歌曲在歌单末尾时会永远校验失败；如果只认 `dirId`，创建可能拿不到有效 ID。
 
 
 解决方法：
-- 读回最多 20 页成员，按 `songMid` 建集合；
-- `addSongs` 先过滤已存在 mid，写后校验全部出现；`removeSongs` 写后校验全部消失；
-- 创建时优先取正整数 `dirId`，否则回退正整数 `tid`；
-- 添加到歌单的重复提示同时使用本地缓存成员集合与 `songCount` 是否变化判断。
+- 写接口不读回成员，也不做写前整单扫描；写后刷新由渲染层统一触发（§4.39）；
+- `addSongs` 只提交 `AddSonglist`，`removeSongs` 只提交 `DelSonglist`；80092 视为 `{ changed: false }`，其余错误继续抛出；
+- 创建时 `id = result.tid`、`dirId = result.dirId`，两者都必须为正整数；
+- 重复提示使用写接口返回的 `changed`，不再依赖本地成员集合或 `songCount` 变化。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `PROVIDER.html` | §4.1 歌单写入 / 歌单增删歌曲 | 改 | 补读回校验范围、重复添加判定与 `dirId` / `tid` 优先级。 |
-| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 记录 20 页读回上限、重复过滤、创建 ID 回退规则。 |
-| `EVOLVE.md` | #14 | 不动 | 写后校验细节由 CORE 主责，见上一行。 |
+| `PROVIDER.html` | §4.1 歌单写入 / 歌单增删歌曲 | 改 | 明确 `dirId` 与 `tid` 的区别；写后确认由 CORE 的刷新流程负责，不在写接口内读回。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 写 API 只负责写入并返回 `changed`；创建时 `id = tid`、`dirId = dirId`；写后刷新见 §4.39。 |
+| `EVOLVE.md` | #14 | 不动 | 写后刷新与 ID 契约由 CORE 主责，见上一行。 |
 
-### 2.4 评论点赞的返回结构、`liked` 来源与点赞数处理未定义
+实际操作（2026-11-10，分支 `doc/playlist-write-contract`）：
+
+- `PROVIDER.html` §3.4 收藏写入：把“写后必须读回状态与成员可见性”改为写接口只负责写入，写后刷新由 CORE 的统一歌单刷新流程负责。
+- `PROVIDER.html` §4.1 歌单写入 / 歌单增删歌曲：明确 `AddPlaylist` 的 `result.dirId` 是目录 ID、`result.tid` 是歌单标识；增删歌曲的 `dirId` / `tid` 不能混用；参数行删除未使用的 `dirName`。
+- `PROVIDER.html` §4.2 写操作成功判定：区分收藏写入的读回与普通歌单增删歌曲的渲染层刷新。
+- `PROVIDER.html` §4.3 `QqPlaylistWriteResult` 映射：补 `id = String(result.tid)`、`dirId = result.dirId`，两者不能互换。
+- `CORE.html` §4.55 `api/playlist-write.ts`：创建补 `id = tid` / `dirId = dirId` 与参数 `{ bFmtUtf8: 1, dirName }`；改名改为先读详情拿 `dirId`、成功后返回 `readMeta`；删除改为先读 `dirId`、删除后由主进程清缓存、渲染层重载；保留 `PlaylistMutationResult { changed }` 与 80092 语义。
+- `CORE.html` §4.61 `stores/playlist.ts`：把删除后的 `applyRemoval` 更正为当前 `removeMembers`，并补 `stop` / `refresh` / `clearRecent` 签名，使乐观移除与统一刷新流程一致。
+- `CORE.html` §5.14 歌单编辑调用树：添加歌曲改为 `fetchTrackIdentities` + `CgiGetTrackInfo`；删除改为本地乐观移除 + `refreshAfterWrite` 统一刷新，不再写后读回成员。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/playlist-write.ts`：`createPlaylist` 返回 `id: String(tid)`、`dirId`；`addSongs` / `removeSongs` 只提交写入并返回 `{ changed }`，80092 返回 `changed:false`；`renamePlaylist` / `removePlaylist` 先 `readMeta` 获取 `dirId`。
+- 对照 `src/renderer/stores/playlist-edit.ts`：`addSongs` / `removeSongs` 写后统一调用 `refreshAfterWrite(id)`。
+- `grep "写后读回成员可见性" CORE.html PROVIDER.html` 无结果。
+
+状态：已解决。
+
+### 2.4 评论点赞的返回结构、`liked` 来源与点赞数处理未定义 [已解决]
 
 问题描述：文档定义了 `CommentSort` 与评论列表映射，但评论模型里没有说明 `liked` 来自哪个上游字段；点赞接口只写了“返回最新点赞状态 / 数量”，fixture 里只有 `code/msg/subcode`，没有数量。实现必须自己决定 `liked` 的来源，以及点赞数为 0 时是否隐藏、失败回滚时如何恢复计数。
 
 
 解决方法：
-- 读取可选的 `IsLiked` 字段映射为 `Comment.liked`，字段缺失时按 `false`；
+- 读取可选的 `IsPraised` 字段映射为 `Comment.liked`，并保留 `IsLiked` 作为兼容回退，字段缺失时按 `false`；登录后携带凭证，未登录等价匿名（§4.7）；
 - `CommentLikeResult` 的 `likedCount` 设为可选；上游不返回数量时由前端乐观更新并在失败时回滚；
 - 点赞 / 取消点赞统一走 `UpdateHotComment`，`type` 3 / 4；
 - UI 在 `likedCount === 0` 时只显示按钮、不显示数字。
@@ -153,12 +273,29 @@
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `PROVIDER.html` | §4.3 `QqComment` | 改 | 增可选 `IsLiked` 字段及“缺失按未点赞处理”的说明。 |
+| `PROVIDER.html` | §4.3 `QqComment` | 改 | 增可选 `IsPraised` 字段（兼容 `IsLiked`）及“缺失按未点赞处理”的说明；登录后才按当前用户返回。 |
 | `CORE.html` | §4.1 `types.ts` | 改 | `Comment.liked?`、`CommentLikeResult.likedCount?`。 |
-| `CORE.html` | §4.15 `api/comment.ts` | 改 | 补点赞返回状态、数量缺失与类型映射。 |
+| `CORE.html` | §4.15 `api/comment.ts` | 改 | 补 `IsPraised → liked`、`IsLiked` 兼容回退、登录凭据与点赞数量缺失的映射。 |
 | `EVOLVE.md` | #5 / #14 | 不动 | 排序与点赞 UI 分别由 #5 / #14 维护，见对应项。 |
 
-### 2.5 推荐分区刷新返回范围与缓存存储未定义
+实际操作（2026-11-10，分支 `doc/comment-like-contract`）：
+
+- `PROVIDER.html` §4.3 `QqComment`：新增可选 `IsPraised` / `IsLiked`。
+- `PROVIDER.html` §4.3 `QqCommentList` 说明：消费字段补 `IsPraised` / `IsLiked`；明确 `IsPraised` 优先、`IsLiked` 兼容回退、两者缺失按未点赞，登录后才按当前用户返回。
+- `PROVIDER.html` §4.3 `QqCommentList → CommentPage` 映射：补 `IsPraised` / `IsLiked → liked`，缺失为 `false`。
+- `PROVIDER.html` §4.3 `QqCommentLikeResult → CommentLikeResult` 映射：明确上游不返回点赞数量，`likedCount` 为可选，前端乐观更新并在失败时回滚。
+- `CORE.html` §4.1 `types.ts`：`Comment.liked` 改为可选，`CommentLikeResult.likedCount` 改为可选。
+- `CORE.html` §4.15 `api/comment.ts`：补 `IsPraised → liked`、`IsLiked` 兼容回退、登录 Cookie 读取与点赞数量缺失语义；删除“以读回评论校正”的旧描述。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/comment.ts`：`liked: Number(raw.IsPraised ?? raw.IsLiked ?? 0) === 1`；`updateLike` 返回 `{ commentId, liked }`，不带数量；读取评论时携带当前凭证。
+- `Comment` / `CommentLikeResult` 与 `src/shared/types.ts` 一致。
+
+状态：已解决。
+
+### 2.5 推荐分区刷新返回范围与缓存存储未定义 [已解决]
 
 问题描述：文档新增了 `recommend.refresh(sectionId?)`，但没说明传入 `sectionId` 时是只返回该分区还是返回完整 feed，也没说明 24 小时缓存是内存缓存还是落盘、刷新失败时是否保留旧分区、空分区算合法结果还是错误。实现若猜错，渲染层会把其他分区覆盖成空。
 
@@ -178,14 +315,29 @@
 | `CORE.html` | §4.62 `stores/recommend.ts` | 改 | 补按分区合并与刷新失败处理。 |
 | `EVOLVE.md` | #14 | 不动 | 分区刷新细节由 CORE 主责，见以上三行。 |
 
-### 2.6 MV 降档后的 `quality` 语义与搜索分页未定义
+实际操作（2026-11-10，分支 `doc/recommend-section-cache`）：
+
+- `CORE.html` §4.2 `ipc.ts`：`recommend.get` / `recommend.refresh` 改为当前签名 `(sectionId: string | null, token: number)`，补 `recommend.cancel(token)`；note 明确已登录时传 `sectionId` 只加载并返回该分区，`null` 才返回完整 feed，未登录返回完整空分区用于登录引导。
+- `CORE.html` §4.53 `api/recommend.ts`：明确 24 小时缓存是进程内 `Map`、不落盘、`force` 绕过缓存；单分区失败保留旧 section，无旧缓存返回合法空分区；空分区不抛错；`AUTH_EXPIRED` 继续抛出，取消时抛中止错误且不继续填充后续分区。
+- `CORE.html` §4.62 `stores/recommend.ts`：明确 `refreshSection` 只请求指定分区、成功按 id 替换且不覆盖其他分区，失败只写 `errors[id]` 并保留原内容。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/recommend.ts`：`cache` 为 `Map`，`buildFeed` 按 `only ? [only] : RECOMMEND_SECTION_IDS` 处理；失败时 `sections.push(hit?.section ?? emptySection(id))`，`AUTH_EXPIRED` 继续抛出。
+- 对照 `src/renderer/stores/recommend.ts`：`fetchSection` 只替换返回的分区，`refreshSection` 只刷新指定 id。
+- `CORE.html` §4.2 / §4.53 / §4.62 与当前 token 取消接口一致。
+
+状态：已解决。
+
+### 2.6 MV 降档后的 `quality` 语义与搜索分页未定义 [已解决]
 
 问题描述：文档要求“默认最高清晰度，不可用时按 `fhd → hd → sd` 降档”，但没有说明返回的 `MvStream.quality` 表示请求档还是实际档；也没说明 MV 搜索与歌曲搜索是否共用 `pageNo`。如果返回请求档，UI 会高亮一个实际没取到的清晰度；如果分页各自为政，搜索页页码会错乱。
 
 
 解决方法：
 - `getMvStream` 返回实际采用的清晰度；`MvView` 的清晰度按钮跟随实际值高亮；
-- 请求档不可用时在 API 内降档，`url: null` 表示该档及以上都不可用；
+- 请求档不可用时在 API 内降档，`url: null` 表示从请求档起向下所有档位都不可用；
 - MV 搜索复用歌曲搜索的页码与每页条数，搜索结果只合并 `mvs`，不影响歌曲分页。
 
 修订建议：
@@ -196,7 +348,22 @@
 | `CORE.html` | §4.69 `MvView.vue` | 改 | 补按钮跟随实际清晰度与空流重试。 |
 | `USER.html` | §5.2.8 MV 播放 | 不动 | 用户交互由 #14 维护，见 CORE 两行。 |
 
-### 2.7 最近歌单校验失败分类与 `stale` 字段未定义
+实际操作（2026-11-10，分支 `doc/mv-quality-semantics`）：
+
+- `CORE.html` §4.56 `api/mv.ts`：明确成功时 `MvStream.quality` 是实际采用的档位，不是请求档；全部失败时返回请求档并令 `url: null`，表示从请求档起向下所有档位都不可用；补 MV 搜索与歌曲搜索共用页码 / 每页条数，搜索结果只合并 `mvs`。
+- `CORE.html` §4.69 `MvView.vue`：明确清晰度按钮跟随 `stream.quality` 实际档高亮，不跟随请求档；`url: null` 时展示失败重试。
+- `CORE.html` §4.70 `stores/mv.ts`：明确 `quality` 写回 `MvStream.quality`，成功为实际档、失败为请求档。
+- `USER.html` §5.2.8：按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/mv.ts`：`QUALITY_ORDER = fhd → hd → sd`，命中地址时返回 `{ quality: candidate, url }`，全部失败返回 `{ quality, url: null }`；`searchMv` 复用 `pageNo` 与搜索页大小。
+- 对照 `src/renderer/stores/mv.ts`：`quality.value = result.quality`。
+- `MvView` 的清晰度高亮条件为 `mv.quality === quality.value`。
+
+状态：已解决。
+
+### 2.7 最近歌单校验失败分类与 `stale` 字段未定义 [已解决]
 
 问题描述：文档要求“删除或无权限则移除，校验失败保留条目并标 stale”，但没有定义 `stale` 放在哪个类型字段、`AUTH_EXPIRED` 算删除还是保留、缓存存在但网络失败时用哪份元数据展示。实现若处理不一致，会出现登录过期后最近歌单被永久删掉，或已删除歌单一直残留。
 
@@ -216,7 +383,22 @@
 | `USER.html` | §2 CONVENTIONS 最近歌单 | 改 | 补校验失败时保留 / 移除的用户可见行为。 |
 | `EVOLVE.md` | #11 | 不动 | 实现细节由 CORE / USER 主责，见以上三行。 |
 
-### 2.8 运行期依赖的发行版包名映射未定义
+实际操作（2026-11-10，分支 `doc/recent-playlist-stale`）：
+
+- `CORE.html` §4.61 `stores/playlist.ts`：补失败分类：`NO_PERMISSION` / `AUTH_EXPIRED` / `UPSTREAM_CHANGED` / 歌单不存在时移除且不补位；网络 / 超时等其余失败保留并标记 `stale`，展示缓存元数据；保留 5 秒节流 + 单飞。
+- `CORE.html` §4.1 `types.ts`：`RecentPlaylist.stale?: boolean` 已存在，内容与代码一致，无需改动。
+- `CORE.html` §5.17 最近歌单调用树：把移除条件补为 `NO_PERMISSION` / `AUTH_EXPIRED` / `UPSTREAM_CHANGED`，其余失败标记 `stale` 并展示缓存元数据。
+- `USER.html` §2 CONVENTIONS 最近歌单：补用户可见行为：已删除 / 无权限 / 登录失效 / 上游结构变化时移除且不补位；网络 / 超时等临时失败保留并标记失效，继续显示缓存元数据。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/stores/playlist.ts` 的 `validateRecent()`：`NO_PERMISSION` / `AUTH_EXPIRED` / `UPSTREAM_CHANGED` 走 `continue` 移除；其余错误使用 `cachedMeta ?? item` 并置 `stale: true`。
+- `RecentPlaylist.stale?` 与 `src/shared/types.ts` 一致。
+
+状态：已解决。
+
+### 2.8 运行期依赖的发行版包名映射未定义 [已解决]
 
 问题描述：`BUILD.html §1` 只列了 GTK / libsecret / NSS / ALSA / D-Bus 这些库名，`install.sh` 却需要具体的发行版包名。文档没有给出 Arch 的 `pacman` 包名映射，脚本若猜错会安装失败或装到无关包。非 Arch 发行版的行为也需要明确。
 
@@ -234,9 +416,22 @@
 | `BUILD.html` | §5 curl 安装 | 改 | 说明脚本按该映射安装，检测不到 `pacman` 时跳过。 |
 | `EVOLVE.md` | #12 | 不动 | 包清单以 BUILD §1 为准，见上一行。 |
 
+实际操作（2026-11-10，分支 `doc/arch-runtime-packages`）：
+
+- `BUILD.html` §1 环境要求：新增 Arch 包名映射表：GTK → `gtk3`、libsecret → `libsecret`、NSS → `nss`、ALSA → `alsa-lib`、D-Bus → `dbus`；补 note 说明 `install.sh --with-deps` 只对检测到 `pacman` 的系统使用该映射，其他发行版需自行安装等价依赖。
+- `BUILD.html` §5 curl 安装：运行期依赖 note 补脚本按 §1 映射执行 `pacman -S --needed gtk3 libsecret nss alsa-lib dbus`，未检测到 `pacman` 时跳过并提示自行安装。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `install.sh`：`PKGS="gtk3 libsecret nss alsa-lib dbus"`，通过 `command -v pacman` 判断后执行 `pacman -S --needed`；未检测到时打印跳过提示。
+- `BUILD.html` §1 的五项映射与脚本包名一致。
+
+状态：已解决。
+
 ## 3. 其它技术上踩的坑
 
-### 3.1 退出时异步写索引被截断，且未加载下载模块会写空索引
+### 3.1 退出时异步写索引被截断，且未加载下载模块会写空索引 [已解决]
 
 问题描述：下载索引最初用异步 `writeFile` + 防抖落盘。`before-quit` 里 `void save()` 不会等待 Promise，进程退出后最后一批完成 / 暂停状态可能丢失。更严重的是：本次启动若从未打开下载模块，内存里没有任务，退出时仍会写出一份空索引，把上次的下载记录覆盖掉；切换账号时旧的防抖定时器也可能把旧账号任务写进新账号索引。
 
@@ -254,25 +449,53 @@
 | `BUILD.html` | §11 存储 | 增 | 索引 `.part` 原子替换、退出时同步写入的约束。 |
 | `EVOLVE.md` | #2 | 不动 | 持久化细节由 CORE / BUILD 主责，见以上两行。 |
 
-### 3.2 整单下载被单次 IPC 的 100 首上限挡住
+实际操作（2026-11-10，分支 `doc/download-index-atomic-save`）：
 
-问题描述：`download.startBatch` 的请求走 `midArray` 校验，而 `midArray` 默认上限是 `IPC_SONG_MIDS_MAX = 100`。整单下载允许最多 `DOWNLOAD_BATCH_MAX = 2000` 首，结果超过 100 首的歌单点击“下载全部”会直接被参数校验拒绝，而不是进入批次队列。
+- `CORE.html` §4.60 `download/manager.ts`：已在 §2.1 更新中写入 `loadedScope` 保护、退出同步 `writeFileSync` + `renameSync` 原子替换、切换账号前先落盘旧账号索引；本次核对与代码一致，无需再改。
+- `BUILD.html` §11 存储：下载行补索引生命周期约束：先写 `<index>.part` 再原子替换；退出时同步写盘；从未加载下载模块时不写空索引；切换账号前先把旧账号索引落盘。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/download/manager.ts`：`flushDownloads()` 使用 `writeFileSync` + `renameSync`；`saveIndex()` / `flushDownloads()` 均有 `if (!loadedScope) return`；切换账号流程先落盘旧索引。
+- `BUILD.html` §11 与 CORE §4.60 对索引原子写、退出同步写、空索引保护的描述一致。
+
+状态：已解决。
+
+### 3.2 整单下载被单次 IPC 的 100 首上限挡住 [已解决]
+
+> 后续修正：§4.15 已将 `download.startBatch` 改为 `download.startMany`，常量 `DOWNLOAD_BATCH_MAX` 更名为 `DOWNLOAD_QUEUE_MAX`；“整单入队上限与单曲 IPC 上限分离”的结论不变。
+
+问题描述：`download.startMany` 的请求走 `midArray` 校验，而 `midArray` 默认上限是 `IPC_SONG_MIDS_MAX = 100`。整单下载允许最多 `DOWNLOAD_QUEUE_MAX = 2000` 首，结果超过 100 首的歌单点击“下载全部”会直接被参数校验拒绝，而不是进入统一队列。
 
 
 解决方法：
-- `download.startBatch` 单独使用 `DOWNLOAD_BATCH_MAX` 作为 `midArray` 上限；
-- `song.getUrls` / `song.probe` 等仍保持 100 首限制；
-- 渲染层资产查询按 100 首分块，批次创建不按 100 分块。
+- `download.startMany` 单独使用 `DOWNLOAD_QUEUE_MAX` 作为 `midArray` 上限；
+- `song.getUrls` 等仍保持 100 首限制；`song.probe` 使用 `PROBE_MIDS_MAX = 50`；
+- 渲染层资产查询按 100 首分块，整单入队不按 100 分块。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.2 `ipc.ts` | 改 | 逐通道列出批量上限：批次用 `DOWNLOAD_BATCH_MAX`，播放链接 / 探测仍用 100。 |
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确批次上限与单曲 IPC 上限分离。 |
-| `EVOLVE.md` | #1 | 不动 | 批次能力见 #2，上限由 CORE 主责。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | 逐通道列出批量上限：整单入队用 `DOWNLOAD_QUEUE_MAX`，播放链接等仍用 100，探测用 `PROBE_MIDS_MAX = 50`。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确整单入队上限与单曲 IPC 上限分离。 |
+| `EVOLVE.md` | #1 | 不动 | 整单下载能力见 #2，上限由 CORE 主责。 |
 
-### 3.3 资产状态查询触发上游探测风暴
+实际操作（2026-11-10，分支 `doc/download-queue-limit`）：
+
+- `CORE.html` §4.2 `ipc.ts`：新增批量上限说明：`download.startMany` 的 `midArray` 上限为 `DOWNLOAD_QUEUE_MAX = 2000`；`song.getUrls`、`playlist.addSongs` / `removeSongs`、`favorite.get` 等其余 mid 数组使用 `IPC_SONG_MIDS_MAX = 100`；`song.probe` 使用 `PROBE_MIDS_MAX = 50`，渲染层探测调度也按 50 分批。
+- `CORE.html` §4.60 `download/manager.ts`：明确 `DOWNLOAD_QUEUE_MAX` 只作用于整单入队，`song.getUrls` 等单曲 IPC 仍受 `IPC_SONG_MIDS_MAX = 100` 限制，`song.probe` 使用 `PROBE_MIDS_MAX = 50`。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/ipc.ts`：`download.startMany` 使用 `DOWNLOAD_QUEUE_MAX`；`song.getUrls`、`playlist.addSongs` / `removeSongs`、`favorite.get` 使用默认 `IPC_SONG_MIDS_MAX`；`song.probe` 显式使用 `PROBE_MIDS_MAX`。
+- 对照 `src/shared/constants.ts`：`DOWNLOAD_QUEUE_MAX = 2000`、`IPC_SONG_MIDS_MAX = 100`、`PROBE_MIDS_MAX = 50`（已由早期 30 调整为 50）。
+
+状态：已解决。
+
+### 3.3 资产状态查询触发上游探测风暴 [已解决]
 
 问题描述：`download.assetStates` 最初直接调用 `probeAvailability` 补 `maxQuality`。一个 1000 首歌单会分 20 批、每批 50 首，触发大量歌曲详情与 vkey 请求；而 UI 的下载图标其实只依赖缓存 / 下载状态。这个实现会让打开歌单就明显增加上游压力，也更容易触发限流。
 
@@ -290,7 +513,21 @@
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确 `assetStates` 不触发上游探测，`maxQuality` 可为空。 |
 | `CORE.html` | §4.2 `ipc.ts` | 不动 | IPC 通道与参数不变，只改主进程查询来源。 |
 
-### 3.4 音频代理的 200 / 206 完整响应判定与进度节流
+实际操作（2026-11-10，分支 `doc/availability-peek-cache`）：
+
+- `CORE.html` §4.52 `api/availability.ts`（原建议写 §4.58，实际接口在 §4.52）：签名补 `peekAvailability(mids): Map<string, SongAvailability>`；note 明确它只读现有缓存、不探测、不写缓存，未探测歌曲不出现在结果中。
+- `CORE.html` §4.60 `download/manager.ts`：明确 `assetStates` 用 `peekAvailability` 补 `maxQuality`，不主动探测上游；未探测过时 `maxQuality` 为 `null`。
+- `CORE.html` §4.2 `ipc.ts`：按原表“不动”未处理，IPC 通道与参数未变。
+- 注：`cache/audio.ts` 的 `getCachedAudioInfo` 原本就是只读本地文件，无需改动；`peekAvailability` 属于可用性缓存，不在 `cache/audio.ts`。
+
+验证：
+
+- 对照 `src/main/api/availability.ts`：`peekAvailability` 只读取 `accountCache()` 中未过期条目，不发请求；`probeAvailability` 才执行探测。
+- 对照 `src/main/download/manager.ts`：`assetStates` 调用 `peekAvailability(unique)`，`maxQuality` 缺失时为 `null`。
+
+状态：已解决。
+
+### 3.4 音频代理的 200 / 206 完整响应判定与进度节流 [已解决]
 
 问题描述：`lychee-audio` 代理既要透传 Range，又要判断什么时候可以落盘缓存、什么时候上报进度。最初只看 status：200 算完整，206 算局部。但不少上游对 `Range: bytes=0-` 返回 206，且 `Content-Range` 覆盖整个文件；若一律按局部处理，永远不会缓存，也不会发完成进度。反过来把局部 206 当完整又会产生半截缓存。
 
@@ -309,25 +546,60 @@
 | `CORE.html` | §5.17 音频缓存进度 | 改 | 调用树补完整 / 局部 / 缓存命中三个分支。 |
 | `EVOLVE.md` | #3 | 不动 | 进度语义由 #3 定，实现细节见 CORE 两行。 |
 
-### 3.5 缓存转下载的硬链接会跨设备失败
+实际操作（2026-11-10，分支 `doc/audio-progress-branches`）：
+
+- `CORE.html` §4.59 `media/audio-protocol.ts`：完整响应判定、缓存命中 100%、局部 206 不落盘等规则已存在；本次把进度节流明确为 `CACHE_PROGRESS_THROTTLE_MS = 300`。
+- `CORE.html` §5.18 音频缓存进度（原建议写 §5.17，实际章节为 §5.18）：调用树改为 `handleStream` 的四个分支：缓存命中 / 200 完整 / 覆盖完整文件的 206 / 局部 206；完整分支写缓存并按 300ms 节流上报，局部 206 只透传。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/media/audio-protocol.ts`：`complete = status === 200 || (Content-Range 为 bytes 0-(n-1)/n)`；完整分支写缓存并按 `CACHE_PROGRESS_THROTTLE_MS` 节流；缓存命中与本地下载文件直接上报 `complete: true`；局部 206 直接透传。
+- `src/shared/constants.ts` 中 `CACHE_PROGRESS_THROTTLE_MS = 300`。
+
+状态：已解决。
+
+### 3.5 缓存转下载的硬链接会跨设备失败 [已解决]
+
+> 后续修正：硬链接方案已弃用。缓存与下载可能跨文件系统，硬链接的收益不足以抵消 `EXDEV` / 回退分支带来的复杂度；现在统一复制，复制失败直接回退网络下载。
 
 问题描述：“缓存达到最高档时本地转移”优先用硬链接。但缓存目录在 `userData`，下载目录可能在另一块磁盘或另一分区，`link()` 会抛 `EXDEV`。如果异常直接冒泡，任务会被标记失败；实际上复制文件即可完成转移。另外缓存文件可能在转移过程中被清理，失败后应回退网络下载而不是让任务停在失败态。
 
 
 解决方法：
-- `linkCachedAudio` 先 `link`，捕获任何失败后 `copyFile`；
-- 缓存转移整体包一层 try/catch，失败时把 `source` 改回 `network` 并继续正常下载；
+- 不再使用硬链接；缓存转下载统一 `copyFile`（`copyCachedAudio`）；
+- 复制失败时把 `source` 改回 `network` 并继续正常下载；
 - 只有网络下载失败才把任务标记 `failed`。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确硬链接失败复制、缓存转移失败回退网络下载。 |
-| `BUILD.html` | §11 存储 | 增 | 缓存与下载可能跨文件系统，说明硬链接优先 / 复制兜底。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确缓存转下载统一复制、不使用硬链接；复制失败回退网络下载。 |
+| `BUILD.html` | §11 存储 | 增 | 缓存与下载可能跨文件系统，说明统一复制 / 复制失败回退网络下载。 |
 | `EVOLVE.md` | #2 | 不动 | 转移规则见 #2，技术细节由 CORE / BUILD 主责。 |
 
-### 3.6 旧窄屏 64px / 56px 常驻侧栏样式与抽屉冲突
+实际操作（2026-11-10，分支 `fix/cache-copy-only`）：
+
+- `src/main/cache/audio.ts`：删除 `link` 导入与硬链接分支；`linkCachedAudio` 重命名为 `copyCachedAudio`，统一 `copyFile`。
+- `src/main/download/manager.ts`：改用 `copyCachedAudio`；复制失败仍把 `source` 改回 `network` 并继续下载。
+- `test/download-manager.test.ts`：同步重命名 mock。
+- `CORE.html` §4.60 / §5.16：改为“统一复制缓存文件，不使用硬链接”。
+- `BUILD.html` §11 存储：改为“统一复制；复制失败时改回网络下载”。
+- `USER.html` §2 CONVENTIONS 缓存与下载：删除“优先硬链接，失败回退复制”，改为“复制缓存文件”。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- `grep -rn "linkCachedAudio\|await link(" src test` 无结果。
+- 对照 `src/main/cache/audio.ts`：`copyCachedAudio` 只调用 `copyFile`；`src/main/download/manager.ts` 在复制异常时把 `source` 改回 `network`。
+- `npm run typecheck` 通过；`npx vitest run test/download-manager.test.ts` 通过。
+
+状态：已解决。
+
+### 3.6 旧窄屏 64px / 56px 常驻侧栏样式与抽屉冲突 [已解决]
+
+> 后续修正：旧的 64px / 56px 常驻图标栏规则已从样式表删除；900px 断点只保留单列 grid + 覆盖式抽屉，560px 只收窄抽屉宽度。
 
 问题描述：`main.css` 原有的 `@media (max-width: 900px)` 把侧栏收成 64px 常驻图标栏，`@media (max-width: 560px)` 又改成 56px，并把 `.nav-item` 的 `font-size` 设为 0。新方案要求窄屏改成默认隐藏的覆盖式抽屉，但旧规则仍会先命中；如果只改组件类名，抽屉会被压成一条图标栏，文字也消失。
 
@@ -335,15 +607,30 @@
 解决方法：
 - 在样式表末尾追加窄屏覆盖块，重新设置 `--sidebar-width: 0`、单列 grid、`position: fixed`、`transform: translateX(...)`；
 - 恢复抽屉内的 `.nav-item` 字号、间距、`.user-meta` 与 `.brand` 文本；
-- 把旧断点规则视为历史残留，后续统一清理为单一 900px 抽屉规则，避免依赖样式顺序。
+- 删除旧的 64px / 56px 常驻栏、隐藏文本与图标化规则；900px 只保留抽屉规则，560px 只收窄抽屉宽度。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.49 `styles/main.css` | 改 | 明确 900px / 560px 断点只保留抽屉规则，删除 64px / 56px 常驻栏。 |
-| `CORE.html` | §4.23 `App.vue` | 改 | 补窄屏单列 grid、固定抽屉与 revealer 的组合关系。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 说明 900px / 560px 只保留单列 grid + 覆盖式抽屉；删除 64px / 56px 常驻栏规则。 |
+| `CORE.html` | §4.23 `App.vue` | 改 | 补窄屏单列 grid、固定抽屉与 revealer 的组合关系；抽屉覆盖内容区，不压缩主内容。 |
 | `USER.html` | §5.2.1 窗口与布局 | 不动 | 布局契约由 #11 维护，见 CORE 两行。 |
+
+实际操作（2026-11-10，分支 `doc/sidebar-drawer-rules`）：
+
+- `src/renderer/styles/main.css`：删除 `@media (max-width: 900px)` / `(max-width: 560px)` 中 64px / 56px 常驻图标栏、隐藏品牌文本 / 导航文字、`.nav-item` 字号归零与 `.user-meta` 隐藏规则；保留 560px 的 `.brand-mark` 尺寸与通用页面间距。抽屉规则由末尾覆盖块统一提供。
+- `CORE.html` §4.49：改为“900px 单列 grid + 固定覆盖式抽屉，560px 只收窄抽屉宽度；抽屉覆盖内容区，不压缩主内容”。
+- `CORE.html` §4.23：补单列 grid、固定抽屉、revealer 与覆盖式布局的关系。
+- `USER.html` §5.2.1：按原表“不动”未处理。
+
+验证：
+
+- `grep -n "64px\|56px" src/renderer/styles/main.css` 只剩非侧栏用途（如时长列宽、品牌尺寸等），不再有 `--sidebar-width: 64px/56px` 或 64/56 常驻栏 grid。
+- 末尾 `@media (max-width: 900px)` 设置 `--sidebar-width: 0`、单列 grid、`position: fixed` 抽屉；560px 只设置抽屉宽度与页面间距。
+- `npm run build` 通过。
+
+状态：已解决。
 
 ### 3.7 歌曲表内的链接 / 按钮会触发行双击播放
 
@@ -382,21 +669,23 @@
 | `CORE.html` | §4.23 `App.vue` | 改 | 明确队列筛选保留原始 index 与移除语义。 |
 | `USER.html` | §5.2.9 播放队列 | 不动 | 移除行为由 #6 维护，见该节。 |
 
-### 3.9 评论“最旧”排序分页追加后会失去全局顺序
+### 3.9 评论“最旧”排序分页追加后会失去全局顺序（该排序后由 §4.41 取消）
+
+> 后续修正：§4.41 已完全取消“最旧”排序与 `CommentSort`，评论只保留最新评论的 `LastCommentSeqNo` 游标分页；本节关于最旧排序跨页重排的规则不再适用，追加时按 `id` 去重仍然有效。
 
 问题描述：最旧排序允许在已加载评论上本地重排。如果只在请求单页后排序，再把下一页直接 append，第二页的评论会整体排在第一页后面，跨页顺序并不正确；评论还可能因为刷新与翻页重叠而重复。
 
 
 解决方法：
-- 每次追加新一页后，对合并结果按 `createdAtMs` 重新升序排序；
+- 每次追加新一页后，对合并结果按 `createdAtMs` 重新升序排序（该重排已由 §4.41 随最旧排序一并删除）；
 - 追加前按评论 `id` 去重；
-- “最新 / 点赞”依赖上游顺序，不做本地重排；最旧排序的重排只作用于已加载集合。
+- “最新”依赖上游顺序，不做本地重排；最旧排序及其重排已由 §4.41 删除。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 补最旧排序在每次分页追加后全局重排、按 id 去重。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 已由 §4.41 删除最旧排序；追加时按 `id` 去重仍有效。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 不动 | 上游透传与本地排序分工由 #5 维护。 |
 | `PROVIDER.html` | §4.1 歌曲评论行 | 不动 | 上游排序方法不变，见 #5。 |
 
@@ -477,13 +766,15 @@
 
 ### 4.2 播放模式改为“按钮即当前项”的 revealer
 
+> 后续修正：§4.20 / §4.33 已把播放模式按钮点击从“开合菜单”改为按固定顺序 `sequence → repeat-all → repeat-one → shuffle` 循环；悬停仍打开其余模式菜单，按钮仍表示当前模式。本节其余样式与菜单结构结论有效。
+
 问题描述：ISSUES 要求播放模式切换改成 revealer 式，按钮与弹出一体化，按钮本身表示当前选中项，弹出层只展示其它选项。原实现把当前模式同时渲染在按钮图标和弹出菜单最后一项里，按钮只有非顺序模式才高亮，菜单与按钮之间还有 8px 间距，视觉上是两个独立控件，当前项重复出现。
 
 解决方法：
 - 抽出 `MODE_ICON` 映射，触发按钮改用 `.mode-button`，常驻 `accent-soft` 背景 + `accent-strong` 图标，直接表示当前模式，不再依赖 `active` 条件；
 - 弹出层改为 `otherModes = 固定顺序.filter(mode !== 当前)`，只渲染其它三种模式，去掉重复的当前项；
 - 菜单改为 `bottom: 0` 包住按钮：`width: 100%` 与按钮同宽、底部预留按钮高度、背景使用 surface 且无边框；按钮浮在弹层底部并始终保留全部 9px 圆角，形成包含式 revealer，并加 `scaleY` 向上展开动画；
-- `toggleModeMenu()` 在切换前清理打开 / 关闭定时器，避免悬停定时器在点击关闭后又把菜单重新打开；悬停、外部点击、Esc 与选择后关闭的行为保持不变。
+- 当时 `toggleModeMenu()` 在切换前清理打开 / 关闭定时器，避免悬停定时器在点击关闭后又把菜单重新打开；该函数后由 §4.20 的 `cycleMode()` 取代，悬停、外部点击、Esc 与选择后关闭的行为保持不变。
 
 验证：
 - `npm run typecheck` 通过；
@@ -554,6 +845,8 @@
 
 ### 4.5 侧栏新增“我喜欢”入口
 
+> 后续修正：§4.19 将侧栏“浏览”组顺序改为“发现 → 搜索 → 我喜欢 → 我的歌单”，并把根路径默认页改为发现页；“我喜欢”入口本身不变。
+
 问题描述：ISSUES 要求在导航栏“我的歌单”上方增加“我喜欢”。此前“我喜欢”只能从“我的歌单”页面的卡片进入，侧栏没有快捷入口；同时渲染层没有引用固定收藏歌单 ID 的常量，若在组件里再写一份 `'liked'` 容易与主进程漂移。
 
 解决方法：
@@ -571,7 +864,7 @@
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.23 `App.vue` | 改 | 侧栏“浏览”组顺序改为搜索 / 发现 / 我喜欢 / 我的歌单；“我喜欢”登录后显示并指向固定收藏歌单。 |
+| `CORE.html` | §4.23 `App.vue` | 改 | 侧栏“浏览”组顺序改为“发现 / 搜索 / 我喜欢 / 我的歌单”；“我喜欢”登录后显示并指向固定收藏歌单。 |
 | `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `FAVORITES_PLAYLIST_ID = 'liked'`。 |
 | `CORE.html` | §4.12 `main/api/playlist.ts` | 改 | 固定收藏歌单 ID 改为引用共享常量，删除模块内重复字面量。 |
 | `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序补“我喜欢”；说明登录后显示、与“我的歌单”同级。 |
@@ -775,7 +1068,9 @@
 | `USER.html` | §5.3 错误与通知 | 不动 | 背景探测仍静默处理，不新增用户可见提示。 |
 | `EVOLVE.md` | #5 歌词 / 评论或 #4 歌手页 | 不动 | 属于可用性探测的生命周期修复，不改变产品交互。 |
 
-### 4.13 song.probe 请求量与 IP 104009 风控核查（未完成）
+### 4.13 song.probe 请求量与 IP 104009 风控核查（后由 §4.25 / §4.30 完成）
+
+> 后续修正：§4.25 已采用本节“方案 2”，把逐首详情改为 `CgiGetTrackInfo` 批量详情（50 首/次，缺失才单曲兜底）；§4.30 又补充了 104009 后的 60 秒全局截断。本节“未完成 / 待决定”的状态仅代表当时，后续已按方案 2 + 全局截断落地。
 
 问题描述：4.12 的泄漏问题修复后，用户 IP 仍被 QQ 音乐风控，播放链接请求持续返回 104009。需要确认 `song.probe` 是否绕过了限流，以及现有令牌桶是否过于宽松。
 
@@ -794,7 +1089,7 @@
 4. 在 104009 / `UPSTREAM_NETWORK` 后增加全局退避与更长的冷却时间，而不只是暂停当前组件；
 5. 评估是否需要把可用性缓存 TTL 从 10 分钟延长，减少重复探测。
 
-状态：ISSUES 已新增顶层记录，未标记已解决；待完成上述策略调整后再补充验证结果。
+状态（当时）：ISSUES 已新增顶层记录，未标记已解决；后续已按方案 2 + 全局截断落地，见 §4.25 / §4.30。
 
 ### 4.14 歌曲标题的版本标签、尾部空白与徽标位置
 
@@ -874,7 +1169,7 @@
 
 追加需求：清空下载目录按钮。
 
-- 设置页“缓存与下载”的下载目录行增加“清空目录”按钮，下载中心底部同步提供同一操作；点击前用确认框展示实际目录，并说明会删除目录内全部文件与下载记录，播放缓存不受影响；
+- 设置页“缓存与下载”的下载目录行增加“清空目录”按钮，下载中心顶部操作区同步提供同一操作（下载中心后于 §4.31 改为完整页面，操作区在顶部）；点击前用确认框展示实际目录，并说明会删除目录内全部文件与下载记录，播放缓存不受影响；
 - 主进程新增 `clearDownloadDirectory()`：先中止活动下载、清空任务记录，再删除下载目录内的全部内容并写回空索引；
 - 阻止清空文件系统根目录、用户主目录及其上级目录，避免误选目录造成系统级删除；
 - 新增 IPC `download.clearDirectory`，preload 与渲染层下载 store 同步清空本地任务 / 资产快照；设置页清空后刷新存储占用；
@@ -892,10 +1187,12 @@
 | `CORE.html` | §4.49 `components/PlayerBar.vue` | 改 | 当前曲已下载时缓存进度按 100% 显示，tooltip 使用“已下载到本机”。 |
 | `USER.html` | §1 TERMS 下载限制 | 改 | 明确下载任务只有统一队列，没有批次；已下载歌曲直接本地播放，不再重新缓冲。 |
 | `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 下载目录行增加“清空目录”，确认后删除目录内已下载文件、封面、分片与记录；播放缓存独立清理。 |
-| `USER.html` | §5.2.8 页面结构 · 下载中心 | 改 | 下载中心只展示单一任务列表，不再按批次分组；底部提供“清空目录”。 |
+| `USER.html` | §5.2.8 页面结构 · 下载中心 | 改 | 下载中心只展示单一任务列表，不再按批次分组；顶部操作区提供“清空目录”（§4.31 改为完整页面后位置由底部移到顶部）。 |
 | `EVOLVE.md` | #2 下载队列 | 改 | 删除批次模型与批次控制，补充统一入队、出队时解析歌曲信息、已下载文件本地播放与清空下载目录约束。 |
 
 ### 4.17 下载按钮的缓存 / 下载状态在播放条与歌曲表统一
+
+> 后续修正：本节后半的“追加修复（遗留问题）”已取代前半的 2px inset 边框方案，最终统一为 24px `::before` 状态框（缓存态 surface 背景、下载态 accent 填充）。以追加修复与本节末尾结论为准。
 
 问题描述：ISSUES 指出歌曲下载按钮在“已缓存”状态下，图标本身变成了带外框的样式，且按钮的圆角边框需要更粗；同时播放条的下载按钮与歌单 / 歌曲表内的呈现不一致，已缓存的边框与已下载的高亮在播放条上都没有生效。
 
@@ -948,6 +1245,8 @@
 
 ### 4.18 设置页新增带节点的播放缓存上限滑动条
 
+> 后续修正：本节后半的“追加修复（缓存上限持久化）”已取代前面“只在 `change` 时写盘”的描述；最终为 `input` 防抖 200ms 保存、`change` 立即 flush、卸载兜底，主进程使用同步原子写。
+
 问题描述：ISSUES 要求设置里的缓存选项增加一个带节点的滑动条，用固定档位调整缓存大小：最小 128MB、最大 2GB，档位为 128M → 256M → 512M → 1G → 1.5G → 2G。原实现只有播放缓存开关与“清空”按钮，容量上限写死为 `AUDIO_CACHE_MAX_BYTES = 2 GiB`，用户无法调整；`Settings` 与设置页也没有对应字段。
 
 解决方法：
@@ -957,7 +1256,7 @@
 - `cache/audio.ts` 的 LRU 清理不再读常量，改为每次按 `getSettings().audioCacheMaxBytes` 执行，并导出 `enforceAudioCacheLimit()`：写入缓存后仍自动清理，设置页下调上限时也立即清理；
 - `settings.set` 保存后若缓存上限发生变化，调用 `enforceAudioCacheLimit()`；关闭播放缓存仍沿用原有清空逻辑，返回实际落盘后的 `saved` 设置；
 - 设置页在播放缓存开关下方新增全宽 `cache-limit-row`：左侧显示“播放缓存上限 / 超出后按最久未使用自动清理”，右侧显示当前档位；滑杆固定 6 个节点，已选节点与轨道填充使用 accent 色，未到节点保持弱色；
-- 滑杆拖动时只更新本地预览档位，释放（`change`）后才写入设置并刷新缓存占用，失败时回退到当前设置值并提示；`aria-label` 为“播放缓存上限”，节点标签为 128M / 256M / 512M / 1G / 1.5G / 2G；
+- 滑杆拖动时立即更新本地档位并安排 200ms 防抖保存，释放（`change`）时取消防抖并立即落盘；组件卸载时若有待保存值则立即 flush；失败时回退到当前设置值并提示；`aria-label` 为“播放缓存上限”，节点标签为 128M / 256M / 512M / 1G / 1.5G / 2G；
 - `styles/main.css` 增加滑杆、填充轨道、滑块、节点与焦点环样式；轨道两端各留 7px 与滑块半径对齐，节点使用绝对定位，首尾标签不会挤出面板。
 
 验证：
@@ -1017,7 +1316,7 @@
 
 - `router/index.ts` 的根路径重定向从 `/search` 改为 `/discover`，启动与访问 `/` 都默认进入发现页；
 - `App.vue` 侧栏“浏览”组改为“发现 → 搜索 → 我喜欢 → 我的歌单”，发现项继续使用 `compass` 图标，搜索项使用 `search` 图标；
-- `/search` 路由、搜索结果内的返回链接、歌词页无历史时的回退目标与登录后跳转 `/library` 均保持不变，本次只调整默认首页与导航顺序；
+- `/search` 路由、搜索结果内的返回链接与登录后跳转 `/library` 均保持不变；歌词 / 评论后由 §4.29 改为弹出层，不再保留 `/lyrics` 路由及其返回逻辑；
 - 路由 `active-class` 由现有 RouterLink 自动处理，无需额外状态。
 
 验证：
@@ -1033,7 +1332,7 @@
 |---|---|---|---|
 | `CORE.html` | §4.25 `router/index.ts` | 改 | 根路径重定向改为 `/discover`，启动默认进入发现页。 |
 | `CORE.html` | §4.23 `App.vue` | 改 | 侧栏“浏览”组顺序改为“发现 / 搜索 / 我喜欢 / 我的歌单”。 |
-| `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序改为“发现 / 搜索 / 我的歌单”，并说明启动默认落在发现页。 |
+| `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序改为“发现 / 搜索 / 我喜欢 / 我的歌单”，并说明启动默认落在发现页。 |
 | `USER.html` | §3.4 页面 / URL 架构图 | 改 | 注明根路径 `/` 默认进入 `/discover`。 |
 | `EVOLVE.md` | #11 优化左侧导航 | 改 | 补“发现”在“搜索”之前、根路径默认进入发现页的导航约定。 |
 
@@ -1107,6 +1406,8 @@
 | `EVOLVE.md` | #5 播放条空状态 | 改 | 补封面占位无边框与全局 fg 轻阴影策略。 |
 
 ### 4.22 歌手简介过长时提供展开 / 收起
+
+> 后续修正：§4.44 已把简介折叠逻辑抽取到 `components/CatalogDescription.vue`，`ArtistView.vue` 不再保留 `descRef` / `descExpanded` / `descOverflow` / `measureDesc()` / `toggleDesc()`；本节关于这些局部实现的描述已被组件化取代，交互与溢出判断规则不变。
 
 问题描述：ISSUES 要求歌手简介太长时提供展开 / 收起选项。原 `ArtistView.vue` 只渲染一整段 `.catalog-desc`，简介较长时会占据大量首屏空间，把歌曲列表推到很下方；短简介又不应出现无意义的切换按钮。因此需要按实际渲染高度判断是否溢出，而不是按字符数或固定长度猜测。
 
@@ -1281,6 +1582,8 @@
 
 ### 4.28 取消评论“点赞”排序（上游没有按点赞排序接口）
 
+> 后续修正：§4.41 已完全删除“最旧”排序与 `CommentSort`，`comment.get` 只保留 `(songId, cursor?)`；本节“只保留最新 / 最旧”的结论以 §4.41 为准，`GetNewCommentList` + `LastCommentSeqNo` 的使用不变。
+
 问题描述：ISSUES 指出按点赞排序评论时报 `[ipc] UPSTREAM_CHANGED: 上游返回错误码 10000（music.globalComment.CommentRead.GetHotCommentList）`。原实现把 `hot` 当作评论排序交给 `GetHotCommentList`，而该方法的响应只有 `req_0.code = 10000` 与空的 `CommentList`，页面直接进入错误态。
 
 对 API 的正确理解：QQ 音乐的 Hot 是评论浏览列表之外的“热评”附加模块，只展示少量最热门评论，冷门歌曲可能为空；它不是可按页浏览的评论排序，也不能替代“按点赞数排序”。
@@ -1294,10 +1597,10 @@
 
 解决方法：
 
-- `CommentSort` 从 `hot | latest | oldest` 改为 `latest | oldest`；
-- 评论排序控件删除“点赞”，只保留“最新 / 最旧”；默认仍为“最新”；
-- `comment.ts` 统一调用 `GetNewCommentList` 并读取 `CommentList`，不再使用 `GetHotCommentList`、`WithHot` 或 `CommentList2`；`oldest` 继续在已加载评论上按 `createdAtMs` 本地升序重排；
-- `comment.get` IPC 只接受 `latest` / `oldest`，旧渲染层若仍传入 `hot` 会回退为 `latest`，不会再把上游错误码暴露给用户；
+- `CommentSort` 从 `hot | latest | oldest` 改为 `latest | oldest`（§4.41 随后完全删除 `CommentSort`）；
+- 评论排序控件删除“点赞”，只保留“最新 / 最旧”（§4.41 后连“最旧”也删除，只显示“评论”）；默认仍为“最新”；
+- `comment.ts` 统一调用 `GetNewCommentList` 并读取 `CommentList`，不再使用 `GetHotCommentList`、`WithHot` 或 `CommentList2`；`oldest` 继续在已加载评论上按 `createdAtMs` 本地升序重排（该重排随后由 §4.41 删除）；
+- `comment.get` IPC 只接受 `latest` / `oldest`，旧渲染层若仍传入 `hot` 会回退为 `latest`，不会再把上游错误码暴露给用户（§4.41 后签名改为 `(songId, cursor?)`）；
 - 更新 `test/api/comment.test.ts`：锁定最新 / 最旧都使用 `GetNewCommentList`、不携带 `WithHot`，并保留评论过滤与本地排序校验；
 - 热评附加模块当前不实现；若后续需要在评论区之外展示，应作为独立区块单独加载，并允许空状态。
 
@@ -1313,8 +1616,8 @@
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
 | `PROVIDER.html` | §4.1 歌曲评论行 / §4.3 `QqCommentList` | 改 | 删除“点赞排序走 `GetHotCommentList`”；注明上游没有按点赞排序参数，`GetHotCommentList` 返回业务码 `10000`；`WithHot=1` 的 `CommentList2` 是热评附加模块，仅首屏、可为空，不是评论排序。 |
-| `CORE.html` | §4.15 `comment.ts` | 改 | `CommentSort` 改为 `latest | oldest`；删除 hot 分支与 `CommentList2` 读取；说明评论只支持最新 / 最旧。 |
-| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论排序选项改为“最新 / 最旧”，删除“点赞”；若展示热评，应在评论列表外单独说明。 |
+| `CORE.html` | §4.15 `comment.ts` | 改 | 删除 hot 分支与 `CommentList2` 读取；`CommentSort` 最终由 §4.41 完全删除，评论只保留最新评论游标分页。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论排序先删除“点赞”，随后由 §4.41 删除“最新 / 最旧”切换，只显示“评论”标题；若展示热评，应在评论列表外单独说明。 |
 | `EVOLVE.md` | — | 改 | 删除“评论按点赞排序”的要求；如需热评，改为独立的附加模块需求。 |
 
 ### 4.29 歌词 / 评论改为弹出层并由播放条封面开关
@@ -1348,6 +1651,8 @@
 | `EVOLVE.md` | — | 改 | 删除“歌词 / 评论为普通路由页”的要求，改为内容区弹出层。 |
 
 ### 4.30 批量下载卡住页面与 104009 全局截断
+
+> 后续修正：§4.31 已删除 `DownloadDrawer`，下载中心改为 `/downloads` 完整页面；§4.50 / §4.52 又移除数字指示并把进度条改为 fixed overlay。本节“仅在 `ui.downloadOpen` 时渲染抽屉”的修复被页面改造取代；轮询只在状态变化时刷新资产、下载不受页面生命周期取消、104009 全局截断等结论继续有效。
 
 问题描述：ISSUES 指出开始批量下载歌曲后，设置页、搜索页等界面无法打开，同时播放会收到 104009；要求先分析旧代码确认根因，确认改用批量接口后是否仍存在，再决定跳过或修复；并要求作为兜底，收到 104009 时触发 60 秒超时，期间任何上游请求都被截断并 toast 提示。
 
@@ -1391,7 +1696,7 @@
 |---|---|---|---|
 | `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 补 104009 全局截断：`UPSTREAM_BLOCK_MS`、`tripUpstreamBlock` / `upstreamBlockRemainingMs` / `assertUpstreamAvailable`；`fetchOnce` 取令牌前后检查；`musicu` 默认截断，vkey 用 `deferBlock` 等两次入口都失败后再截断；`upstream:blocked` 广播。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 截断窗口内停止出队；任务遇到 104009 保持待下载并在窗口结束后自动恢复，不标记失败。 |
-| `CORE.html` | §4.31 `stores/download.ts` / §4.72 `DownloadDrawer.vue` | 改 | 仅在下载中心打开时轮询与渲染任务列表；资产状态只刷新状态变化的任务，禁止每次轮询全量查询。 |
+| `CORE.html` | §4.31 `stores/download.ts` / DownloadsView（原 `DownloadDrawer.vue` 已由 §4.31 删除） | 改 | 仅在下载中心可见时轮询与渲染任务列表；资产状态只刷新状态变化的任务，禁止每次轮询全量查询。 |
 | `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `UPSTREAM_BLOCK_MS`，推荐值 60_000。 |
 | `USER.html` | §5.3 错误与通知 | 改 | 收到 104009 时提示已暂停上游请求 60 秒，请检查网络 / VPN / 代理出口；期间播放、搜索、下载等上游操作直接失败。 |
 | `USER.html` | §5.2.8 下载中心 | 改 | 下载中心关闭时不渲染全量任务列表、不扫描目录用量；有活动任务时仍轮询状态以更新歌曲表图标，全部结束后停止；打开时刷新用量与完整进度。 |
@@ -1399,13 +1704,15 @@
 
 ### 4.31 下载中心改为完整页面
 
+> 后续修正：§4.50 已删除 `(完成/总数)` 与失败数等数字指示；§4.52 将整体进度条改为不占布局的 fixed overlay；§4.51 在筛选同行右侧新增“全部开始”。本节关于数字指示、吸顶 / 通栏布局与操作栏的描述以这三节为准。
+
 问题描述：ISSUES 要求把下载中心从右侧弹出抽屉改为完整页面；清空目录、打开文件夹等操作按钮放在顶部；页面顶部的进度栏横跨窗口，并显示整体进度（形如 `(1/100)`）。
 
 解决方法：
 
 - 新增 `views/DownloadsView.vue`，删除 `components/DownloadDrawer.vue`，新增 `/downloads` 路由；侧栏“下载”由按钮改为 `RouterLink`，按当前路由高亮；
-- 页面顶部增加吸顶的整体进度栏，横跨内容区宽度：显示完成数 / 总数（如 `(1/100)`）与失败数，进度按 `done / total` 计算；任务列表为空时显示空状态；
-- 后续布局调整：不再显示“整体进度”字样；进度条贴在页面最顶部并左右延伸到内容区边缘，`(完成/总数)` 与失败数绝对定位在进度条下方右对齐；标题区直接复用普通 `.page` 布局，顶部留白、背景与“设置 / 我的歌单”页一致，不使用不透明吸顶背景，避免页面顶部光晕被遮住后只在标题下方露出；
+- 页面顶部增加整体进度栏，横跨内容区宽度：最初显示完成数 / 总数（如 `(1/100)`）与失败数，进度按 `done / total` 计算（数字指示已由 §4.50 删除）；任务列表为空时显示空状态；
+- 后续布局调整：不再显示“整体进度”字样；进度条贴在页面最顶部并左右延伸到内容区边缘，`(完成/总数)` 与失败数绝对定位在进度条下方右对齐（数字指示已由 §4.50 删除，进度条最终由 §4.52 改为 fixed overlay）；标题区直接复用普通 `.page` 布局，顶部留白、背景与“设置 / 我的歌单”页一致，不使用不透明吸顶背景，避免页面顶部光晕被遮住后只在标题下方露出；
 - 下载条目区顶部增加“全部 / 进行中 / 已完成 / 未成功”过滤切换，并包含在任务面板边框内；过滤只影响展示，整体进度仍按全部任务计算；
 - 任务按队列顺序降序展示，新任务在最前；该顺序仅为视觉调整，不改变主进程统一队列的处理顺序；
 - `page-head-actions` 集中放置“清除已完成”“清空目录”“打开文件夹”，其中“清除已完成”只清记录，“清空目录”仍保留目录确认与路径提示；
@@ -1432,11 +1739,13 @@
 | `CORE.html` | §4.31 `stores/ui.ts` | 改 | 删除 `downloadOpen` / `toggleDownload` / `closeDownload`；下载中心不再参与抽屉互斥。 |
 | `CORE.html` | §4.31 `stores/download.ts` | 改 | `setOpen` 改为 `setVisible`；下载页可见时轮询并刷新目录用量，不可见时仅在存在活动任务时继续轮询；新任务追加到列表末尾，页面倒序展示；`reset()` 在页面可见时立即重新加载。 |
 | `CORE.html` | §4.71 `utils/download-progress.ts` | 增 | 补 `downloadOverallProgress`：总任务 / 完成 / 失败 / 进行中 / 百分比。 |
-| `USER.html` | §3.4 页面表 / §5.2.8 下载中心 | 改 | 下载中心改为侧栏可进入的完整页面；页面最顶部为左右通栏进度条，`(完成/总数)` 与失败数绝对定位在进度条下方右对齐；标题区与设置 / 我的歌单页使用相同的页面留白与背景；条目区面板边框内顶部提供“全部 / 进行中 / 已完成 / 未成功”过滤；任务按新到旧展示。 |
+| `USER.html` | §3.4 页面表 / §5.2.8 下载中心 | 改 | 下载中心改为侧栏可进入的完整页面；顶部整体进度条为不占布局的 fixed overlay，不显示数字 / 失败数指示；标题区与设置 / 我的歌单页使用相同的页面留白与背景；条目区面板边框内顶部提供“全部 / 进行中 / 已完成 / 未成功”过滤，右侧提供“全部开始”；任务按新到旧展示。 |
 | `USER.html` | §5.2.2 侧栏 | 改 | “下载”改为路由入口，指向 `/downloads`；不再打开右侧抽屉。 |
 | `EVOLVE.md` | — | 改 | 下载中心由抽屉改为完整页面，补充顶部操作区与整体进度栏要求。 |
 
 ### 4.32 无歌曲时播放条按钮状态与音质弹出
+
+> 后续修正：§4.33 将音质按钮点击改为按 `auto → 128k → 320k → flac` 固定顺序循环，悬停仍展开其余档位；本节“点击按钮仍可切换”以 §4.33 为准。
 
 问题描述：ISSUES 指出没有歌曲在播放时，播放条的喜欢 / 下载按钮没有变灰；同时切换音质按钮失效。要求音质切换改为类似播放模式的弹出：按钮本身表示当前档位，弹层只列出其它档位并与按钮一体化。后续新增子项：播放条与设置页的音质设置没有对齐，播放条不能选“自动”，两边配置没有联动；两者应共用内部 API 与状态。
 
@@ -1447,7 +1756,7 @@
 - 音质按钮改为与播放模式一致的 revealer：
   - 按钮保留当前档位文本并常驻高亮；
   - 弹层只渲染“其它档位”，当前档位不再重复出现；
-  - 鼠标悬停打开、离开延迟关闭，点击按钮仍可切换；展开时按钮位于弹层底部并与弹层左右 / 下边缘对齐；
+  - 鼠标悬停打开、离开延迟关闭，点击按钮循环切换档位（§4.33）；展开时按钮位于弹层底部并与弹层左右 / 下边缘对齐；
   - 档位文案压缩为 `128K / 320K / FLAC`，弹层宽度与按钮一致，避免窄按钮配宽弹层；
 - 弹层打开时关闭音量 / 播放模式弹层，并补齐对应定时器清理与 Esc / 点击外部关闭逻辑。
 - 播放条与设置页音质共用状态：
@@ -1476,7 +1785,9 @@
 
 ### 4.33 Revealer 统一交互
 
-问题描述：ISSUES 要求所有 revealer 统一设计模式：按钮本身点击按固定顺序切换选项、弹层按固定顺序列出除当前项外的其余选项、按钮始终高亮当前项；音量条作为特殊个例单独说明。排查后唯一缺口是播放条音质切换按钮仍为点击展开 / 关闭弹层，而不是点击循环切换。
+> 后续修正：§4.54 将播放条收藏定义为特殊 revealer（点击收藏 / 取消收藏，弹层只有“加入歌单”），§4.55 将音量触屏改为按拖动距离 delta 调节；统一“点击循环”规则只适用于播放模式与音质，收藏 / 音量为例外。
+
+问题描述：ISSUES 要求所有带选项的 revealer 统一设计模式：按钮本身点击按固定顺序切换选项、弹层按固定顺序列出除当前项外的其余选项、按钮始终高亮当前项；音量条作为特殊个例单独说明。排查后唯一缺口是播放条音质切换按钮仍为点击展开 / 关闭弹层，而不是点击循环切换。
 
 解决方法：
 
@@ -1544,6 +1855,8 @@
 
 ### 4.35 歌单详情恢复“从歌单删除”按钮与写后校验
 
+> 后续修正：§4.39 已把写后读回 / 整单扫描移出写 API，删除链路改为 `playlist.removeSongs` 返回 `{ changed }` 后由 `stores/playlist-edit.ts` 的 `refreshAfterWrite` 统一刷新；本节关于“DelSonglist → 读回成员确认”的描述以 §4.39 为准，可编辑判定与乐观移除仍有效。
+
 问题描述：ISSUES 指出从歌单删除歌曲的按钮和功能没有实现。排查后确认渲染层与 IPC 链路本身已存在，但 `PlaylistView` 只有在 `PlaylistMeta.editable && kind === 'normal'` 时才把 `removable` 传给 `SongTable`，而 `fetchPlaylistPage` 对所有普通歌单都硬编码 `editable: false`：
 
 - `listMine()` 返回的“我的歌单”虽然带 `editable: true`，进入详情页后会被 `CgiGetDiss` 的 `fetchPlaylistPage` 结果覆盖成 `false`；
@@ -1555,8 +1868,8 @@
 - `CgiGetDiss` 的 `dirinfo` 补充 `owndir`、`host_uin`、`creator.musicid` 字段；
 - 新增 `canEdit(data)`：优先读取上游 `owndir === 1`；字段缺失或为 0 时，回退比较当前登录 `musicid` 与 `creator.musicid` / `host_uin`；未登录或无归属信息时返回 `false`；
 - 普通歌单的 `editable` 改为 `canEdit(data)`，“我喜欢”仍为可编辑；公开 / 搜索歌单保持不可编辑；
-- 详情页原有删除链路保持不变：确认框 → 本地乐观移除并更新计数 → `playlist.removeSongs` → `DelSonglist` → 读回成员确认 → 失败回滚；
-- 新增 `test/api/playlist-write.test.ts`，用 mock 上游校验删除请求携带数字 `songId` 与真实 `songType`、写后成员消失、非成员歌曲不发起写请求；
+- 详情页原有删除链路保持不变：确认框 → 本地乐观移除并更新计数 → `playlist.removeSongs` → `DelSonglist` → 由 §4.39 的统一刷新流程确认 → 失败回滚；
+- 新增 `test/api/playlist-write.test.ts`，用 mock 上游校验删除请求携带数字 `songId` 与真实 `songType`、写接口返回 `{ changed }` 且不读回成员、非成员歌曲不发起写请求；
 - 扩展 `test/api/playlist-cache.test.ts`，覆盖 `owndir` 判定、非本人歌单不可编辑与 `creator.musicid` 回退。
 
 验证：
@@ -1573,12 +1886,14 @@
 |---|---|---|---|
 | `PROVIDER.html` | §4.1 歌单详情行 / §4.3 `QqPlaylistDirinfo` | 改 | 增 `dirinfo.owndir`、`host_uin`、`creator.musicid`，并说明 `owndir === 1` 表示当前账号拥有该歌单。 |
 | `CORE.html` | §4.12 `api/playlist.ts` | 改 | `fetchPlaylistPage` 的普通歌单 `editable` 改为 `owndir` 优先、创建者 ID 回退；未登录或非本人歌单为 `false`。 |
-| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明删除入口只在普通且 `editable` 的歌单出现，并保留确认、乐观更新、写后读回与失败回滚。 |
-| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 补 `removeSongs` 的归属前置校验由详情接口提供，删除时按数字 `songId` / `songType` 写 `DelSonglist` 并读回成员。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明删除入口只在普通且 `editable` 的歌单出现，并保留确认、乐观更新与失败回滚；写后刷新见 §4.39。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 补 `removeSongs` 的归属前置校验由详情接口提供，删除时按数字 `songId` / `songType` 写 `DelSonglist`；写后刷新由 §4.39 统一流程负责。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 说明自己创建的歌单在歌曲操作列显示“从歌单删除”，公开歌单不显示；删除只影响歌单成员，不改变播放队列。 |
 | `EVOLVE.md` | #14 | 不动 | 删除歌曲的交互与写后校验已由 CORE / USER 记录，本次仅修复可编辑判定。 |
 
 ### 4.36 添加到歌单写错 dirId / tid 导致 80092
+
+> 后续修正：§4.39 已把 80092 的处理收敛为写 API 返回 `{ changed: false }`，写后读回与刷新由渲染层 `refreshAfterWrite` 负责；本节原“写后读回若已达成目标状态则视为成功”的结论已失效，`dirId` / `tid` 契约不变。
 
 问题描述：测试“添加到歌单”时持续报 `UPSTREAM_CHANGED: 上游返回错误码 80092（music.musicasset.PlaylistDetailWrite.AddSonglist）`。排查确认不是简单重复添加，而是写接口的两个 ID 被混用：
 
@@ -1595,12 +1910,12 @@
 - `addSongs` / `removeSongs` 使用 `dirId: meta.dirId` 与 `tid: meta.id`，写请求参数收敛为 `{ dirId, tid, bFmtUtf8, v_songInfo }`，不再把歌单名当作写参数；
 - 改名 / 删除歌单先读取详情拿到当前 `dirId`，再提交 `EditPlaylist` / `DelPlaylist`，不再用歌单标识冒充目录 ID；
 - `mapUpstreamCode` 的未知错误统一携带原始 `upstreamCode`；`assertWrite` 同样保留 `retCode`；
-- 80092 不再直接失败：写后读回若已达成目标状态则视为成功，读回未确认时再给出“歌曲可能已在歌单中 / 歌单状态已变化”的明确错误；
-- 更新 `test/api/playlist-write.test.ts`：覆盖添加 / 删除携带 `dirId + tid`、创建返回 `id=tid`、改名 / 删除使用详情目录 ID、80092 由读回判定；扩展 `test/api/playlist-cache.test.ts` 校验详情返回的 `dirId`。
+- 80092 不再直接失败：写 API 视为 `{ changed: false }`，是否真正添加由 §4.39 的统一刷新流程确认；未变化时给出“歌曲可能已在歌单中 / 歌单状态已变化”的明确提示；
+- 更新 `test/api/playlist-write.test.ts`：覆盖添加 / 删除携带 `dirId + tid`、创建返回 `id=tid`、改名 / 删除使用详情目录 ID、80092 视为未变化；扩展 `test/api/playlist-cache.test.ts` 校验详情返回的 `dirId`。
 
 验证：
 
-- 对照上游实现约定核对：`AddPlaylist` 返回的 `result.tid` 是歌单标识，`result.dirId` 是目录 ID；`PlaylistDetailWrite` 同时需要两者；80092 属于业务状态码，应以读回结果判断；
+- 对照上游实现约定核对：`AddPlaylist` 返回的 `result.tid` 是歌单标识，`result.dirId` 是目录 ID；`PlaylistDetailWrite` 同时需要两者；80092 属于业务状态码，写 API 视为未变化，由统一刷新流程确认；
 - `npm run typecheck` 通过；
 - `npx vitest run` 23 个测试文件 / 85 个用例通过；
 - `npm run build` 通过。
@@ -1612,9 +1927,9 @@
 | `PROVIDER.html` | §4.1 歌单写入行 / §4.3 歌单模型 | 改 | 明确 `dirId` 是当前账号目录 ID、`tid` 才是歌单标识；`AddPlaylist` 返回的 `result.dirId` / `result.tid` 分别对应两者；80092 属于业务状态码而非请求失败。 |
 | `CORE.html` | §4.1 `types.ts` | 改 | `PlaylistMeta` 增加 `dirId?: number`，与 `id`（歌单标识）分开存储。 |
 | `CORE.html` | §4.12 `api/playlist.ts` | 改 | `listMine` 与 `CgiGetDiss` 都要回填 `dirId`；创建歌单以 `result.tid` 作为 `id`、`result.dirId` 作为目录 ID。 |
-| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 增删歌曲按 `dirId + tid + bFmtUtf8 + v_songInfo` 写入；改名 / 删除先读取详情获取 `dirId`；80092 写后读回判定。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 增删歌曲按 `dirId + tid + bFmtUtf8 + v_songInfo` 写入；改名 / 删除先读取详情获取 `dirId`；80092 视为未变化，刷新由 §4.39 统一处理。 |
 | `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 未知上游错误需保留 `upstreamCode`，供写操作识别 80092 等业务状态。 |
-| `USER.html` | §5.3 错误与通知 | 改 | 80092 在写后读回确认成功时不提示错误；未生效时提示歌曲可能已在歌单中或歌单状态已变化。 |
+| `USER.html` | §5.3 错误与通知 | 改 | 80092 在统一刷新确认未变化时提示歌曲可能已在歌单中或歌单状态已变化。 |
 | `EVOLVE.md` | #14 | 不动 | 写接口细节由 CORE / PROVIDER 主责，本次仅修正参数契约。 |
 
 ### 4.37 原生删除确认替换为应用内确认框
@@ -1762,6 +2077,8 @@
 
 ### 4.40 评论区取消正文截断并修复分页游标
 
+> 后续修正：§4.41 已删除“最旧”排序与 `CommentSort`，本节“最旧排序继续在合并结果上本地重排”的结论失效；游标分页、`SeqNo` 精度、正文不截断与按 id 去重仍然有效。
+
 问题描述：ISSUES 指出两条评论问题：
 
 - 太长的评论会被省略号截断；
@@ -1788,7 +2105,7 @@
   - `UpstreamRequest` / `MusicuOptions` 新增可选 `stringFields`；
   - `upstreamRequest` 在 `JSON.parse` 前把指定字段的裸数字字面量改成字符串；
   - 评论请求传入 `stringFields: ['SeqNo']`，`nextCursor` 始终为精确字符串；
-- 加载更多仍使用现有滚动到底触发，不新增按钮；追加后按评论 `id` 去重，最旧排序继续在合并结果上本地重排。
+- 加载更多仍使用现有滚动到底触发，不新增按钮；追加后按评论 `id` 去重；最旧排序及其重排已由 §4.41 删除。
 
 验证：
 
@@ -1815,6 +2132,8 @@
 
 ### 4.41 取消最旧排序，改为评论区跳转顶部 / 底部
 
+> 后续修正：§4.42 实测单页上限为 25 条，并把 `COMMENT_LOAD_ALL_PAGE_MAX` 从 50 调整为 40；本节记录的是调整前的 20 条/页、最多 50 页，最终数值以 §4.42 与代码为准（25 × 40 ≈ 1000 条）。
+
 问题描述：按要求完全取消“最旧”排序，不再保留旧版评论接口与 `nextPage` 分页；评论区顶部只显示“评论”两个字。同时在右下角增加智能出现的独立圆形“跳转到顶部 / 跳转到底部”按钮，使用指向底线的箭头图标。点击“跳转到底部”时先一次性补拉全部剩余评论，再直接滚动到底部。顶部区域下方的分隔线去掉。
 
 解决方法：
@@ -1830,7 +2149,7 @@
     - 还有下一页或未滚到底部时显示“跳转到底部”；
   - 两个按钮分别执行平滑回顶、直接拉到底部；
 - “跳转到底部”补拉逻辑：
-  - 若仍有 `hasMore`，按 `loadMore()` 串行分页，直到没有下一页或达到 `COMMENT_LOAD_ALL_PAGE_MAX = 40` 页（25 × 40 = 1000 条）；
+  - 若仍有 `hasMore`，按 `loadMore()` 串行分页，直到没有下一页或达到当时 `COMMENT_LOAD_ALL_PAGE_MAX = 50` 页（20 × 50 = 1000 条；§4.42 后为 25 条/页、40 页）；
   - 串行请求天然受全局限速约束，避免并发轰炸上游；
   - 达到页数上限时提示“评论较多，已加载前 N 条”，避免热门歌曲无限拉取；
   - 使用现有 `token` 作为取消标记：关闭歌词 / 评论弹出层（组件卸载）、切歌或刷新时立即让循环失效，不再发起后续页请求；
@@ -1854,9 +2173,9 @@
 |---|---|---|---|
 | `CORE.html` | §4.1 `types.ts` / §4.2 `ipc.ts` | 改 | 删除 `CommentSort` / `nextPage` / `pageNo`；`comment.get(songId, cursor?)` 只保留最新评论游标。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 改 | 删除最旧排序与旧版评论接口，只保留 `GetNewCommentList` + `LastCommentSeqNo`。 |
-| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 工具栏改为“评论”；增加右下角跳转顶部 / 底部圆形按钮；跳转底部串行补拉剩余评论，最多 40 页，卸载 / 切歌 / 刷新时取消。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 工具栏改为“评论”；增加右下角跳转顶部 / 底部圆形按钮；跳转底部串行补拉剩余评论，最多 40 页（§4.42 后；本节当时为 50 页），卸载 / 切歌 / 刷新时取消。 |
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comments-toolbar` 下边框；增加 `.comments-title`、`.comments-jump`、`.comments-jump-btn`；调整 `.comments-scroll` 底部 padding。 |
-| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `COMMENT_LOAD_ALL_PAGE_MAX = 40`。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | §4.42 将 `COMMENT_LOAD_ALL_PAGE_MAX` 调整为 40（本节当时为 50）。 |
 | `PROVIDER.html` | §4.3 `QqCommentList` | 改 | 删除最旧排序 / 旧版接口说明，只保留最新评论游标分页。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 删除最新 / 最旧排序，改为“评论”标题；增加右下角跳转顶部 / 底部按钮与跳转底部的补拉行为。 |
 | `EVOLVE.md` | #5 | 改 | 删除最旧排序要求；补跳转顶部 / 底部交互、补拉上限与取消约束。 |

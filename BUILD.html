@@ -18,6 +18,17 @@
   <tr><td>构建工具</td><td><code>base-devel</code>、<code>nodejs</code>、<code>npm</code>。</td></tr>
   <tr><td>运行期依赖</td><td>GTK、libsecret、NSS、ALSA、D-Bus。</td></tr>
 </table>
+<table>
+  <tr><th>运行期库</th><th>Arch 包名</th></tr>
+  <tr><td>GTK</td><td><code>gtk3</code></td></tr>
+  <tr><td>libsecret</td><td><code>libsecret</code></td></tr>
+  <tr><td>NSS</td><td><code>nss</code></td></tr>
+  <tr><td>ALSA</td><td><code>alsa-lib</code></td></tr>
+  <tr><td>D-Bus</td><td><code>dbus</code></td></tr>
+</table>
+<ul class="note">
+  <li><code>install.sh --with-deps</code> 只对检测到 <code>pacman</code> 的系统使用该映射安装 <code>gtk3 libsecret nss alsa-lib dbus</code>；其他发行版需自行安装等价依赖，否则可能影响启动。</li>
+</ul>
 
 <h2 id="b2">2. 开发运行</h2>
 <p><a href="#top">↑</a></p>
@@ -95,7 +106,7 @@ curl -fsSL https://raw.githubusercontent.com/54m43lJ/LycheePlayer/main/install.s
   <li>系统级安装：程序目录 <code>/opt/lychee-player</code>，入口 <code>/usr/bin/lychee-player</code>，桌面文件与图标写入 <code>/usr/share</code>。</li>
   <li>安装包缓存目录为 <code>${XDG_CACHE_HOME:-$HOME/.cache}/lychee-player/install/</code>，tar.gz 与 <code>.sha256</code> 使用与 Release 资产相同的固定文件名；版本化安装按版本分子目录。目录权限 <code>0700</code>，文件按当前用户可读。</li>
   <li>每次安装先取远端 <code>.sha256</code>（体积小），再计算本地缓存 tar.gz 的 sha256：一致则跳过下载直接安装；不一致或缓存缺失时下载到 <code>.part</code>，校验通过后原子 <code>mv</code> 到缓存并写入 <code>.sha256</code>。远端校验和不可获取时不使用过期缓存静默安装，给出错误与清缓存提示。</li>
-  <li>运行期依赖：未给 <code>--with-deps</code> / <code>--no-deps</code> 且 stdin 是 TTY 时询问“安装运行期依赖？[Y/n]”（默认 Y）；无 TTY 时跳过并打印提示。依赖安装放在客户端安装成功之后，失败只提示可能影响启动，不阻塞已安装的客户端；Arch 使用 <code>pacman -S --needed</code>，需要 root 时通过 <code>sudo</code>，用户级安装不静默提权。</li>
+  <li>运行期依赖：未给 <code>--with-deps</code> / <code>--no-deps</code> 且 stdin 是 TTY 时询问“安装运行期依赖？[Y/n]”（默认 Y）；无 TTY 时跳过并打印提示。依赖安装放在客户端安装成功之后，失败只提示可能影响启动，不阻塞已安装的客户端。脚本按 §1 的 Arch 映射执行 <code>pacman -S --needed gtk3 libsecret nss alsa-lib dbus</code>，需要 root 时通过 <code>sudo</code>，用户级安装不静默提权；未检测到 <code>pacman</code> 时跳过并提示自行安装等价依赖。</li>
   <li>安装脚本强制校验 <code>sha256sum</code>；校验和缺失或不匹配时拒绝安装。也可先下载脚本检查再执行。</li>
   <li>安装时会把桌面项的 <code>Exec</code> / <code>TryExec</code> 改写为实际入口的绝对路径，避免 GUI 会话的 PATH 不包含 <code>~/.local/bin</code> 时点击无效。</li>
 </ul>
@@ -177,8 +188,8 @@ git push origin main
 <table>
   <tr><th>用途</th><th>位置 / 说明</th></tr>
   <tr><td>歌单缓存</td><td><code>userData/cache/playlist</code>；每份歌单一个整份快照 JSON，<code>complete</code> 标记是否完整；超过 <code>PLAYLIST_CACHE_MAX_BYTES</code> 时按 mtime LRU 清理。</td></tr>
-  <tr><td>音频缓存</td><td><code>userData/cache/audio/&lt;musicid|anonymous&gt;/&lt;quality&gt;/&lt;songMid&gt;.&lt;mp3|flac&gt;</code>；同曲可有多档；总容量上限与 LRU 清理由 CORE 常量定义；退出登录不清空。缓存与下载可同时存在，删除下载不删除缓存，清空缓存不删除已下载文件。</td></tr>
-  <tr><td>下载</td><td>默认 <code>~/Music/Lychee Player</code>（<code>Settings.downloadDir</code> 可改）；下载索引与内容同目录：<code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>，按账号记录完成与暂停任务，启动时加载当前账号索引并校验文件存在。未完成任务不自动续传，暂停任务可手动继续，失败任务只在当前会话保留。<code>.part</code> 文件用于暂停 / 续传；删除单任务 / 批次才删除文件，“清除已完成”只清记录；<code>downloadStorage</code> 统计排除 <code>.lychee-downloads-*</code>；仅本机个人使用。</td></tr>
+  <tr><td>音频缓存</td><td><code>userData/cache/audio/&lt;musicid|anonymous&gt;/&lt;quality&gt;/&lt;songMid&gt;.&lt;mp3|flac&gt;</code>；同曲可有多档；总容量上限与 LRU 清理由 CORE 常量定义；退出登录不清空。缓存与下载可同时存在，删除下载不删除缓存，清空缓存不删除已下载文件。缓存与下载可能位于不同文件系统；缓存转下载统一复制文件，不使用硬链接；复制失败时改回网络下载。</td></tr>
+  <tr><td>下载</td><td>默认 <code>~/Music/Lychee Player</code>（<code>Settings.downloadDir</code> 可改）；下载索引与内容同目录：<code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>，只有 <code>{ tasks }</code>，按账号记录完成与暂停任务，启动时加载当前账号索引并校验文件存在。索引写入先写 <code>&lt;index&gt;.part</code> 再原子替换；退出时同步写盘，避免异步写入被进程终止截断；从未加载下载模块时不写空索引；切换账号前先把旧账号索引落盘。文件名模板为 <code>歌名-歌手-专辑.&lt;mp3|flac&gt;</code>：多个歌手用顿号连接，缺失片段直接跳过，<code>\ / : * ? " &lt; &gt; |</code> 替换为 <code>_</code> 并压缩空白，全部为空时回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队占位路径仍使用 <code>songMid</code>，最终路径在出队时生成。<code>.part</code> 文件用于暂停 / 续传；删除单任务才删除文件，“清除已完成”只清记录；<code>downloadStorage</code> 统计排除 <code>.lychee-downloads-*</code>；仅本机个人使用。</td></tr>
   <tr><td>安装脚本缓存</td><td><code>${XDG_CACHE_HOME:-$HOME/.cache}/lychee-player/install/</code>；存放 tar.gz 与 <code>.sha256</code>，版本化安装按版本分子目录；目录权限 <code>0700</code>，可随时删除，删除后下次安装重新下载。</td></tr>
   <tr><td>凭证 / 设置</td><td><code>userData/credential.bin</code> 由 <code>safeStorage</code> 加密，权限 <code>0600</code>；<code>userData/settings.json</code> 同样即时写盘。</td></tr>
 </table>
