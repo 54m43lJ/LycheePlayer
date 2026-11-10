@@ -1,7 +1,5 @@
 # Documentation Guidelines
 
-<a id="top"></a>
-
 Documents per project, in HTML — the development docs split by boundary:
 
 | # | Document | Boundary | Content | Elsewhere |
@@ -22,7 +20,7 @@ Documents per project, in HTML — the development docs split by boundary:
 
 ## Global constraints
 
-[↑](#top)
+[↑](#documentation-guidelines)
 
 | # | Constraint | Rule |
 |--:|-----------|------|
@@ -41,7 +39,7 @@ Documents per project, in HTML — the development docs split by boundary:
 
 ## About
 
-[↑](#top)
+[↑](#documentation-guidelines)
 
 1. **WHAT & WHY** — IDEAL: the problem to solve · GOAL: what success looks like · NON-GOAL: project boundaries and the scope left to others
 2. **User interactions** — entry points and user-observable outcomes; mechanisms belong to USER/CORE
@@ -50,7 +48,7 @@ Documents per project, in HTML — the development docs split by boundary:
 
 ## User
 
-[↑](#top)
+[↑](#documentation-guidelines)
 
 **Rules**
 - express requirements as mechanisms; finer requirements that resist a mechanism → complement at the end of the section
@@ -74,7 +72,7 @@ Documents per project, in HTML — the development docs split by boundary:
 
 ## Core
 
-[↑](#top)
+[↑](#documentation-guidelines)
 
 **Rules**
 
@@ -102,7 +100,7 @@ Documents per project, in HTML — the development docs split by boundary:
 
 ## Provider
 
-[↑](#top)
+[↑](#documentation-guidelines)
 
 **Rules**
 - contractual = the consumed subset; link the official documentation as the authoritative definition (mirror in `reference/` when applicable)
@@ -119,7 +117,7 @@ Documents per project, in HTML — the development docs split by boundary:
 
 ## Diagrams: PlantUML
 
-[↑](#top)
+[↑](#documentation-guidelines)
 
 Applies to USER & PROVIDER. PlantUML is the sole diagram source: Component Diagram, Sequence Diagram, or Activity Diagram with Swimlanes. Other visuals use actual pictures.
 Sources (`*.puml`) and exports (`*.svg`) live in the owning project's own `diagram/` (one folder per project); embed the SVG via `<img>` with a relative path (`diagram/…`).
@@ -133,7 +131,7 @@ Sources (`*.puml`) and exports (`*.svg`) live in the owning project's own `diagr
 
 ## BUILD
 
-[↑](#top)
+[↑](#documentation-guidelines)
 
 **Rules**
 - guides other developers in using and building on the project
