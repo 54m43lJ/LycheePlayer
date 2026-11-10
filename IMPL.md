@@ -698,7 +698,7 @@
 
 状态：已解决。
 
-### 3.9 评论“最旧”排序分页追加后会失去全局顺序（该排序后由 §4.41 取消）
+### 3.9 评论“最旧”排序分页追加后会失去全局顺序（该排序后由 §4.41 取消） [已解决]
 
 > 后续修正：§4.41 已完全取消“最旧”排序与 `CommentSort`，评论只保留最新评论的 `LastCommentSeqNo` 游标分页；本节关于最旧排序跨页重排的规则不再适用，追加时按 `id` 去重仍然有效。
 
@@ -717,6 +717,19 @@
 | `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 已由 §4.41 删除最旧排序；追加时按 `id` 去重仍有效。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 不动 | 上游透传与本地排序分工由 #5 维护。 |
 | `PROVIDER.html` | §4.1 歌曲评论行 | 不动 | 上游排序方法不变，见 #5。 |
+
+实际操作（2026-11-11，分支 `doc/comment-append-dedupe`）：
+
+- `CORE.html` §4.42 `CommentsPanel.vue`：在分页 note 中补充“追加前用已加载评论的 `id` 集合去重”，并明确评论只按上游最新顺序展示、不再按 `createdAtMs` 重排，最旧排序已取消。
+- `CORE.html` §4.15 `api/comment.ts`：按原表“不动”未处理；§4.15 已写明只保留最新读取与 `LastCommentSeqNo` 游标。
+- `PROVIDER.html` §4.1 歌曲评论行：按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/components/CommentsPanel.vue`：`loadMore()` 先以 `new Set(comments.value.map((comment) => comment.id))` 建已知集合，再过滤 `page.comments` 后追加；无本地排序调用。
+- `grep` 确认 `CORE.html` §4.42 已写入 `id` 去重与“不重排”说明；§4.15 / `PROVIDER.html` §4.1 未改。
+
+状态：已解决。
 
 ### 3.10 播放模式悬停菜单的定时器与外部监听泄漏
 
