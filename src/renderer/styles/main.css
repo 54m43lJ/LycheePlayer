@@ -1974,7 +1974,9 @@ a {
   flex: 1;
   overflow-y: auto;
   padding: 26px 26px 120px;
-  scroll-behavior: smooth;
+  /* 拖拽时直接写 scrollTop，不能带平滑，否则滚动会滞后于指针。自动回中用
+     scrollIntoView({ behavior: 'smooth' }) 单独处理。 */
+  scroll-behavior: auto;
 }
 
 .lyric-line {
