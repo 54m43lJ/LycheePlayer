@@ -3617,7 +3617,8 @@ a {
   gap: 8px;
 }
 
-.comments-jump-btn {
+.comments-jump-btn,
+.page-jump-btn {
   display: grid;
   place-items: center;
   width: 38px;
@@ -3629,14 +3630,26 @@ a {
   color: var(--muted);
 }
 
-.comments-jump-btn:hover {
+.comments-jump-btn:hover,
+.page-jump-btn:hover {
   color: var(--text);
   border-color: var(--border-strong);
 }
 
-.comments-jump-btn:disabled {
+.comments-jump-btn:disabled,
+.page-jump-btn:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+.page-jump {
+  position: fixed;
+  right: 22px;
+  bottom: calc(var(--player-height) + 18px);
+  z-index: 15;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .comment {

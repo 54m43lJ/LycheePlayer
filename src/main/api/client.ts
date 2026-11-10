@@ -266,11 +266,15 @@ interface MusicuResponse<T> {
   }
 }
 
-/** 部分接口把具体错误放在 data.retcode，而 req_0.code 统一为 1000。 */
+/** 部分接口把具体错误放在 data.retcode / data.code，而 req_0.code 统一为 0 或 1000。 */
 function dataErrorCode(data: unknown): number | null {
   if (!data || typeof data !== 'object') return null
-  const code = Number((data as Record<string, unknown>).retcode)
-  return Number.isFinite(code) && code !== 0 ? code : null
+  const record = data as Record<string, unknown>
+  const retcode = Number(record.retcode)
+  if (Number.isFinite(retcode) && retcode !== 0) return retcode
+  // 歌单不存在等场景使用顶层负数码（如 -100006），不能只看 retcode。
+  const code = Number(record.code)
+  return Number.isFinite(code) && code < 0 ? code : null
 }
 
 export interface MusicuOptions {
@@ -324,7 +328,10 @@ export async function musicu<T>(
     const node = response.req_0
     const baseCode = response.code !== 0 ? response.code : (node?.code ?? 0)
     const specificCode = dataErrorCode(node?.data)
-    const code = baseCode === 1000 && specificCode !== null ? specificCode : baseCode
+    const code =
+      specificCode !== null && (baseCode === 0 || baseCode === 1000)
+        ? specificCode
+        : baseCode
     if (code !== 0) {
       // 2001 / 104604 为上游瞬时繁忙，短退避后重试；其余错误码直接映射。
       if ((code === 2001 || code === 104604) && attempt < UPSTREAM_RETRY_ATTEMPTS - 1) {
@@ -372,6 +379,9 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError {
   }
   if (code === 403) {
     return new UpstreamError('NO_PERMISSION', '当前账号无权执行该操作')
+  }
+  if (code === -100006) {
+    return new UpstreamError('NO_PERMISSION', '歌单不存在或已失效', false, code)
   }
   const loginMessages: Record<number, string> = {
     20261: '登录参数错误',

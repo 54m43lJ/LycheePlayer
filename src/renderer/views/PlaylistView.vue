@@ -38,7 +38,18 @@ watch(
 )
 const favoriteMids = computed(() => [...playlistEdit.favorites])
 const assetStates = computed(() => download.assets)
+const downloadedCount = computed(
+  () =>
+    songs.value.filter((song) => Boolean(download.assets[song.songMid]?.downloadedQuality))
+      .length
+)
 const filterText = ref('')
+const pageRef = ref<HTMLElement | null>(null)
+const showJumpTop = ref(false)
+const showJumpBottom = ref(false)
+const JUMP_THRESHOLD = 120
+let scrollRoot: HTMLElement | null = null
+let contentObserver: ResizeObserver | null = null
 
 const filteredSongs = computed(() => {
   const keyword = filterText.value.trim().toLowerCase()
@@ -168,6 +179,22 @@ function retry(): void {
   void playlist.retry()
 }
 
+function updateJumpVisibility(): void {
+  const el = scrollRoot
+  if (!el) return
+  showJumpTop.value = el.scrollTop > JUMP_THRESHOLD
+  showJumpBottom.value = el.scrollTop + el.clientHeight < el.scrollHeight - JUMP_THRESHOLD
+}
+
+function scrollToTop(): void {
+  scrollRoot?.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+function scrollToBottom(): void {
+  const el = scrollRoot
+  if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+}
+
 watch(
   id,
   (value, previous) => {
@@ -205,6 +232,13 @@ watch(
 let pollTimer: number | null = null
 
 onMounted(() => {
+  scrollRoot = pageRef.value?.closest<HTMLElement>('.main') ?? null
+  scrollRoot?.addEventListener('scroll', updateJumpVisibility, { passive: true })
+  if (pageRef.value) {
+    contentObserver = new ResizeObserver(() => updateJumpVisibility())
+    contentObserver.observe(pageRef.value)
+  }
+  updateJumpVisibility()
   pollTimer = window.setInterval(() => {
     if (document.visibilityState === 'visible' && id.value) {
       void playlist.poll(id.value)
@@ -214,12 +248,16 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   if (pollTimer !== null) window.clearInterval(pollTimer)
+  scrollRoot?.removeEventListener('scroll', updateJumpVisibility)
+  scrollRoot = null
+  contentObserver?.disconnect()
+  contentObserver = null
   playlist.stop(id.value)
 })
 </script>
 
 <template>
-  <div class="page">
+  <div ref="pageRef" class="page">
     <div v-if="loading" class="loading-block">
       <span class="spinner lg" />
       正在加载歌单
@@ -267,8 +305,8 @@ onBeforeUnmount(() => {
       <div class="section-title">
         <span>歌曲</span>
         <span class="count">
-          {{ filterText ? `${filteredSongs.length} / ${songs.length}` : songs.length }} /
-          {{ meta.songCount }} 首
+          <template v-if="filterText">筛选 {{ filteredSongs.length }} · </template>
+          已下载 {{ downloadedCount }} / {{ songs.length }} 首
         </span>
       </div>
 
@@ -327,6 +365,29 @@ onBeforeUnmount(() => {
         @added="onPickerAdded"
       />
     </template>
+
+    <div v-if="showJumpTop || showJumpBottom" class="page-jump">
+      <button
+        v-if="showJumpTop"
+        type="button"
+        class="page-jump-btn"
+        title="跳转到顶部"
+        aria-label="跳转到顶部"
+        @click="scrollToTop()"
+      >
+        <AppIcon name="to-top" :size="17" />
+      </button>
+      <button
+        v-if="showJumpBottom"
+        type="button"
+        class="page-jump-btn"
+        title="跳转到底部"
+        aria-label="跳转到底部"
+        @click="scrollToBottom()"
+      >
+        <AppIcon name="to-bottom" :size="17" />
+      </button>
+    </div>
 
     <ConfirmDialog
       :open="removeTarget !== null"
