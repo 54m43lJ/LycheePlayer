@@ -57,8 +57,8 @@ export const PLAYLIST_PAGE_MAX = 20_000
 export const PLAYLIST_POLL_INTERVAL_MS = 15_000
 /** 完整歌单刷新失败后的自动重试间隔。推荐值 5 * 60_000 ms。 */
 export const PLAYLIST_REFRESH_RETRY_MS = 5 * 60_000
-/** 歌单缓存字节上限。推荐值 16 × 1024 × 1024。 */
-export const PLAYLIST_CACHE_MAX_BYTES = 16 * 1024 * 1024
+/** 歌单缓存字节上限。推荐值 64 × 1024 × 1024。 */
+export const PLAYLIST_CACHE_MAX_BYTES = 64 * 1024 * 1024
 
 // ---------- 可用性探测 ----------
 
