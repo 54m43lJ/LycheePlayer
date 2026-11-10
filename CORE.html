@@ -916,7 +916,7 @@ export function unlikeComment(commentId: string): Promise&lt;CommentLikeResult&g
 </code></pre>
 <ul class="note">
   <li>评论读取未登录时匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>。<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
-  <li><code>latest</code> 使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。分页固定每页 20 条（上游单页上限 25，超过返回业务码 10000）。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留“最新”读取，不提供“最旧”排序。</li>
+  <li><code>latest</code> 使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。上游 <code>PageSize</code> 实测上限为 25（26 起返回业务码 10000），应用固定每页 25 条。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留“最新”读取，不提供“最旧”排序。</li>
   <li>点赞使用 <code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code>，参数 <code>{ comment_id, type: 3 | 4, uin }</code>（3 点赞、4 取消）；需要登录，响应的 <code>data.code</code> / <code>msg</code> / <code>subcode</code> 全为 0 才算成功。成功后以读回评论的 <code>IsPraised</code> / <code>PraiseNum</code> 校正本地状态；失败抛错由渲染层回滚。</li>
 </ul>
 
@@ -1398,7 +1398,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li><a href="#c4-72">LyricsView</a> 右列的评论区；监听当前歌曲与路由激活状态，存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
   <li>顶部只显示“评论”标题、总数与刷新入口，不再提供“最新 / 最旧”排序切换。刷新只重载评论，不触发歌词重载。</li>
-  <li>分页每页 20 条，滚动到底且 <code>hasMore=true</code> 时按游标追加下一页。右下角按滚动位置显示独立圆形“跳转到顶部 / 底部”按钮：顶部按钮在 <code>scrollTop &gt; 120</code> 时出现；底部按钮在仍有下一页或未滚到底时出现。点击“跳转到顶部”平滑回顶；点击“跳转到底部”先串行补拉剩余评论（最多 <code>COMMENT_LOAD_ALL_PAGE_MAX = 50</code> 页），再直接滚到底部。补拉期间按钮显示 spinner；组件卸载、切歌或刷新时通过 token 立即取消后续页。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
+  <li>分页每页 25 条，滚动到底且 <code>hasMore=true</code> 时按游标追加下一页。右下角按滚动位置显示独立圆形“跳转到顶部 / 底部”按钮：顶部按钮在 <code>scrollTop &gt; 120</code> 时出现；底部按钮在仍有下一页或未滚到底时出现。点击“跳转到顶部”平滑回顶；点击“跳转到底部”先串行补拉剩余评论（最多 <code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 页 / 约 1000 条），再直接滚到底部。补拉期间按钮显示 spinner；组件卸载、切歌或刷新时通过 token 立即取消后续页。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
   <li>评论行两行布局：第一行头像 + 昵称 + 正文（完整展示，不截断），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
 </ul>
 
@@ -1530,8 +1530,8 @@ export declare const OAUTH_TIMEOUT_MS: number;              // 15_000 ms
 export declare const LOGIN_ALLOWED_DOMAINS: readonly string[]; // qq.com / gtimg.cn / weixin.qq.com
 export declare const FAVORITE_STATUS_CACHE_MS: number;      // 30_000 ms
 export declare const VIP_CACHE_MS: number;                  // 5 × 60_000 ms
-export declare const COMMENT_PAGE_SIZE: number;             // 20；上游上限 25
-export declare const COMMENT_LOAD_ALL_PAGE_MAX: number;     // 50；跳转底部最多补拉 1000 条
+export declare const COMMENT_PAGE_SIZE: number;             // 25；上游实测上限
+export declare const COMMENT_LOAD_ALL_PAGE_MAX: number;     // 40；跳转底部最多补拉 1000 条
 export declare const AUDIO_CACHE_MAX_BYTES: number;         // 2 GiB
 export declare const AUDIO_CACHE_DIR: string;               // 'audio'
 export declare const STARTUP_FLAGS_MAX_BYTES: number;       // 8 × 1024
@@ -2292,7 +2292,7 @@ app::requestSingleInstanceLock()
 <ul class="note">
   <li>播放条封面调用 <code>router.push('/lyrics')</code> 进入页面；离开页面不改变播放状态，返回优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
   <li>歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>；歌词请求可返回 QRC，解密与逐字解析见 <a href="#c4-64">§4.64</a>，无 QRC 时回退 LRC 整行高亮。</li>
-  <li>评论默认按最新排序、固定每页 20 条，匿名发送；切换排序时优先透传上游，不支持则本地重排；右上刷新只重载评论。评论读取与分页见 <a href="#c4-15">§4.15</a>，接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
+  <li>评论默认只读取最新评论、固定每页 25 条，未登录匿名、登录后携带 Cookie 读取点赞状态；右上刷新只重载评论。评论读取与分页见 <a href="#c4-15">§4.15</a>，接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
   <li>点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a> / <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。歌词 / 评论随路由加载与卸载。</li>
 </ul>
 

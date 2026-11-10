@@ -1830,7 +1830,7 @@
     - 还有下一页或未滚到底部时显示“跳转到底部”；
   - 两个按钮分别执行平滑回顶、直接拉到底部；
 - “跳转到底部”补拉逻辑：
-  - 若仍有 `hasMore`，按 `loadMore()` 串行分页，直到没有下一页或达到 `COMMENT_LOAD_ALL_PAGE_MAX = 50` 页（约 1000 条）；
+  - 若仍有 `hasMore`，按 `loadMore()` 串行分页，直到没有下一页或达到 `COMMENT_LOAD_ALL_PAGE_MAX = 40` 页（25 × 40 = 1000 条）；
   - 串行请求天然受全局限速约束，避免并发轰炸上游；
   - 达到页数上限时提示“评论较多，已加载前 N 条”，避免热门歌曲无限拉取；
   - 使用现有 `token` 作为取消标记：关闭歌词 / 评论弹出层（组件卸载）、切歌或刷新时立即让循环失效，不再发起后续页请求；
@@ -1854,9 +1854,52 @@
 |---|---|---|---|
 | `CORE.html` | §4.1 `types.ts` / §4.2 `ipc.ts` | 改 | 删除 `CommentSort` / `nextPage` / `pageNo`；`comment.get(songId, cursor?)` 只保留最新评论游标。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 改 | 删除最旧排序与旧版评论接口，只保留 `GetNewCommentList` + `LastCommentSeqNo`。 |
-| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 工具栏改为“评论”；增加右下角跳转顶部 / 底部圆形按钮；跳转底部串行补拉剩余评论，最多 50 页，卸载 / 切歌 / 刷新时取消。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 工具栏改为“评论”；增加右下角跳转顶部 / 底部圆形按钮；跳转底部串行补拉剩余评论，最多 40 页，卸载 / 切歌 / 刷新时取消。 |
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comments-toolbar` 下边框；增加 `.comments-title`、`.comments-jump`、`.comments-jump-btn`；调整 `.comments-scroll` 底部 padding。 |
-| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `COMMENT_LOAD_ALL_PAGE_MAX = 50`。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `COMMENT_LOAD_ALL_PAGE_MAX = 40`。 |
 | `PROVIDER.html` | §4.3 `QqCommentList` | 改 | 删除最旧排序 / 旧版接口说明，只保留最新评论游标分页。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 删除最新 / 最旧排序，改为“评论”标题；增加右下角跳转顶部 / 底部按钮与跳转底部的补拉行为。 |
 | `EVOLVE.md` | #5 | 改 | 删除最旧排序要求；补跳转顶部 / 底部交互、补拉上限与取消约束。 |
+
+### 4.42 评论单次拉取上限实测与批量参数调整
+
+问题描述：跳转到底部需要大量补拉评论，原实现每页 20 条、最多 50 页，会发出 50 次上游请求，在 4 req/s 全局限速下明显卡顿。需要确定单次请求能否直接拉 500 条。
+
+实测结论（匿名 `GetNewCommentList`，歌曲 `97773`）：
+
+| `PageSize` | 上游结果 |
+|---:|---|
+| 20 | 正常返回 20 条 |
+| 24 | 正常返回 24 条 |
+| 25 | 正常返回 25 条 |
+| 26 / 30 / 40 / 50 / 100 / 200 / 300 / 500 / 1000 | `req_0.code = 10000`，评论 0 条 |
+
+旧版 `fcg_global_comment_h5.fcg` 的 `pagesize > 25` 虽然返回 `code=0`，但实际只给 10 条，属于不可靠的静默截断，不能用于批量读取。
+
+因此单次上限确定是 **25 条**，无法做到 500 条/页。
+
+解决方法：
+
+- `COMMENT_PAGE_SIZE` 从 20 调整为上游实测上限 **25**；
+- `COMMENT_LOAD_ALL_PAGE_MAX` 从 50 调整为 **40**，保持“跳转到底部”最多约 1000 条；
+- 批量补拉请求数从 50 次降为 40 次（减少 20%），但仍保持串行请求，不绕过全局令牌桶；
+- 跳转底部的取消机制、spinner、达到上限提示不变；
+- 单页变大后普通滚动分页也同步为 25 条/页。
+
+验证：
+
+- 匿名实测 25 成功、26 起返回业务码 10000，500 条/页不可用；
+- 新增测试断言评论请求 `PageSize = 25`；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 88 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌曲评论行 / §4.3 `QqCommentList` | 改 | 明确 `PageSize` 实测上限 25，26 起返回业务码 10000；不要尝试 500 条/页。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | `COMMENT_PAGE_SIZE = 25`；`COMMENT_LOAD_ALL_PAGE_MAX = 40`（约 1000 条）。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 跳转底部最多 40 页、约 1000 条；保持串行请求与取消机制。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论单页 25 条；跳转底部最多约 1000 条。 |
+| `EVOLVE.md` | #5 | 改 | 补评论单页上限 25 与跳转底部 40 页的约束。 |
