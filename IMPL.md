@@ -527,7 +527,7 @@
 
 状态：已解决。
 
-### 3.4 音频代理的 200 / 206 完整响应判定与进度节流
+### 3.4 音频代理的 200 / 206 完整响应判定与进度节流 [已解决]
 
 问题描述：`lychee-audio` 代理既要透传 Range，又要判断什么时候可以落盘缓存、什么时候上报进度。最初只看 status：200 算完整，206 算局部。但不少上游对 `Range: bytes=0-` 返回 206，且 `Content-Range` 覆盖整个文件；若一律按局部处理，永远不会缓存，也不会发完成进度。反过来把局部 206 当完整又会产生半截缓存。
 
@@ -545,6 +545,19 @@
 | `CORE.html` | §4.59 `media/audio-protocol.ts` | 改 | 补 200/206/full-range 的完整判定、缓存命中 100%、300ms 节流。 |
 | `CORE.html` | §5.17 音频缓存进度 | 改 | 调用树补完整 / 局部 / 缓存命中三个分支。 |
 | `EVOLVE.md` | #3 | 不动 | 进度语义由 #3 定，实现细节见 CORE 两行。 |
+
+实际操作（2026-11-10，分支 `doc/audio-progress-branches`）：
+
+- `CORE.html` §4.59 `media/audio-protocol.ts`：完整响应判定、缓存命中 100%、局部 206 不落盘等规则已存在；本次把进度节流明确为 `CACHE_PROGRESS_THROTTLE_MS = 300`。
+- `CORE.html` §5.18 音频缓存进度（原建议写 §5.17，实际章节为 §5.18）：调用树改为 `handleStream` 的四个分支：缓存命中 / 200 完整 / 覆盖完整文件的 206 / 局部 206；完整分支写缓存并按 300ms 节流上报，局部 206 只透传。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/media/audio-protocol.ts`：`complete = status === 200 || (Content-Range 为 bytes 0-(n-1)/n)`；完整分支写缓存并按 `CACHE_PROGRESS_THROTTLE_MS` 节流；缓存命中与本地下载文件直接上报 `complete: true`；局部 206 直接透传。
+- `src/shared/constants.ts` 中 `CACHE_PROGRESS_THROTTLE_MS = 300`。
+
+状态：已解决。
 
 ### 3.5 缓存转下载的硬链接会跨设备失败
 
