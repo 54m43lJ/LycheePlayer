@@ -1903,3 +1903,28 @@
 | `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 跳转底部最多 40 页、约 1000 条；保持串行请求与取消机制。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 评论单页 25 条；跳转底部最多约 1000 条。 |
 | `EVOLVE.md` | #5 | 改 | 补评论单页上限 25 与跳转底部 40 页的约束。 |
+
+### 4.43 歌词页拖拽滚动滞后于指针
+
+问题描述：ISSUES 指出歌词页上下拖动手感不对、不跟手。`LyricsPanel.vue` 在 `pointermove` 中直接写 `listRef.value.scrollTop`，但 `.lyrics-list` 同时设置了 `scroll-behavior: smooth`。按 CSSOM 语义，写 `scrollTop` 会使用元素自身的 `scroll-behavior`，浏览器会把每次赋值变成一段平滑滚动；指针已经移动，列表还在追赶动画，快速拖动时尤其明显。另一个冲突来源是 `activeIndex` 的自动回中也走平滑滚动：按下之后、越过 6px 拖拽阈值之前 `dragging` 仍为 `false`，此时歌词推进仍会触发 `centerActive()`，与用户手势抢滚动位置。
+
+解决方法：
+- `.lyrics-list` 的 `scroll-behavior` 改为 `auto`，拖拽写 `scrollTop` 立即生效、与指针位移 1:1；自动回中仍由 `scrollIntoView({ block: 'center', behavior: 'smooth' })` 显式平滑，不依赖容器默认值；
+- `onPointerDown` 忽略 `pointerType === 'touch'`，触屏交给原生滚动与惯性，避免原生滚动和自定义 `scrollTop` 叠加造成双倍位移；鼠标 / 触控笔仍走自定义拖拽；
+- `activeIndex` 监听在 `pressing` 期间也跳过自动回中（原先只判断 `dragging`），避免按住但尚未越过阈值时被回中动画抢走位置；
+- 保留 6px 拖拽阈值与“越过阈值后才 `setPointerCapture`”，继续保证未拖拽时原生 click 能触发歌词跳转。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 88 个用例通过；
+- `npm run build` 通过；
+- 未在图形界面中实拖验证；修改点依据 CSSOM `scroll-behavior` 语义与指针事件顺序确认。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.41 `LyricsPanel.vue` | 改 | 说明拖拽写 `scrollTop` 必须即时生效；触屏不进入自定义拖拽；`pressing` 期间不自动回中。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | `.lyrics-list` 的 `scroll-behavior` 为 `auto`；平滑只用于 `scrollIntoView` 自动回中。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 明确鼠标拖拽与指针 1:1 跟手；触屏使用原生惯性滚动；点击定位与拖拽互不误触。 |
+| `EVOLVE.md` | #5 | 改 | 在歌词交互中补充“拖拽即时跟手、触屏走原生滚动”的约束。 |
