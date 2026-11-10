@@ -2055,3 +2055,36 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 新增 `.page-jump` 固定定位；`.page-jump-btn` 与评论跳转按钮共用样式。 |
 | `USER.html` | §5.2.8 页面表 · 歌单详情行 | 改 | 打开立即显示缓存；后台更新失败不提示；歌曲区显示已下载数量；右下角提供快速到顶部 / 底部按钮。 |
 | `EVOLVE.md` | #5 歌单 | 改 | 补缓存优先、静默刷新、失效歌单清理、已下载计数与快速跳转要求。 |
+
+### 4.47 歌单缓存从未落盘：Vue 响应式代理无法通过 IPC 结构化克隆
+
+问题描述：切换到歌单时仍会显示一段“正在加载歌单”。检查实际用户目录发现 `cache/playlist` 目录根本不存在，说明不是缓存读取慢，而是缓存从未写入；每次切换都在等完整网络快照。
+
+根因：
+- `stores/playlist.ts` 的 `persistCache()` 直接把 `current.meta` 和 `current.songs.slice()` 传给 `window.lychee.playlist.saveCache`；
+- `feed` 是 `ref<PlaylistFeed>`，Vue 会深度转换为响应式 Proxy；`current.meta` 是 Proxy，`current.songs` 的数组元素也是 Proxy；
+- Electron IPC 使用结构化克隆，`structuredClone(reactive(...))` 会抛 `DataCloneError: #<Object> could not be cloned`；
+- `persistCache()` 的 `catch` 静默吞掉异常，因此主进程从未收到 `playlist.saveCache`，`cache/playlist` 目录也不会被创建。切换歌单只能重新走网络拉取，表现为持续 spinner。
+
+这不是缓存结构本身导致的慢：命中缓存时只是一次 IPC + JSON 读取；真正的问题是缓存命中率恒为 0。次要风险是 16MB 上限会让超大歌单（例如 1 万首约 20MB）写入后立刻被清理，以及同步 `readFileSync` 会占用主进程，但都不解释普通歌单每次切换都慢。
+
+解决方法：
+- 新增 `plainSong()`，把 `Song` 及其 `singers` / `album` / `pay` 逐层展开为普通对象；`meta` 使用 `{ ...current.meta }` 展开；
+- `persistCache()` 只把纯对象快照交给 IPC，避免响应式 Proxy 进入结构化克隆；
+- 不改变缓存文件结构与读取流程，现有按“账号 + 歌单 ID”的持久缓存继续使用。
+
+验证：
+
+- 复现：`structuredClone(reactive({ a: 1 }))` 抛 `DataCloneError`；修复前传给 `saveCache` 的 `meta` / `songs[0]` 均为 `isProxy() === true`；
+- 新增 store 用例断言 `snapshot`、`meta`、`songs`、`songs[0]`、`album`、`pay` 都不是 Proxy；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 101 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.61 `stores/playlist.ts` | 改 | 明确写缓存前必须把响应式 feed 展开为纯对象；Electron IPC 不能克隆 Vue Proxy。 |
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | 缓存快照结构不变；说明大歌单可能因 16MB 上限被立即清理。 |
+| `USER.html` | §5.2.8 歌单详情 | 改 | 首次成功加载后写入缓存；后续打开优先命中缓存，避免重复网络等待。 |

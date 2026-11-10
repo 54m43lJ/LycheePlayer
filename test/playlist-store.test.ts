@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
+import { isProxy } from 'vue'
 import type {
   IpcResult,
   PlaylistCacheEntry,
@@ -160,6 +161,24 @@ describe('playlist feed refresh', () => {
     expect(lastSave?.[1].songs).toHaveLength(100)
     expect(lastSave?.[1].total).toBe(100)
     expect(lastSave?.[2]).toBe(true)
+    store.stop('liked')
+  })
+
+  it('writes a plain snapshot that survives IPC structured cloning', async () => {
+    getSnapshotMock.mockResolvedValueOnce(ok(snapshot([song('1'), song('2')])))
+    const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
+    const store = usePlaylistStore()
+
+    await store.load('liked')
+    await vi.waitFor(() => expect(saveCacheMock).toHaveBeenCalled())
+
+    const saved = saveCacheMock.mock.calls.at(-1)?.[1]
+    expect(isProxy(saved)).toBe(false)
+    expect(isProxy(saved.meta)).toBe(false)
+    expect(isProxy(saved.songs)).toBe(false)
+    expect(isProxy(saved.songs[0])).toBe(false)
+    expect(isProxy(saved.songs[0].album)).toBe(false)
+    expect(isProxy(saved.songs[0].pay)).toBe(false)
     store.stop('liked')
   })
 

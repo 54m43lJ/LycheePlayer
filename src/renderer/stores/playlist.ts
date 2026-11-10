@@ -282,6 +282,16 @@ export const usePlaylistStore = defineStore('playlist', () => {
     maybeFinalizeQueue()
   }
 
+  /** IPC 使用结构化克隆，响应式 Proxy 会导致 DataCloneError，缓存快照必须是纯对象。 */
+  function plainSong(song: Song): Song {
+    return {
+      ...song,
+      singers: song.singers.map((singer) => ({ ...singer })),
+      album: { ...song.album },
+      pay: { ...song.pay }
+    }
+  }
+
   /** 完整歌单成功后写整份缓存；写入串行化，避免旧快照覆盖新快照。 */
   async function persistCache(): Promise<void> {
     const current = feed.value
@@ -292,8 +302,8 @@ export const usePlaylistStore = defineStore('playlist', () => {
     }
     savingCache = true
     const snapshot: PlaylistSnapshot = {
-      meta: current.meta,
-      songs: current.songs.slice(),
+      meta: { ...current.meta },
+      songs: current.songs.map(plainSong),
       total: current.total,
       sourceTotal: current.sourceTotal
     }
