@@ -606,6 +606,30 @@
 
 ---
 
+## 15. 统一 revealer 交互
+
+**需求**：除特别说明外，所有 revealer 按钮遵循同一套交互：按钮本身点击按固定顺序循环切换选项；悬停 / 键盘聚焦向上弹出弹层；弹层按固定顺序只列出除当前选项外的其它选项；按钮本身始终高亮当前选项，弹层与按钮一体化；Esc 或点击外部关闭。音量条为特殊个例：点击切换静音、悬停弹出音量条，且仅 ≤900px 启用弹出滑块。
+
+**实现思路**：
+
+- 播放模式：固定顺序 `sequence → repeat-all → repeat-one → shuffle`；`cycleMode()` 供按钮点击，`setMode()` 供弹层选择。
+- 音质：设置页与播放条共用 `QUALITY_PREFERENCE_OPTIONS`（`auto → 128k → 320k → flac`）与 `settings.defaultQuality`；`updateDefaultQuality()` 为统一写入入口，`cycleQualityPreference()` 供按钮点击。
+- 当前项固定在弹层底部并由按钮本身表示；弹层不重复渲染当前项。
+- 音量按钮保留静音切换；宽屏常驻滑块，窄屏悬停 / 点击弹出，限制单独记录在播放条章节。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §2 CONVENTIONS · Revealer 统一交互（`#u2`） | 增 | 增统一交互约定，注明音量条为特殊个例。 |
+| `USER.html` | §2 CONVENTIONS · 播放模式切换 / §5.2.3 播放条 | 改 | 点击按钮循环切换，悬停 / 焦点弹出其余选项；音质增加自动档并与设置页共用偏好。 |
+| `USER.html` | §5.2.7 设置页 | 改 | 音质偏好与播放条共用并即时同步。 |
+| `CORE.html` | §4.29 `stores/player.ts` / §4.30 `stores/settings.ts` | 改 | 补 `QUALITY_PREFERENCE_OPTIONS`、`qualityPreference`、`updateDefaultQuality`、`cycleQualityPreference`。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放模式与音质按钮点击循环、弹层列其余选项、空状态音质仍可用。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | revealer 弹层与按钮一体化的定位 / 动画；音量特殊样式单独记录。 |
+
+---
+
 ## 建议落地顺序
 
 | 阶段 | 清单项 | 原因 |

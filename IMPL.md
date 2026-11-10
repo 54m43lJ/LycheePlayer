@@ -1473,3 +1473,39 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 补 `.icon-btn:disabled` 灰化样式；音质弹层与播放模式共用向上 reveal 的定位 / 动画约定。 |
 | `USER.html` | §5.2.2 播放条 / §5.2.7 设置页 | 改 | 无歌曲时喜欢 / 下载 / 上一首 / 下一首 / 播放按钮灰化不可用；音质按钮始终可用，按钮显示当前偏好（含“自动”），悬停弹出其它档位；设置页与播放条共用同一份音质偏好并即时联动。 |
 | `EVOLVE.md` | — | 改 | 补充音质切换与播放模式一致的 revealer 交互要求。 |
+
+### 4.33 Revealer 统一交互
+
+问题描述：ISSUES 要求所有 revealer 统一设计模式：按钮本身点击按固定顺序切换选项、弹层按固定顺序列出除当前项外的其余选项、按钮始终高亮当前项；音量条作为特殊个例单独说明。排查后唯一缺口是播放条音质切换按钮仍为点击展开 / 关闭弹层，而不是点击循环切换。
+
+解决方法：
+
+- `stores/player.ts` 新增 `cycleQualityPreference()`：按 `QUALITY_PREFERENCE_OPTIONS` 的固定顺序 `auto → 128k → 320k → flac → auto` 调用共享的 `updateDefaultQuality()`；
+- `PlayerBar.vue` 音质按钮点击改为 `cycleQuality()`：关闭当前弹层并循环切换偏好；悬停仍按 120ms / 200ms 展开其余档位；
+- 弹层继续只显示除当前偏好外的档位，顺序与共享选项一致；按钮本身显示当前偏好（`AUTO / 128K / 320K / FLAC`）并保持高亮；
+- 播放模式按钮已符合规则（点击 `cycleMode()` 循环，悬停展开其余模式）；音量条保持特殊个例：点击切换静音、悬停展开音量条、≤900px 才启用弹出滑块。
+
+文档同步：
+
+- `USER.html` §2 新增 Revealer 统一交互约定，并修正播放模式 / 音质的点击行为；§5.2.2 播放条与 §5.2.7 设置页补充音质共享偏好与空状态可用性；
+- `CORE.html` §4.29 / §4.30 / §4.40 补充 `QUALITY_PREFERENCE_OPTIONS`、`qualityPreference`、`updateDefaultQuality`、`cycleQualityPreference` 与音质 revealer 行为；
+- `EVOLVE.md` 新增 #15 统一 revealer 交互需求；
+- `README.html` 播放行同步“点击循环、悬停展开”的交互描述。
+
+验证：
+
+- `test/player-store.test.ts` 新增音质偏好按固定顺序循环的用例；
+- `npm run typecheck` 通过；
+- `npx vitest run` 22 个测试文件 / 78 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §2 CONVENTIONS · Revealer 统一交互 | 增 | 统一约定：按钮点击循环、悬停 / 焦点展开其余选项、按钮高亮当前项、弹层与按钮一体化；音量条为特殊个例。 |
+| `USER.html` | §2 播放模式切换 / §5.2.2 播放条 / §5.2.7 设置页 | 改 | 点击循环切换；音质包含自动档并与设置页共用偏好；空状态下音质仍可用。 |
+| `CORE.html` | §4.29 `stores/player.ts` / §4.30 `stores/settings.ts` | 改 | 增加共享音质选项、`qualityPreference`、`updateDefaultQuality`、`cycleQualityPreference` 与固定顺序约定。 |
+| `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放模式与音质按钮点击循环；音质弹层只列其余档位；音量保持静音 / 悬停特殊交互。 |
+| `EVOLVE.md` | #15 | 增 | 记录统一 revealer 交互需求与音量特例。 |
+| `README.html` | §2 用户交互 · 播放行 | 改 | 描述点击循环、悬停展开与音质偏好共享。 |

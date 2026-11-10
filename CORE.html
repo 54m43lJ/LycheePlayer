@@ -1154,6 +1154,7 @@ interface PlayerStore {
   readonly quality: Quality;
   readonly requestedQuality: Quality;
   readonly defaultQuality: Quality;
+  readonly qualityPreference: Settings['defaultQuality'];
   readonly loading: boolean;
   readonly canPlay: boolean;
   readonly progress: number;
@@ -1175,6 +1176,8 @@ interface PlayerStore {
   seek(positionMs: number): void;
   setVolume(volume: number): void;
   setQuality(quality: Quality): void;
+  updateDefaultQuality(preference: Settings['defaultQuality']): Promise&lt;void&gt;;
+  cycleQualityPreference(): Promise&lt;void&gt;;
   setLoopStatus(status: 'None' | 'Track' | 'Playlist'): void;
   setShuffle(enabled: boolean): void;
   setMode(mode: PlayMode): void;
@@ -1194,12 +1197,22 @@ interface PlayerStore {
   <li><code>seek</code> 在 duration 未知时也直接设置位置；播放中 1.2 秒后若实际位置与目标相差超过 2.5 秒，会再触发一次定位（seek 看门狗），用于兜底连续 Range 定位。</li>
   <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放按洗牌后的 <code>playOrder</code> 进行。</li>
   <li><code>setMode(mode)</code> 供播放模式菜单直接选择，立即生效且不触发 Toast；<code>cycleMode()</code> 保留给键盘与兼容入口，按固定顺序循环。两者都走同一套队列重排与持久化逻辑。</li>
-  <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档。</li>
+  <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档；<code>qualityPreference</code> 为持久化偏好（可能为 <code>auto</code>）。</li>
+  <li><code>updateDefaultQuality()</code> 是设置页与播放条共用的音质偏好写入入口：先 <code>settings.update</code> 持久化 <code>defaultQuality</code>，再 <code>applySettings()</code>；有当前曲时按解析后的 <code>defaultQuality</code> 重载。无当前曲时只影响下一次播放。设置页与播放条都不得直接改写本地偏好。</li>
+  <li><code>cycleQualityPreference()</code> 按 <code>QUALITY_PREFERENCE_OPTIONS</code> 的固定顺序循环（<code>auto → 128k → 320k → flac → auto</code>），供播放条 revealer 按钮点击使用。</li>
   <li><code>sendState</code> 以节流方式发布 <code>player:state</code>，包含 <code>volume</code> / <code>loopStatus</code> / <code>shuffle</code>；音量持久化在 <code>localStorage</code>。</li>
 </ul>
 
 <h3 id="c4-30">4.30 src/renderer/stores/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function useSettingsStore(): SettingsStore;
+<pre><code>export interface QualityPreferenceOption {
+  value: Settings['defaultQuality'];
+  label: string;
+  short: string;
+}
+
+export const QUALITY_PREFERENCE_OPTIONS: QualityPreferenceOption[];
+
+export function useSettingsStore(): SettingsStore;
 
 interface SettingsStore {
   readonly settings: Settings;
@@ -1209,6 +1222,9 @@ interface SettingsStore {
   applyTheme(): void;
 }
 </code></pre>
+<ul class="note">
+  <li><code>QUALITY_PREFERENCE_OPTIONS</code> 固定顺序为 <code>auto → 128k → 320k → flac</code>；设置页使用 <code>label</code>，播放条与 revealer 弹层使用 <code>short</code>，两处共用同一组选项与顺序。</li>
+</ul>
 
 <h3 id="c4-31">4.31 src/renderer/stores/ui.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function useUiStore(): UiStore;
@@ -1366,8 +1382,9 @@ const emit = defineEmits&lt;{
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>assetStates</code> 的三态渲染（未缓存未下载 / 已缓存 / 已下载），tooltip 显示“已缓存 FLAC / 已下载 320K / 下载”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
   <li>播放进度条下方增加一条细缓存进度线，订阅 <code>audioCache.onProgress</code>，按当前 <code>songMid + quality</code> 匹配；缓存完成显示满格 / 对勾，关闭播放缓存时隐藏。缓存进度不读取下载 store，与下载进度相互独立。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
-  <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭，点击 / 焦点同样打开，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
-  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染文字占位。</li>
+  <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭；点击按钮本身按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换，键盘焦点可打开弹层，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
+  <li>音质 revealer：按钮显示 <code>qualityPreference</code> 的短名称（<code>AUTO / 128K / 320K / FLAC</code>），点击调用 <code>player.cycleQualityPreference()</code> 按同一固定顺序循环；悬停 120ms 打开、离开 200ms 关闭，弹层只渲染除当前偏好外的其它档位，顺序与 <code>QUALITY_PREFERENCE_OPTIONS</code> 一致。选择调用 <code>player.updateDefaultQuality()</code>；弹层与播放模式 / 音量弹层互斥。</li>
+  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
 </ul>
 
 <h3 id="c4-41">4.41 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
