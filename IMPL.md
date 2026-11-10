@@ -295,7 +295,7 @@
 
 状态：已解决。
 
-### 2.5 推荐分区刷新返回范围与缓存存储未定义
+### 2.5 推荐分区刷新返回范围与缓存存储未定义 [已解决]
 
 问题描述：文档新增了 `recommend.refresh(sectionId?)`，但没说明传入 `sectionId` 时是只返回该分区还是返回完整 feed，也没说明 24 小时缓存是内存缓存还是落盘、刷新失败时是否保留旧分区、空分区算合法结果还是错误。实现若猜错，渲染层会把其他分区覆盖成空。
 
@@ -314,6 +314,21 @@
 | `CORE.html` | §4.53 `api/recommend.ts` | 改 | 补 24h 内存缓存、单分区失败保留旧值、空分区语义。 |
 | `CORE.html` | §4.62 `stores/recommend.ts` | 改 | 补按分区合并与刷新失败处理。 |
 | `EVOLVE.md` | #14 | 不动 | 分区刷新细节由 CORE 主责，见以上三行。 |
+
+实际操作（2026-11-10，分支 `doc/recommend-section-cache`）：
+
+- `CORE.html` §4.2 `ipc.ts`：`recommend.get` / `recommend.refresh` 改为当前签名 `(sectionId: string | null, token: number)`，补 `recommend.cancel(token)`；note 明确已登录时传 `sectionId` 只加载并返回该分区，`null` 才返回完整 feed，未登录返回完整空分区用于登录引导。
+- `CORE.html` §4.53 `api/recommend.ts`：明确 24 小时缓存是进程内 `Map`、不落盘、`force` 绕过缓存；单分区失败保留旧 section，无旧缓存返回合法空分区；空分区不抛错；`AUTH_EXPIRED` 继续抛出，取消时抛中止错误且不继续填充后续分区。
+- `CORE.html` §4.62 `stores/recommend.ts`：明确 `refreshSection` 只请求指定分区、成功按 id 替换且不覆盖其他分区，失败只写 `errors[id]` 并保留原内容。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/recommend.ts`：`cache` 为 `Map`，`buildFeed` 按 `only ? [only] : RECOMMEND_SECTION_IDS` 处理；失败时 `sections.push(hit?.section ?? emptySection(id))`，`AUTH_EXPIRED` 继续抛出。
+- 对照 `src/renderer/stores/recommend.ts`：`fetchSection` 只替换返回的分区，`refreshSection` 只刷新指定 id。
+- `CORE.html` §4.2 / §4.53 / §4.62 与当前 token 取消接口一致。
+
+状态：已解决。
 
 ### 2.6 MV 降档后的 `quality` 语义与搜索分页未定义
 

@@ -656,8 +656,9 @@ export interface FlagsFile {
     toggle(songMid: string): Promise&lt;IpcResult&lt;FavoriteState&gt;&gt;;
   };
   recommend: {
-    get(): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
-    refresh(sectionId?: RecommendSection['id']): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
+    get(sectionId: string | null, token: number): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
+    refresh(sectionId: string | null, token: number): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
+    cancel(token: number): Promise&lt;IpcResult&lt;null&gt;&gt;;
   };
   mv: {
     search(keyword: string, pageNo: number): Promise&lt;IpcResult&lt;SearchResult&gt;&gt;;
@@ -721,6 +722,7 @@ export interface FlagsFile {
   <li><code>login.setEmbedBounds</code> 与 <code>player.sendState</code> 是单向 IPC，不返回信封。</li>
   <li><code>flags</code> 读取 / 保存当前 flags 文件；<code>download</code> 的 <code>storage</code> / <code>openFolder</code> / <code>chooseFolder</code> / <code>clearCache</code> 服务设置页与下载页；<code>start</code> 返回缓存转移或新建任务的结果，<code>list</code> 只返回任务列表。</li>
   <li><code>lyric.decryptQrc</code> 是同步方法，在 preload 内用 Node crypto + zlib 完成解密；主进程只透传密文，接口细节见 <a href="#c4-64">§4.64</a>。</li>
+  <li><code>recommend.get</code> / <code>recommend.refresh</code> 在已登录时传 <code>sectionId</code> 只加载并返回该分区，<code>null</code> 才返回完整 feed；未登录直接返回完整空分区用于登录引导。<code>token</code> 用于按请求取消，<code>recommend.cancel</code> 只中止匹配 token 的请求。</li>
 </ul>
 
 <h3 id="c4-3">4.3 src/shared/xlogin.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1599,8 +1601,9 @@ export function clearRecommendCache(): void;
   <li>每日推荐：<code>music.recommend.RecommendFeed / get_recommend_feed</code>，参数 <code>{ direction: 0, page: 1, v_cache: [], v_uniq: [], s_num: 0 }</code>；在返回的 <code>v_shelf[].v_niche[].v_card[]</code> 中取唯一 <code>subtype === 510</code> 且日期为上海当天的卡片，再用 <code>music.srfDissInfo.DissInfo / CgiGetDiss</code> 读取完整歌单，固定 30 首。</li>
   <li>专属雷达：<code>music.recommend.TrackRelationServer / GetRadarSong</code>，参数 <code>{ Page, NeedNum, EntranceSongs: [], extra_info: {} }</code>；返回 <code>VecSongs[].Track</code>，按 <code>Page</code> 翻页并以 <code>HasMore</code> 判断，最多 4 页凑够 30 首。</li>
   <li>猜你喜欢：<code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>），参数 <code>{ id: 99, firstplay: 1, page, pageNo, page_num, offset, num }</code>；返回 <code>data.tracks[]</code> 扁平歌曲，按 mid 去重后最多取 20 首。</li>
-  <li>三个分区各自缓存 24 小时（<code>RECOMMEND_CACHE_TTL_MS</code>）；<code>sectionId</code> 只刷新指定分区，省略时刷新全部；未登录直接返回空分区，由渲染层显示登录引导。</li>
-  <li><code>signal</code> 透传到每个 <code>musicu</code> 与 <code>CgiGetDiss</code> 请求；调用方取消后不再吞掉中止错误，也不继续填充后续分区。</li>
+  <li>三个分区各自缓存 24 小时（<code>RECOMMEND_CACHE_TTL_MS</code>），缓存是进程内 <code>Map</code>，不落盘；<code>force</code> 绕过缓存。传 <code>sectionId</code> 时只加载并返回该分区，渲染层按分区 id 替换；省略时串行加载全部分区。</li>
+  <li>单区失败时，有旧缓存则保留旧 section，没有旧缓存则返回合法空分区；空分区不抛错，由 UI 显示空状态。未登录直接返回空分区，由渲染层显示登录引导。<code>AUTH_EXPIRED</code> 继续抛出；调用方取消后抛出中止错误，不继续填充后续分区，也不吞掉中止错误。</li>
+  <li><code>signal</code> 透传到每个 <code>musicu</code> 与 <code>CgiGetDiss</code> 请求。</li>
 </ul>
 
 <h3 id="c4-54">4.54 src/main/api/favorite.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1854,7 +1857,7 @@ interface RecommendStore {
 <ul class="note">
   <li><code>feed.sections</code> 始终按 <code>daily → radar → guess</code> 提供三块；未加载的分区用 <code>refreshedAtMs = 0</code> 的占位表示，页面先渲染骨架。</li>
   <li><code>load</code> 每次只请求一个分区，完成后立即替换该区，再继续下一区；因此页面不必等待整份 feed。单区失败只写 <code>errors[id]</code>，保留该区占位或已有内容。</li>
-  <li><code>refreshSection</code> 只请求指定分区；<code>cancel</code> 递增会话序号并调用主进程取消当前 token，已返回的结果不再写入 store。</li>
+  <li><code>refreshSection</code> 只请求指定分区，成功按分区 id 替换该区，不覆盖其他分区；失败只写 <code>errors[id]</code> 并保留该区原有内容。<code>cancel</code> 递增会话序号并调用主进程取消当前 token，已返回的结果不再写入 store。</li>
 </ul>
 
 <h3 id="c4-63">4.63 src/renderer/stores/playlist-edit.ts <a class="backlink" href="#c1">文件树</a></h3>
