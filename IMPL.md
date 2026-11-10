@@ -2014,3 +2014,44 @@
 | `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 切换歌单与卸载时调用 `playlist.stop(id)`，终止进行中的完整刷新与重试 timer。 |
 | `USER.html` | §5.2.8 页面表 · 歌单详情行 | 改 | 打开时立即后台刷新，完整后一次性更新；失败保留当前内容并 5 分钟后自动重试；滚动 / 筛选不再触发上游分页。 |
 | `EVOLVE.md` | #5 歌单 / #14 接口 | 改 | 补“整份快照原子替换、失败 5 分钟重试、离开页面取消、浏览纯本地、大页拉取与固定 offset”的约束。 |
+
+### 4.46 歌单缓存优先、静默刷新、已下载计数与快速跳转
+
+问题描述：ISSUES 要求改进歌单缓存：打开页面即加载缓存，后台更新不再对用户可见，失败不提示；所有歌单按 ID 持久缓存，发现歌单不存在时清理缓存；把歌曲标题右侧的“668 / 668 首”改为提示已下载数量；并像评论页一样增加快速到达顶部 / 底部的按钮。
+
+排查发现：
+- §4.45 已经做到先读缓存、完整快照成功后才替换，缓存失败时保留旧内容且不弹 toast；但“歌单不存在”在上游不是错误码：`req_0.code` 仍为 0，实际是顶层 `data.code = -100006`、`dirinfo` 为空壳。原 `dataErrorCode` 只看 `data.retcode`，会把失效歌单当成空歌单并覆盖内容 / 写入缓存。
+- 缓存本身已按 `账号 scope + 歌单 ID` 存成 JSON，但没有任何删除入口在地歌单失效时清理文件。
+- 歌曲区标题仍是“已载入 / 总数”，与下载状态无关。
+- 歌单页没有评论页那套滚动位置按钮。
+
+解决方法：
+
+- `api/client.ts`：`dataErrorCode` 同时读取顶层负数码 `data.code`，并在 `req_0.code` 为 0 / 1000 时优先采用；新增 `-100006` 映射为 `NO_PERMISSION`（歌单不存在或已失效）。
+- `api/playlist.ts`：`fetchPlaylistSnapshot` 与轻量 `fetchPlaylistPage` 捕获 `NO_PERMISSION` 后调用 `invalidatePlaylistCache(id)`，确保已删除 / 无权限歌单的持久缓存被清理；最近歌单校验也走轻量页接口，因此会同步清掉缓存。
+- 歌单 store 保持 §4.45 的缓存优先与静默刷新：有缓存时先展示缓存，后台整份拉取成功才替换；失败保留当前内容、标记 stale、不弹提示，并继续 5 分钟自动重试。
+- `PlaylistView.vue`：
+  - 歌曲区标题改为“已下载 X / Y 首”，X 由 `downloadedQuality` 统计，不把播放缓存算作已下载；筛选时额外显示“筛选 N ·”；
+  - 增加 `pageRef`、`scrollRoot = .main`、`ResizeObserver` 与滚动监听，按 `scrollTop > 120` / 未到底部显示顶部 / 底部按钮；点击用 `scrollTo({ behavior: 'smooth' })`；
+  - 页面卸载时移除监听与 observer，并继续调用 `playlist.stop()` 终止后台刷新。
+- `styles/main.css`：评论跳转按钮样式扩展为 `.comments-jump-btn, .page-jump-btn` 共用；新增固定定位的 `.page-jump`，底部避开播放条。
+
+验证：
+
+- 实测失效歌单 `999999999` 的响应：`req_0.code=0`、`data.code=-100006`、`dirinfo` 为空壳、`songlist=[]`；新逻辑映射为 `NO_PERMISSION` 并清理缓存；
+- 新增 `api/client` 用例：顶层 `data.code=-100006` 不再被当作成功空结果；
+- 新增 `api/playlist` 用例：完整快照与轻量分页遇到 `NO_PERMISSION` 都会调用 `invalidatePlaylistCache`；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 100 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌单详情行 / §4.3 `QqPlaylist*` | 改 | 补充失效歌单的响应形状：`req_0.code=0`、顶层 `data.code=-100006`、`dirinfo` 空壳；不能只看 `retcode`。 |
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | 完整快照与轻量分页遇到 `NO_PERMISSION` 时调用 `invalidatePlaylistCache`；缓存按账号 + 歌单 ID 持久化。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 先展示缓存、后台静默刷新；标题显示已下载数量；增加 `.main` 滚动监听、顶部 / 底部跳转按钮与卸载清理。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 新增 `.page-jump` 固定定位；`.page-jump-btn` 与评论跳转按钮共用样式。 |
+| `USER.html` | §5.2.8 页面表 · 歌单详情行 | 改 | 打开立即显示缓存；后台更新失败不提示；歌曲区显示已下载数量；右下角提供快速到顶部 / 底部按钮。 |
+| `EVOLVE.md` | #5 歌单 | 改 | 补缓存优先、静默刷新、失效歌单清理、已下载计数与快速跳转要求。 |
