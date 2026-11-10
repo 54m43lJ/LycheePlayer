@@ -122,6 +122,13 @@ export const useDownloadStore = defineStore('download', () => {
     replace(unwrap(await window.lychee.download.resume(id)))
   }
 
+  /** 继续全部暂停任务；主进程一次完成状态切换，避免逐条 IPC。 */
+  async function resumeAll(): Promise<void> {
+    const next = unwrap(await window.lychee.download.resumeAll())
+    for (const task of next) replace(task)
+    if (next.length > 0) startPolling()
+  }
+
   async function remove(id: string): Promise<void> {
     const task = tasks.value.find((item) => item.id === id)
     unwrap(await window.lychee.download.remove(id))
@@ -172,6 +179,7 @@ export const useDownloadStore = defineStore('download', () => {
     startMany,
     pause,
     resume,
+    resumeAll,
     remove,
     clearCompleted,
     clearDirectory,

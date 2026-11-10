@@ -114,6 +114,7 @@ export interface LycheeApi {
     startMany(songMids: string[], quality: Quality): Promise<IpcResult<DownloadTask[]>>
     pause(id: string): Promise<IpcResult<DownloadTask>>
     resume(id: string): Promise<IpcResult<DownloadTask>>
+    resumeAll(): Promise<IpcResult<DownloadTask[]>>
     remove(id: string): Promise<IpcResult<null>>
     clearCompleted(): Promise<IpcResult<null>>
     clearDirectory(): Promise<IpcResult<null>>

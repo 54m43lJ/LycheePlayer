@@ -500,6 +500,21 @@ export async function resumeDownload(id: string): Promise<DownloadTask> {
   return snapshot(runtime.task)
 }
 
+/** 继续所有已暂停任务；返回被重置为 pending 的任务快照。 */
+export async function resumeAllDownloads(): Promise<DownloadTask[]> {
+  await ensureScope()
+  const resumed: DownloadTask[] = []
+  for (const runtime of tasks.values()) {
+    if (runtime.task.status !== 'paused') continue
+    runtime.task.status = 'pending'
+    runtime.task.error = ''
+    touchTask(runtime.task)
+    resumed.push(snapshot(runtime.task))
+  }
+  if (resumed.length > 0) schedulePump()
+  return resumed
+}
+
 export async function removeDownload(id: string): Promise<void> {
   await ensureScope()
   const runtime = tasks.get(id)

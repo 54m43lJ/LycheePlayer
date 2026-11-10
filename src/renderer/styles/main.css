@@ -2609,39 +2609,37 @@ a {
   min-height: 100%;
 }
 
-.downloads-progress-count {
-  position: absolute;
-  top: 5px;
-  right: 34px;
-  color: var(--muted);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.2;
-  text-align: right;
-  white-space: nowrap;
-}
-
 .downloads-progress-track {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  z-index: 14;
   height: 4px;
   overflow: hidden;
   background: var(--track);
+  pointer-events: none;
 }
 
 .downloads-progress-track span {
   display: block;
   height: 100%;
-  background: var(--palette-purple-light);
+  background: var(--muted);
   transition: width 0.2s ease;
 }
 
 .downloads-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   padding: 12px 20px;
 }
 
 .downloads-filter {
   display: inline-flex;
   gap: 2px;
-  margin: 8px 0 0 8px;
+  margin: 0;
   padding: 3px;
   border: 1px solid var(--border);
   border-radius: 999px;
@@ -2948,20 +2946,12 @@ a {
     display: none;
   }
 
-  .downloads-progress-count {
-    right: 20px;
-  }
-
   .mv-info {
     flex-direction: column;
   }
 }
 
 @media (max-width: 560px) {
-  .downloads-progress-count {
-    right: 12px;
-  }
-
   .downloads-filter-btn {
     padding: 0 10px;
   }

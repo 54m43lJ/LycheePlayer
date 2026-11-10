@@ -22,6 +22,10 @@ const toast = useToast()
 
 const tasks = computed(() => downloads.tasks)
 const progress = computed(() => downloadOverallProgress(tasks.value))
+const pausedCount = computed(
+  () => tasks.value.filter((task) => task.status === 'paused').length
+)
+const resumingAll = ref(false)
 const storage = computed(() => downloads.storage)
 const activeText = computed(() =>
   progress.value.active > 0 ? `${progress.value.active} 个任务进行中` : '没有进行中的任务'
@@ -97,6 +101,18 @@ function confirmClearCompleted(): void {
   void run(() => downloads.clearCompleted(), '已清除完成记录')
 }
 
+async function resumeAll(): Promise<void> {
+  if (resumingAll.value || pausedCount.value === 0) return
+  resumingAll.value = true
+  try {
+    await downloads.resumeAll()
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err))
+  } finally {
+    resumingAll.value = false
+  }
+}
+
 function confirmClearDirectory(): void {
   const directory = downloads.storage?.directory ?? '下载目录'
   confirmState.value = {
@@ -127,10 +143,6 @@ onBeforeUnmount(() => downloads.setVisible(false))
       aria-valuemax="100"
     >
       <span :style="{ width: `${progress.percent}%` }" />
-    </div>
-    <div class="downloads-progress-count">
-      ({{ progress.done }}/{{ progress.total }})
-      <template v-if="progress.failed > 0"> · 失败 {{ progress.failed }}</template>
     </div>
 
     <div class="page">
@@ -176,6 +188,15 @@ onBeforeUnmount(() => downloads.setVisible(false))
                 {{ item.label }}
               </button>
             </div>
+            <button
+              class="btn ghost small"
+              :disabled="resumingAll || pausedCount === 0"
+              @click="resumeAll()"
+            >
+              <span v-if="resumingAll" class="spinner" />
+              <AppIcon v-else name="play" :size="14" />
+              全部开始
+            </button>
           </div>
 
           <div v-if="filteredTasks.length === 0" class="empty compact">

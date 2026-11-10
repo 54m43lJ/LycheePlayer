@@ -2166,3 +2166,74 @@
 | `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 已更新：心跳只在页面可见时运行，隐藏停止，恢复立即检查。 |
 | `USER.html` | §2 CONVENTIONS / §5.2.8 歌单详情 | 改 | 已更新：打开先显示缓存；心跳跟随页面；心跳变化优先于 timeout。 |
 | `EVOLVE.md` | #5 歌单 | 改 | 补“写后保留旧缓存、心跳跟随页面、心跳优先于 timeout”的约束。 |
+
+### 4.50 下载页移除数字进度指示并将进度条改为 muted
+
+问题描述：ISSUES 要求下载页顶部的整体进度条不再显示下方的 `(1/100)` 数字指示，并把进度填充色改为 muted。
+
+解决方法：
+- `DownloadsView.vue` 删除 `.downloads-progress-count` 节点；保留顶部 `.downloads-progress-track` 的语义 `<div role="progressbar">` 与百分比宽度。
+- `styles/main.css` 删除 `.downloads-progress-count` 及 900px / 560px 两处响应式规则。
+- `.downloads-progress-track span` 背景由 `var(--palette-purple-light)` 改为 `var(--muted)`。
+- 更新 `downloads-view` SSR 用例：不再出现 `(0/2)` 或 `downloads-progress-count`，同时确认进度条节点仍存在。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 106 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 顶部只保留 muted 整体进度条，不显示数字 / 失败数量指示；失败数量仍在任务列表与筛选中体现。 |
+| `CORE.html` | 下载中心对应小节 | 改 | 删除 `.downloads-progress-count` 说明；进度条填充使用 `--muted`。 |
+
+### 4.51 下载页新增“全部开始”继续所有暂停任务
+
+问题描述：补充需求：下载页需要“全部开始”按钮，把所有暂停任务继续，并与任务筛选切换放在同一行右侧。
+
+解决方法：
+- `download/manager.ts` 新增 `resumeAllDownloads()`：遍历任务，只把 `paused` 置为 `pending`、清空错误并 `touchTask`；有变化时 `schedulePump()`，返回被继续任务的快照。`downloading` / `done` / `failed` 不受影响。
+- `ipc` / `preload` / `shared/ipc.ts` 新增 `download.resumeAll`，避免逐条任务 IPC。
+- `stores/download.ts` 新增 `resumeAll()`：一次调用主进程，替换返回的任务快照，并在有任务时启动轮询。
+- `DownloadsView.vue`：工具栏改为左右布局，左侧原筛选切换，右侧“全部开始”按钮；按钮在无暂停任务或请求进行中时禁用，请求中显示 spinner。
+- `styles/main.css`：`.downloads-toolbar` 改为 flex 两端对齐；筛选组去掉旧的上 / 左外边距，与按钮同行垂直居中。
+
+验证：
+- 新增 store 用例：`resumeAll()` 只调用一次 IPC，并把暂停任务更新为 `pending`；
+- `downloads-view` SSR 用例确认页面包含“全部开始”；
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 107 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 筛选切换同行右侧提供“全部开始”，继续所有暂停任务。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 新增 `resumeAllDownloads()`：只把 paused 置为 pending，并调度队列。 |
+| `CORE.html` | 下载中心对应小节 | 改 | 工具栏左筛选、右“全部开始”；无暂停任务时禁用。 |
+
+### 4.52 下载页整体进度条改为不占布局的顶部 overlay
+
+问题描述：补充子任务：下载页整体进度条应改为不占地方的 overlay，常驻页面顶端。
+
+解决方法：
+- `.downloads-progress-track` 从普通文档流块改为固定定位：`position: fixed`、`top: 0`、`left: var(--sidebar-width)`、`right: 0`、`z-index: 14`。
+- 增加 `pointer-events: none`，不拦截页面点击；高度保持 4px，滚动页面时始终停留在内容区顶端。
+- 进度条不再占据页面高度，`.page` 的内容从原来的进度条下方改为从顶端开始。
+- 填充色继续使用 `var(--muted)`；数字指示保持移除状态。
+
+验证：
+- `downloads-view` SSR 用例仍确认进度条节点存在且无数字指示；
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 107 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 顶部整体进度条为不占布局的 overlay，常驻内容区顶端；不显示数字指示。 |
+| `CORE.html` | 下载中心对应小节 | 改 | `.downloads-progress-track` 使用 fixed 定位、`left: var(--sidebar-width)`、`pointer-events: none`。 |

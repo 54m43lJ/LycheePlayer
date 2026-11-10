@@ -134,6 +134,7 @@ const api: LycheeApi = {
       invoke<DownloadTask[]>('download.startMany', songMids, quality),
     pause: (id: string) => invoke<DownloadTask>('download.pause', id),
     resume: (id: string) => invoke<DownloadTask>('download.resume', id),
+    resumeAll: () => invoke<DownloadTask[]>('download.resumeAll'),
     remove: (id: string) => invoke<null>('download.remove', id),
     clearCompleted: () => invoke<null>('download.clearCompleted'),
     clearDirectory: () => invoke<null>('download.clearDirectory'),
