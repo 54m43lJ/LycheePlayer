@@ -3270,6 +3270,65 @@ a {
   color: var(--text);
 }
 
+.mode-option.touch-active,
+.quality-menu button.touch-active,
+.like-option.touch-active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.mode-button,
+.quality-chip,
+.like-button,
+.volume-button {
+  touch-action: none;
+}
+
+.like-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.like-wrap.open .like-button {
+  position: relative;
+  z-index: 36;
+}
+
+.like-menu {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  z-index: 35;
+  width: 100%;
+  padding: 0 0 34px;
+  border-radius: 9px;
+  background: var(--panel);
+  box-shadow: var(--shadow-up);
+  transform: translateX(-50%);
+  transform-origin: bottom center;
+  animation: mode-reveal 0.14s ease-out;
+}
+
+.like-option {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 30px;
+  border-radius: 7px;
+  color: var(--muted);
+}
+
+.like-option:hover {
+  background: var(--subtle-bg);
+  color: var(--text);
+}
+
+.like-option:disabled {
+  color: var(--faint);
+  cursor: default;
+}
+
 @keyframes mode-reveal {
   from {
     opacity: 0;

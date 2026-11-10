@@ -5,12 +5,14 @@ import type { AudioCacheProgress, Settings } from '@shared/types'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
+import PlaylistPicker from './PlaylistPicker.vue'
 import { usePlayerStore, PLAY_MODE_LABEL, type PlayMode } from '../stores/player'
 import { QUALITY_PREFERENCE_OPTIONS } from '../stores/settings'
 import { useUiStore } from '../stores/ui'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
 import { useToast } from '../composables/toast'
+import { useRevealerTouch } from '../composables/revealer-touch'
 import { formatDuration, songCover } from '../utils/format'
 import { downloadStateIcon, resolveDownloadState } from '../utils/download-state'
 
@@ -38,9 +40,14 @@ const compact = ref(compactQuery.matches)
 const qualityMenu = ref(false)
 const volumeOpen = ref(false)
 const modeMenu = ref(false)
+const likeMenu = ref(false)
 const qualityWrap = ref<HTMLElement | null>(null)
 const volumeWrap = ref<HTMLElement | null>(null)
 const modeWrap = ref<HTMLElement | null>(null)
+const likeWrap = ref<HTMLElement | null>(null)
+const pickerOpen = ref(false)
+const pickerMids = computed(() => (current.value ? [current.value.songMid] : []))
+const pickerName = computed(() => current.value?.name ?? '')
 const lastVolume = ref(0.8)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 let modeOpenTimer: number | null = null
@@ -49,6 +56,15 @@ let qualityOpenTimer: number | null = null
 let qualityCloseTimer: number | null = null
 let volumeOpenTimer: number | null = null
 let volumeCloseTimer: number | null = null
+let likeOpenTimer: number | null = null
+let likeCloseTimer: number | null = null
+const VOLUME_DRAG_RANGE = 120
+let volumePressing = false
+let volumeActive = false
+let volumeStartY = 0
+let volumeStartValue = 0
+let volumePointerId: number | null = null
+let suppressVolumeClick = false
 let offCacheProgress: (() => void) | null = null
 
 const cache = ref<AudioCacheProgress | null>(null)
@@ -158,18 +174,30 @@ async function cycleQuality(): Promise<void> {
   }
 }
 
-function openQualityMenu(): void {
+function openQualityMenu(immediate = false): void {
   if (qualityCloseTimer !== null) {
     window.clearTimeout(qualityCloseTimer)
     qualityCloseTimer = null
   }
   if (qualityMenu.value) return
-  qualityOpenTimer = window.setTimeout(() => {
-    qualityMenu.value = true
+  if (qualityOpenTimer !== null) {
+    window.clearTimeout(qualityOpenTimer)
     qualityOpenTimer = null
-    volumeOpen.value = false
-    modeMenu.value = false
-  }, 120)
+  }
+  if (!immediate) {
+    qualityOpenTimer = window.setTimeout(() => {
+      qualityOpenTimer = null
+      qualityMenu.value = true
+      volumeOpen.value = false
+      modeMenu.value = false
+      likeMenu.value = false
+    }, 120)
+    return
+  }
+  qualityMenu.value = true
+  volumeOpen.value = false
+  modeMenu.value = false
+  likeMenu.value = false
 }
 
 function scheduleCloseQualityMenu(): void {
@@ -208,9 +236,18 @@ function closeMenus(): void {
     window.clearTimeout(volumeCloseTimer)
     volumeCloseTimer = null
   }
+  if (likeOpenTimer !== null) {
+    window.clearTimeout(likeOpenTimer)
+    likeOpenTimer = null
+  }
+  if (likeCloseTimer !== null) {
+    window.clearTimeout(likeCloseTimer)
+    likeCloseTimer = null
+  }
   qualityMenu.value = false
   volumeOpen.value = false
   modeMenu.value = false
+  likeMenu.value = false
 }
 
 async function chooseQuality(next: Settings['defaultQuality']): Promise<void> {
@@ -222,18 +259,30 @@ async function chooseQuality(next: Settings['defaultQuality']): Promise<void> {
   }
 }
 
-function openModeMenu(): void {
+function openModeMenu(immediate = false): void {
   if (modeCloseTimer !== null) {
     window.clearTimeout(modeCloseTimer)
     modeCloseTimer = null
   }
   if (modeMenu.value) return
-  modeOpenTimer = window.setTimeout(() => {
-    modeMenu.value = true
+  if (modeOpenTimer !== null) {
+    window.clearTimeout(modeOpenTimer)
     modeOpenTimer = null
-    volumeOpen.value = false
-    qualityMenu.value = false
-  }, 120)
+  }
+  if (!immediate) {
+    modeOpenTimer = window.setTimeout(() => {
+      modeOpenTimer = null
+      modeMenu.value = true
+      volumeOpen.value = false
+      qualityMenu.value = false
+      likeMenu.value = false
+    }, 120)
+    return
+  }
+  modeMenu.value = true
+  volumeOpen.value = false
+  qualityMenu.value = false
+  likeMenu.value = false
 }
 
 function scheduleCloseModeMenu(): void {
@@ -262,6 +311,49 @@ async function toggleFavorite(): Promise<void> {
   await playlistEdit.toggleFavorite(current.value.songMid)
 }
 
+function openLikeMenu(immediate = false): void {
+  if (likeCloseTimer !== null) {
+    window.clearTimeout(likeCloseTimer)
+    likeCloseTimer = null
+  }
+  if (likeMenu.value) return
+  if (likeOpenTimer !== null) {
+    window.clearTimeout(likeOpenTimer)
+    likeOpenTimer = null
+  }
+  if (!immediate) {
+    likeOpenTimer = window.setTimeout(() => {
+      likeOpenTimer = null
+      likeMenu.value = true
+      qualityMenu.value = false
+      modeMenu.value = false
+      volumeOpen.value = false
+    }, 120)
+    return
+  }
+  likeMenu.value = true
+  qualityMenu.value = false
+  modeMenu.value = false
+  volumeOpen.value = false
+}
+
+function scheduleCloseLikeMenu(): void {
+  if (likeOpenTimer !== null) {
+    window.clearTimeout(likeOpenTimer)
+    likeOpenTimer = null
+  }
+  likeCloseTimer = window.setTimeout(() => {
+    likeMenu.value = false
+    likeCloseTimer = null
+  }, 200)
+}
+
+function openSongPicker(): void {
+  closeMenus()
+  if (!current.value) return
+  pickerOpen.value = true
+}
+
 async function downloadCurrent(): Promise<void> {
   if (!current.value) return
   try {
@@ -272,19 +364,31 @@ async function downloadCurrent(): Promise<void> {
   }
 }
 
-function openVolumeMenu(): void {
+function openVolumeMenu(immediate = false): void {
   if (!compact.value) return
   if (volumeCloseTimer !== null) {
     window.clearTimeout(volumeCloseTimer)
     volumeCloseTimer = null
   }
   if (volumeOpen.value) return
-  volumeOpenTimer = window.setTimeout(() => {
-    volumeOpen.value = true
+  if (volumeOpenTimer !== null) {
+    window.clearTimeout(volumeOpenTimer)
     volumeOpenTimer = null
-    qualityMenu.value = false
-    modeMenu.value = false
-  }, 120)
+  }
+  if (!immediate) {
+    volumeOpenTimer = window.setTimeout(() => {
+      volumeOpen.value = true
+      volumeOpenTimer = null
+      qualityMenu.value = false
+      modeMenu.value = false
+      likeMenu.value = false
+    }, 120)
+    return
+  }
+  volumeOpen.value = true
+  qualityMenu.value = false
+  modeMenu.value = false
+  likeMenu.value = false
 }
 
 function scheduleCloseVolumeMenu(): void {
@@ -307,6 +411,60 @@ function toggleMute(): void {
   }
 }
 
+function onVolumePointerDown(event: PointerEvent): void {
+  if (event.pointerType !== 'touch') return
+  volumePressing = true
+  volumeActive = false
+  volumeStartY = event.clientY
+  volumeStartValue = volume.value
+  volumePointerId = event.pointerId
+}
+
+function onVolumePointerMove(event: PointerEvent): void {
+  if (!volumePressing || event.pointerId !== volumePointerId) return
+  if (!volumeActive) {
+    if (Math.abs(event.clientY - volumeStartY) <= 4) return
+    volumeActive = true
+    ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
+    openVolumeMenu(true)
+  }
+  const next = Math.min(
+    1,
+    Math.max(0, volumeStartValue + (volumeStartY - event.clientY) / VOLUME_DRAG_RANGE)
+  )
+  player.setVolume(next)
+  event.preventDefault()
+}
+
+function finishVolumeGesture(event: PointerEvent): void {
+  if (!volumePressing) return
+  const active = volumeActive
+  volumePressing = false
+  volumeActive = false
+  volumePointerId = null
+  if (!active) return
+  ;(event.currentTarget as HTMLElement).releasePointerCapture?.(event.pointerId)
+  suppressVolumeClick = true
+  window.setTimeout(() => {
+    suppressVolumeClick = false
+  }, 0)
+  scheduleCloseVolumeMenu()
+}
+
+function onVolumePointerUp(event: PointerEvent): void {
+  finishVolumeGesture(event)
+}
+
+function onVolumePointerCancel(event: PointerEvent): void {
+  finishVolumeGesture(event)
+}
+
+function onVolumeClickCapture(event: Event): void {
+  if (!suppressVolumeClick) return
+  event.preventDefault()
+  event.stopPropagation()
+}
+
 function toggleLyrics(): void {
   if (!current.value) return
   ui.toggleLyrics()
@@ -324,11 +482,62 @@ function onDocumentClick(event: MouseEvent): void {
   if (modeMenu.value && modeWrap.value && !modeWrap.value.contains(target)) {
     modeMenu.value = false
   }
+  if (likeMenu.value && likeWrap.value && !likeWrap.value.contains(target)) {
+    likeMenu.value = false
+  }
 }
 
 function onKeydown(event: KeyboardEvent): void {
   if (event.key === 'Escape') closeMenus()
 }
+
+const {
+  highlighted: modeHighlighted,
+  onPointerDown: onModePointerDown,
+  onPointerMove: onModePointerMove,
+  onPointerUp: onModePointerUp,
+  onPointerCancel: onModePointerCancel,
+  onClickCapture: onModeClickCapture
+} = useRevealerTouch({
+  container: modeWrap,
+  open: () => openModeMenu(true),
+  close: closeMenus,
+  confirm: (index) => {
+    const next = otherModes.value[index]
+    if (next) chooseMode(next)
+  }
+})
+
+const {
+  highlighted: qualityHighlighted,
+  onPointerDown: onQualityPointerDown,
+  onPointerMove: onQualityPointerMove,
+  onPointerUp: onQualityPointerUp,
+  onPointerCancel: onQualityPointerCancel,
+  onClickCapture: onQualityClickCapture
+} = useRevealerTouch({
+  container: qualityWrap,
+  open: () => openQualityMenu(true),
+  close: closeMenus,
+  confirm: (index) => {
+    const option = otherQualities.value[index]
+    if (option) void chooseQuality(option.value)
+  }
+})
+
+const {
+  highlighted: likeHighlighted,
+  onPointerDown: onLikePointerDown,
+  onPointerMove: onLikePointerMove,
+  onPointerUp: onLikePointerUp,
+  onPointerCancel: onLikePointerCancel,
+  onClickCapture: onLikeClickCapture
+} = useRevealerTouch({
+  container: likeWrap,
+  open: () => openLikeMenu(true),
+  close: closeMenus,
+  confirm: () => openSongPicker()
+})
 
 onMounted(() => {
   document.addEventListener('click', onDocumentClick, true)
@@ -427,6 +636,7 @@ watch(
           @mouseleave="scheduleCloseModeMenu()"
           @focusin="openModeMenu()"
           @focusout="scheduleCloseModeMenu()"
+          @click.capture="onModeClickCapture"
         >
           <button
             class="mode-button"
@@ -434,14 +644,20 @@ watch(
             aria-haspopup="true"
             :aria-expanded="modeMenu"
             @click="cyclePlayMode()"
+            @pointerdown="onModePointerDown"
+            @pointermove="onModePointerMove"
+            @pointerup="onModePointerUp"
+            @pointercancel="onModePointerCancel"
           >
             <AppIcon :name="modeIcon" :size="16" />
           </button>
           <div v-if="modeMenu" class="mode-menu" @click.stop>
             <button
-              v-for="item in otherModes"
+              v-for="(item, index) in otherModes"
               :key="item"
               class="mode-option"
+              :class="{ 'touch-active': modeHighlighted === index }"
+              data-revealer-option
               :title="PLAY_MODE_LABEL[item]"
               @click="chooseMode(item)"
             >
@@ -501,15 +717,42 @@ watch(
     </div>
 
     <div class="player-right">
-      <button
-        class="icon-btn"
-        :class="{ active: favorited }"
-        :title="favorited ? '取消收藏' : '收藏'"
-        :disabled="!hasSong"
-        @click.stop="toggleFavorite()"
+      <div
+        ref="likeWrap"
+        class="like-wrap"
+        :class="{ open: likeMenu }"
+        @mouseenter="openLikeMenu()"
+        @mouseleave="scheduleCloseLikeMenu()"
+        @focusin="openLikeMenu()"
+        @focusout="scheduleCloseLikeMenu()"
+        @click.capture="onLikeClickCapture"
       >
-        <AppIcon :name="favorited ? 'heart-filled' : 'heart'" :size="17" />
-      </button>
+        <button
+          class="icon-btn like-button"
+          :class="{ active: favorited }"
+          :title="favorited ? '取消收藏' : '收藏'"
+          :disabled="!hasSong"
+          @click.stop="toggleFavorite()"
+          @pointerdown="onLikePointerDown"
+          @pointermove="onLikePointerMove"
+          @pointerup="onLikePointerUp"
+          @pointercancel="onLikePointerCancel"
+        >
+          <AppIcon :name="favorited ? 'heart-filled' : 'heart'" :size="17" />
+        </button>
+        <div v-if="likeMenu" class="like-menu" @click.stop>
+          <button
+            class="like-option"
+            :class="{ 'touch-active': likeHighlighted === 0 }"
+            data-revealer-option
+            title="加入歌单"
+            :disabled="!hasSong"
+            @click="openSongPicker()"
+          >
+            <AppIcon name="playlist-add" :size="16" />
+          </button>
+        </div>
+      </div>
       <button
         class="icon-btn"
         :class="downloadState === 'none' ? null : downloadState"
@@ -527,6 +770,7 @@ watch(
         @mouseleave="scheduleCloseQualityMenu()"
         @focusin="openQualityMenu()"
         @focusout="scheduleCloseQualityMenu()"
+        @click.capture="onQualityClickCapture"
       >
         <button
           class="quality-chip"
@@ -534,13 +778,19 @@ watch(
           aria-haspopup="true"
           :aria-expanded="qualityMenu"
           @click.stop="cycleQuality()"
+          @pointerdown="onQualityPointerDown"
+          @pointermove="onQualityPointerMove"
+          @pointerup="onQualityPointerUp"
+          @pointercancel="onQualityPointerCancel"
         >
           {{ qualityPreferenceLabel }}
         </button>
         <div v-if="qualityMenu" class="quality-menu" @click.stop>
           <button
-            v-for="option in otherQualities"
+            v-for="(option, index) in otherQualities"
             :key="option.value"
+            :class="{ 'touch-active': qualityHighlighted === index }"
+            data-revealer-option
             :title="option.label"
             @click="chooseQuality(option.value)"
           >
@@ -554,6 +804,7 @@ watch(
         :class="{ open: volumeOpen }"
         @mouseenter="openVolumeMenu()"
         @mouseleave="scheduleCloseVolumeMenu()"
+        @click.capture="onVolumeClickCapture"
       >
         <div v-if="compact && volumeOpen" class="volume-menu" @click.stop>
           <div class="volume-slider">
@@ -579,6 +830,10 @@ watch(
           aria-haspopup="true"
           :aria-expanded="volumeOpen"
           @click.stop="toggleMute()"
+          @pointerdown="onVolumePointerDown"
+          @pointermove="onVolumePointerMove"
+          @pointerup="onVolumePointerUp"
+          @pointercancel="onVolumePointerCancel"
         >
           <AppIcon :name="volume > 0 ? 'volume' : 'mute'" :size="17" />
         </button>
@@ -596,5 +851,15 @@ watch(
         @input="player.setVolume(Number(($event.target as HTMLInputElement).value))"
       />
     </div>
+
+    <Teleport to="body">
+      <PlaylistPicker
+        :open="pickerOpen"
+        :song-mids="pickerMids"
+        :song-name="pickerName"
+        @close="pickerOpen = false"
+        @added="() => undefined"
+      />
+    </Teleport>
   </footer>
 </template>
