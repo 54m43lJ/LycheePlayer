@@ -79,6 +79,8 @@ export interface LycheeApi {
   playlist: {
     get(id: string, options?: { offset?: number }): Promise<IpcResult<PlaylistPage>>
     getCached(id: string): Promise<IpcResult<PlaylistCacheEntry | null>>
+    getSnapshot(id: string, token: number): Promise<IpcResult<PlaylistSnapshot>>
+    cancelSnapshot(id: string, token: number): Promise<IpcResult<null>>
     saveCache(
       id: string,
       snapshot: PlaylistSnapshot,

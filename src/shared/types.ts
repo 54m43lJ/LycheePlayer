@@ -142,6 +142,8 @@ export interface PlaylistSnapshot {
   meta: PlaylistMeta
   songs: Song[]
   total: number
+  /** 上游声明的曲目总数；展示总数以实际拉到的 songs 为准。 */
+  sourceTotal?: number
 }
 
 export interface PlaylistCacheEntry extends PlaylistSnapshot {

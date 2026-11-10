@@ -101,6 +101,8 @@ export interface UpstreamRequest {
   body?: string
   credential?: Credential | null
   timeoutMs?: number
+  /** 调用方取消时同时中止网络请求。 */
+  signal?: AbortSignal
   /** 解析前把指定字段的数字字面量转成字符串，避免超过 Number 安全范围时丢精度。 */
   stringFields?: string[]
 }
@@ -151,6 +153,7 @@ export function throttleUpstream(): Promise<void> {
 
 async function fetchOnce(req: UpstreamRequest): Promise<Response> {
   assertUpstreamAvailable()
+  req.signal?.throwIfAborted()
   const credential = req.credential === undefined ? getCredential() : req.credential
   const url = new URL(req.path, req.host)
   for (const [key, value] of Object.entries(req.params)) {
@@ -160,7 +163,9 @@ async function fetchOnce(req: UpstreamRequest): Promise<Response> {
   await throttleUpstream()
   // 排队取令牌期间可能刚好收到 104009，取到令牌后再检查一次。
   assertUpstreamAvailable()
+  req.signal?.throwIfAborted()
 
+  const timeout = AbortSignal.timeout(req.timeoutMs ?? UPSTREAM_TIMEOUT_MS)
   let response: Response
   try {
     response = await fetch(url, {
@@ -173,9 +178,10 @@ async function fetchOnce(req: UpstreamRequest): Promise<Response> {
         ...req.headers
       },
       body: req.body,
-      signal: AbortSignal.timeout(req.timeoutMs ?? UPSTREAM_TIMEOUT_MS)
+      signal: req.signal ? AbortSignal.any([req.signal, timeout]) : timeout
     })
   } catch (error) {
+    if (req.signal?.aborted) throw new UpstreamError('UPSTREAM_NETWORK', '上游请求已取消')
     // 连接失败 / 超时不重试。
     const message =
       error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError')
@@ -274,6 +280,8 @@ export interface MusicuOptions {
   credential?: Credential | null
   /** vkey 需要先尝试备用入口，104009 由调用方在两次失败后统一触发截断。 */
   deferBlock?: boolean
+  /** 调用方取消时中止当前及后续重试。 */
+  signal?: AbortSignal
   /** 解析前把指定字段的数字字面量转成字符串。 */
   stringFields?: string[]
 }
@@ -303,11 +311,13 @@ export async function musicu<T>(
   if (comm) payload.comm = comm
 
   for (let attempt = 0; attempt < UPSTREAM_RETRY_ATTEMPTS; attempt += 1) {
+    options.signal?.throwIfAborted()
     const response = await upstreamRequest<MusicuResponse<T>>({
       host: 'https://u.y.qq.com',
       path: '/cgi-bin/musicu.fcg',
       params: { data: JSON.stringify(payload) },
       credential,
+      signal: options.signal,
       stringFields: options.stringFields
     })
 

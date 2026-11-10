@@ -39,18 +39,26 @@ export const SEARCH_PAGE_SIZE_MAX = 50
 
 /** “我喜欢”固定歌单 ID。 */
 export const FAVORITES_PLAYLIST_ID = 'liked'
-/** 歌单固定 50 首/页。 */
+/** 歌单轻量探测页大小（最近歌单校验 / 轮询首页）。 */
 export const PLAYLIST_PAGE_SIZE = 50
+/** 完整歌单快照单次拉取条数。推荐值 2000；实测上游单次最多可返回约 1 万首。 */
+export const PLAYLIST_FETCH_PAGE_SIZE = 2000
+/** 完整歌单拉取的最大页数，约 2 万首；防止异常 total 造成无限循环。 */
+export const PLAYLIST_FETCH_PAGE_MAX = 10
+/**
+ * 完整歌单校验允许缺失的比例与下限。推荐值 0.02 / 10。
+ * 上游会静默省略部分不可用曲目，因此不能要求条数与 total 严格相等。
+ */
+export const PLAYLIST_FETCH_MISSING_RATIO = 0.02
+export const PLAYLIST_FETCH_MISSING_MIN = 10
 /** 歌单本地最大分页数。推荐值 20_000。 */
 export const PLAYLIST_PAGE_MAX = 20_000
 /** 歌单界面变化轮询间隔。推荐值 15_000 ms。 */
 export const PLAYLIST_POLL_INTERVAL_MS = 15_000
+/** 完整歌单刷新失败后的自动重试间隔。推荐值 5 * 60_000 ms。 */
+export const PLAYLIST_REFRESH_RETRY_MS = 5 * 60_000
 /** 歌单缓存字节上限。推荐值 16 × 1024 × 1024。 */
 export const PLAYLIST_CACHE_MAX_BYTES = 16 * 1024 * 1024
-/** 自动补全时单页失败的最大重试次数。 */
-export const PLAYLIST_PAGE_RETRY_ATTEMPTS = 3
-/** 自动补全失败重试的基础退避。推荐值 500 ms。 */
-export const PLAYLIST_PAGE_RETRY_BACKOFF_MS = 500
 
 // ---------- 可用性探测 ----------
 

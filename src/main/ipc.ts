@@ -19,6 +19,7 @@ import { getLyric } from './api/lyric'
 import { getComments, likeComment, unlikeComment } from './api/comment'
 import {
   fetchPlaylistPage,
+  fetchPlaylistSnapshot,
   getCachedPlaylist,
   listMine,
   savePlaylistSnapshot
@@ -104,6 +105,12 @@ function stringArg(value: unknown, name: string, max = 512): string {
   return value
 }
 
+function numberArg(value: unknown, name: string): number {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) throw new Error(`${name} 无效`)
+  return parsed
+}
+
 function midArray(value: unknown, max = IPC_SONG_MIDS_MAX): string[] {
   if (!Array.isArray(value) || value.length === 0 || value.length > max) {
     throw new Error(`歌曲列表必须为非空数组且不超过 ${max} 个`)
@@ -136,6 +143,9 @@ export function sendPlaybackToggle(): void {
   lastToggleAt = now
   sendPlayerCommand(lastPlayerStatus === 'playing' ? 'pause' : 'play')
 }
+
+/** 正在执行的完整歌单拉取；取消时只中止匹配的请求标识。 */
+const playlistFetches = new Map<string, { token: number; controller: AbortController }>()
 
 export function registerIpc(): void {
   // 104009 触发全局截断时，通知渲染层展示 toast；截断本身由上游请求入口执行。
@@ -245,6 +255,31 @@ export function registerIpc(): void {
   handle('playlist.getCached', async (id: unknown) =>
     getCachedPlaylist(stringArg(id, '歌单 ID'))
   )
+  handle('playlist.getSnapshot', async (id: unknown, token: unknown) => {
+    const playlistId = stringArg(id, '歌单 ID')
+    const requestToken = numberArg(token, '刷新标识')
+    const previous = playlistFetches.get(playlistId)
+    if (previous && previous.token !== requestToken) previous.controller.abort()
+    const controller = new AbortController()
+    playlistFetches.set(playlistId, { token: requestToken, controller })
+    try {
+      return await fetchPlaylistSnapshot(playlistId, controller.signal)
+    } finally {
+      if (playlistFetches.get(playlistId)?.token === requestToken) {
+        playlistFetches.delete(playlistId)
+      }
+    }
+  })
+  handle('playlist.cancelSnapshot', async (id: unknown, token: unknown) => {
+    const playlistId = stringArg(id, '歌单 ID')
+    const requestToken = numberArg(token, '刷新标识')
+    const current = playlistFetches.get(playlistId)
+    if (current?.token === requestToken) {
+      current.controller.abort()
+      playlistFetches.delete(playlistId)
+    }
+    return null
+  })
   handle('playlist.saveCache', async (id: unknown, snapshot: unknown, complete: unknown) => {
     await savePlaylistSnapshot(
       stringArg(id, '歌单 ID'),

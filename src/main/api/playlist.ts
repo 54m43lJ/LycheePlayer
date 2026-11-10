@@ -6,6 +6,10 @@ import type {
 } from '../../shared/types'
 import {
   FAVORITES_PLAYLIST_ID,
+  PLAYLIST_FETCH_MISSING_MIN,
+  PLAYLIST_FETCH_MISSING_RATIO,
+  PLAYLIST_FETCH_PAGE_MAX,
+  PLAYLIST_FETCH_PAGE_SIZE,
   PLAYLIST_PAGE_MAX,
   PLAYLIST_PAGE_SIZE
 } from '../../shared/constants'
@@ -99,18 +103,28 @@ function canEdit(data: PlaylistData): boolean {
   return Number.isSafeInteger(me) && me > 0 && owner === me
 }
 
-async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
+async function requestPage(
+  id: string,
+  offset: number,
+  pageSize: number,
+  signal?: AbortSignal
+): Promise<PlaylistPage> {
   const favorites = isFavoritesId(id)
-  const data = await musicu<PlaylistData>('music.srfDissInfo.DissInfo', 'CgiGetDiss', {
-    disstid: favorites ? 0 : Number(id),
-    dirid: favorites ? 201 : 0,
-    tag: true,
-    song_begin: offset,
-    song_num: PLAYLIST_PAGE_SIZE,
-    userinfo: true,
-    orderlist: true,
-    onlysonglist: false
-  })
+  const data = await musicu<PlaylistData>(
+    'music.srfDissInfo.DissInfo',
+    'CgiGetDiss',
+    {
+      disstid: favorites ? 0 : Number(id),
+      dirid: favorites ? 201 : 0,
+      tag: true,
+      song_begin: offset,
+      song_num: pageSize,
+      userinfo: true,
+      orderlist: true,
+      onlysonglist: false
+    },
+    { signal }
+  )
 
   const total = Number(data.dirinfo?.songnum ?? 0)
   const meta: PlaylistMeta = favorites
@@ -143,7 +157,7 @@ async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
     offset,
     total: total || offset + songs.length,
     hasMore:
-      songs.length === PLAYLIST_PAGE_SIZE && (total === 0 || offset + songs.length < total)
+      total === 0 ? songs.length >= pageSize : offset + pageSize < total
   }
 }
 
@@ -156,7 +170,66 @@ export async function fetchPlaylistPage(id: string, offset: number): Promise<Pla
   if (start > PLAYLIST_PAGE_MAX * PLAYLIST_PAGE_SIZE) {
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单分页超出上限')
   }
-  return requestPage(id, start)
+  return requestPage(id, start, PLAYLIST_PAGE_SIZE)
+}
+
+/**
+ * 后台拉取完整歌单快照：固定 offset 大页扫描，全部成功且覆盖足够后才返回。
+ * 任一分页失败、出现空页、超出页数上限或数量校验不通过都会抛错，调用方保留旧内容。
+ */
+export async function fetchPlaylistSnapshot(
+  id: string,
+  signal?: AbortSignal
+): Promise<PlaylistSnapshot> {
+  if (!validId(id)) {
+    throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
+  }
+  const songs: PlaylistSnapshot['songs'] = []
+  const seen = new Set<string>()
+  let meta: PlaylistMeta | null = null
+  let total = 0
+  let offset = 0
+  let pages = 0
+  for (;;) {
+    signal?.throwIfAborted()
+    if (pages >= PLAYLIST_FETCH_PAGE_MAX) {
+      throw new UpstreamError('UPSTREAM_CHANGED', '歌单拉取页数超出上限')
+    }
+    const page = await requestPage(id, offset, PLAYLIST_FETCH_PAGE_SIZE, signal)
+    pages += 1
+    meta = page.meta
+    total = page.total
+    if (page.songs.length === 0 && offset < total) {
+      throw new UpstreamError('UPSTREAM_CHANGED', `歌单分页为空（${offset}/${total}）`)
+    }
+    for (const song of page.songs) {
+      // 固定 offset 分页理论上不重叠；重复 mid 直接跳过，避免把重叠页写进快照。
+      if (song.songMid && seen.has(song.songMid)) continue
+      if (song.songMid) seen.add(song.songMid)
+      songs.push(song)
+    }
+    offset += PLAYLIST_FETCH_PAGE_SIZE
+    if (offset >= total) break
+  }
+  if (!meta) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '歌单响应缺少 dirinfo')
+  }
+  const tolerance = Math.max(
+    PLAYLIST_FETCH_MISSING_MIN,
+    Math.ceil(total * PLAYLIST_FETCH_MISSING_RATIO)
+  )
+  if (total > 0 && songs.length + tolerance < total) {
+    throw new UpstreamError(
+      'UPSTREAM_CHANGED',
+      `歌单拉取不完整（${songs.length}/${total}）`
+    )
+  }
+  return {
+    meta: { ...meta, songCount: songs.length },
+    songs,
+    total: songs.length,
+    sourceTotal: total
+  }
 }
 
 /** 读取整份歌单缓存；不完整快照通过 complete=false 标记。 */
@@ -188,6 +261,7 @@ export async function savePlaylistSnapshot(
     meta,
     songs: snapshot.songs,
     total: snapshot.total,
+    sourceTotal: snapshot.sourceTotal,
     complete,
     fetchedAtMs: Date.now()
   })
