@@ -2,6 +2,8 @@
 
 本文只记录实现 `doc/evol-2` 蓝图时暴露出的文档问题、未写明细节与技术坑，作为后续修订 `EVOLVE.md` / `PROVIDER.html` / `CORE.html` / `USER.html` / `BUILD.html` 的输入，不改写产品文档本身。
 
+阅读约定：同一事实若前后章节冲突，以较后的章节为准；与实现不一致时以 `src/` 代码为准。受后续修改影响的早期结论已在原节标注“后续修正”，避免把历史方案当成当前实现。
+
 ## 1. 开发中发现文档的错误
 
 ### 1.1 歌手歌曲接口的响应层级与 PROVIDER 不一致
@@ -81,34 +83,37 @@
 
 ## 2. 开发中发现文档没写明的细节
 
-### 2.1 下载任务 / 批次 / 索引缺少精确类型与持久化契约
+### 2.1 下载任务 / 索引缺少精确类型与持久化契约（批次模型后由 §4.15 取消）
 
-问题描述：文档描述了 `DownloadTask.batchId`、`playlistId`、`source`、`DownloadBatch`、`SongAssetState` 与“按账号索引”，但没有给出 `source` 的枚举值、批次状态的派生规则、索引 JSON 的字段、哪些状态需要落盘，以及“清除已完成”对批次记录的处理。实现时这些都必须自行决定，否则主进程、preload 与 UI 三端无法对齐。
+> 后续修正：§4.15 已彻底取消下载批次模型，`DownloadBatch`、`batchId` / `playlistId`、`DownloadSource = 'batch'`、索引中的 `batches` 与批次状态派生都不再存在。下载索引只有 `{ tasks }`，任务来源只保留 `network` / `cache`；本节的批次结论以 §4.15 为准。
+
+问题描述：文档描述了 `DownloadTask.batchId`、`playlistId`、`source`、`DownloadBatch`、`SongAssetState` 与“按账号索引”，但没有给出 `source` 的枚举值、索引 JSON 的字段、哪些状态需要落盘，以及“清除已完成”对记录的处理。实现时这些都必须自行决定，否则主进程、preload 与 UI 三端无法对齐。
 
 
 解决方法：
-- 在 `shared/types.ts` 定义 `DownloadSource = 'network' | 'cache' | 'batch'`、`DownloadBatch`、`SongAssetState` 与扩展后的 `DownloadTask`；
-- 索引固定为 `{ tasks, batches }`，只持久化 `done` / `paused` 任务；启动时 `downloading/pending` 统一转为 `paused`；
-- 批次 `total/done/failed` 由实际任务实时重算，批次状态按“有活动任务 / 暂停 / 有失败 / 完成”派生；
-- `clearCompleted` 只删除已完成任务记录，不删除文件，也不删除批次记录本身。
+- 在 `shared/types.ts` 定义 `DownloadSource = 'network' | 'cache'`、`SongAssetState` 与 `DownloadTask`（批次类型后来由 §4.15 删除）；
+- 索引固定为 `{ tasks }`，只持久化 `done` / `paused` 任务；启动时 `downloading/pending` 统一转为 `paused`；
+- `clearCompleted` 只删除已完成任务记录，不删除文件；批次记录已随 §4.15 取消。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.1 `types.ts` | 增 | `DownloadSource`、`DownloadBatch`、`SongAssetState`、索引 JSON 结构。 |
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 补索引字段、批次状态派生、持久化状态与 `clearCompleted` 语义。 |
+| `CORE.html` | §4.1 `types.ts` | 增 | `DownloadSource`、`SongAssetState`、索引 JSON 结构；不再定义 `DownloadBatch`。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 补索引字段、持久化状态与 `clearCompleted` 语义；批次模型已由 §4.15 删除。 |
 | `USER.html` | §1 TERMS 下载任务 / 下载中心 | 不动 | 术语由 #2 维护，见 CORE 两行。 |
 | `EVOLVE.md` | #2 | 不动 | 类型契约以 CORE 为主责，避免与本文重复定义。 |
 
 ### 2.2 下载文件命名与同名覆盖规则未定义
 
+> 后续修正：§4.23 已将下载文件命名改为 `downloadFileName()` 的“歌名-歌手-专辑”，仅三者完全相同的文件才会覆盖；本节关于 `safeName(song.name)` 与同名覆盖的规则是当时的临时方案。
+
 问题描述：文档只要求“文件放到 `downloadDir`”，没有规定文件名格式、歌手/歌名如何拼接、同名歌曲如何处理、是否允许覆盖已有文件。实现若直接使用歌名，遇到同名歌曲会互相覆盖；若加随机后缀，又会让用户难以在文件管理器里识别。
 
 
 解决方法：
-- 当前使用 `safeName(song.name) + 扩展名`，过滤文件系统非法字符并压缩空白；
-- 同名文件按覆盖处理，不做静默改名；
+- 当时使用 `safeName(song.name) + 扩展名`，过滤文件系统非法字符并压缩空白；该方案已由 §4.23 的“歌名-歌手-专辑”规则取代；
+- 同名文件按覆盖处理，不做静默改名；§4.23 之后仅“歌名 + 歌手 + 专辑”完全相同的文件才覆盖；
 - 在文档补齐规则前，不引入随机 UUID 后缀，避免下载目录不可读。
 
 修订建议：
@@ -116,27 +121,29 @@
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
 | `BUILD.html` | §11 存储 | 增 | 下载文件命名模板、非法字符处理、同名覆盖规则。 |
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确 `safeName` 规则与同名覆盖行为。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确 `downloadFileName` 的命名规则与仅完全相同曲目覆盖；`safeName` 仅用于入队占位路径。 |
 | `USER.html` | §5.3 错误与通知 | 不动 | 不新增错误码，行为由 #2 维护。 |
 
 ### 2.3 歌单写入的读回校验、重复添加与创建 ID 选择未定义
+
+> 后续修正：§4.35 修正了可编辑判定；§4.36 把 `id`（tid）与 `dirId` 分开，创建时必须同时返回两者；§4.39 又将写后读回 / 整单扫描移出写 API，`addSongs` / `removeSongs` 只返回 `{ changed }`，刷新统一由 `stores/playlist-edit.ts` 的 `refreshAfterWrite` 触发；§4.49 进一步规定内容写操作不删除歌单缓存。本节原有的 20 页读回、重复过滤与 `dirId` 回退 `tid` 等细节均已失效。
 
 问题描述：文档要求“写后读回或成员可见性校验”，但没有说明读回多少页、如何判断重复添加、创建接口同时返回 `dirId` / `tid` 时选哪个、`dirId:0` 时是否回退 `tid`。如果实现只读第一页，新增歌曲在歌单末尾时会永远校验失败；如果只认 `dirId`，创建可能拿不到有效 ID。
 
 
 解决方法：
-- 读回最多 20 页成员，按 `songMid` 建集合；
-- `addSongs` 先过滤已存在 mid，写后校验全部出现；`removeSongs` 写后校验全部消失；
-- 创建时优先取正整数 `dirId`，否则回退正整数 `tid`；
-- 添加到歌单的重复提示同时使用本地缓存成员集合与 `songCount` 是否变化判断。
+- 写接口不读回成员，也不做写前整单扫描；写后刷新由渲染层统一触发（§4.39）；
+- `addSongs` 只提交 `AddSonglist`，`removeSongs` 只提交 `DelSonglist`；80092 视为 `{ changed: false }`，其余错误继续抛出；
+- 创建时 `id = result.tid`、`dirId = result.dirId`，两者都必须为正整数；
+- 重复提示使用写接口返回的 `changed`，不再依赖本地成员集合或 `songCount` 变化。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `PROVIDER.html` | §4.1 歌单写入 / 歌单增删歌曲 | 改 | 补读回校验范围、重复添加判定与 `dirId` / `tid` 优先级。 |
-| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 记录 20 页读回上限、重复过滤、创建 ID 回退规则。 |
-| `EVOLVE.md` | #14 | 不动 | 写后校验细节由 CORE 主责，见上一行。 |
+| `PROVIDER.html` | §4.1 歌单写入 / 歌单增删歌曲 | 改 | 明确 `dirId` 与 `tid` 的区别；写后确认由 CORE 的刷新流程负责，不在写接口内读回。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 写 API 只负责写入并返回 `changed`；创建时 `id = tid`、`dirId = dirId`；写后刷新见 §4.39。 |
+| `EVOLVE.md` | #14 | 不动 | 写后刷新与 ID 契约由 CORE 主责，见上一行。 |
 
 ### 2.4 评论点赞的返回结构、`liked` 来源与点赞数处理未定义
 
@@ -144,7 +151,7 @@
 
 
 解决方法：
-- 读取可选的 `IsLiked` 字段映射为 `Comment.liked`，字段缺失时按 `false`；
+- 读取可选的 `IsPraised` 字段映射为 `Comment.liked`，并保留 `IsLiked` 作为兼容回退，字段缺失时按 `false`；登录后携带凭证，未登录等价匿名（§4.7）；
 - `CommentLikeResult` 的 `likedCount` 设为可选；上游不返回数量时由前端乐观更新并在失败时回滚；
 - 点赞 / 取消点赞统一走 `UpdateHotComment`，`type` 3 / 4；
 - UI 在 `likedCount === 0` 时只显示按钮、不显示数字。
@@ -153,9 +160,9 @@
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `PROVIDER.html` | §4.3 `QqComment` | 改 | 增可选 `IsLiked` 字段及“缺失按未点赞处理”的说明。 |
+| `PROVIDER.html` | §4.3 `QqComment` | 改 | 增可选 `IsPraised` 字段（兼容 `IsLiked`）及“缺失按未点赞处理”的说明；登录后才按当前用户返回。 |
 | `CORE.html` | §4.1 `types.ts` | 改 | `Comment.liked?`、`CommentLikeResult.likedCount?`。 |
-| `CORE.html` | §4.15 `api/comment.ts` | 改 | 补点赞返回状态、数量缺失与类型映射。 |
+| `CORE.html` | §4.15 `api/comment.ts` | 改 | 补 `IsPraised → liked`、`IsLiked` 兼容回退、登录凭据与点赞数量缺失的映射。 |
 | `EVOLVE.md` | #5 / #14 | 不动 | 排序与点赞 UI 分别由 #5 / #14 维护，见对应项。 |
 
 ### 2.5 推荐分区刷新返回范围与缓存存储未定义
@@ -256,21 +263,23 @@
 
 ### 3.2 整单下载被单次 IPC 的 100 首上限挡住
 
-问题描述：`download.startBatch` 的请求走 `midArray` 校验，而 `midArray` 默认上限是 `IPC_SONG_MIDS_MAX = 100`。整单下载允许最多 `DOWNLOAD_BATCH_MAX = 2000` 首，结果超过 100 首的歌单点击“下载全部”会直接被参数校验拒绝，而不是进入批次队列。
+> 后续修正：§4.15 已将 `download.startBatch` 改为 `download.startMany`，常量 `DOWNLOAD_BATCH_MAX` 更名为 `DOWNLOAD_QUEUE_MAX`；“整单入队上限与单曲 IPC 上限分离”的结论不变。
+
+问题描述：`download.startMany` 的请求走 `midArray` 校验，而 `midArray` 默认上限是 `IPC_SONG_MIDS_MAX = 100`。整单下载允许最多 `DOWNLOAD_QUEUE_MAX = 2000` 首，结果超过 100 首的歌单点击“下载全部”会直接被参数校验拒绝，而不是进入统一队列。
 
 
 解决方法：
-- `download.startBatch` 单独使用 `DOWNLOAD_BATCH_MAX` 作为 `midArray` 上限；
+- `download.startMany` 单独使用 `DOWNLOAD_QUEUE_MAX` 作为 `midArray` 上限；
 - `song.getUrls` / `song.probe` 等仍保持 100 首限制；
-- 渲染层资产查询按 100 首分块，批次创建不按 100 分块。
+- 渲染层资产查询按 100 首分块，整单入队不按 100 分块。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.2 `ipc.ts` | 改 | 逐通道列出批量上限：批次用 `DOWNLOAD_BATCH_MAX`，播放链接 / 探测仍用 100。 |
-| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确批次上限与单曲 IPC 上限分离。 |
-| `EVOLVE.md` | #1 | 不动 | 批次能力见 #2，上限由 CORE 主责。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | 逐通道列出批量上限：整单入队用 `DOWNLOAD_QUEUE_MAX`，播放链接 / 探测仍用 100。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确整单入队上限与单曲 IPC 上限分离。 |
+| `EVOLVE.md` | #1 | 不动 | 整单下载能力见 #2，上限由 CORE 主责。 |
 
 ### 3.3 资产状态查询触发上游探测风暴
 
@@ -335,13 +344,13 @@
 解决方法：
 - 在样式表末尾追加窄屏覆盖块，重新设置 `--sidebar-width: 0`、单列 grid、`position: fixed`、`transform: translateX(...)`；
 - 恢复抽屉内的 `.nav-item` 字号、间距、`.user-meta` 与 `.brand` 文本；
-- 把旧断点规则视为历史残留，后续统一清理为单一 900px 抽屉规则，避免依赖样式顺序。
+- 把旧断点规则视为历史残留；当前样式表末尾的窄屏覆盖块仍依赖顺序覆盖 64px / 56px 常驻栏，尚未删除旧规则，后续清理时再收敛为单一 900px 抽屉规则。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.49 `styles/main.css` | 改 | 明确 900px / 560px 断点只保留抽屉规则，删除 64px / 56px 常驻栏。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 说明 900px / 560px 旧断点仍保留 64px / 56px 常驻栏规则，由末尾覆盖块改为抽屉；当前实现依赖样式顺序，删除旧规则需单独清理。 |
 | `CORE.html` | §4.23 `App.vue` | 改 | 补窄屏单列 grid、固定抽屉与 revealer 的组合关系。 |
 | `USER.html` | §5.2.1 窗口与布局 | 不动 | 布局契约由 #11 维护，见 CORE 两行。 |
 
@@ -382,21 +391,23 @@
 | `CORE.html` | §4.23 `App.vue` | 改 | 明确队列筛选保留原始 index 与移除语义。 |
 | `USER.html` | §5.2.9 播放队列 | 不动 | 移除行为由 #6 维护，见该节。 |
 
-### 3.9 评论“最旧”排序分页追加后会失去全局顺序
+### 3.9 评论“最旧”排序分页追加后会失去全局顺序（该排序后由 §4.41 取消）
+
+> 后续修正：§4.41 已完全取消“最旧”排序与 `CommentSort`，评论只保留最新评论的 `LastCommentSeqNo` 游标分页；本节关于最旧排序跨页重排的规则不再适用，追加时按 `id` 去重仍然有效。
 
 问题描述：最旧排序允许在已加载评论上本地重排。如果只在请求单页后排序，再把下一页直接 append，第二页的评论会整体排在第一页后面，跨页顺序并不正确；评论还可能因为刷新与翻页重叠而重复。
 
 
 解决方法：
-- 每次追加新一页后，对合并结果按 `createdAtMs` 重新升序排序；
+- 每次追加新一页后，对合并结果按 `createdAtMs` 重新升序排序（该重排已由 §4.41 随最旧排序一并删除）；
 - 追加前按评论 `id` 去重；
-- “最新 / 点赞”依赖上游顺序，不做本地重排；最旧排序的重排只作用于已加载集合。
+- “最新”依赖上游顺序，不做本地重排；最旧排序及其重排已由 §4.41 删除。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 补最旧排序在每次分页追加后全局重排、按 id 去重。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 已由 §4.41 删除最旧排序；追加时按 `id` 去重仍有效。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 不动 | 上游透传与本地排序分工由 #5 维护。 |
 | `PROVIDER.html` | §4.1 歌曲评论行 | 不动 | 上游排序方法不变，见 #5。 |
 
@@ -477,13 +488,15 @@
 
 ### 4.2 播放模式改为“按钮即当前项”的 revealer
 
+> 后续修正：§4.20 / §4.33 已把播放模式按钮点击从“开合菜单”改为按固定顺序 `sequence → repeat-all → repeat-one → shuffle` 循环；悬停仍打开其余模式菜单，按钮仍表示当前模式。本节其余样式与菜单结构结论有效。
+
 问题描述：ISSUES 要求播放模式切换改成 revealer 式，按钮与弹出一体化，按钮本身表示当前选中项，弹出层只展示其它选项。原实现把当前模式同时渲染在按钮图标和弹出菜单最后一项里，按钮只有非顺序模式才高亮，菜单与按钮之间还有 8px 间距，视觉上是两个独立控件，当前项重复出现。
 
 解决方法：
 - 抽出 `MODE_ICON` 映射，触发按钮改用 `.mode-button`，常驻 `accent-soft` 背景 + `accent-strong` 图标，直接表示当前模式，不再依赖 `active` 条件；
 - 弹出层改为 `otherModes = 固定顺序.filter(mode !== 当前)`，只渲染其它三种模式，去掉重复的当前项；
 - 菜单改为 `bottom: 0` 包住按钮：`width: 100%` 与按钮同宽、底部预留按钮高度、背景使用 surface 且无边框；按钮浮在弹层底部并始终保留全部 9px 圆角，形成包含式 revealer，并加 `scaleY` 向上展开动画；
-- `toggleModeMenu()` 在切换前清理打开 / 关闭定时器，避免悬停定时器在点击关闭后又把菜单重新打开；悬停、外部点击、Esc 与选择后关闭的行为保持不变。
+- 当时 `toggleModeMenu()` 在切换前清理打开 / 关闭定时器，避免悬停定时器在点击关闭后又把菜单重新打开；该函数后由 §4.20 的 `cycleMode()` 取代，悬停、外部点击、Esc 与选择后关闭的行为保持不变。
 
 验证：
 - `npm run typecheck` 通过；
@@ -554,6 +567,8 @@
 
 ### 4.5 侧栏新增“我喜欢”入口
 
+> 后续修正：§4.19 将侧栏“浏览”组顺序改为“发现 → 搜索 → 我喜欢 → 我的歌单”，并把根路径默认页改为发现页；“我喜欢”入口本身不变。
+
 问题描述：ISSUES 要求在导航栏“我的歌单”上方增加“我喜欢”。此前“我喜欢”只能从“我的歌单”页面的卡片进入，侧栏没有快捷入口；同时渲染层没有引用固定收藏歌单 ID 的常量，若在组件里再写一份 `'liked'` 容易与主进程漂移。
 
 解决方法：
@@ -571,7 +586,7 @@
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.23 `App.vue` | 改 | 侧栏“浏览”组顺序改为搜索 / 发现 / 我喜欢 / 我的歌单；“我喜欢”登录后显示并指向固定收藏歌单。 |
+| `CORE.html` | §4.23 `App.vue` | 改 | 侧栏“浏览”组顺序改为“发现 / 搜索 / 我喜欢 / 我的歌单”；“我喜欢”登录后显示并指向固定收藏歌单。 |
 | `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `FAVORITES_PLAYLIST_ID = 'liked'`。 |
 | `CORE.html` | §4.12 `main/api/playlist.ts` | 改 | 固定收藏歌单 ID 改为引用共享常量，删除模块内重复字面量。 |
 | `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序补“我喜欢”；说明登录后显示、与“我的歌单”同级。 |
@@ -775,7 +790,9 @@
 | `USER.html` | §5.3 错误与通知 | 不动 | 背景探测仍静默处理，不新增用户可见提示。 |
 | `EVOLVE.md` | #5 歌词 / 评论或 #4 歌手页 | 不动 | 属于可用性探测的生命周期修复，不改变产品交互。 |
 
-### 4.13 song.probe 请求量与 IP 104009 风控核查（未完成）
+### 4.13 song.probe 请求量与 IP 104009 风控核查（后由 §4.25 / §4.30 完成）
+
+> 后续修正：§4.25 已采用本节“方案 2”，把逐首详情改为 `CgiGetTrackInfo` 批量详情（50 首/次，缺失才单曲兜底）；§4.30 又补充了 104009 后的 60 秒全局截断。本节“未完成 / 待决定”的状态仅代表当时，后续已按方案 2 + 全局截断落地。
 
 问题描述：4.12 的泄漏问题修复后，用户 IP 仍被 QQ 音乐风控，播放链接请求持续返回 104009。需要确认 `song.probe` 是否绕过了限流，以及现有令牌桶是否过于宽松。
 
@@ -794,7 +811,7 @@
 4. 在 104009 / `UPSTREAM_NETWORK` 后增加全局退避与更长的冷却时间，而不只是暂停当前组件；
 5. 评估是否需要把可用性缓存 TTL 从 10 分钟延长，减少重复探测。
 
-状态：ISSUES 已新增顶层记录，未标记已解决；待完成上述策略调整后再补充验证结果。
+状态（当时）：ISSUES 已新增顶层记录，未标记已解决；后续已按方案 2 + 全局截断落地，见 §4.25 / §4.30。
 
 ### 4.14 歌曲标题的版本标签、尾部空白与徽标位置
 
@@ -874,7 +891,7 @@
 
 追加需求：清空下载目录按钮。
 
-- 设置页“缓存与下载”的下载目录行增加“清空目录”按钮，下载中心底部同步提供同一操作；点击前用确认框展示实际目录，并说明会删除目录内全部文件与下载记录，播放缓存不受影响；
+- 设置页“缓存与下载”的下载目录行增加“清空目录”按钮，下载中心顶部操作区同步提供同一操作（下载中心后于 §4.31 改为完整页面，操作区在顶部）；点击前用确认框展示实际目录，并说明会删除目录内全部文件与下载记录，播放缓存不受影响；
 - 主进程新增 `clearDownloadDirectory()`：先中止活动下载、清空任务记录，再删除下载目录内的全部内容并写回空索引；
 - 阻止清空文件系统根目录、用户主目录及其上级目录，避免误选目录造成系统级删除；
 - 新增 IPC `download.clearDirectory`，preload 与渲染层下载 store 同步清空本地任务 / 资产快照；设置页清空后刷新存储占用；
@@ -892,10 +909,12 @@
 | `CORE.html` | §4.49 `components/PlayerBar.vue` | 改 | 当前曲已下载时缓存进度按 100% 显示，tooltip 使用“已下载到本机”。 |
 | `USER.html` | §1 TERMS 下载限制 | 改 | 明确下载任务只有统一队列，没有批次；已下载歌曲直接本地播放，不再重新缓冲。 |
 | `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 下载目录行增加“清空目录”，确认后删除目录内已下载文件、封面、分片与记录；播放缓存独立清理。 |
-| `USER.html` | §5.2.8 页面结构 · 下载中心 | 改 | 下载中心只展示单一任务列表，不再按批次分组；底部提供“清空目录”。 |
+| `USER.html` | §5.2.8 页面结构 · 下载中心 | 改 | 下载中心只展示单一任务列表，不再按批次分组；顶部操作区提供“清空目录”（§4.31 改为完整页面后位置由底部移到顶部）。 |
 | `EVOLVE.md` | #2 下载队列 | 改 | 删除批次模型与批次控制，补充统一入队、出队时解析歌曲信息、已下载文件本地播放与清空下载目录约束。 |
 
 ### 4.17 下载按钮的缓存 / 下载状态在播放条与歌曲表统一
+
+> 后续修正：本节后半的“追加修复（遗留问题）”已取代前半的 2px inset 边框方案，最终统一为 24px `::before` 状态框（缓存态 surface 背景、下载态 accent 填充）。以追加修复与本节末尾结论为准。
 
 问题描述：ISSUES 指出歌曲下载按钮在“已缓存”状态下，图标本身变成了带外框的样式，且按钮的圆角边框需要更粗；同时播放条的下载按钮与歌单 / 歌曲表内的呈现不一致，已缓存的边框与已下载的高亮在播放条上都没有生效。
 
@@ -948,6 +967,8 @@
 
 ### 4.18 设置页新增带节点的播放缓存上限滑动条
 
+> 后续修正：本节后半的“追加修复（缓存上限持久化）”已取代前面“只在 `change` 时写盘”的描述；最终为 `input` 防抖 200ms 保存、`change` 立即 flush、卸载兜底，主进程使用同步原子写。
+
 问题描述：ISSUES 要求设置里的缓存选项增加一个带节点的滑动条，用固定档位调整缓存大小：最小 128MB、最大 2GB，档位为 128M → 256M → 512M → 1G → 1.5G → 2G。原实现只有播放缓存开关与“清空”按钮，容量上限写死为 `AUDIO_CACHE_MAX_BYTES = 2 GiB`，用户无法调整；`Settings` 与设置页也没有对应字段。
 
 解决方法：
@@ -957,7 +978,7 @@
 - `cache/audio.ts` 的 LRU 清理不再读常量，改为每次按 `getSettings().audioCacheMaxBytes` 执行，并导出 `enforceAudioCacheLimit()`：写入缓存后仍自动清理，设置页下调上限时也立即清理；
 - `settings.set` 保存后若缓存上限发生变化，调用 `enforceAudioCacheLimit()`；关闭播放缓存仍沿用原有清空逻辑，返回实际落盘后的 `saved` 设置；
 - 设置页在播放缓存开关下方新增全宽 `cache-limit-row`：左侧显示“播放缓存上限 / 超出后按最久未使用自动清理”，右侧显示当前档位；滑杆固定 6 个节点，已选节点与轨道填充使用 accent 色，未到节点保持弱色；
-- 滑杆拖动时只更新本地预览档位，释放（`change`）后才写入设置并刷新缓存占用，失败时回退到当前设置值并提示；`aria-label` 为“播放缓存上限”，节点标签为 128M / 256M / 512M / 1G / 1.5G / 2G；
+- 滑杆拖动时立即更新本地档位并安排 200ms 防抖保存，释放（`change`）时取消防抖并立即落盘；组件卸载时若有待保存值则立即 flush；失败时回退到当前设置值并提示；`aria-label` 为“播放缓存上限”，节点标签为 128M / 256M / 512M / 1G / 1.5G / 2G；
 - `styles/main.css` 增加滑杆、填充轨道、滑块、节点与焦点环样式；轨道两端各留 7px 与滑块半径对齐，节点使用绝对定位，首尾标签不会挤出面板。
 
 验证：
@@ -1017,7 +1038,7 @@
 
 - `router/index.ts` 的根路径重定向从 `/search` 改为 `/discover`，启动与访问 `/` 都默认进入发现页；
 - `App.vue` 侧栏“浏览”组改为“发现 → 搜索 → 我喜欢 → 我的歌单”，发现项继续使用 `compass` 图标，搜索项使用 `search` 图标；
-- `/search` 路由、搜索结果内的返回链接、歌词页无历史时的回退目标与登录后跳转 `/library` 均保持不变，本次只调整默认首页与导航顺序；
+- `/search` 路由、搜索结果内的返回链接与登录后跳转 `/library` 均保持不变；歌词 / 评论后由 §4.29 改为弹出层，不再保留 `/lyrics` 路由及其返回逻辑；
 - 路由 `active-class` 由现有 RouterLink 自动处理，无需额外状态。
 
 验证：
@@ -1033,7 +1054,7 @@
 |---|---|---|---|
 | `CORE.html` | §4.25 `router/index.ts` | 改 | 根路径重定向改为 `/discover`，启动默认进入发现页。 |
 | `CORE.html` | §4.23 `App.vue` | 改 | 侧栏“浏览”组顺序改为“发现 / 搜索 / 我喜欢 / 我的歌单”。 |
-| `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序改为“发现 / 搜索 / 我的歌单”，并说明启动默认落在发现页。 |
+| `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序改为“发现 / 搜索 / 我喜欢 / 我的歌单”，并说明启动默认落在发现页。 |
 | `USER.html` | §3.4 页面 / URL 架构图 | 改 | 注明根路径 `/` 默认进入 `/discover`。 |
 | `EVOLVE.md` | #11 优化左侧导航 | 改 | 补“发现”在“搜索”之前、根路径默认进入发现页的导航约定。 |
 
@@ -1107,6 +1128,8 @@
 | `EVOLVE.md` | #5 播放条空状态 | 改 | 补封面占位无边框与全局 fg 轻阴影策略。 |
 
 ### 4.22 歌手简介过长时提供展开 / 收起
+
+> 后续修正：§4.44 已把简介折叠逻辑抽取到 `components/CatalogDescription.vue`，`ArtistView.vue` 不再保留 `descRef` / `descExpanded` / `descOverflow` / `measureDesc()` / `toggleDesc()`；本节关于这些局部实现的描述已被组件化取代，交互与溢出判断规则不变。
 
 问题描述：ISSUES 要求歌手简介太长时提供展开 / 收起选项。原 `ArtistView.vue` 只渲染一整段 `.catalog-desc`，简介较长时会占据大量首屏空间，把歌曲列表推到很下方；短简介又不应出现无意义的切换按钮。因此需要按实际渲染高度判断是否溢出，而不是按字符数或固定长度猜测。
 
@@ -1281,6 +1304,8 @@
 
 ### 4.28 取消评论“点赞”排序（上游没有按点赞排序接口）
 
+> 后续修正：§4.41 已完全删除“最旧”排序与 `CommentSort`，`comment.get` 只保留 `(songId, cursor?)`；本节“只保留最新 / 最旧”的结论以 §4.41 为准，`GetNewCommentList` + `LastCommentSeqNo` 的使用不变。
+
 问题描述：ISSUES 指出按点赞排序评论时报 `[ipc] UPSTREAM_CHANGED: 上游返回错误码 10000（music.globalComment.CommentRead.GetHotCommentList）`。原实现把 `hot` 当作评论排序交给 `GetHotCommentList`，而该方法的响应只有 `req_0.code = 10000` 与空的 `CommentList`，页面直接进入错误态。
 
 对 API 的正确理解：QQ 音乐的 Hot 是评论浏览列表之外的“热评”附加模块，只展示少量最热门评论，冷门歌曲可能为空；它不是可按页浏览的评论排序，也不能替代“按点赞数排序”。
@@ -1294,10 +1319,10 @@
 
 解决方法：
 
-- `CommentSort` 从 `hot | latest | oldest` 改为 `latest | oldest`；
-- 评论排序控件删除“点赞”，只保留“最新 / 最旧”；默认仍为“最新”；
-- `comment.ts` 统一调用 `GetNewCommentList` 并读取 `CommentList`，不再使用 `GetHotCommentList`、`WithHot` 或 `CommentList2`；`oldest` 继续在已加载评论上按 `createdAtMs` 本地升序重排；
-- `comment.get` IPC 只接受 `latest` / `oldest`，旧渲染层若仍传入 `hot` 会回退为 `latest`，不会再把上游错误码暴露给用户；
+- `CommentSort` 从 `hot | latest | oldest` 改为 `latest | oldest`（§4.41 随后完全删除 `CommentSort`）；
+- 评论排序控件删除“点赞”，只保留“最新 / 最旧”（§4.41 后连“最旧”也删除，只显示“评论”）；默认仍为“最新”；
+- `comment.ts` 统一调用 `GetNewCommentList` 并读取 `CommentList`，不再使用 `GetHotCommentList`、`WithHot` 或 `CommentList2`；`oldest` 继续在已加载评论上按 `createdAtMs` 本地升序重排（该重排随后由 §4.41 删除）；
+- `comment.get` IPC 只接受 `latest` / `oldest`，旧渲染层若仍传入 `hot` 会回退为 `latest`，不会再把上游错误码暴露给用户（§4.41 后签名改为 `(songId, cursor?)`）；
 - 更新 `test/api/comment.test.ts`：锁定最新 / 最旧都使用 `GetNewCommentList`、不携带 `WithHot`，并保留评论过滤与本地排序校验；
 - 热评附加模块当前不实现；若后续需要在评论区之外展示，应作为独立区块单独加载，并允许空状态。
 
@@ -1313,8 +1338,8 @@
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
 | `PROVIDER.html` | §4.1 歌曲评论行 / §4.3 `QqCommentList` | 改 | 删除“点赞排序走 `GetHotCommentList`”；注明上游没有按点赞排序参数，`GetHotCommentList` 返回业务码 `10000`；`WithHot=1` 的 `CommentList2` 是热评附加模块，仅首屏、可为空，不是评论排序。 |
-| `CORE.html` | §4.15 `comment.ts` | 改 | `CommentSort` 改为 `latest | oldest`；删除 hot 分支与 `CommentList2` 读取；说明评论只支持最新 / 最旧。 |
-| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论排序选项改为“最新 / 最旧”，删除“点赞”；若展示热评，应在评论列表外单独说明。 |
+| `CORE.html` | §4.15 `comment.ts` | 改 | 删除 hot 分支与 `CommentList2` 读取；`CommentSort` 最终由 §4.41 完全删除，评论只保留最新评论游标分页。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论排序先删除“点赞”，随后由 §4.41 删除“最新 / 最旧”切换，只显示“评论”标题；若展示热评，应在评论列表外单独说明。 |
 | `EVOLVE.md` | — | 改 | 删除“评论按点赞排序”的要求；如需热评，改为独立的附加模块需求。 |
 
 ### 4.29 歌词 / 评论改为弹出层并由播放条封面开关
@@ -1348,6 +1373,8 @@
 | `EVOLVE.md` | — | 改 | 删除“歌词 / 评论为普通路由页”的要求，改为内容区弹出层。 |
 
 ### 4.30 批量下载卡住页面与 104009 全局截断
+
+> 后续修正：§4.31 已删除 `DownloadDrawer`，下载中心改为 `/downloads` 完整页面；§4.50 / §4.52 又移除数字指示并把进度条改为 fixed overlay。本节“仅在 `ui.downloadOpen` 时渲染抽屉”的修复被页面改造取代；轮询只在状态变化时刷新资产、下载不受页面生命周期取消、104009 全局截断等结论继续有效。
 
 问题描述：ISSUES 指出开始批量下载歌曲后，设置页、搜索页等界面无法打开，同时播放会收到 104009；要求先分析旧代码确认根因，确认改用批量接口后是否仍存在，再决定跳过或修复；并要求作为兜底，收到 104009 时触发 60 秒超时，期间任何上游请求都被截断并 toast 提示。
 
@@ -1391,7 +1418,7 @@
 |---|---|---|---|
 | `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 补 104009 全局截断：`UPSTREAM_BLOCK_MS`、`tripUpstreamBlock` / `upstreamBlockRemainingMs` / `assertUpstreamAvailable`；`fetchOnce` 取令牌前后检查；`musicu` 默认截断，vkey 用 `deferBlock` 等两次入口都失败后再截断；`upstream:blocked` 广播。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 截断窗口内停止出队；任务遇到 104009 保持待下载并在窗口结束后自动恢复，不标记失败。 |
-| `CORE.html` | §4.31 `stores/download.ts` / §4.72 `DownloadDrawer.vue` | 改 | 仅在下载中心打开时轮询与渲染任务列表；资产状态只刷新状态变化的任务，禁止每次轮询全量查询。 |
+| `CORE.html` | §4.31 `stores/download.ts` / DownloadsView（原 `DownloadDrawer.vue` 已由 §4.31 删除） | 改 | 仅在下载中心可见时轮询与渲染任务列表；资产状态只刷新状态变化的任务，禁止每次轮询全量查询。 |
 | `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `UPSTREAM_BLOCK_MS`，推荐值 60_000。 |
 | `USER.html` | §5.3 错误与通知 | 改 | 收到 104009 时提示已暂停上游请求 60 秒，请检查网络 / VPN / 代理出口；期间播放、搜索、下载等上游操作直接失败。 |
 | `USER.html` | §5.2.8 下载中心 | 改 | 下载中心关闭时不渲染全量任务列表、不扫描目录用量；有活动任务时仍轮询状态以更新歌曲表图标，全部结束后停止；打开时刷新用量与完整进度。 |
@@ -1399,13 +1426,15 @@
 
 ### 4.31 下载中心改为完整页面
 
+> 后续修正：§4.50 已删除 `(完成/总数)` 与失败数等数字指示；§4.52 将整体进度条改为不占布局的 fixed overlay；§4.51 在筛选同行右侧新增“全部开始”。本节关于数字指示、吸顶 / 通栏布局与操作栏的描述以这三节为准。
+
 问题描述：ISSUES 要求把下载中心从右侧弹出抽屉改为完整页面；清空目录、打开文件夹等操作按钮放在顶部；页面顶部的进度栏横跨窗口，并显示整体进度（形如 `(1/100)`）。
 
 解决方法：
 
 - 新增 `views/DownloadsView.vue`，删除 `components/DownloadDrawer.vue`，新增 `/downloads` 路由；侧栏“下载”由按钮改为 `RouterLink`，按当前路由高亮；
-- 页面顶部增加吸顶的整体进度栏，横跨内容区宽度：显示完成数 / 总数（如 `(1/100)`）与失败数，进度按 `done / total` 计算；任务列表为空时显示空状态；
-- 后续布局调整：不再显示“整体进度”字样；进度条贴在页面最顶部并左右延伸到内容区边缘，`(完成/总数)` 与失败数绝对定位在进度条下方右对齐；标题区直接复用普通 `.page` 布局，顶部留白、背景与“设置 / 我的歌单”页一致，不使用不透明吸顶背景，避免页面顶部光晕被遮住后只在标题下方露出；
+- 页面顶部增加整体进度栏，横跨内容区宽度：最初显示完成数 / 总数（如 `(1/100)`）与失败数，进度按 `done / total` 计算（数字指示已由 §4.50 删除）；任务列表为空时显示空状态；
+- 后续布局调整：不再显示“整体进度”字样；进度条贴在页面最顶部并左右延伸到内容区边缘，`(完成/总数)` 与失败数绝对定位在进度条下方右对齐（数字指示已由 §4.50 删除，进度条最终由 §4.52 改为 fixed overlay）；标题区直接复用普通 `.page` 布局，顶部留白、背景与“设置 / 我的歌单”页一致，不使用不透明吸顶背景，避免页面顶部光晕被遮住后只在标题下方露出；
 - 下载条目区顶部增加“全部 / 进行中 / 已完成 / 未成功”过滤切换，并包含在任务面板边框内；过滤只影响展示，整体进度仍按全部任务计算；
 - 任务按队列顺序降序展示，新任务在最前；该顺序仅为视觉调整，不改变主进程统一队列的处理顺序；
 - `page-head-actions` 集中放置“清除已完成”“清空目录”“打开文件夹”，其中“清除已完成”只清记录，“清空目录”仍保留目录确认与路径提示；
@@ -1432,11 +1461,13 @@
 | `CORE.html` | §4.31 `stores/ui.ts` | 改 | 删除 `downloadOpen` / `toggleDownload` / `closeDownload`；下载中心不再参与抽屉互斥。 |
 | `CORE.html` | §4.31 `stores/download.ts` | 改 | `setOpen` 改为 `setVisible`；下载页可见时轮询并刷新目录用量，不可见时仅在存在活动任务时继续轮询；新任务追加到列表末尾，页面倒序展示；`reset()` 在页面可见时立即重新加载。 |
 | `CORE.html` | §4.71 `utils/download-progress.ts` | 增 | 补 `downloadOverallProgress`：总任务 / 完成 / 失败 / 进行中 / 百分比。 |
-| `USER.html` | §3.4 页面表 / §5.2.8 下载中心 | 改 | 下载中心改为侧栏可进入的完整页面；页面最顶部为左右通栏进度条，`(完成/总数)` 与失败数绝对定位在进度条下方右对齐；标题区与设置 / 我的歌单页使用相同的页面留白与背景；条目区面板边框内顶部提供“全部 / 进行中 / 已完成 / 未成功”过滤；任务按新到旧展示。 |
+| `USER.html` | §3.4 页面表 / §5.2.8 下载中心 | 改 | 下载中心改为侧栏可进入的完整页面；顶部整体进度条为不占布局的 fixed overlay，不显示数字 / 失败数指示；标题区与设置 / 我的歌单页使用相同的页面留白与背景；条目区面板边框内顶部提供“全部 / 进行中 / 已完成 / 未成功”过滤，右侧提供“全部开始”；任务按新到旧展示。 |
 | `USER.html` | §5.2.2 侧栏 | 改 | “下载”改为路由入口，指向 `/downloads`；不再打开右侧抽屉。 |
 | `EVOLVE.md` | — | 改 | 下载中心由抽屉改为完整页面，补充顶部操作区与整体进度栏要求。 |
 
 ### 4.32 无歌曲时播放条按钮状态与音质弹出
+
+> 后续修正：§4.33 将音质按钮点击改为按 `auto → 128k → 320k → flac` 固定顺序循环，悬停仍展开其余档位；本节“点击按钮仍可切换”以 §4.33 为准。
 
 问题描述：ISSUES 指出没有歌曲在播放时，播放条的喜欢 / 下载按钮没有变灰；同时切换音质按钮失效。要求音质切换改为类似播放模式的弹出：按钮本身表示当前档位，弹层只列出其它档位并与按钮一体化。后续新增子项：播放条与设置页的音质设置没有对齐，播放条不能选“自动”，两边配置没有联动；两者应共用内部 API 与状态。
 
@@ -1447,7 +1478,7 @@
 - 音质按钮改为与播放模式一致的 revealer：
   - 按钮保留当前档位文本并常驻高亮；
   - 弹层只渲染“其它档位”，当前档位不再重复出现；
-  - 鼠标悬停打开、离开延迟关闭，点击按钮仍可切换；展开时按钮位于弹层底部并与弹层左右 / 下边缘对齐；
+  - 鼠标悬停打开、离开延迟关闭，点击按钮循环切换档位（§4.33）；展开时按钮位于弹层底部并与弹层左右 / 下边缘对齐；
   - 档位文案压缩为 `128K / 320K / FLAC`，弹层宽度与按钮一致，避免窄按钮配宽弹层；
 - 弹层打开时关闭音量 / 播放模式弹层，并补齐对应定时器清理与 Esc / 点击外部关闭逻辑。
 - 播放条与设置页音质共用状态：
@@ -1476,7 +1507,9 @@
 
 ### 4.33 Revealer 统一交互
 
-问题描述：ISSUES 要求所有 revealer 统一设计模式：按钮本身点击按固定顺序切换选项、弹层按固定顺序列出除当前项外的其余选项、按钮始终高亮当前项；音量条作为特殊个例单独说明。排查后唯一缺口是播放条音质切换按钮仍为点击展开 / 关闭弹层，而不是点击循环切换。
+> 后续修正：§4.54 将播放条收藏定义为特殊 revealer（点击收藏 / 取消收藏，弹层只有“加入歌单”），§4.55 将音量触屏改为按拖动距离 delta 调节；统一“点击循环”规则只适用于播放模式与音质，收藏 / 音量为例外。
+
+问题描述：ISSUES 要求所有带选项的 revealer 统一设计模式：按钮本身点击按固定顺序切换选项、弹层按固定顺序列出除当前项外的其余选项、按钮始终高亮当前项；音量条作为特殊个例单独说明。排查后唯一缺口是播放条音质切换按钮仍为点击展开 / 关闭弹层，而不是点击循环切换。
 
 解决方法：
 
@@ -1544,6 +1577,8 @@
 
 ### 4.35 歌单详情恢复“从歌单删除”按钮与写后校验
 
+> 后续修正：§4.39 已把写后读回 / 整单扫描移出写 API，删除链路改为 `playlist.removeSongs` 返回 `{ changed }` 后由 `stores/playlist-edit.ts` 的 `refreshAfterWrite` 统一刷新；本节关于“DelSonglist → 读回成员确认”的描述以 §4.39 为准，可编辑判定与乐观移除仍有效。
+
 问题描述：ISSUES 指出从歌单删除歌曲的按钮和功能没有实现。排查后确认渲染层与 IPC 链路本身已存在，但 `PlaylistView` 只有在 `PlaylistMeta.editable && kind === 'normal'` 时才把 `removable` 传给 `SongTable`，而 `fetchPlaylistPage` 对所有普通歌单都硬编码 `editable: false`：
 
 - `listMine()` 返回的“我的歌单”虽然带 `editable: true`，进入详情页后会被 `CgiGetDiss` 的 `fetchPlaylistPage` 结果覆盖成 `false`；
@@ -1555,8 +1590,8 @@
 - `CgiGetDiss` 的 `dirinfo` 补充 `owndir`、`host_uin`、`creator.musicid` 字段；
 - 新增 `canEdit(data)`：优先读取上游 `owndir === 1`；字段缺失或为 0 时，回退比较当前登录 `musicid` 与 `creator.musicid` / `host_uin`；未登录或无归属信息时返回 `false`；
 - 普通歌单的 `editable` 改为 `canEdit(data)`，“我喜欢”仍为可编辑；公开 / 搜索歌单保持不可编辑；
-- 详情页原有删除链路保持不变：确认框 → 本地乐观移除并更新计数 → `playlist.removeSongs` → `DelSonglist` → 读回成员确认 → 失败回滚；
-- 新增 `test/api/playlist-write.test.ts`，用 mock 上游校验删除请求携带数字 `songId` 与真实 `songType`、写后成员消失、非成员歌曲不发起写请求；
+- 详情页原有删除链路保持不变：确认框 → 本地乐观移除并更新计数 → `playlist.removeSongs` → `DelSonglist` → 由 §4.39 的统一刷新流程确认 → 失败回滚；
+- 新增 `test/api/playlist-write.test.ts`，用 mock 上游校验删除请求携带数字 `songId` 与真实 `songType`、写接口返回 `{ changed }` 且不读回成员、非成员歌曲不发起写请求；
 - 扩展 `test/api/playlist-cache.test.ts`，覆盖 `owndir` 判定、非本人歌单不可编辑与 `creator.musicid` 回退。
 
 验证：
@@ -1573,12 +1608,14 @@
 |---|---|---|---|
 | `PROVIDER.html` | §4.1 歌单详情行 / §4.3 `QqPlaylistDirinfo` | 改 | 增 `dirinfo.owndir`、`host_uin`、`creator.musicid`，并说明 `owndir === 1` 表示当前账号拥有该歌单。 |
 | `CORE.html` | §4.12 `api/playlist.ts` | 改 | `fetchPlaylistPage` 的普通歌单 `editable` 改为 `owndir` 优先、创建者 ID 回退；未登录或非本人歌单为 `false`。 |
-| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明删除入口只在普通且 `editable` 的歌单出现，并保留确认、乐观更新、写后读回与失败回滚。 |
-| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 补 `removeSongs` 的归属前置校验由详情接口提供，删除时按数字 `songId` / `songType` 写 `DelSonglist` 并读回成员。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明删除入口只在普通且 `editable` 的歌单出现，并保留确认、乐观更新与失败回滚；写后刷新见 §4.39。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 补 `removeSongs` 的归属前置校验由详情接口提供，删除时按数字 `songId` / `songType` 写 `DelSonglist`；写后刷新由 §4.39 统一流程负责。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 说明自己创建的歌单在歌曲操作列显示“从歌单删除”，公开歌单不显示；删除只影响歌单成员，不改变播放队列。 |
 | `EVOLVE.md` | #14 | 不动 | 删除歌曲的交互与写后校验已由 CORE / USER 记录，本次仅修复可编辑判定。 |
 
 ### 4.36 添加到歌单写错 dirId / tid 导致 80092
+
+> 后续修正：§4.39 已把 80092 的处理收敛为写 API 返回 `{ changed: false }`，写后读回与刷新由渲染层 `refreshAfterWrite` 负责；本节原“写后读回若已达成目标状态则视为成功”的结论已失效，`dirId` / `tid` 契约不变。
 
 问题描述：测试“添加到歌单”时持续报 `UPSTREAM_CHANGED: 上游返回错误码 80092（music.musicasset.PlaylistDetailWrite.AddSonglist）`。排查确认不是简单重复添加，而是写接口的两个 ID 被混用：
 
@@ -1595,12 +1632,12 @@
 - `addSongs` / `removeSongs` 使用 `dirId: meta.dirId` 与 `tid: meta.id`，写请求参数收敛为 `{ dirId, tid, bFmtUtf8, v_songInfo }`，不再把歌单名当作写参数；
 - 改名 / 删除歌单先读取详情拿到当前 `dirId`，再提交 `EditPlaylist` / `DelPlaylist`，不再用歌单标识冒充目录 ID；
 - `mapUpstreamCode` 的未知错误统一携带原始 `upstreamCode`；`assertWrite` 同样保留 `retCode`；
-- 80092 不再直接失败：写后读回若已达成目标状态则视为成功，读回未确认时再给出“歌曲可能已在歌单中 / 歌单状态已变化”的明确错误；
-- 更新 `test/api/playlist-write.test.ts`：覆盖添加 / 删除携带 `dirId + tid`、创建返回 `id=tid`、改名 / 删除使用详情目录 ID、80092 由读回判定；扩展 `test/api/playlist-cache.test.ts` 校验详情返回的 `dirId`。
+- 80092 不再直接失败：写 API 视为 `{ changed: false }`，是否真正添加由 §4.39 的统一刷新流程确认；未变化时给出“歌曲可能已在歌单中 / 歌单状态已变化”的明确提示；
+- 更新 `test/api/playlist-write.test.ts`：覆盖添加 / 删除携带 `dirId + tid`、创建返回 `id=tid`、改名 / 删除使用详情目录 ID、80092 视为未变化；扩展 `test/api/playlist-cache.test.ts` 校验详情返回的 `dirId`。
 
 验证：
 
-- 对照上游实现约定核对：`AddPlaylist` 返回的 `result.tid` 是歌单标识，`result.dirId` 是目录 ID；`PlaylistDetailWrite` 同时需要两者；80092 属于业务状态码，应以读回结果判断；
+- 对照上游实现约定核对：`AddPlaylist` 返回的 `result.tid` 是歌单标识，`result.dirId` 是目录 ID；`PlaylistDetailWrite` 同时需要两者；80092 属于业务状态码，写 API 视为未变化，由统一刷新流程确认；
 - `npm run typecheck` 通过；
 - `npx vitest run` 23 个测试文件 / 85 个用例通过；
 - `npm run build` 通过。
@@ -1612,9 +1649,9 @@
 | `PROVIDER.html` | §4.1 歌单写入行 / §4.3 歌单模型 | 改 | 明确 `dirId` 是当前账号目录 ID、`tid` 才是歌单标识；`AddPlaylist` 返回的 `result.dirId` / `result.tid` 分别对应两者；80092 属于业务状态码而非请求失败。 |
 | `CORE.html` | §4.1 `types.ts` | 改 | `PlaylistMeta` 增加 `dirId?: number`，与 `id`（歌单标识）分开存储。 |
 | `CORE.html` | §4.12 `api/playlist.ts` | 改 | `listMine` 与 `CgiGetDiss` 都要回填 `dirId`；创建歌单以 `result.tid` 作为 `id`、`result.dirId` 作为目录 ID。 |
-| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 增删歌曲按 `dirId + tid + bFmtUtf8 + v_songInfo` 写入；改名 / 删除先读取详情获取 `dirId`；80092 写后读回判定。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 增删歌曲按 `dirId + tid + bFmtUtf8 + v_songInfo` 写入；改名 / 删除先读取详情获取 `dirId`；80092 视为未变化，刷新由 §4.39 统一处理。 |
 | `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 未知上游错误需保留 `upstreamCode`，供写操作识别 80092 等业务状态。 |
-| `USER.html` | §5.3 错误与通知 | 改 | 80092 在写后读回确认成功时不提示错误；未生效时提示歌曲可能已在歌单中或歌单状态已变化。 |
+| `USER.html` | §5.3 错误与通知 | 改 | 80092 在统一刷新确认未变化时提示歌曲可能已在歌单中或歌单状态已变化。 |
 | `EVOLVE.md` | #14 | 不动 | 写接口细节由 CORE / PROVIDER 主责，本次仅修正参数契约。 |
 
 ### 4.37 原生删除确认替换为应用内确认框
@@ -1762,6 +1799,8 @@
 
 ### 4.40 评论区取消正文截断并修复分页游标
 
+> 后续修正：§4.41 已删除“最旧”排序与 `CommentSort`，本节“最旧排序继续在合并结果上本地重排”的结论失效；游标分页、`SeqNo` 精度、正文不截断与按 id 去重仍然有效。
+
 问题描述：ISSUES 指出两条评论问题：
 
 - 太长的评论会被省略号截断；
@@ -1788,7 +1827,7 @@
   - `UpstreamRequest` / `MusicuOptions` 新增可选 `stringFields`；
   - `upstreamRequest` 在 `JSON.parse` 前把指定字段的裸数字字面量改成字符串；
   - 评论请求传入 `stringFields: ['SeqNo']`，`nextCursor` 始终为精确字符串；
-- 加载更多仍使用现有滚动到底触发，不新增按钮；追加后按评论 `id` 去重，最旧排序继续在合并结果上本地重排。
+- 加载更多仍使用现有滚动到底触发，不新增按钮；追加后按评论 `id` 去重；最旧排序及其重排已由 §4.41 删除。
 
 验证：
 
@@ -1815,6 +1854,8 @@
 
 ### 4.41 取消最旧排序，改为评论区跳转顶部 / 底部
 
+> 后续修正：§4.42 实测单页上限为 25 条，并把 `COMMENT_LOAD_ALL_PAGE_MAX` 从 50 调整为 40；本节记录的是调整前的 20 条/页、最多 50 页，最终数值以 §4.42 与代码为准（25 × 40 ≈ 1000 条）。
+
 问题描述：按要求完全取消“最旧”排序，不再保留旧版评论接口与 `nextPage` 分页；评论区顶部只显示“评论”两个字。同时在右下角增加智能出现的独立圆形“跳转到顶部 / 跳转到底部”按钮，使用指向底线的箭头图标。点击“跳转到底部”时先一次性补拉全部剩余评论，再直接滚动到底部。顶部区域下方的分隔线去掉。
 
 解决方法：
@@ -1830,7 +1871,7 @@
     - 还有下一页或未滚到底部时显示“跳转到底部”；
   - 两个按钮分别执行平滑回顶、直接拉到底部；
 - “跳转到底部”补拉逻辑：
-  - 若仍有 `hasMore`，按 `loadMore()` 串行分页，直到没有下一页或达到 `COMMENT_LOAD_ALL_PAGE_MAX = 40` 页（25 × 40 = 1000 条）；
+  - 若仍有 `hasMore`，按 `loadMore()` 串行分页，直到没有下一页或达到当时 `COMMENT_LOAD_ALL_PAGE_MAX = 50` 页（20 × 50 = 1000 条；§4.42 后为 25 条/页、40 页）；
   - 串行请求天然受全局限速约束，避免并发轰炸上游；
   - 达到页数上限时提示“评论较多，已加载前 N 条”，避免热门歌曲无限拉取；
   - 使用现有 `token` 作为取消标记：关闭歌词 / 评论弹出层（组件卸载）、切歌或刷新时立即让循环失效，不再发起后续页请求；
@@ -1854,9 +1895,9 @@
 |---|---|---|---|
 | `CORE.html` | §4.1 `types.ts` / §4.2 `ipc.ts` | 改 | 删除 `CommentSort` / `nextPage` / `pageNo`；`comment.get(songId, cursor?)` 只保留最新评论游标。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 改 | 删除最旧排序与旧版评论接口，只保留 `GetNewCommentList` + `LastCommentSeqNo`。 |
-| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 工具栏改为“评论”；增加右下角跳转顶部 / 底部圆形按钮；跳转底部串行补拉剩余评论，最多 40 页，卸载 / 切歌 / 刷新时取消。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 工具栏改为“评论”；增加右下角跳转顶部 / 底部圆形按钮；跳转底部串行补拉剩余评论，最多 40 页（§4.42 后；本节当时为 50 页），卸载 / 切歌 / 刷新时取消。 |
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comments-toolbar` 下边框；增加 `.comments-title`、`.comments-jump`、`.comments-jump-btn`；调整 `.comments-scroll` 底部 padding。 |
-| `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `COMMENT_LOAD_ALL_PAGE_MAX = 40`。 |
+| `CORE.html` | §4.50 `shared/constants.ts` | 改 | §4.42 将 `COMMENT_LOAD_ALL_PAGE_MAX` 调整为 40（本节当时为 50）。 |
 | `PROVIDER.html` | §4.3 `QqCommentList` | 改 | 删除最旧排序 / 旧版接口说明，只保留最新评论游标分页。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 删除最新 / 最旧排序，改为“评论”标题；增加右下角跳转顶部 / 底部按钮与跳转底部的补拉行为。 |
 | `EVOLVE.md` | #5 | 改 | 删除最旧排序要求；补跳转顶部 / 底部交互、补拉上限与取消约束。 |
