@@ -308,9 +308,20 @@ watch(
             <template v-if="player.queueBuilding"> · 正在补齐</template>
           </p>
         </div>
-        <button class="icon-btn" title="关闭播放队列" @click="ui.closeQueue()">
-          <AppIcon name="close" :size="18" />
-        </button>
+        <div class="lyrics-head-actions">
+          <button
+            class="icon-btn"
+            title="清空播放队列"
+            aria-label="清空播放队列"
+            :disabled="player.queue.length === 0"
+            @click="player.clearQueue()"
+          >
+            <AppIcon name="trash" :size="17" />
+          </button>
+          <button class="icon-btn" title="关闭播放队列" @click="ui.closeQueue()">
+            <AppIcon name="close" :size="18" />
+          </button>
+        </div>
       </div>
 
       <div class="queue-now">
@@ -359,9 +370,6 @@ watch(
           >
             <AppIcon name="close" :size="15" />
           </button>
-        </div>
-        <div class="queue-footer">
-          <button class="btn ghost small" @click="player.clearQueue()">清空队列</button>
         </div>
       </div>
     </aside>
