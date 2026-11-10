@@ -398,7 +398,7 @@
 
 状态：已解决。
 
-### 2.8 运行期依赖的发行版包名映射未定义
+### 2.8 运行期依赖的发行版包名映射未定义 [已解决]
 
 问题描述：`BUILD.html §1` 只列了 GTK / libsecret / NSS / ALSA / D-Bus 这些库名，`install.sh` 却需要具体的发行版包名。文档没有给出 Arch 的 `pacman` 包名映射，脚本若猜错会安装失败或装到无关包。非 Arch 发行版的行为也需要明确。
 
@@ -415,6 +415,19 @@
 | `BUILD.html` | §1 环境要求 | 增 | Arch 包名映射表与“其他发行版自行安装”的说明。 |
 | `BUILD.html` | §5 curl 安装 | 改 | 说明脚本按该映射安装，检测不到 `pacman` 时跳过。 |
 | `EVOLVE.md` | #12 | 不动 | 包清单以 BUILD §1 为准，见上一行。 |
+
+实际操作（2026-11-10，分支 `doc/arch-runtime-packages`）：
+
+- `BUILD.html` §1 环境要求：新增 Arch 包名映射表：GTK → `gtk3`、libsecret → `libsecret`、NSS → `nss`、ALSA → `alsa-lib`、D-Bus → `dbus`；补 note 说明 `install.sh --with-deps` 只对检测到 `pacman` 的系统使用该映射，其他发行版需自行安装等价依赖。
+- `BUILD.html` §5 curl 安装：运行期依赖 note 补脚本按 §1 映射执行 `pacman -S --needed gtk3 libsecret nss alsa-lib dbus`，未检测到 `pacman` 时跳过并提示自行安装。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `install.sh`：`PKGS="gtk3 libsecret nss alsa-lib dbus"`，通过 `command -v pacman` 判断后执行 `pacman -S --needed`；未检测到时打印跳过提示。
+- `BUILD.html` §1 的五项映射与脚本包名一致。
+
+状态：已解决。
 
 ## 3. 其它技术上踩的坑
 
