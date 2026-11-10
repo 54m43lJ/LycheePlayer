@@ -2214,3 +2214,26 @@
 | `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 筛选切换同行右侧提供“全部开始”，继续所有暂停任务。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 新增 `resumeAllDownloads()`：只把 paused 置为 pending，并调度队列。 |
 | `CORE.html` | 下载中心对应小节 | 改 | 工具栏左筛选、右“全部开始”；无暂停任务时禁用。 |
+
+### 4.52 下载页整体进度条改为不占布局的顶部 overlay
+
+问题描述：补充子任务：下载页整体进度条应改为不占地方的 overlay，常驻页面顶端。
+
+解决方法：
+- `.downloads-progress-track` 从普通文档流块改为固定定位：`position: fixed`、`top: 0`、`left: var(--sidebar-width)`、`right: 0`、`z-index: 14`。
+- 增加 `pointer-events: none`，不拦截页面点击；高度保持 4px，滚动页面时始终停留在内容区顶端。
+- 进度条不再占据页面高度，`.page` 的内容从原来的进度条下方改为从顶端开始。
+- 填充色继续使用 `var(--muted)`；数字指示保持移除状态。
+
+验证：
+- `downloads-view` SSR 用例仍确认进度条节点存在且无数字指示；
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 107 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 顶部整体进度条为不占布局的 overlay，常驻内容区顶端；不显示数字指示。 |
+| `CORE.html` | 下载中心对应小节 | 改 | `.downloads-progress-track` 使用 fixed 定位、`left: var(--sidebar-width)`、`pointer-events: none`。 |

@@ -2610,9 +2610,15 @@ a {
 }
 
 .downloads-progress-track {
+  position: fixed;
+  top: 0;
+  left: var(--sidebar-width);
+  right: 0;
+  z-index: 14;
   height: 4px;
   overflow: hidden;
   background: var(--track);
+  pointer-events: none;
 }
 
 .downloads-progress-track span {
