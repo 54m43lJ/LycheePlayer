@@ -62,6 +62,11 @@ export interface PlaylistMeta {
   editable: boolean
 }
 
+/** 歌单加删歌曲的写入结果；是否需要刷新由渲染层统一触发。 */
+export interface PlaylistMutationResult {
+  changed: boolean
+}
+
 export interface RecentPlaylist extends PlaylistMeta {
   visitedAtMs: number
   stale?: boolean

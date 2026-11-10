@@ -5,12 +5,14 @@ import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
+import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { playlistSubtitle } from '../utils/format'
 
 const props = defineProps<{ open: boolean; songMids: string[]; songName?: string }>()
 const emit = defineEmits<{ close: []; added: [id: string] }>()
 
 const toast = useToast()
+const playlistEdit = usePlaylistEditStore()
 const playlists = ref<PlaylistMeta[]>([])
 const loading = ref(false)
 const error = ref('')
@@ -55,13 +57,8 @@ async function addTo(id: string): Promise<void> {
       toast.show('已在歌单中')
       return
     }
-    const before = playlists.value.find((playlist) => playlist.id === id)?.songCount
-    const meta = unwrap(await window.lychee.playlist.addSongs(id, props.songMids))
-    if (before !== undefined && meta.songCount === before) {
-      toast.show('已在歌单中')
-      return
-    }
-    toast.show('已添加到歌单')
+    const changed = await playlistEdit.addSongs(id, props.songMids)
+    if (!changed) return
     emit('added', id)
     emit('close')
   } catch (err) {
@@ -77,8 +74,7 @@ async function createAndAdd(): Promise<void> {
   submittingId.value = 'new'
   try {
     const meta = unwrap(await window.lychee.playlist.create(name))
-    unwrap(await window.lychee.playlist.addSongs(meta.id, props.songMids))
-    toast.show('歌单已创建并添加')
+    await playlistEdit.addSongs(meta.id, props.songMids)
     emit('added', meta.id)
     emit('close')
   } catch (err) {

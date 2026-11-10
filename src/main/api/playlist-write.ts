@@ -1,5 +1,5 @@
-import type { PlaylistMeta, PlaylistPage } from '../../shared/types'
-import { PLAYLIST_PAGE_SIZE, SONG_DETAIL_BATCH } from '../../shared/constants'
+import type { PlaylistMeta, PlaylistMutationResult } from '../../shared/types'
+import { SONG_DETAIL_BATCH } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu } from './client'
 import { fetchPlaylistPage } from './playlist'
@@ -145,25 +145,6 @@ async function writeDetail(
   assertWrite(data, action)
 }
 
-/** 从指定偏移读取成员 mid 与最新元数据；最多读取 20 页。 */
-async function readMembers(
-  id: string,
-  startOffset = 0
-): Promise<{ mids: Set<string>; meta: PlaylistMeta }> {
-  const mids = new Set<string>()
-  let offset = Math.max(0, Math.floor(startOffset / PLAYLIST_PAGE_SIZE) * PLAYLIST_PAGE_SIZE)
-  let meta: PlaylistMeta | null = null
-  for (let page = 0; page < 20; page += 1) {
-    const result: PlaylistPage = await fetchPlaylistPage(id, offset)
-    meta = result.meta
-    for (const song of result.songs) if (song.songMid) mids.add(song.songMid)
-    if (!result.hasMore || result.songs.length === 0) break
-    offset += result.songs.length
-  }
-  if (!meta) throw new UpstreamError('UPSTREAM_CHANGED', '歌单响应缺少元数据')
-  return { mids, meta }
-}
-
 export async function createPlaylist(name: string): Promise<PlaylistMeta> {
   const data = await writeBase(
     'AddPlaylist',
@@ -216,68 +197,38 @@ export async function removePlaylist(id: string): Promise<void> {
   )
 }
 
-export async function addSongs(id: string, mids: string[]): Promise<PlaylistMeta> {
+/** 只负责写入；写后歌单刷新由渲染层统一触发，不在写 API 内做整单扫描。 */
+export async function addSongs(id: string, mids: string[]): Promise<PlaylistMutationResult> {
   const meta = await readMeta(id)
   const target = [...new Set(mids.filter(Boolean))]
-  if (target.length === 0) return meta
-  let writeError: unknown = null
+  if (target.length === 0) return { changed: false }
   try {
     await writeDetail('AddSonglist', meta.id, playlistDirId(meta), target, '添加歌曲')
+    return { changed: true }
   } catch (err) {
-    // 80092：歌曲已存在等业务状态；以写后读回为准。
-    if (err instanceof UpstreamError && err.upstreamCode === 80092) writeError = err
-    else throw err
-  }
-  // 新歌通常追加在末尾：先只读回旧总数之后的尾部，避免为了确认一首歌重扫整单。
-  const tail = await readMembers(id, meta.songCount)
-  let missing = target.filter((mid) => !tail.mids.has(mid))
-  let confirmed = tail.meta
-  if (missing.length > 0) {
-    // 未在尾部找到（或 80092 表示重复）时再退回完整扫描。
-    const full = await readMembers(id, 0)
-    missing = target.filter((mid) => !full.mids.has(mid))
-    confirmed = full.meta
-  }
-  if (missing.length > 0) {
-    if (writeError) {
-      throw new UpstreamError(
-        'UPSTREAM_CHANGED',
-        '添加歌曲未生效：上游返回 80092（歌曲可能已在歌单中或歌单状态已变化）',
-        false,
-        80092
-      )
+    // 80092 表示歌曲已存在等业务状态；是否需要刷新与重复提示交给渲染层刷新流程。
+    if (err instanceof UpstreamError && err.upstreamCode === 80092) {
+      return { changed: false }
     }
-    throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认添加结果，请稍后刷新')
+    throw err
   }
-  return confirmed
 }
 
-export async function removeSongs(id: string, mids: string[]): Promise<PlaylistMeta> {
+/** 只负责写入；写后歌单刷新由渲染层统一触发，不在写 API 内做整单扫描。 */
+export async function removeSongs(id: string, mids: string[]): Promise<PlaylistMutationResult> {
   const meta = await readMeta(id)
   const target = [...new Set(mids.filter(Boolean))]
-  if (target.length === 0) return meta
-  let writeError: unknown = null
+  if (target.length === 0) return { changed: false }
   try {
     await writeDetail('DelSonglist', meta.id, playlistDirId(meta), target, '移除歌曲')
+    return { changed: true }
   } catch (err) {
-    // 80092：歌曲不存在等业务状态；以写后读回为准。
-    if (err instanceof UpstreamError && err.upstreamCode === 80092) writeError = err
-    else throw err
-  }
-  const after = await readMembers(id, 0)
-  const remaining = target.filter((mid) => after.mids.has(mid))
-  if (remaining.length > 0) {
-    if (writeError) {
-      throw new UpstreamError(
-        'UPSTREAM_CHANGED',
-        '移除歌曲未生效：上游返回 80092（歌曲可能已不在歌单中或歌单状态已变化）',
-        false,
-        80092
-      )
+    // 80092 表示歌曲不存在等业务状态；最终状态由统一刷新流程确认。
+    if (err instanceof UpstreamError && err.upstreamCode === 80092) {
+      return { changed: false }
     }
-    throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认移除结果，请稍后刷新')
+    throw err
   }
-  return after.meta
 }
 
 /** 供收藏等需要真实 songType 的模块复用。 */

@@ -24,6 +24,7 @@ import type {
   PlayerState,
   PlaylistCacheEntry,
   PlaylistMeta,
+  PlaylistMutationResult,
   PlaylistPage,
   PlaylistSnapshot,
   Quality,
@@ -98,9 +99,9 @@ const api: LycheeApi = {
     rename: (id: string, name: string) => invoke<PlaylistMeta>('playlist.rename', id, name),
     remove: (id: string) => invoke<null>('playlist.remove', id),
     addSongs: (id: string, mids: string[]) =>
-      invoke<PlaylistMeta>('playlist.addSongs', id, mids),
+      invoke<PlaylistMutationResult>('playlist.addSongs', id, mids),
     removeSongs: (id: string, mids: string[]) =>
-      invoke<PlaylistMeta>('playlist.removeSongs', id, mids)
+      invoke<PlaylistMutationResult>('playlist.removeSongs', id, mids)
   },
   favorite: {
     get: (mids: string[]) => invoke<FavoriteState[]>('favorite.get', mids),

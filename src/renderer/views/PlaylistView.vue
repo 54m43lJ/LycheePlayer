@@ -134,7 +134,6 @@ async function confirmRemove(): Promise<void> {
   playlist.removeMembers(id.value, [target.songMid])
   try {
     await playlistEdit.removeSongs(id.value, [target.songMid])
-    toast.show('已从歌单删除')
   } catch (err) {
     if (feed.value) {
       feed.value.songs = snapshot

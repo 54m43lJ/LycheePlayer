@@ -100,8 +100,7 @@ describe('api/playlist-write', () => {
     const { removeSongs } = await import('../../src/main/api/playlist-write')
     const result = await removeSongs('123', ['a'])
 
-    expect(result).toMatchObject({ id: '123', dirId: 456, songCount: 1 })
-    expect(state.members).toEqual(['b'])
+    expect(result).toEqual({ changed: true })
     const write = musicuMock.mock.calls.find(
       ([module, method]) =>
         module === 'music.musicasset.PlaylistDetailWrite' && method === 'DelSonglist'
@@ -119,8 +118,7 @@ describe('api/playlist-write', () => {
     const { addSongs } = await import('../../src/main/api/playlist-write')
     const result = await addSongs('123', ['a'])
 
-    expect(result).toMatchObject({ id: '123', dirId: 456, songCount: 2 })
-    expect(state.members).toEqual(['b', 'a'])
+    expect(result).toEqual({ changed: true })
     const write = musicuMock.mock.calls.find(
       ([module, method]) =>
         module === 'music.musicasset.PlaylistDetailWrite' && method === 'AddSonglist'
@@ -128,8 +126,7 @@ describe('api/playlist-write', () => {
     expect(write?.[2]).toMatchObject({ dirId: 456, tid: 123, bFmtUtf8: 1 })
   })
 
-  it('treats 80092 as success when the write result is confirmed by read-back', async () => {
-    state.members = ['b']
+  it('returns changed=false for 80092 without scanning the playlist', async () => {
     const { UpstreamError } = await import('../../src/main/api/client')
     musicuMock.mockImplementation(
       async (module: string, method: string, param: Record<string, unknown>) => {
@@ -138,7 +135,6 @@ describe('api/playlist-write', () => {
           return { tracks: mids.map((mid) => ({ id: 1001, mid, type: 0 })) }
         }
         if (method === 'AddSonglist') {
-          state.members = ['b', 'a']
           throw new UpstreamError('UPSTREAM_CHANGED', 'upstream 80092', false, 80092)
         }
         throw new Error(`unexpected request: ${module}.${method}`)
@@ -146,14 +142,12 @@ describe('api/playlist-write', () => {
     )
 
     const { addSongs } = await import('../../src/main/api/playlist-write')
-    await expect(addSongs('123', ['a'])).resolves.toMatchObject({ songCount: 2 })
+    await expect(addSongs('123', ['a'])).resolves.toEqual({ changed: false })
   })
 
-  it('returns the current meta without any write when there is nothing to remove', async () => {
+  it('does not write when there are no song IDs', async () => {
     const { removeSongs } = await import('../../src/main/api/playlist-write')
-    const result = await removeSongs('123', [])
-
-    expect(result).toMatchObject({ id: '123', songCount: 2 })
+    await expect(removeSongs('123', [])).resolves.toEqual({ changed: false })
     expect(
       musicuMock.mock.calls.some(([, method]) => method === 'DelSonglist')
     ).toBe(false)
