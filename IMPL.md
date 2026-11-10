@@ -258,7 +258,7 @@
 
 状态：已解决。
 
-### 2.4 评论点赞的返回结构、`liked` 来源与点赞数处理未定义
+### 2.4 评论点赞的返回结构、`liked` 来源与点赞数处理未定义 [已解决]
 
 问题描述：文档定义了 `CommentSort` 与评论列表映射，但评论模型里没有说明 `liked` 来自哪个上游字段；点赞接口只写了“返回最新点赞状态 / 数量”，fixture 里只有 `code/msg/subcode`，没有数量。实现必须自己决定 `liked` 的来源，以及点赞数为 0 时是否隐藏、失败回滚时如何恢复计数。
 
@@ -277,6 +277,23 @@
 | `CORE.html` | §4.1 `types.ts` | 改 | `Comment.liked?`、`CommentLikeResult.likedCount?`。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 改 | 补 `IsPraised → liked`、`IsLiked` 兼容回退、登录凭据与点赞数量缺失的映射。 |
 | `EVOLVE.md` | #5 / #14 | 不动 | 排序与点赞 UI 分别由 #5 / #14 维护，见对应项。 |
+
+实际操作（2026-11-10，分支 `doc/comment-like-contract`）：
+
+- `PROVIDER.html` §4.3 `QqComment`：新增可选 `IsPraised` / `IsLiked`。
+- `PROVIDER.html` §4.3 `QqCommentList` 说明：消费字段补 `IsPraised` / `IsLiked`；明确 `IsPraised` 优先、`IsLiked` 兼容回退、两者缺失按未点赞，登录后才按当前用户返回。
+- `PROVIDER.html` §4.3 `QqCommentList → CommentPage` 映射：补 `IsPraised` / `IsLiked → liked`，缺失为 `false`。
+- `PROVIDER.html` §4.3 `QqCommentLikeResult → CommentLikeResult` 映射：明确上游不返回点赞数量，`likedCount` 为可选，前端乐观更新并在失败时回滚。
+- `CORE.html` §4.1 `types.ts`：`Comment.liked` 改为可选，`CommentLikeResult.likedCount` 改为可选。
+- `CORE.html` §4.15 `api/comment.ts`：补 `IsPraised → liked`、`IsLiked` 兼容回退、登录 Cookie 读取与点赞数量缺失语义；删除“以读回评论校正”的旧描述。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/comment.ts`：`liked: Number(raw.IsPraised ?? raw.IsLiked ?? 0) === 1`；`updateLike` 返回 `{ commentId, liked }`，不带数量；读取评论时携带当前凭证。
+- `Comment` / `CommentLikeResult` 与 `src/shared/types.ts` 一致。
+
+状态：已解决。
 
 ### 2.5 推荐分区刷新返回范围与缓存存储未定义
 

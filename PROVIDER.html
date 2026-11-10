@@ -628,6 +628,8 @@ interface QqComment {
   PubTime?: number;
   PraiseNum?: number;
   ReplyCnt?: number;
+  IsPraised?: number;
+  IsLiked?: number;
 }
 
 interface QqRecommendCard {
@@ -824,8 +826,8 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code></td>
-    <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
-    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>PubTime</code> 映射为 <code>createdAtMs</code>；点赞通过读取方法选择，模型不新增字段。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。评论区只提供最新评论读取，不提供“最旧”排序。</td>
+    <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> / <code>IsPraised</code> / <code>IsLiked</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
+    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。评论区只提供最新评论读取，不提供“最旧”排序。</td>
   </tr>
   <tr>
     <td><code>QqVipData</code></td>
@@ -945,7 +947,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentLikeResult</code> → <code>CommentLikeResult</code></td>
-    <td><code>code</code> / <code>subcode</code> 均为 0 才成功；<code>type</code> 3 → <code>liked=true</code>，4 → <code>liked=false</code>；点赞数由读回评论校正。</td>
+    <td><code>code</code> / <code>subcode</code> 均为 0 才成功；<code>type</code> 3 → <code>liked=true</code>，4 → <code>liked=false</code>。上游不返回点赞数量，<code>CommentLikeResult.likedCount</code> 为可选；前端在成功后乐观更新计数，失败时回滚。</td>
   </tr>
   <tr>
     <td><code>QqLyricResponse</code> → <code>Lyric</code></td>
@@ -953,7 +955,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code> → <code>CommentPage</code></td>
-    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。</td>
+    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code> → <code>UserProfile</code></td>
