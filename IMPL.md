@@ -148,7 +148,7 @@
 
 ## 2. 开发中发现文档没写明的细节
 
-### 2.1 下载任务 / 索引缺少精确类型与持久化契约（批次模型后由 §4.15 取消）
+### 2.1 下载任务 / 索引缺少精确类型与持久化契约（批次模型后由 §4.15 取消） [已解决]
 
 > 后续修正：§4.15 已彻底取消下载批次模型，`DownloadBatch`、`batchId` / `playlistId`、`DownloadSource = 'batch'`、索引中的 `batches` 与批次状态派生都不再存在。下载索引只有 `{ tasks }`，任务来源只保留 `network` / `cache`；本节的批次结论以 §4.15 为准。
 
@@ -168,6 +168,22 @@
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 补索引字段、持久化状态与 `clearCompleted` 语义；批次模型已由 §4.15 删除。 |
 | `USER.html` | §1 TERMS 下载任务 / 下载中心 | 不动 | 术语由 #2 维护，见 CORE 两行。 |
 | `EVOLVE.md` | #2 | 不动 | 类型契约以 CORE 为主责，避免与本文重复定义。 |
+
+实际操作（2026-11-10，分支 `doc/download-index-contract`）：
+
+- `CORE.html` §4.1 `types.ts`：新增 `DownloadSource = 'network' | 'cache'`、`DownloadIndex { tasks }`；`DownloadTask` 删除 `batchId` / `playlistId`，`source` 改为 `DownloadSource`；删除 `DownloadBatch`；`DownloadStorageInfo` 删除 `batchCount`。
+- `CORE.html` §4.60 `download/manager.ts`：签名改为 `listDownloads(): DownloadTask[]`、`startDownload` / `startDownloads`、`assetStates` 以及 `clearDownloadDirectory` / `findDownloadedAudio` 等当前函数；说明索引只有 `{ tasks }`、只持久化 `done` / `paused`、启动时未完成任务转 `paused`、`loadedScope` 保护、退出同步原子写、`clearCompleted` 只清记录等规则。
+- 为避免删除 `DownloadBatch` 后留下悬空引用，同步把 CORE 中直接依赖批次的章节改为无批次模型：§4.2 `download` IPC、§4.31 download store、§4.46 “下载全部”、§4.50 下载常量、§5.16 下载调用树与文件树注释。
+- `USER.html` §1 TERMS：按原表“不动”未处理。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- `grep "DownloadBatch\|startBatch\|pauseBatch\|resumeBatch\|removeBatch\|retryFailed\|DOWNLOAD_BATCH_MAX" CORE.html` 无结果。
+- `DownloadTask.source`、`DownloadIndex`、`DownloadStorageInfo` 与 `src/shared/types.ts` 一致；`listDownloads` / `startDownloads` / `assetStates` 等签名与 `src/main/download/manager.ts` 一致。
+- 索引只持久化 `done` / `paused`，启动时 `downloading` / `pending` 归一为 `paused`，与 `loadIndex` 实现一致。
+
+状态：已解决。
 
 ### 2.2 下载文件命名与同名覆盖规则未定义
 
