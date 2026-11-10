@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { DownloadTask } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useDownloadStore } from '../stores/download'
 import { useToast } from '../composables/toast'
 import { downloadOverallProgress } from '../utils/download-progress'
@@ -74,9 +75,22 @@ function openFolder(): void {
   })
 }
 
+interface ConfirmState {
+  title: string
+  message: string
+  confirmLabel: string
+  action: () => void
+}
+
+const confirmState = ref<ConfirmState | null>(null)
+
 function confirmRemoveTask(task: DownloadTask): void {
-  if (!window.confirm(`删除「${task.name}」及其下载文件？`)) return
-  void run(() => downloads.remove(task.id), '下载已删除')
+  confirmState.value = {
+    title: '删除下载',
+    message: `删除「${task.name}」及其下载文件？`,
+    confirmLabel: '删除',
+    action: () => void run(() => downloads.remove(task.id), '下载已删除')
+  }
 }
 
 function confirmClearCompleted(): void {
@@ -85,14 +99,18 @@ function confirmClearCompleted(): void {
 
 function confirmClearDirectory(): void {
   const directory = downloads.storage?.directory ?? '下载目录'
-  if (
-    !window.confirm(
-      `确定清空下载目录「${directory}」？\n将删除目录内的全部文件与下载记录（包括其他账号在同目录的下载）；播放缓存不受影响。`
-    )
-  ) {
-    return
+  confirmState.value = {
+    title: '清空下载目录',
+    message: `确定清空下载目录「${directory}」？\n将删除目录内的全部文件与下载记录（包括其他账号在同目录的下载）；播放缓存不受影响。`,
+    confirmLabel: '清空',
+    action: () => void run(() => downloads.clearDirectory(), '下载目录已清空')
   }
-  void run(() => downloads.clearDirectory(), '下载目录已清空')
+}
+
+function runConfirmed(): void {
+  const action = confirmState.value?.action
+  confirmState.value = null
+  action?.()
 }
 
 onMounted(() => downloads.setVisible(true))
@@ -218,5 +236,15 @@ onBeforeUnmount(() => downloads.setVisible(false))
         <p>在歌单或歌曲表中点击下载按钮，任务会显示在这里。</p>
       </div>
     </div>
+
+    <ConfirmDialog
+      :open="confirmState !== null"
+      :title="confirmState?.title ?? ''"
+      :message="confirmState?.message ?? ''"
+      :confirm-label="confirmState?.confirmLabel"
+      danger
+      @confirm="runConfirmed()"
+      @cancel="confirmState = null"
+    />
   </div>
 </template>

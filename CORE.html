@@ -1612,14 +1612,15 @@ export function toggleFavorite(songMid: string): Promise&lt;FavoriteState&gt;;
 <pre><code>export function createPlaylist(name: string): Promise&lt;PlaylistMeta&gt;;
 export function renamePlaylist(id: string, name: string): Promise&lt;PlaylistMeta&gt;;
 export function removePlaylist(id: string): Promise&lt;void&gt;;
-export function addSongs(id: string, mids: string[]): Promise&lt;PlaylistMeta&gt;;
-export function removeSongs(id: string, mids: string[]): Promise&lt;PlaylistMeta&gt;;
+export function addSongs(id: string, mids: string[]): Promise&lt;PlaylistMutationResult&gt;;
+export function removeSongs(id: string, mids: string[]): Promise&lt;PlaylistMutationResult&gt;;
 </code></pre>
 <ul class="note">
   <li>创建：<code>music.musicasset.PlaylistBaseWrite / AddPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirName, dirDesc: '', dirPicUrl: '', taglist: '' }</code>；要求 <code>data.retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数，名称最多 20 个 JS 字符。</li>
   <li>改名：<code>PlaylistBaseWrite / EditPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirId, dirNewName, dirShow: 1, mask: 1 }</code>；<code>retCode === 0</code> 后必须读回 <code>dirinfo.title</code> 确认，不能只看返回码。</li>
   <li>删除：<code>PlaylistBaseWrite / DelPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirId, dirName }</code>；只允许当前账号自建、非 <code>201</code> 的普通歌单，删除后从歌单列表读回确认已消失。</li>
-  <li>增删歌曲：<code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>，参数 <code>{ dirId, tid, bFmtUtf8: true, dirName, v_songInfo: [{ songId, songType }] }</code>；<code>songId</code> 必须为数字 ID 且 <code>songType</code> 取歌曲详情真实值，每批最多 100 首，写后读回成员可见性。<code>dirId:201</code> 的收藏写入走签名加密通道，见 <a href="#c4-54">§4.54</a>。</li>
+  <li>增删歌曲：<code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>，参数 <code>{ dirId, tid, bFmtUtf8: true, v_songInfo: [{ songId, songType }] }</code>；<code>dirId</code> 是当前账号目录 ID，<code>tid</code> 是歌单标识，不能混用；<code>songId</code> 必须为数字 ID 且 <code>songType</code> 取歌曲详情真实值，每批最多 100 首。<code>dirId:201</code> 的收藏写入走签名加密通道，见 <a href="#c4-54">§4.54</a>。</li>
+  <li><strong>写后刷新职责：</strong>增删歌曲只负责写入并返回 <code>PlaylistMutationResult { changed }</code>；<code>80092</code> 视为状态未变化并返回 <code>changed:false</code>。写后歌单内容 / 计数刷新统一由 <code>stores/playlist-edit</code> 调用现有 <code>playlist.invalidate(id)</code> + <code>playlist.poll(id)</code> 完成；不得在写 API 内单独实现整单扫描、尾部读回或其他刷新流程。</li>
   <li>业务码 <code>1000</code> 映射 <code>AUTH_EXPIRED</code>，<code>80105</code> / 权限不足映射 <code>NO_PERMISSION</code>，结构缺失映射 <code>UPSTREAM_CHANGED</code>；不新增错误码。</li>
 </ul>
 

@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import type { FlagsFile, Settings } from '@shared/types'
 import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
+import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
@@ -195,15 +196,19 @@ async function chooseDownloadDir(): Promise<void> {
   }
 }
 
-async function clearDownloadDir(): Promise<void> {
+const confirmClearDir = ref(false)
+
+function clearDownloadDir(): void {
+  confirmClearDir.value = true
+}
+
+const clearDirMessage = computed(() => {
   const directory = storage.value?.directory ?? settings.settings.downloadDir ?? '下载目录'
-  if (
-    !window.confirm(
-      `确定清空下载目录「${directory}」？\n将删除目录内的全部文件与下载记录（包括其他账号在同目录的下载）；播放缓存不受影响。`
-    )
-  ) {
-    return
-  }
+  return `确定清空下载目录「${directory}」？\n将删除目录内的全部文件与下载记录（包括其他账号在同目录的下载）；播放缓存不受影响。`
+})
+
+async function confirmClearDownloadDir(): Promise<void> {
+  confirmClearDir.value = false
   try {
     await downloads.clearDirectory()
     await loadStorage()
@@ -472,5 +477,15 @@ onBeforeUnmount(() => {
 
       </div>
     </div>
+
+    <ConfirmDialog
+      :open="confirmClearDir"
+      title="清空下载目录"
+      :message="clearDirMessage"
+      confirm-label="清空"
+      danger
+      @confirm="confirmClearDownloadDir()"
+      @cancel="confirmClearDir = false"
+    />
   </div>
 </template>

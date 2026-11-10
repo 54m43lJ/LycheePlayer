@@ -1,4 +1,5 @@
-import type { PlaylistMeta } from '../../shared/types'
+import type { PlaylistMeta, PlaylistMutationResult } from '../../shared/types'
+import { SONG_DETAIL_BATCH } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu } from './client'
 import { fetchPlaylistPage } from './playlist'
@@ -31,7 +32,9 @@ function assertWrite(data: WriteResult, action: string): void {
   }
   throw new UpstreamError(
     'UPSTREAM_CHANGED',
-    `${action}失败：上游返回错误码 ${code}${data.msg ? `（${data.msg}）` : ''}`
+    `${action}失败：上游返回错误码 ${code}${data.msg ? `（${data.msg}）` : ''}`,
+    false,
+    code
   )
 }
 
@@ -39,6 +42,15 @@ function numericId(id: string): number {
   const value = Number(id)
   if (!Number.isFinite(value) || value <= 0) {
     throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
+  }
+  return value
+}
+
+/** 写入接口的 dirId 是当前账号下的目录 ID，与歌单 ID（tid/disstid）不是同一个值。 */
+function playlistDirId(meta: PlaylistMeta): number {
+  const value = Number(meta.dirId ?? 0)
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '无法确认歌单目录 ID，写操作已取消')
   }
   return value
 }
@@ -69,19 +81,42 @@ async function fetchTrackIdentities(
 ): Promise<Array<{ songId: number; songType: number }>> {
   const unique = [...new Set(mids.filter(Boolean))]
   const result: Array<{ songId: number; songType: number }> = []
-  for (const mid of unique) {
-    const data = await musicu<{ track_info?: TrackInfo }>(
-      'music.pf_song_detail_svr',
-      'get_song_detail_yqq',
-      { song_mid: mid }
+  for (let start = 0; start < unique.length; start += SONG_DETAIL_BATCH) {
+    const batch = unique.slice(start, start + SONG_DETAIL_BATCH)
+    // 批量详情一次取回，避免逐首详情把写操作拖慢；缺失歌曲再走单曲兜底。
+    const data = await musicu<{ tracks?: TrackInfo[] }>(
+      'music.trackInfo.UniformRuleCtrl',
+      'CgiGetTrackInfo',
+      {
+        types: batch.map(() => 0),
+        modify_stamp: batch.map(() => 0),
+        ctx: 0,
+        client: 1,
+        mids: batch
+      }
     )
-    const info = data.track_info
-    const songId = String(info?.id ?? '')
-    const songType = Number(info?.type ?? 0)
-    if (!info || !/^\d+$/.test(songId) || !Number.isSafeInteger(songType) || songType < 0) {
-      throw new UpstreamError('UPSTREAM_CHANGED', '无法确认歌曲 ID，写操作已取消')
+    if (!Array.isArray(data.tracks)) {
+      throw new UpstreamError('UPSTREAM_CHANGED', '批量歌曲详情响应缺少 tracks')
     }
-    result.push({ songId: Number(songId), songType })
+    const byMid = new Map<string, TrackInfo>()
+    for (const track of data.tracks) if (track.mid) byMid.set(track.mid, track)
+    for (const mid of batch) {
+      let info = byMid.get(mid)
+      if (!info) {
+        const fallback = await musicu<{ track_info?: TrackInfo }>(
+          'music.pf_song_detail_svr',
+          'get_song_detail_yqq',
+          { song_mid: mid }
+        )
+        info = fallback.track_info
+      }
+      const songId = String(info?.id ?? '')
+      const songType = Number(info?.type ?? 0)
+      if (!info || !/^\d+$/.test(songId) || !Number.isSafeInteger(songType) || songType < 0) {
+        throw new UpstreamError('UPSTREAM_CHANGED', '无法确认歌曲 ID，写操作已取消')
+      }
+      result.push({ songId: Number(songId), songType })
+    }
   }
   return result
 }
@@ -89,8 +124,8 @@ async function fetchTrackIdentities(
 async function writeDetail(
   method: 'AddSonglist' | 'DelSonglist',
   id: string,
+  dirId: number,
   mids: string[],
-  playlistName: string,
   action: string
 ): Promise<void> {
   const credential = getCredential()
@@ -101,27 +136,13 @@ async function writeDetail(
     'music.musicasset.PlaylistDetailWrite',
     method,
     {
-      dirId: numericId(id),
-      tid: 0,
+      dirId,
+      tid: numericId(id),
       bFmtUtf8: 1,
-      dirName: playlistName,
       v_songInfo: info
     }
   )
   assertWrite(data, action)
-}
-
-/** 读取歌单成员 mid 用于写后读回校验；最多读取 20 页。 */
-async function readMemberMids(id: string): Promise<Set<string>> {
-  const mids = new Set<string>()
-  let offset = 0
-  for (let page = 0; page < 20; page += 1) {
-    const result = await fetchPlaylistPage(id, offset)
-    for (const song of result.songs) if (song.songMid) mids.add(song.songMid)
-    if (!result.hasMore || result.songs.length === 0) break
-    offset += result.songs.length
-  }
-  return mids
 }
 
 export async function createPlaylist(name: string): Promise<PlaylistMeta> {
@@ -132,12 +153,17 @@ export async function createPlaylist(name: string): Promise<PlaylistMeta> {
   )
   const dirId = Number(data.result?.dirId ?? 0)
   const tid = Number(data.result?.tid ?? 0)
-  const id = String(dirId > 0 ? dirId : tid)
-  if (!/^\d+$/.test(id) || Number(id) <= 0) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '新建歌单响应缺少 dirId')
+  if (
+    !Number.isSafeInteger(dirId) ||
+    dirId <= 0 ||
+    !Number.isSafeInteger(tid) ||
+    tid <= 0
+  ) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '新建歌单响应缺少 dirId / tid')
   }
   return {
-    id,
+    id: String(tid),
+    dirId,
     name: data.result?.dirName || name,
     coverUrl: '',
     songCount: 0,
@@ -147,11 +173,12 @@ export async function createPlaylist(name: string): Promise<PlaylistMeta> {
 }
 
 export async function renamePlaylist(id: string, name: string): Promise<PlaylistMeta> {
+  const meta = await readMeta(id)
   await writeBase(
     'EditPlaylist',
     {
       bFmtUtf8: 1,
-      dirId: numericId(id),
+      dirId: playlistDirId(meta),
       dirNewName: name,
       dirShow: 1,
       mask: 1
@@ -162,37 +189,46 @@ export async function renamePlaylist(id: string, name: string): Promise<Playlist
 }
 
 export async function removePlaylist(id: string): Promise<void> {
+  const meta = await readMeta(id)
   await writeBase(
     'DelPlaylist',
-    { bFmtUtf8: 1, dirId: numericId(id), dirName: '' },
+    { bFmtUtf8: 1, dirId: playlistDirId(meta), dirName: meta.name },
     '删除歌单'
   )
 }
 
-export async function addSongs(id: string, mids: string[]): Promise<PlaylistMeta> {
-  const before = await readMemberMids(id)
-  const target = [...new Set(mids.filter((mid) => mid && !before.has(mid)))]
+/** 只负责写入；写后歌单刷新由渲染层统一触发，不在写 API 内做整单扫描。 */
+export async function addSongs(id: string, mids: string[]): Promise<PlaylistMutationResult> {
   const meta = await readMeta(id)
-  await writeDetail('AddSonglist', id, target, meta.name, '添加歌曲')
-  const after = await readMemberMids(id)
-  const missing = target.filter((mid) => !after.has(mid))
-  if (missing.length > 0) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认添加结果，请稍后刷新')
+  const target = [...new Set(mids.filter(Boolean))]
+  if (target.length === 0) return { changed: false }
+  try {
+    await writeDetail('AddSonglist', meta.id, playlistDirId(meta), target, '添加歌曲')
+    return { changed: true }
+  } catch (err) {
+    // 80092 表示歌曲已存在等业务状态；是否需要刷新与重复提示交给渲染层刷新流程。
+    if (err instanceof UpstreamError && err.upstreamCode === 80092) {
+      return { changed: false }
+    }
+    throw err
   }
-  return readMeta(id)
 }
 
-export async function removeSongs(id: string, mids: string[]): Promise<PlaylistMeta> {
-  const before = await readMemberMids(id)
-  const target = [...new Set(mids.filter((mid) => mid && before.has(mid)))]
+/** 只负责写入；写后歌单刷新由渲染层统一触发，不在写 API 内做整单扫描。 */
+export async function removeSongs(id: string, mids: string[]): Promise<PlaylistMutationResult> {
   const meta = await readMeta(id)
-  await writeDetail('DelSonglist', id, target, meta.name, '移除歌曲')
-  const after = await readMemberMids(id)
-  const remaining = target.filter((mid) => after.has(mid))
-  if (remaining.length > 0) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认移除结果，请稍后刷新')
+  const target = [...new Set(mids.filter(Boolean))]
+  if (target.length === 0) return { changed: false }
+  try {
+    await writeDetail('DelSonglist', meta.id, playlistDirId(meta), target, '移除歌曲')
+    return { changed: true }
+  } catch (err) {
+    // 80092 表示歌曲不存在等业务状态；最终状态由统一刷新流程确认。
+    if (err instanceof UpstreamError && err.upstreamCode === 80092) {
+      return { changed: false }
+    }
+    throw err
   }
-  return readMeta(id)
 }
 
 /** 供收藏等需要真实 songType 的模块复用。 */

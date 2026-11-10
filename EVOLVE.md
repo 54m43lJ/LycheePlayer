@@ -547,7 +547,7 @@
 - 接口验证先行：用 `scripts/record-fixtures.mjs` 抓取推荐、歌单写入、MV、评论点赞的真实请求 / 响应，确认模块名、方法名、参数、权限与错误码；验证通过后立即更新 PROVIDER / USER / CORE，再写实现与回放测试。未验证不进入实现，不用空数据、搜索或占位内容兜底。
 - 推荐：实现 `fetchRecommendFeed` / `refresh(sectionId?)`，按每日推荐、专属雷达、猜你喜欢映射歌曲与歌单；分区各自刷新，若上游只支持全局刷新则退化为全局并注明；按分区缓存 24 小时；未登录、空结果、接口失败分别走登录引导 / 空状态 / 错误重试。
 - 推荐布局：每个分区用 flexbox + 上下滚动，固定高度显示 3 行；歌曲条目固定宽度、横向排列封面图标 + 歌曲信息（上方歌名、下方歌手），文字超出时走马灯；每区提供独立刷新入口。
-- 歌单写入：实现 `createPlaylist` / `renamePlaylist` / `removePlaylist` / `addSongs` / `removeSongs`；写后读回或成员可见性校验，失败映射 `NO_PERMISSION` / `UPSTREAM_CHANGED` 等；创建 / 改名 / 删除沿用 `LibraryView` 菜单与 `PlaylistEditDialog`。
+- 歌单写入：实现 `createPlaylist` / `renamePlaylist` / `removePlaylist` / `addSongs` / `removeSongs`；写接口只负责写入并返回 `{ changed }`，`80092` 视为状态未变化；写后刷新统一由 `stores/playlist-edit` 复用现有 `playlist.invalidate(id)` + `playlist.poll(id)`，不得在写 API 内单独实现整单扫描或写后读回；失败映射 `NO_PERMISSION` / `UPSTREAM_CHANGED` 等；创建 / 改名 / 删除沿用 `LibraryView` 菜单与 `PlaylistEditDialog`。
 - 添加到歌单：所有登录后的 `SongTable` 操作列增加第五个按钮，图标为简单加号；点击打开 `PlaylistPicker`，列出当前账号可编辑的普通歌单（排除“我喜欢”），并提供“新建歌单”；选择后调用 `addSongs`，成功 Toast、更新目标歌单缓存 / 轮询；重复添加 Toast“已在歌单中”。下一首播放改用“横线 + 上箭头”图标；窄屏菜单变为五项“图标 + 文字”。
 - MV：实现 `searchMv` / `getMvDetail` / `getMvStream`，按清晰度 `fhd / hd / sd` 映射；默认最高清晰度，打开自动播放，请求清晰度不可用时按 `fhd → hd → sd` 降档；搜索结果合并进搜索页 MV 卡片；播放页使用原生 `<video controls>` + 清晰度按钮 + 全屏 + 失败重试；“退出恢复”定义为退出全屏后恢复普通页面布局并保持播放位置 / 状态，不做离开页面后的续播。MV 播放与音频播放互不影响。
 - 评论点赞：验证并实现 `comment.like` / `comment.unlike`（或上游等价接口），返回最新点赞状态 / 数量；#5 的点赞按钮消费该接口，失败回滚。

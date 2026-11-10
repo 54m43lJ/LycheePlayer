@@ -132,4 +132,32 @@ describe('api/playlist cache', () => {
     )
     expect(cacheState.writes).toHaveLength(0)
   })
+
+  it('marks normal playlists editable only when the upstream says the account owns them', async () => {
+    const { fetchPlaylistPage } = await import('../../src/main/api/playlist')
+
+    musicuMock.mockResolvedValueOnce({
+      dirinfo: { id: '123', dirid: 456, title: '我的歌单', songnum: 1, owndir: 1 },
+      songlist: []
+    })
+    await expect(fetchPlaylistPage('123', 0)).resolves.toMatchObject({
+      meta: { editable: true, dirId: 456 }
+    })
+
+    musicuMock.mockResolvedValueOnce({
+      dirinfo: { id: '456', title: '公开歌单', songnum: 1, owndir: 0, creator: { musicid: 99 } },
+      songlist: []
+    })
+    await expect(fetchPlaylistPage('456', 0)).resolves.toMatchObject({
+      meta: { editable: false }
+    })
+
+    musicuMock.mockResolvedValueOnce({
+      dirinfo: { id: '789', title: '缺少 owndir', songnum: 1, creator: { musicid: '42' } },
+      songlist: []
+    })
+    await expect(fetchPlaylistPage('789', 0)).resolves.toMatchObject({
+      meta: { editable: true }
+    })
+  })
 })

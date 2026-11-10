@@ -1541,3 +1541,221 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.lyrics-head-actions` 头部按钮组样式，删除无引用的 `.queue-footer`。 |
 | `USER.html` | §5.2.9 播放队列 | 改 | 明确清空队列入口固定在面板顶部、使用垃圾桶图标，队列为空时不可用。 |
 | `EVOLVE.md` | — | 不动 | 队列操作位置属于页面实现细节，由 CORE / USER 主责。 |
+
+### 4.35 歌单详情恢复“从歌单删除”按钮与写后校验
+
+问题描述：ISSUES 指出从歌单删除歌曲的按钮和功能没有实现。排查后确认渲染层与 IPC 链路本身已存在，但 `PlaylistView` 只有在 `PlaylistMeta.editable && kind === 'normal'` 时才把 `removable` 传给 `SongTable`，而 `fetchPlaylistPage` 对所有普通歌单都硬编码 `editable: false`：
+
+- `listMine()` 返回的“我的歌单”虽然带 `editable: true`，进入详情页后会被 `CgiGetDiss` 的 `fetchPlaylistPage` 结果覆盖成 `false`；
+- 因此歌单详情永远不会渲染删除按钮，删除功能也不可达；
+- 公开 / 搜索歌单也不应显示删除按钮，不能直接把普通歌单一律改成可编辑。
+
+解决方法：
+
+- `CgiGetDiss` 的 `dirinfo` 补充 `owndir`、`host_uin`、`creator.musicid` 字段；
+- 新增 `canEdit(data)`：优先读取上游 `owndir === 1`；字段缺失或为 0 时，回退比较当前登录 `musicid` 与 `creator.musicid` / `host_uin`；未登录或无归属信息时返回 `false`；
+- 普通歌单的 `editable` 改为 `canEdit(data)`，“我喜欢”仍为可编辑；公开 / 搜索歌单保持不可编辑；
+- 详情页原有删除链路保持不变：确认框 → 本地乐观移除并更新计数 → `playlist.removeSongs` → `DelSonglist` → 读回成员确认 → 失败回滚；
+- 新增 `test/api/playlist-write.test.ts`，用 mock 上游校验删除请求携带数字 `songId` 与真实 `songType`、写后成员消失、非成员歌曲不发起写请求；
+- 扩展 `test/api/playlist-cache.test.ts`，覆盖 `owndir` 判定、非本人歌单不可编辑与 `creator.musicid` 回退。
+
+验证：
+
+- 匿名实测公开歌单 `CgiGetDiss` 返回 `dirinfo.owndir = 0`，确认不能靠“普通歌单即可编辑”判断；
+- 新增 / 扩展测试覆盖归属判定与 `removeSongs` 写入链路；
+- `npm run typecheck` 通过；
+- `npx vitest run` 23 个测试文件 / 81 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌单详情行 / §4.3 `QqPlaylistDirinfo` | 改 | 增 `dirinfo.owndir`、`host_uin`、`creator.musicid`，并说明 `owndir === 1` 表示当前账号拥有该歌单。 |
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | `fetchPlaylistPage` 的普通歌单 `editable` 改为 `owndir` 优先、创建者 ID 回退；未登录或非本人歌单为 `false`。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明删除入口只在普通且 `editable` 的歌单出现，并保留确认、乐观更新、写后读回与失败回滚。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 补 `removeSongs` 的归属前置校验由详情接口提供，删除时按数字 `songId` / `songType` 写 `DelSonglist` 并读回成员。 |
+| `USER.html` | §5.2.8 歌单详情 | 改 | 说明自己创建的歌单在歌曲操作列显示“从歌单删除”，公开歌单不显示；删除只影响歌单成员，不改变播放队列。 |
+| `EVOLVE.md` | #14 | 不动 | 删除歌曲的交互与写后校验已由 CORE / USER 记录，本次仅修复可编辑判定。 |
+
+### 4.36 添加到歌单写错 dirId / tid 导致 80092
+
+问题描述：测试“添加到歌单”时持续报 `UPSTREAM_CHANGED: 上游返回错误码 80092（music.musicasset.PlaylistDetailWrite.AddSonglist）`。排查确认不是简单重复添加，而是写接口的两个 ID 被混用：
+
+- `PlaylistDetailWrite` 的 `dirId` 是当前账号下的歌单目录 ID，`tid` 才是歌单标识（disstid / 歌曲列表接口里的歌单 ID），两者不是同一个值；
+- 原实现把 `PlaylistMeta.id` 同时当作 `dirId` 发送，并固定 `tid: 0`；`PlaylistMeta` 也没有保存详情返回的 `dirinfo.dirid`；
+- 创建歌单时又把 `result.dirId` 当成 `id`，丢失了 `result.tid`，后续添加 / 删除 / 打开都拿不到正确的歌单标识；
+- 改名 / 删除歌单也直接用 `PlaylistMeta.id` 当 `dirId`，同样会写错目录；
+- `mapUpstreamCode` 对未知错误码没有保留 `upstreamCode`，导致 80092 这种业务状态无法在写后读回时被识别。
+
+解决方法：
+
+- `PlaylistMeta` 新增可选 `dirId`：`listMine` 从 `dirId / dirid` 读取，`CgiGetDiss` 从 `dirinfo.dirid` 读取，“我喜欢”固定为 201；
+- 创建歌单改为 `id = result.tid`、`dirId = result.dirId`，两者都必须为正整数；
+- `addSongs` / `removeSongs` 使用 `dirId: meta.dirId` 与 `tid: meta.id`，写请求参数收敛为 `{ dirId, tid, bFmtUtf8, v_songInfo }`，不再把歌单名当作写参数；
+- 改名 / 删除歌单先读取详情拿到当前 `dirId`，再提交 `EditPlaylist` / `DelPlaylist`，不再用歌单标识冒充目录 ID；
+- `mapUpstreamCode` 的未知错误统一携带原始 `upstreamCode`；`assertWrite` 同样保留 `retCode`；
+- 80092 不再直接失败：写后读回若已达成目标状态则视为成功，读回未确认时再给出“歌曲可能已在歌单中 / 歌单状态已变化”的明确错误；
+- 更新 `test/api/playlist-write.test.ts`：覆盖添加 / 删除携带 `dirId + tid`、创建返回 `id=tid`、改名 / 删除使用详情目录 ID、80092 由读回判定；扩展 `test/api/playlist-cache.test.ts` 校验详情返回的 `dirId`。
+
+验证：
+
+- 对照上游实现约定核对：`AddPlaylist` 返回的 `result.tid` 是歌单标识，`result.dirId` 是目录 ID；`PlaylistDetailWrite` 同时需要两者；80092 属于业务状态码，应以读回结果判断；
+- `npm run typecheck` 通过；
+- `npx vitest run` 23 个测试文件 / 85 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌单写入行 / §4.3 歌单模型 | 改 | 明确 `dirId` 是当前账号目录 ID、`tid` 才是歌单标识；`AddPlaylist` 返回的 `result.dirId` / `result.tid` 分别对应两者；80092 属于业务状态码而非请求失败。 |
+| `CORE.html` | §4.1 `types.ts` | 改 | `PlaylistMeta` 增加 `dirId?: number`，与 `id`（歌单标识）分开存储。 |
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | `listMine` 与 `CgiGetDiss` 都要回填 `dirId`；创建歌单以 `result.tid` 作为 `id`、`result.dirId` 作为目录 ID。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 增删歌曲按 `dirId + tid + bFmtUtf8 + v_songInfo` 写入；改名 / 删除先读取详情获取 `dirId`；80092 写后读回判定。 |
+| `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 未知上游错误需保留 `upstreamCode`，供写操作识别 80092 等业务状态。 |
+| `USER.html` | §5.3 错误与通知 | 改 | 80092 在写后读回确认成功时不提示错误；未生效时提示歌曲可能已在歌单中或歌单状态已变化。 |
+| `EVOLVE.md` | #14 | 不动 | 写接口细节由 CORE / PROVIDER 主责，本次仅修正参数契约。 |
+
+### 4.37 原生删除确认替换为应用内确认框
+
+问题描述：歌单删除仍使用 `window.confirm`，样式由操作系统决定，与应用主题和圆角面板不一致；原生弹窗还会阻塞渲染进程，且无法表达危险操作、补充说明和统一键盘行为。
+
+解决方法：
+
+- 新增 `components/ConfirmDialog.vue`：复用现有 `.dialog-backdrop` / `.dialog` 视觉，提供标题、说明、确认文案与危险态；说明支持换行；
+- 打开时默认聚焦“取消”，`Esc`、点击遮罩或关闭按钮都取消，避免破坏性操作被回车误确认；
+- 删除确认统一使用红色危险按钮，新增 `.btn.danger` 与 `.confirm-message` 样式；
+- 替换渲染层全部 `window.confirm`：
+  - 歌单详情删除歌曲；
+  - 我的歌单删除歌单；
+  - 下载中心删除任务、清空下载目录；
+  - 设置页清空下载目录；
+- 各页面只保存待确认对象 / 待执行动作，确认后再调用原有删除或清空逻辑，业务链路不变。
+
+验证：
+
+- `grep window.confirm src/renderer` 无结果；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 87 个用例通过；
+- `npm run build` 通过，产物包含独立 `ConfirmDialog` 分包。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §1 文件树 / §4.36 附近 | 增 | 新增 `components/ConfirmDialog.vue`。 |
+| `CORE.html` | §4.39 `SongTable.vue` / §4.46 `PlaylistView.vue` / §4.48 `SettingsView.vue` / §4.67 `DownloadsView.vue` / §4.68 `LibraryView.vue` | 改 | 删除 / 清空确认统一使用应用内 `ConfirmDialog`，不再调用 `window.confirm`。 |
+| `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.btn.danger`、`.confirm-dialog`、`.confirm-message` 样式。 |
+| `USER.html` | §5.2.8 歌单详情 / §5.2.7 设置页 / §5.2.8 下载中心 | 改 | 确认框为应用内圆角面板，危险操作使用红色确认按钮，Esc / 点击遮罩取消。 |
+| `EVOLVE.md` | — | 增 | 补“不调用原生 `window.confirm`，统一使用应用内确认框”的约束。 |
+
+### 4.38 添加到歌单链路耗时分析与优化
+
+> 后续修正：§4.39 已把写后读回 / 整单扫描移出写 API，改为渲染层触发统一的歌单刷新流程。本节保留原问题分析、实测耗时与优化背景，最终职责划分以 §4.39 为准。
+
+问题描述：添加到歌单从点击目标歌单到出现“已添加到歌单”等待时间很长。按代码链路排查，主要耗时来自写前后的整单成员扫描和重复元数据请求，而不是写入本身。
+
+原链路与请求数（添加 1 首，歌单 N 首）：
+
+1. 渲染层 `PlaylistPicker.isDuplicate` 读取整单缓存（本地 IPC，通常 1–10ms）；
+2. 主进程 `addSongs`：
+   - `readMemberMids` 预先扫描整单，`ceil(N / 50)` 次 `CgiGetDiss`；
+   - `readMeta` 再请求第 0 页，1 次 `CgiGetDiss`；
+   - `fetchTrackIdentities` 逐首请求歌曲详情，1 次 `get_song_detail_yqq`；
+   - `AddSonglist` 写入，1 次；
+   - 写后 `readMemberMids` 再扫描整单，`ceil(N / 50)` 次；
+   - 最后 `readMeta` 再请求第 0 页，1 次；
+3. 合计 `2 × ceil(N / 50) + 4` 次上游请求，耗时随歌单长度线性增长。
+
+实测匿名上游 RTT（本机网络、5 次中位数）：
+
+| 请求 | 中位耗时 |
+|---|---|
+| `CgiGetDiss` 单页 | 294ms |
+| 单曲 `get_song_detail_yqq` | 338ms |
+| 批量 `CgiGetTrackInfo` | 97ms |
+| `PlaylistDetailWrite` | 87ms（匿名被拒，仅测到网络往返） |
+
+按上述 RTT 估算添加 1 首：
+
+| 歌单规模 | 原请求数 | 原估算耗时 | 优化后请求数 | 优化后估算 |
+|---|---|---|---|---|
+| 50 首 | 6 | ≈1.6s | 4 | ≈0.8s |
+| 500 首 | 24 | ≈6.9s | 4 | ≈0.8s |
+| 1000 首 | 44 | ≈12.8s | 4 | ≈0.8s |
+
+实际认证写入可能比匿名的 87ms 更慢，且限流令牌不足时会排队；但主要增长项是整单扫描。
+
+解决方法：
+
+- 删除写入前的整单成员预扫描；重复歌曲由上游 80092 + 写后读回判断，不再为了去重先扫全单；
+- 元数据只读一次，拿到 `dirId`、`tid` 与旧总数；
+- 歌曲身份改为批量详情 `CgiGetTrackInfo`（按 `SONG_DETAIL_BATCH` 分块，缺失歌曲再单曲兜底）；
+- 写后只读取“旧总数之后”的尾部页确认新歌，通常 1 次请求；只有尾部找不到或遇到 80092 时才回退完整扫描；
+- 添加成功后直接使用尾部页返回的最新 `PlaylistMeta`，不再额外请求一次 `readMeta`；
+- 删除歌曲同样去掉写前整单扫描，写后完整扫描一次并复用最后一页的元数据，避免“扫描 → 单页 → 写入 → 扫描 → 单页”的重复路径。
+
+优化后添加 1 首的请求链：
+
+1. `readMeta` 1 次 `CgiGetDiss`；
+2. 批量歌曲身份 1 次 `CgiGetTrackInfo`；
+3. `AddSonglist` 1 次；
+4. 尾部读回 1 次 `CgiGetDiss`。
+
+正常追加场景与歌单长度无关，约 4 次请求；只有重复添加或上游未按尾部追加时才回退完整扫描。
+
+验证：
+
+- 匿名实测各接口 RTT，确认耗时主要来自整单扫描而非写入；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 87 个用例通过（含批量身份、尾部读回与 80092 读回判定）；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 增删歌曲不再写前全量扫描；添加用批量详情 + 尾部读回，重复 / 异常才回退完整扫描；删除写后扫描一次并复用末页元数据。 |
+| `CORE.html` | §4.11 `api/song.ts` | 改 | 歌曲身份统一走批量详情 `CgiGetTrackInfo`，按 50 首分块，缺失再单曲兜底。 |
+| `PROVIDER.html` | §4.1 歌单增删歌曲行 | 改 | 说明 `AddSonglist` 通常追加到末尾；写后读回可只查尾部页，重复 / 异常时再全量扫描；80092 不能单独作为失败依据。 |
+| `USER.html` | §5.2.8 歌单详情 | 改 | 添加到歌单正常应在约 1 秒内完成，且不随歌单长度明显变慢；重复添加直接提示“已在歌单中”。 |
+| `EVOLVE.md` | #14 | 改 | 补“歌单写入确认不得每次全量扫描，优先尾页读回”的性能约束。 |
+
+### 4.39 纠正：写后刷新应复用歌单刷新流程
+
+问题描述：§4.38 把“写后读回 / 整单扫描”定义在 `api/playlist-write.ts` 内部，误解了职责边界。添加 / 删除写接口只应负责写入，写后歌单内容与计数的确认必须触发现有歌单刷新流程，由同一份代码统一处理；否则每个写操作都会重复实现一套“扫描 + 校验”，既慢又容易与轮询 / 缓存逻辑漂移。
+
+解决方法：
+
+- `api/playlist-write.ts` 的 `addSongs` / `removeSongs` 只负责写入：
+  - 读取一次歌单元数据拿到 `dirId` / `tid`；
+  - 批量取歌曲身份并提交 `AddSonglist` / `DelSonglist`；
+  - 成功返回 `{ changed: true }`，`80092` 视为“状态未变化”返回 `{ changed: false }`；
+  - 删除 `readMembers`、尾部读回、整单扫描与写后元数据读取，不再在写 API 内定义刷新逻辑；
+- 新增共享类型 `PlaylistMutationResult`，IPC 的 `playlist.addSongs` / `playlist.removeSongs` 返回 `{ changed }`；
+- 渲染层在 `stores/playlist-edit.ts` 统一处理写后刷新：
+  - 新增 `refreshAfterWrite(id)`：`playlist.invalidate(id)` 后立即 `playlist.poll(id)`；
+  - `addSongs` / `removeSongs` 共用该函数，不再各自实现刷新；
+  - 当前打开该歌单时 `poll` 会走已有的 `load(force)` 分页加载流程；未打开时只失效缓存，下次进入重新加载；
+- `PlaylistPicker` 改为调用 `playlistEdit.addSongs`，由 store 统一提示与刷新；移除播放选择器里基于返回 `songCount` 的重复判断；
+- `PlaylistView` 删除歌曲后不再额外提示，避免与 store 提示重复；乐观移除仍保留，统一刷新负责最终对齐；
+- `createAndAdd` 也复用同一个 `addSongs` 入口。
+
+验证：
+
+- 源码核对：`api/playlist-write.ts` 不再包含 `readMembers` / 整单扫描；`playlist-edit.ts` 的添加与删除共用 `refreshAfterWrite`；
+- `npm run typecheck` 通过；
+- `npx vitest run` 24 个测试文件 / 87 个用例通过（`playlist-write` 用例改为校验只写入与 `{ changed }` 结果）；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 明确写接口只负责写入并返回 `PlaylistMutationResult`；不得在写 API 内做写后读回或整单扫描。 |
+| `CORE.html` | §4.31 `stores/playlist-edit.ts` | 改 | `addSongs` / `removeSongs` 写后统一调用 `refreshAfterWrite(id)`：`invalidate(id)` + `poll(id)`；当前页走已有分页加载，未打开只失效缓存。 |
+| `CORE.html` | §4.2 `ipc.ts` / §4.1 `types.ts` | 改 | `playlist.addSongs` / `playlist.removeSongs` 返回 `PlaylistMutationResult { changed }`。 |
+| `CORE.html` | §4.65 `composables/availability.ts` 附近 / §4.61 `stores/playlist.ts` | 改 | 说明写后刷新复用 `invalidate` + `poll`，不要在写操作内重复实现刷新或校验。 |
+| `USER.html` | §5.2.8 歌单详情 | 改 | 添加 / 删除后歌单内容与计数由统一刷新流程更新；重复添加提示“已在歌单中”，未变化删除提示“歌曲不在歌单中”。 |
+| `EVOLVE.md` | #14 | 改 | 补“歌单写后刷新必须复用既有歌单刷新流程，不得在写接口内单独实现扫描 / 读回”的约束。 |

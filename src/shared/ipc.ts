@@ -21,6 +21,7 @@ import type {
   PlayerState,
   PlaylistCacheEntry,
   PlaylistMeta,
+  PlaylistMutationResult,
   PlaylistPage,
   PlaylistSnapshot,
   ProbeOptions,
@@ -88,8 +89,8 @@ export interface LycheeApi {
     create(name: string): Promise<IpcResult<PlaylistMeta>>
     rename(id: string, name: string): Promise<IpcResult<PlaylistMeta>>
     remove(id: string): Promise<IpcResult<null>>
-    addSongs(id: string, mids: string[]): Promise<IpcResult<PlaylistMeta>>
-    removeSongs(id: string, mids: string[]): Promise<IpcResult<PlaylistMeta>>
+    addSongs(id: string, mids: string[]): Promise<IpcResult<PlaylistMutationResult>>
+    removeSongs(id: string, mids: string[]): Promise<IpcResult<PlaylistMutationResult>>
   }
   favorite: {
     get(mids: string[]): Promise<IpcResult<FavoriteState[]>>

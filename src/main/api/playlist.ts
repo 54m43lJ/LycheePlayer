@@ -41,6 +41,10 @@ interface PlaylistData {
     title?: string
     picurl?: string
     songnum?: number
+    dirid?: string | number
+    owndir?: string | number
+    host_uin?: string | number
+    creator?: { musicid?: string | number }
   }
   songlist?: unknown[]
 }
@@ -70,6 +74,7 @@ function toMeta(raw: RawPlaylistItem, editable: boolean): PlaylistMeta {
   const favorites = dirId === 201
   return {
     id: favorites ? FAVORITES_PLAYLIST_ID : String(raw.dissid ?? raw.disstid ?? raw.tid ?? raw.dirId ?? raw.id ?? ''),
+    dirId: dirId > 0 ? dirId : undefined,
     name: favorites ? FAVORITES_NAME : (raw.dissname ?? raw.name ?? raw.title ?? raw.dirName ?? ''),
     coverUrl: normalizeCover(raw.imgurl ?? raw.picurl ?? raw.cover ?? raw.bigpicUrl),
     songCount: Number(raw.song_count ?? raw.songnum ?? raw.songNum ?? raw.song_cnt ?? 0),
@@ -82,6 +87,16 @@ function validId(id: string): boolean {
   if (isFavoritesId(id)) return true
   const playlistId = Number(id)
   return Number.isFinite(playlistId) && playlistId > 0
+}
+
+/** 判断歌单详情是否属于当前账号：优先使用上游 owndir 标记，缺失时回退创建者 ID。 */
+function canEdit(data: PlaylistData): boolean {
+  const credential = getCredential()
+  if (!credential) return false
+  if (Number(data.dirinfo?.owndir ?? 0) === 1) return true
+  const owner = Number(data.dirinfo?.creator?.musicid ?? data.dirinfo?.host_uin ?? 0)
+  const me = Number(credential.musicid)
+  return Number.isSafeInteger(me) && me > 0 && owner === me
 }
 
 async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
@@ -101,6 +116,7 @@ async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
   const meta: PlaylistMeta = favorites
     ? {
         id: FAVORITES_PLAYLIST_ID,
+        dirId: 201,
         name: FAVORITES_NAME,
         coverUrl: normalizeCover(data.dirinfo?.picurl),
         songCount: total,
@@ -109,11 +125,12 @@ async function requestPage(id: string, offset: number): Promise<PlaylistPage> {
       }
     : {
         id: String(data.dirinfo?.id ?? id),
+        dirId: Number(data.dirinfo?.dirid ?? 0) > 0 ? Number(data.dirinfo?.dirid) : undefined,
         name: data.dirinfo?.title ?? '',
         coverUrl: normalizeCover(data.dirinfo?.picurl),
         songCount: total,
         kind: 'normal',
-        editable: false
+        editable: canEdit(data)
       }
   if (!data.dirinfo && !favorites) {
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单响应缺少 dirinfo')

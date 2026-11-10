@@ -53,11 +53,18 @@ export type PlaylistKind = 'normal' | 'favorites'
 
 export interface PlaylistMeta {
   id: string
+  /** 当前账号下的歌单目录 ID（写入接口的 dirId）；公开歌单可能没有。 */
+  dirId?: number
   name: string
   coverUrl: string
   songCount: number
   kind: PlaylistKind
   editable: boolean
+}
+
+/** 歌单加删歌曲的写入结果；是否需要刷新由渲染层统一触发。 */
+export interface PlaylistMutationResult {
+  changed: boolean
 }
 
 export interface RecentPlaylist extends PlaylistMeta {
