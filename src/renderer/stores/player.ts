@@ -11,7 +11,7 @@ import { IpcCallError, describeError, unwrap } from '../api'
 import { createAudioEngine, type AudioEngine, type AudioEngineHandlers } from '../audio/engine'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from './auth'
-import { useSettingsStore } from './settings'
+import { useSettingsStore, QUALITY_PREFERENCE_OPTIONS } from './settings'
 
 export type PlayMode = 'sequence' | 'repeat-all' | 'repeat-one' | 'shuffle'
 
@@ -515,6 +515,15 @@ export const usePlayerStore = defineStore('player', () => {
     if (current.value) setQuality(defaultQuality.value)
   }
 
+  /** revealer 按钮点击：按共享选项的固定顺序循环切换音质偏好。 */
+  async function cycleQualityPreference(): Promise<void> {
+    const index = QUALITY_PREFERENCE_OPTIONS.findIndex(
+      (option) => option.value === settings.settings.defaultQuality
+    )
+    const next = QUALITY_PREFERENCE_OPTIONS[(index + 1) % QUALITY_PREFERENCE_OPTIONS.length]
+    if (next) await updateDefaultQuality(next.value)
+  }
+
   function setLoopStatus(nextStatus: 'None' | 'Track' | 'Playlist'): void {
     if (nextStatus === 'Track') mode.value = 'repeat-one'
     else if (nextStatus === 'None') mode.value = 'sequence'
@@ -609,6 +618,7 @@ export const usePlayerStore = defineStore('player', () => {
     setVolume,
     setQuality,
     updateDefaultQuality,
+    cycleQualityPreference,
     setLoopStatus,
     setShuffle,
     setMode,

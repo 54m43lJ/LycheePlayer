@@ -133,6 +133,21 @@ describe('player queue', () => {
     expect(player.requestedQuality).toBe(player.defaultQuality)
   })
 
+  it('cycles the quality preference in the shared revealer order', async () => {
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+
+    expect(player.qualityPreference).toBe('auto')
+    await player.cycleQualityPreference()
+    expect(player.qualityPreference).toBe('128k')
+    await player.cycleQualityPreference()
+    expect(player.qualityPreference).toBe('320k')
+    await player.cycleQualityPreference()
+    expect(player.qualityPreference).toBe('flac')
+    await player.cycleQualityPreference()
+    expect(player.qualityPreference).toBe('auto')
+  })
+
   it('cycles play modes in the preset order', async () => {    const { usePlayerStore } = await import('../src/renderer/stores/player')
     const player = usePlayerStore()
     expect(player.mode).toBe('sequence')

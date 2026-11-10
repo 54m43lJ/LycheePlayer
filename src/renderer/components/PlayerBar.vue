@@ -149,11 +149,12 @@ function visibleSingers(): Array<{ mid: string; name: string }> {
   return (current.value?.singers ?? []).filter((singer) => singer.name.trim().length > 0)
 }
 
-function toggleQualityMenu(): void {
-  qualityMenu.value = !qualityMenu.value
-  if (qualityMenu.value) {
-    volumeOpen.value = false
-    modeMenu.value = false
+async function cycleQuality(): Promise<void> {
+  closeMenus()
+  try {
+    await player.cycleQualityPreference()
+  } catch (err) {
+    toast.error(err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -424,6 +425,8 @@ watch(
           :class="{ open: modeMenu }"
           @mouseenter="openModeMenu()"
           @mouseleave="scheduleCloseModeMenu()"
+          @focusin="openModeMenu()"
+          @focusout="scheduleCloseModeMenu()"
         >
           <button
             class="mode-button"
@@ -522,13 +525,15 @@ watch(
         :class="{ open: qualityMenu }"
         @mouseenter="openQualityMenu()"
         @mouseleave="scheduleCloseQualityMenu()"
+        @focusin="openQualityMenu()"
+        @focusout="scheduleCloseQualityMenu()"
       >
         <button
           class="quality-chip"
           :title="qualityTitle"
           aria-haspopup="true"
           :aria-expanded="qualityMenu"
-          @click.stop="toggleQualityMenu()"
+          @click.stop="cycleQuality()"
         >
           {{ qualityPreferenceLabel }}
         </button>
