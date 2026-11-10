@@ -2243,7 +2243,7 @@
 问题描述：ISSUES 要求在左侧导航“退出”按钮下面增加一个切换配色按钮。
 
 解决方法：
-- `AppIcon.vue` 新增 `theme` 太阳图标。
+- `AppIcon.vue` 新增 `sun` / `moon` 两个图标：浅色模式显示太阳，深色模式显示月亮。
 - `App.vue` 在“退出”按钮后增加仅图标、无文字的配色切换按钮：
   - 点击读取 `settings.settings.theme`，在 `dark` / `light` 之间切换；
   - 统一调用 `settings.update({ theme })`，与设置页主题选项共用同一写入与 `applyTheme()` 逻辑；

@@ -286,7 +286,10 @@ watch(
           aria-label="切换配色"
           @click="toggleTheme()"
         >
-          <AppIcon name="theme" :size="18" />
+          <AppIcon
+            :name="settings.settings.theme === 'light' ? 'sun' : 'moon'"
+            :size="18"
+          />
         </button>
       </nav>
 

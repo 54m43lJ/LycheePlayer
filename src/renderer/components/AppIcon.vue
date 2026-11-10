@@ -83,7 +83,7 @@ const ICONS: Record<string, string[]> = {
   speed: ['M12 20a8 8 0 1 1 8-8', 'M12 12l4-4', 'M4 20h16'],
   'to-top': ['M5 4h14', 'M12 19V8', 'M7 12l5-5 5 5'],
   'to-bottom': ['M5 20h14', 'M12 5v11', 'M7 11l5 5 5-5'],
-  theme: [
+  sun: [
     'M12 4v2',
     'M12 18v2',
     'M4 12h2',
@@ -94,6 +94,7 @@ const ICONS: Record<string, string[]> = {
     'M7.7 17.7l-1.4 1.4',
     'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z'
   ],
+  moon: ['M20 14.5A8.5 8.5 0 0 1 9.5 4a8.5 8.5 0 1 0 10.5 10.5z'],
   power: ['M12 4v8', 'M7.5 6.5a7 7 0 1 0 9 0']
 }
 
