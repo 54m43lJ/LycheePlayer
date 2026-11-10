@@ -6,11 +6,13 @@ Documents per project, in HTML — the development docs split by boundary:
 
 | # | Document | Boundary | Content | Elsewhere |
 |--:|----------|----------|---------|-----------|
-| 1 | [README](#readme) | — | WHAT & WHY · user interactions | — |
+| 1 | [ABOUT](#about) | — | WHAT & WHY · user interactions | — |
 | 2 | [USER](#user) | upper — end users / dependent software | protocols · conventions · APIs · workflows · UI & prototypes (graphical programs) | internal mechanics → [CORE](#core) · underlying sources → [PROVIDER](#provider) |
 | 3 | [CORE](#core) | none — internal only; anything with no counterpart outside the project | internal data structures & APIs · call stacks · SBOM | usage-facing → [USER](#user) · provider boundary → [PROVIDER](#provider) |
 | 4 | [PROVIDER](#provider) | lower — underlying data sources / dependencies (system services, IPC, hardware, daemons, network endpoints, …); omit when absent | protocols · conventions · APIs · workflows | whole-system view → [USER](#user) · internal handling → [CORE](#core) |
 | 5 | [BUILD](#build) | written after development | how to use & build on the project | — |
+
+**README** (`README.md`) — the project front page only; maintained separately from this document set and provides no reference for development work.
 
 **Proximity principle** — place a concern at the nearest boundary it directly faces; an indirect relationship does not move it to a higher document.
 
@@ -33,11 +35,11 @@ Documents per project, in HTML — the development docs split by boundary:
 | 7 | Comment budget | an in-code comment with >3 information points → `ul.note` after its code block; the comment keeps only what the signature/call needs |
 | 8 | One block, one flow | a code block is a single continuous content; disjoint pieces → separate blocks/subsections |
 | 9 | CONVENTIONS chapter | USER / CORE / PROVIDER each keep one, right after the first chapter (may stay empty); stated once there, referenced from the affected sections |
-| 10 | BUILD is downstream | BUILD is generated from README / USER / CORE / PROVIDER. Those documents must never link to or cite BUILD; every fact they need lives in them, and BUILD repeats it with links back. Before development, no BUILD document exists in the doc set. |
+| 10 | BUILD is downstream | BUILD is generated from ABOUT / USER / CORE / PROVIDER. Those documents must never link to or cite BUILD; every fact they need lives in them, and BUILD repeats it with links back. Before development, no BUILD document exists in the doc set. |
 | 11 | Documentation-first | documents define the target design and contract before implementation; docs guide implementation, never the reverse. Never record implementation status (implemented / not implemented / pending / draft) in any document. |
 | 12 | Conventions vs exceptions | CONVENTIONS chapters state general rules only; every exception is documented in the mechanism / component section it belongs to and linked from the rule — never enumerated in CONVENTIONS. |
 
-## Readme
+## About
 
 [↑](#top)
 
@@ -135,5 +137,5 @@ Sources (`*.puml`) and exports (`*.svg`) live in the owning project's own `diagr
 **Rules**
 - produced once development is complete — not written during the design phase, but kept as part of the project
 - guides other developers in using and building on the project
-- downstream only — generated from README / USER / CORE / PROVIDER; never a source for them and never cited by them
+- downstream only — generated from ABOUT / USER / CORE / PROVIDER; never a source for them and never cited by them
 - absent before development — delete BUILD from the product doc set until development is complete; no other document may link to it
