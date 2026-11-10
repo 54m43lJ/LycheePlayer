@@ -43,7 +43,10 @@ Documents per project, in HTML — the development docs split by boundary:
 
 1. **WHAT & WHY** — IDEAL: the problem to solve · GOAL: what success looks like · NON-GOAL: project boundaries and the scope left to others
 2. **User interactions** — entry points and user-observable outcomes; mechanisms belong to USER/CORE
-3. **Project map** — optional; root project of a multi-project repo only · ASCII tree of the project family · document ownership and the component document index live here
+3. **Project map** — optional; root project of a multi-project repo only
+   - **Scope** — the current project as the root, with every subproject beneath it, recorded recursively
+   - **Granularity** — one entry per subproject root folder, without project content
+   - **Form** — file tree with a one-sentence comment per entry, stating its role in the project organization
 4. **Credits** — always present and last; credit the projects used, with stack/license where useful
 
 ## User
