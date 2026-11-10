@@ -2133,3 +2133,36 @@
 | `CORE.html` | §4.1 `api/client.ts` | 改 | 记录全局令牌桶 4 req/s、突发 8；限流不等于取消，页面仍需主动 abort。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 不动 | 已在本节说明下载不受页面生命周期约束。 |
 | `EVOLVE.md` | #5 / #14 | 改 | 补“页面离开取消上游请求、下载例外、发现页骨架与分区独立填充”的约束。 |
+
+### 4.49 歌单写后仍保留缓存、心跳跟随页面并优先于 timeout
+
+问题描述：歌单内容发生变动（添加 / 删除 / 改名 / 收藏）后，再打开该歌单会进入整页 loading 转圈；心跳也应只在页面活跃时运行，不能在后台一直跑。约束目标：打开歌单无论如何都立刻显示最近缓存并触发后台更新；心跳发现变化时立即刷新，优先级高于 5 分钟 timeout；只有其它失败场景（主要是切换歌单）才进入 timeout。
+
+根因：
+- 主进程在 `playlist.rename`、`playlist.addSongs`、`playlist.removeSongs`、`favorite.toggle` 成功后调用 `invalidatePlaylistCache()`，该函数直接删除缓存文件。写操作后缓存不存在，切回歌单时 `load()` 只能把 feed 置为 loading 并等待完整网络快照，表现为转圈。
+- 心跳 interval 在 `PlaylistView` 挂载后一直存在，只在 tick 时判断 `visibilityState`，窗口隐藏时仍保留定时器；没有真正做到“跟随页面”。
+- 心跳发现变化虽会调用 `refresh()`，但相关优先级没有在文档和测试中固定。
+
+解决方法：
+- 内容写操作不再删除歌单缓存：`playlist.rename` / `addSongs` / `removeSongs` / `favorite.toggle` 只返回写入结果，渲染层 `invalidate()` 把当前 feed 标记为 stale；下一次打开仍先展示旧快照，后台刷新成功后原子替换。
+- 只有歌单被删除（`playlist.remove`）或上游明确返回 `NO_PERMISSION`（歌单不存在 / 无权限）时才调用 `invalidatePlaylistCache()` 清理文件。
+- `PlaylistView` 心跳改为页面生命周期驱动：`onMounted` 仅在页面可见时启动 interval；`visibilitychange` 隐藏时清除 interval，恢复可见时立即 `poll()` 一次并重新计时；卸载或切换歌单时清除 interval 并调用 `playlist.stop()`。
+- `playlist.poll()` 发现变化时调用 `refresh()`；`refresh()` 开始即 `clearRetry()`，因此心跳变化会自动取消待执行的 5 分钟 timeout，立即后台拉取。无变化时保留 timeout，等其到期重试。
+- `load()` 保持缓存优先：只有没有缓存时才显示 loading；有缓存（包括 stale）时立即展示，再后台刷新。
+
+验证：
+- 新增 store 用例：刷新失败进入 timeout 后，心跳检测到变化立即再次请求并清除 timer，推进 5 分钟不会重复请求；
+- 代码核对：写操作路径不再调用 `invalidatePlaylistCache`，删除歌单仍清理缓存；
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 106 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | 已更新：写操作不删除缓存，只有删除 / 无权限才清理；缓存上限 64MB。 |
+| `CORE.html` | §4.61 `stores/playlist.ts` | 改 | 已更新：缓存优先、心跳变化优先于 timeout、stop 取消刷新。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 已更新：心跳只在页面可见时运行，隐藏停止，恢复立即检查。 |
+| `USER.html` | §2 CONVENTIONS / §5.2.8 歌单详情 | 改 | 已更新：打开先显示缓存；心跳跟随页面；心跳变化优先于 timeout。 |
+| `EVOLVE.md` | #5 歌单 | 改 | 补“写后保留旧缓存、心跳跟随页面、心跳优先于 timeout”的约束。 |

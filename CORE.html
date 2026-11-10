@@ -877,7 +877,15 @@ function buildStreamUrl(purl: string): string;
 </ul>
 
 <h3 id="c4-12">4.12 src/main/api/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function fetchPlaylistPage(id: string, offset: number): Promise&lt;PlaylistPage&gt;;
+<pre><code>export function fetchPlaylistPage(
+  id: string,
+  offset: number,
+  signal?: AbortSignal
+): Promise&lt;PlaylistPage&gt;;
+export function fetchPlaylistSnapshot(
+  id: string,
+  signal?: AbortSignal
+): Promise&lt;PlaylistSnapshot&gt;;
 export function getCachedPlaylist(id: string): PlaylistCacheEntry | null;
 export function savePlaylistSnapshot(
   id: string,
@@ -887,9 +895,10 @@ export function savePlaylistSnapshot(
 export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 </code></pre>
 <ul class="note">
-  <li><code>fetchPlaylistPage</code> 只负责网络分页，不读页级缓存；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
-  <li><code>getCachedPlaylist</code> 读取整份歌单快照；<code>savePlaylistSnapshot</code> 写入整份快照并标记 <code>complete</code>；不存在预取入口。</li>
-  <li><code>hasMore</code> 按实际返回批次与 <code>total</code> 判断，不把总数当唯一依据；上游单次最多 100 首，应用固定 50 首/页。</li>
+  <li><code>fetchPlaylistPage</code> 只负责轻量首页 / 最近歌单校验；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
+  <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin</code> 递增、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；任一分页失败、空页、覆盖不足或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>。</li>
+  <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存按账号 + 歌单 ID 持久化，上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>。</li>
+  <li>歌单不存在 / 无权限时才删除缓存；添加、删除、改名、收藏等写操作只标记旧缓存为过期，不删除文件，下一次打开仍先展示旧内容。</li>
   <li>歌单歌曲条目复用 <a href="#c4-11">§4.11</a> 的 <code>rawSongToSong</code>；歌单响应可能只带 <code>singer[].name</code> 而没有 <code>mid</code>，此时保留名称、<code>mid</code> 留空，界面按纯文本展示。</li>
 </ul>
 
@@ -1431,13 +1440,13 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>按路由参数加载歌单详情；绑定 playlist feed，第一页即渲染，底部显示加载 / 重试与已载入 / 总数；离开页面不取消 feed。</li>
-  <li>支持播放全部、单曲播放、“下一首播放”与失败重试；返回入口指向“我的歌单”。</li>
+  <li>按路由参数加载歌单详情；打开页面无论内容是否变化都先展示该歌单最近一次缓存，同时触发后台静默刷新，不进入整页 loading。刷新成功一次性替换，失败保留缓存且不提示。</li>
+  <li>心跳只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时存在：隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时；切换歌单或卸载时清除 interval 并调用 <code>playlist.stop(id)</code>。</li>
+  <li>心跳由 <code>playlist.poll(id)</code> 用 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 检查首页；发现名称、封面、首屏顺序或数量显著变化时立即后台刷新，并取消待执行的 5 分钟 timeout。</li>
   <li>接入 <code>useAvailability</code>，按当前歌单歌曲集合触发探测；探测只更新歌单歌曲元数据，并把 <code>availability</code> / <code>loading</code> 同步给 playlist store，用于判断最终快照是否就绪。</li>
-  <li>页面可见时每 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 调用 <code>playlist.poll(id)</code>；<code>document.visibilityState !== 'visible'</code> 时跳过。加载中断（<code>error</code> / <code>partial</code>）时由轮询恢复补全；底部 <code>.feed-footer</code> 为 flex，spinner 使用 <code>inline-block</code> / <code>flex: none</code>，避免显示为异常元素。</li>
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
-  <li>处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后清除该歌单缓存并触发轮询，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
-  <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变分页、轮询与队列构建。显示匹配数 / 总数与清除按钮，无匹配时显示空结果状态。</li>
+  <li>处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后触发静默刷新，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
+  <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。显示筛选数与已下载数量，无匹配时显示空结果状态。</li>
   <li>歌单头的“下载全部”按钮与“播放全部”并列，仅登录且存在可播歌曲时可用；点击调用 <code>download.startBatch({ source: 'playlist', playlistId, songMids })</code>，按歌单顺序建任务。按钮读取批次汇总显示完成 / 总数 / 失败，全部完成显示“已全部下载”，部分失败提示到下载中心重试；调用 <code>download.assetStates</code> 填充歌曲表下载图标。</li>
 </ul>
 
@@ -1814,11 +1823,11 @@ export interface PlaylistFeed {
 }
 </code></pre>
 <ul class="note">
-  <li><code>load</code> 先读整份缓存：<code>complete=true</code> 的缓存先以 <code>stale=true</code> 展示，再请求第一页重新验证；<code>complete=false</code> 只作临时展示。第一页成功后串行补全剩余页，每页成功立即写入整份快照；网络中断、空页停滞或 <code>hasMore=false</code> 但已载入数小于 total 时置 <code>error</code> / <code>complete=false</code>。</li>
-  <li><code>completingToken</code> 保证同一代只启动一个补全循环；<code>retry()</code> 在无 meta 时从头加载，有部分内容时从已载入位置续传。<code>poll()</code> 在 <code>error</code> / <code>partial</code> 时恢复补全，并由 <code>polling</code> 防重入。</li>
-  <li><code>poll</code> 比较 total、meta.songCount 与首页顺序；有变化时重置列表并继续补页，无变化时只清除错误并恢复中断的补全。调用方须保证页面可见（15 秒间隔见 <a href="USER.html#u5-2-8">USER §5.2.8</a>）。</li>
+  <li>打开歌单先读取整份缓存并立即展示（<code>complete=false</code> 显示为 <code>partial</code>），同时调用 <code>refresh</code> 在后台拉取完整快照；只有 <code>getSnapshot</code> 成功才一次性替换 <code>feed</code>。失败保留缓存、标记 <code>stale</code>，并安排 <code>PLAYLIST_REFRESH_RETRY_MS</code> 定时重试。</li>
+  <li><code>refresh</code> 开始前清除 timeout；<code>poll</code> 心跳发现名称、封面、首屏顺序或数量显著变化时立即调用 <code>refresh</code>，因此心跳变化优先于 5 分钟 timeout。无变化且内容完整时保留 timeout，不做额外刷新。</li>
+  <li>心跳由 <code>PlaylistView</code> 只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时启动；隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时。离开页面调用 <code>stop</code>：清除 timeout、递增刷新序号并调用 <code>playlist.cancelSnapshot</code>。</li>
+  <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale；写操作不再删除缓存文件，心跳或下次打开时静默刷新覆盖。只有歌单不存在 / 无权限时才删除持久缓存。</li>
   <li>队列快照：<code>beginQueueBuild()</code> 标记来源；<code>setProbeState()</code> 在每次探测结果变化后尝试推进。最终快照要求 <code>complete &amp;&amp; !stale</code> 且所有歌曲元数据已就绪；之前只生成一次临时快照（优先整份缓存，其次当前已载入页）。最终快照与临时快照签名相同则保留现有队列（含手动插入歌曲），不同则 <code>replacePlaylistQueue</code> 替换。</li>
-  <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale，供收藏等外部写操作触发下一次 <code>load</code> / <code>poll</code> 重新验证。</li>
   <li><code>applyRemoval(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code> 与 <code>meta.songCount</code>，并把剩余歌曲写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后调用，删除失败时由调用方恢复原数组。</li>
   <li><code>recent</code> 按当前账号持久化到 <code>localStorage</code>（key 前缀见 <a href="#c4-50">§4.50</a>），最多 <code>RECENT_PLAYLIST_LIMIT</code> 条。<code>visit(meta)</code> 在进入歌单页时更新 <code>visitedAtMs</code> 并置顶，超出时淘汰最旧一条；<code>removeRecent</code> 移除条目，不补位。</li>
   <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数；<code>NO_PERMISSION</code> / 歌单不存在时移除条目，其他失败标记 <code>stale</code> 并保留。</li>
