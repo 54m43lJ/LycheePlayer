@@ -763,7 +763,7 @@
 
 状态：已解决。
 
-### 3.11 音频代理取消时 `reader.cancel` 拒绝产生未处理 Promise
+### 3.11 音频代理取消时 `reader.cancel` 拒绝产生未处理 Promise [已解决]
 
 问题描述：运行中偶发出现 `UnhandledPromiseRejectionWarning: Error: net::ERR_CONNECTION_CLOSED`，堆栈位于 Electron 的 `SimpleURLLoaderWrapper` / `IncomingMessage`。触发条件不稳定，常见于切歌、seek、关闭音频流或上游提前断开连接之后。
 
@@ -789,6 +789,20 @@
 | `CORE.html` | §4.59 `media/audio-protocol.ts` | 改 | 补取消路径约束：`abortUpstream` 后 `reader.cancel()` 必须以 catch 吞掉连接关闭类拒绝，不能留下未处理 Promise。 |
 | `USER.html` | — | 不动 | 未处理拒绝只产生控制台警告，不改变用户可见的播放 / 切歌行为。 |
 | `EVOLVE.md` | — | 不动 | 现有“切歌中止上游流”要求不变，仅补齐取消异常处理。 |
+
+实际操作（2026-11-11，分支 `doc/audio-cancel-rejection`）：
+
+- `CORE.html` §4.59 `media/audio-protocol.ts`：新增取消路径约束 note：先 `abortUpstream()`，再用 `reader.cancel(reason).catch(() => undefined)` 吞掉连接关闭类拒绝，禁止 `void` 丢弃；正常读取错误仍由 `controller.error()` 上报。
+- `USER.html`：按原表“不动”未处理；未处理拒绝只产生控制台警告，不改变播放 / 切歌行为。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/media/audio-protocol.ts`：`ReadableStream` 的 `cancel(reason)` 调用 `abortUpstream()` 后执行 `reader.cancel(reason).catch(() => undefined)`。
+- 对照 `test/audio-protocol.test.ts`：mock 的 `cancel()` 拒绝时断言不产生 `unhandledRejection`。
+- `grep` 确认 `CORE.html` §4.59 已写入取消路径的 catch 约束；`USER.html` 未改。
+
+状态：已解决。
 
 ## 4. ISSUES 未决项修复记录
 
