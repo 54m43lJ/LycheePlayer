@@ -2088,3 +2088,81 @@
 | `CORE.html` | §4.61 `stores/playlist.ts` | 改 | 明确写缓存前必须把响应式 feed 展开为纯对象；Electron IPC 不能克隆 Vue Proxy。 |
 | `CORE.html` | §4.12 `api/playlist.ts` | 改 | 缓存快照结构不变；缓存上限提高到 64MB，1 万首左右的快照可正常保留。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 首次成功加载后写入缓存；后续打开优先命中缓存，避免重复网络等待。 |
+
+### 4.48 发现页骨架加载、分区独立填充与离开取消
+
+问题描述：ISSUES 要求确认“发现页加载时打开歌单容易触发风控”的根因，并写明“页面离开必须取消上游请求、下载例外”的统一约定；同时发现页不得等三块内容全部完成才渲染，应先显示骨架，再按组件分别填充。
+
+根因确认：
+- 所有元数据请求都经过 `client.ts` 的全局令牌桶（4 req/s，突发容量 8），`musicu`、vkey、收藏 / 登录等入口没有绕过限流；“完全没走限流”不成立。
+- 真正的漏洞是**页面请求没有生命周期**：`DiscoverView.onMounted` 调用的 `recommend.load` 在离开页面后继续跑，主进程没有对应取消通道；打开歌单又会启动完整快照和整单可用性探测（`useAvailability` 每 50 首一批，每批可能发 1–3 次 vkey）。104009 主要打在 vkey / 播放链接上，因此打开歌单触发的整单探测才是请求风暴主体，发现页残留请求只是叠加；同时旧页面请求排队会进一步占用限流预算。
+- 发现页原实现还要等 `daily → radar → guess` 全部加载完才渲染，进一步延长了请求窗口和首屏等待。
+
+解决方法：
+- `shared/constants.ts` 新增 `RECOMMEND_SECTION_IDS` / `RECOMMEND_SECTION_TITLES`，主进程与渲染层共用分区顺序和标题。
+- `api/recommend.ts`：`loadDaily` / `loadRadar` / `loadGuess` / `loadSection` / `buildFeed` / `fetchRecommendFeed` 全部接受 `AbortSignal` 并透传到 `musicu` 与 `CgiGetDiss`；取消后不再吞掉中止错误，也不继续填充后续分区。
+- `main/ipc.ts`：新增 `recommend.get(sectionId, token)` / `recommend.refresh(sectionId, token)` / `recommend.cancel(token)`，按 token 管理 `AbortController`；新 token 会中止旧发现页请求。
+- `preload` / `shared/ipc.ts`：暴露新签名。
+- `stores/recommend.ts`：
+  - `feed` 始终包含三个占位分区（`refreshedAtMs = 0`），首帧即可渲染骨架；
+  - `load` 按 `daily → radar → guess` 串行请求，每区完成立刻替换，不再等整份 feed；
+  - 单区失败只写 `errors[id]`，保留占位或已有内容；
+  - `refreshSection` 只走指定分区；`cancel` 递增会话序号并调用主进程取消当前 token；`reset` 恢复占位。
+- `views/DiscoverView.vue`：登录后监听 `auth.loggedIn` 触发加载；删除整页 loading / 全局错误分支，改为每区骨架、单区错误与重试；顶部“换一批”仍刷新全部；卸载时调用 `recommend.cancel()`。
+- 新增 `components/DiscoverSkeleton.vue`：占位直接复用真实条目的 `.discover-strip` / `.discover-item` / `.card` / `.card-cover` / `.card-name` / `.card-sub` 布局类，只把内部内容换成 `.skeleton` 线块；歌曲固定 30 条、每日推荐固定 1 张歌单卡，`.discover-strip` 增加 176px 最小高度。此前自定义 skeleton 使用独立尺寸（卡片 150px 无内边距、额外的 margin-top 与不同的行高），所以替换时会出现卡片变窄、行高变化和整块下移；现在标题 / 刷新按钮固定在外层，内容区尺寸与真实内容一致。
+- 文档同步：
+  - `GUIDELINES.md` 新增全局约束 #12：CONVENTIONS 只写通用规则，例外写在对应机制章节；
+  - `CORE.html` §2 新增“页面请求生命周期”约定；§4.60 下载章节注明下载任务不随页面离开取消，是该约定的例外；
+  - `USER.html` §2 新增页面骨架与离开停止加载的用户侧约定，并更新歌单缓存行为；
+  - `CORE.html` §4.53 / §4.62 / §4.68 / §5.13 与 `USER.html` §5.2.8 发现页行同步为骨架、逐区填充与取消行为；骨架复用真实布局类，尺寸与内容一致。
+
+验证：
+
+- 新增 recommend store 用例：三区逐块填充、离开页面取消当前 token、单区刷新只请求该区；
+- 新增 API 用例：已取消的 signal 不会再发起请求；
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 105 个用例通过；
+- `npm run build` 通过；
+- 未在实际网络中复现 104009；根因由请求入口、限流实现与页面生命周期代码路径确认。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 vkey / 播放链接行 | 改 | 明确 104009 主要作用于 vkey / 播放链接；整单可用性探测会放大触发概率。 |
+| `CORE.html` | §4.1 `api/client.ts` | 改 | 记录全局令牌桶 4 req/s、突发 8；限流不等于取消，页面仍需主动 abort。 |
+| `CORE.html` | §4.60 `download/manager.ts` | 不动 | 已在本节说明下载不受页面生命周期约束。 |
+| `EVOLVE.md` | #5 / #14 | 改 | 补“页面离开取消上游请求、下载例外、发现页骨架与分区独立填充”的约束。 |
+
+### 4.49 歌单写后仍保留缓存、心跳跟随页面并优先于 timeout
+
+问题描述：歌单内容发生变动（添加 / 删除 / 改名 / 收藏）后，再打开该歌单会进入整页 loading 转圈；心跳也应只在页面活跃时运行，不能在后台一直跑。约束目标：打开歌单无论如何都立刻显示最近缓存并触发后台更新；心跳发现变化时立即刷新，优先级高于 5 分钟 timeout；只有其它失败场景（主要是切换歌单）才进入 timeout。
+
+根因：
+- 主进程在 `playlist.rename`、`playlist.addSongs`、`playlist.removeSongs`、`favorite.toggle` 成功后调用 `invalidatePlaylistCache()`，该函数直接删除缓存文件。写操作后缓存不存在，切回歌单时 `load()` 只能把 feed 置为 loading 并等待完整网络快照，表现为转圈。
+- 心跳 interval 在 `PlaylistView` 挂载后一直存在，只在 tick 时判断 `visibilityState`，窗口隐藏时仍保留定时器；没有真正做到“跟随页面”。
+- 心跳发现变化虽会调用 `refresh()`，但相关优先级没有在文档和测试中固定。
+
+解决方法：
+- 内容写操作不再删除歌单缓存：`playlist.rename` / `addSongs` / `removeSongs` / `favorite.toggle` 只返回写入结果，渲染层 `invalidate()` 把当前 feed 标记为 stale；下一次打开仍先展示旧快照，后台刷新成功后原子替换。
+- 只有歌单被删除（`playlist.remove`）或上游明确返回 `NO_PERMISSION`（歌单不存在 / 无权限）时才调用 `invalidatePlaylistCache()` 清理文件。
+- `PlaylistView` 心跳改为页面生命周期驱动：`onMounted` 仅在页面可见时启动 interval；`visibilitychange` 隐藏时清除 interval，恢复可见时立即 `poll()` 一次并重新计时；卸载或切换歌单时清除 interval 并调用 `playlist.stop()`。
+- `playlist.poll()` 发现变化时调用 `refresh()`；`refresh()` 开始即 `clearRetry()`，因此心跳变化会自动取消待执行的 5 分钟 timeout，立即后台拉取。无变化时保留 timeout，等其到期重试。
+- `load()` 保持缓存优先：只有没有缓存时才显示 loading；有缓存（包括 stale）时立即展示，再后台刷新。
+
+验证：
+- 新增 store 用例：刷新失败进入 timeout 后，心跳检测到变化立即再次请求并清除 timer，推进 5 分钟不会重复请求；
+- 代码核对：写操作路径不再调用 `invalidatePlaylistCache`，删除歌单仍清理缓存；
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 106 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | 已更新：写操作不删除缓存，只有删除 / 无权限才清理；缓存上限 64MB。 |
+| `CORE.html` | §4.61 `stores/playlist.ts` | 改 | 已更新：缓存优先、心跳变化优先于 timeout、stop 取消刷新。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 已更新：心跳只在页面可见时运行，隐藏停止，恢复立即检查。 |
+| `USER.html` | §2 CONVENTIONS / §5.2.8 歌单详情 | 改 | 已更新：打开先显示缓存；心跳跟随页面；心跳变化优先于 timeout。 |
+| `EVOLVE.md` | #5 歌单 | 改 | 补“写后保留旧缓存、心跳跟随页面、心跳优先于 timeout”的约束。 |

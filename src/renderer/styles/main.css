@@ -3299,6 +3299,7 @@ a {
   grid-auto-flow: column;
   grid-template-rows: repeat(3, minmax(0, auto));
   gap: 6px 12px;
+  min-height: 176px;
   overflow-x: auto;
   padding-bottom: 8px;
 }
@@ -3363,6 +3364,47 @@ a {
 .discover-playlist {
   width: 150px;
   flex: 0 0 150px;
+}
+
+.skeleton {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--subtle-bg) 0%,
+    var(--border) 50%,
+    var(--subtle-bg) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+
+.skeleton-line {
+  display: inline-block;
+  width: 70%;
+  height: 0.7em;
+  vertical-align: middle;
+}
+
+.skeleton-line.short {
+  width: 45%;
+}
+
+@keyframes skeleton-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* 占位复用真实条目布局，保证替换内容时标题、行高与间距不跳动。 */
+.discover-skeleton {
+  pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+  }
 }
 
 /* ---------- 歌手 / 专辑页 ---------- */

@@ -35,6 +35,7 @@ Documents per project, in HTML — the development docs split by boundary:
 | 9 | CONVENTIONS chapter | USER / CORE / PROVIDER each keep one, right after the first chapter (may stay empty); stated once there, referenced from the affected sections |
 | 10 | BUILD is downstream | BUILD is generated from README / USER / CORE / PROVIDER. Those documents must never link to or cite BUILD; every fact they need lives in them, and BUILD repeats it with links back. Before development, no BUILD document exists in the doc set. |
 | 11 | Documentation-first | documents define the target design and contract before implementation; docs guide implementation, never the reverse. Never record implementation status (implemented / not implemented / pending / draft) in any document. |
+| 12 | Conventions vs exceptions | CONVENTIONS chapters state general rules only; every exception is documented in the mechanism / component section it belongs to and linked from the rule — never enumerated in CONVENTIONS. |
 
 ## Readme
 

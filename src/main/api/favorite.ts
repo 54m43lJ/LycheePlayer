@@ -2,7 +2,6 @@ import { createCipheriv, createHash, randomBytes } from 'node:crypto'
 import type { Credential, FavoriteState } from '../../shared/types'
 import { FAVORITE_STATUS_CACHE_MS, UPSTREAM_TIMEOUT_MS } from '../../shared/constants'
 import { getCredential } from '../credential'
-import { invalidatePlaylistCache } from '../cache/playlist'
 import {
   assertUpstreamAvailable,
   throttleUpstream,
@@ -348,6 +347,5 @@ export async function toggleFavorite(songMid: string): Promise<FavoriteState> {
     expiresAtMs: Date.now() + FAVORITE_STATUS_CACHE_MS,
     statuses
   }
-  await invalidatePlaylistCache('liked')
   return { songMid, favorited: target }
 }

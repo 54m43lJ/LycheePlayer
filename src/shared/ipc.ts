@@ -98,8 +98,9 @@ export interface LycheeApi {
     toggle(songMid: string): Promise<IpcResult<FavoriteState>>
   }
   recommend: {
-    get(): Promise<IpcResult<RecommendFeed>>
-    refresh(sectionId?: string): Promise<IpcResult<RecommendFeed>>
+    get(sectionId: string | null, token: number): Promise<IpcResult<RecommendFeed>>
+    refresh(sectionId: string | null, token: number): Promise<IpcResult<RecommendFeed>>
+    cancel(token: number): Promise<IpcResult<null>>
   }
   mv: {
     search(keyword: string, pageNo: number): Promise<IpcResult<SearchResult>>

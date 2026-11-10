@@ -174,6 +174,10 @@
     <td>上游原始 JSON 只存在于 <code>api/</code> 层内部；离开该层的值必须是 <a href="#c4-1">§4.1</a> 定义的内部模型。</td>
   </tr>
   <tr>
+    <td>页面请求生命周期</td>
+    <td>页面 / 弹出层卸载或路由离开时，必须取消该页面发起的全部上游请求，包括已发出、排队中与等待重试的请求；渲染进程的 token / generation 只能忽略结果，不能代替取消。例外只在对应机制章节说明。</td>
+  </tr>
+  <tr>
     <td>错误映射</td>
     <td><code>UpstreamError</code> 直接保留其 <code>code</code>；超时 / 中止映射为 <code>UPSTREAM_NETWORK</code>；其他异常映射为 <code>INTERNAL</code>。</td>
   </tr>
@@ -873,7 +877,15 @@ function buildStreamUrl(purl: string): string;
 </ul>
 
 <h3 id="c4-12">4.12 src/main/api/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function fetchPlaylistPage(id: string, offset: number): Promise&lt;PlaylistPage&gt;;
+<pre><code>export function fetchPlaylistPage(
+  id: string,
+  offset: number,
+  signal?: AbortSignal
+): Promise&lt;PlaylistPage&gt;;
+export function fetchPlaylistSnapshot(
+  id: string,
+  signal?: AbortSignal
+): Promise&lt;PlaylistSnapshot&gt;;
 export function getCachedPlaylist(id: string): PlaylistCacheEntry | null;
 export function savePlaylistSnapshot(
   id: string,
@@ -883,9 +895,10 @@ export function savePlaylistSnapshot(
 export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 </code></pre>
 <ul class="note">
-  <li><code>fetchPlaylistPage</code> 只负责网络分页，不读页级缓存；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
-  <li><code>getCachedPlaylist</code> 读取整份歌单快照；<code>savePlaylistSnapshot</code> 写入整份快照并标记 <code>complete</code>；不存在预取入口。</li>
-  <li><code>hasMore</code> 按实际返回批次与 <code>total</code> 判断，不把总数当唯一依据；上游单次最多 100 首，应用固定 50 首/页。</li>
+  <li><code>fetchPlaylistPage</code> 只负责轻量首页 / 最近歌单校验；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
+  <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin</code> 递增、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；任一分页失败、空页、覆盖不足或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>。</li>
+  <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存按账号 + 歌单 ID 持久化，上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>。</li>
+  <li>歌单不存在 / 无权限时才删除缓存；添加、删除、改名、收藏等写操作只标记旧缓存为过期，不删除文件，下一次打开仍先展示旧内容。</li>
   <li>歌单歌曲条目复用 <a href="#c4-11">§4.11</a> 的 <code>rawSongToSong</code>；歌单响应可能只带 <code>singer[].name</code> 而没有 <code>mid</code>，此时保留名称、<code>mid</code> 留空，界面按纯文本展示。</li>
 </ul>
 
@@ -1427,13 +1440,13 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>按路由参数加载歌单详情；绑定 playlist feed，第一页即渲染，底部显示加载 / 重试与已载入 / 总数；离开页面不取消 feed。</li>
-  <li>支持播放全部、单曲播放、“下一首播放”与失败重试；返回入口指向“我的歌单”。</li>
+  <li>按路由参数加载歌单详情；打开页面无论内容是否变化都先展示该歌单最近一次缓存，同时触发后台静默刷新，不进入整页 loading。刷新成功一次性替换，失败保留缓存且不提示。</li>
+  <li>心跳只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时存在：隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时；切换歌单或卸载时清除 interval 并调用 <code>playlist.stop(id)</code>。</li>
+  <li>心跳由 <code>playlist.poll(id)</code> 用 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 检查首页；发现名称、封面、首屏顺序或数量显著变化时立即后台刷新，并取消待执行的 5 分钟 timeout。</li>
   <li>接入 <code>useAvailability</code>，按当前歌单歌曲集合触发探测；探测只更新歌单歌曲元数据，并把 <code>availability</code> / <code>loading</code> 同步给 playlist store，用于判断最终快照是否就绪。</li>
-  <li>页面可见时每 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 调用 <code>playlist.poll(id)</code>；<code>document.visibilityState !== 'visible'</code> 时跳过。加载中断（<code>error</code> / <code>partial</code>）时由轮询恢复补全；底部 <code>.feed-footer</code> 为 flex，spinner 使用 <code>inline-block</code> / <code>flex: none</code>，避免显示为异常元素。</li>
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
-  <li>处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后清除该歌单缓存并触发轮询，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
-  <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变分页、轮询与队列构建。显示匹配数 / 总数与清除按钮，无匹配时显示空结果状态。</li>
+  <li>处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后触发静默刷新，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
+  <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。显示筛选数与已下载数量，无匹配时显示空结果状态。</li>
   <li>歌单头的“下载全部”按钮与“播放全部”并列，仅登录且存在可播歌曲时可用；点击调用 <code>download.startBatch({ source: 'playlist', playlistId, songMids })</code>，按歌单顺序建任务。按钮读取批次汇总显示完成 / 总数 / 失败，全部完成显示“已全部下载”，部分失败提示到下载中心重试；调用 <code>download.assetStates</code> 填充歌曲表下载图标。</li>
 </ul>
 
@@ -1581,15 +1594,19 @@ export function clearAvailabilityCache(musicid?: string): void;
 </ul>
 
 <h3 id="c4-53">4.53 src/main/api/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function fetchRecommendFeed(force?: boolean): Promise&lt;RecommendFeed&gt;;
-export function refreshRecommendSection(sectionId?: RecommendSection['id']): Promise&lt;RecommendFeed&gt;;
+<pre><code>export function fetchRecommendFeed(
+  force?: boolean,
+  sectionId?: string,
+  signal?: AbortSignal
+): Promise&lt;RecommendFeed&gt;;
 export function clearRecommendCache(): void;
 </code></pre>
 <ul class="note">
   <li>每日推荐：<code>music.recommend.RecommendFeed / get_recommend_feed</code>，参数 <code>{ direction: 0, page: 1, v_cache: [], v_uniq: [], s_num: 0 }</code>；在返回的 <code>v_shelf[].v_niche[].v_card[]</code> 中取唯一 <code>subtype === 510</code> 且日期为上海当天的卡片，再用 <code>music.srfDissInfo.DissInfo / CgiGetDiss</code> 读取完整歌单，固定 30 首。</li>
   <li>专属雷达：<code>music.recommend.TrackRelationServer / GetRadarSong</code>，参数 <code>{ Page, NeedNum, EntranceSongs: [], extra_info: {} }</code>；返回 <code>VecSongs[].Track</code>，按 <code>Page</code> 翻页并以 <code>HasMore</code> 判断，最多 4 页凑够 30 首。</li>
   <li>猜你喜欢：<code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>），参数 <code>{ id: 99, firstplay: 1, page, pageNo, page_num, offset, num }</code>；返回 <code>data.tracks[]</code> 扁平歌曲，按 mid 去重后最多取 20 首。</li>
-  <li>三个分区各自缓存 24 小时（<code>RECOMMEND_CACHE_TTL_MS</code>）；<code>refreshRecommendSection(sectionId?)</code> 只刷新指定分区，省略时刷新全部；未登录直接返回空分区，由渲染层显示登录引导。</li>
+  <li>三个分区各自缓存 24 小时（<code>RECOMMEND_CACHE_TTL_MS</code>）；<code>sectionId</code> 只刷新指定分区，省略时刷新全部；未登录直接返回空分区，由渲染层显示登录引导。</li>
+  <li><code>signal</code> 透传到每个 <code>musicu</code> 与 <code>CgiGetDiss</code> 请求；调用方取消后不再吞掉中止错误，也不继续填充后续分区。</li>
 </ul>
 
 <h3 id="c4-54">4.54 src/main/api/favorite.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1769,6 +1786,7 @@ export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
   <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；封面下载为同名 <code>.jpg</code>，失败不阻塞任务完成。文件名为 <code>&lt;歌手&gt; - &lt;歌名&gt;.&lt;mp3|flac&gt;</code>，非法字符替换为 <code>_</code>；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
   <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> / <code>removeBatch</code> 才删除最终文件与 <code>.part</code>。删除下载不影响缓存；清空缓存不影响已下载文件；<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
   <li><code>getAssetStates</code> 聚合每首歌的 <code>cachedQuality</code> / <code>downloadedQuality</code> / <code>maxQuality</code> / 当前任务状态；下载完成、缓存写入完成、清理缓存、删除下载后刷新相关歌曲状态。<code>writePart</code> 是保留的简单写文件入口，不经过任务状态机。</li>
+  <li>下载任务不受页面请求生命周期约束：任务由主进程队列持有，页面只订阅进度；离开页面不取消下载。这是页面请求取消约定的明确例外。</li>
 </ul>
 
 <h3 id="c4-61">4.61 src/renderer/stores/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1805,11 +1823,11 @@ export interface PlaylistFeed {
 }
 </code></pre>
 <ul class="note">
-  <li><code>load</code> 先读整份缓存：<code>complete=true</code> 的缓存先以 <code>stale=true</code> 展示，再请求第一页重新验证；<code>complete=false</code> 只作临时展示。第一页成功后串行补全剩余页，每页成功立即写入整份快照；网络中断、空页停滞或 <code>hasMore=false</code> 但已载入数小于 total 时置 <code>error</code> / <code>complete=false</code>。</li>
-  <li><code>completingToken</code> 保证同一代只启动一个补全循环；<code>retry()</code> 在无 meta 时从头加载，有部分内容时从已载入位置续传。<code>poll()</code> 在 <code>error</code> / <code>partial</code> 时恢复补全，并由 <code>polling</code> 防重入。</li>
-  <li><code>poll</code> 比较 total、meta.songCount 与首页顺序；有变化时重置列表并继续补页，无变化时只清除错误并恢复中断的补全。调用方须保证页面可见（15 秒间隔见 <a href="USER.html#u5-2-8">USER §5.2.8</a>）。</li>
+  <li>打开歌单先读取整份缓存并立即展示（<code>complete=false</code> 显示为 <code>partial</code>），同时调用 <code>refresh</code> 在后台拉取完整快照；只有 <code>getSnapshot</code> 成功才一次性替换 <code>feed</code>。失败保留缓存、标记 <code>stale</code>，并安排 <code>PLAYLIST_REFRESH_RETRY_MS</code> 定时重试。</li>
+  <li><code>refresh</code> 开始前清除 timeout；<code>poll</code> 心跳发现名称、封面、首屏顺序或数量显著变化时立即调用 <code>refresh</code>，因此心跳变化优先于 5 分钟 timeout。无变化且内容完整时保留 timeout，不做额外刷新。</li>
+  <li>心跳由 <code>PlaylistView</code> 只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时启动；隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时。离开页面调用 <code>stop</code>：清除 timeout、递增刷新序号并调用 <code>playlist.cancelSnapshot</code>。</li>
+  <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale；写操作不再删除缓存文件，心跳或下次打开时静默刷新覆盖。只有歌单不存在 / 无权限时才删除持久缓存。</li>
   <li>队列快照：<code>beginQueueBuild()</code> 标记来源；<code>setProbeState()</code> 在每次探测结果变化后尝试推进。最终快照要求 <code>complete &amp;&amp; !stale</code> 且所有歌曲元数据已就绪；之前只生成一次临时快照（优先整份缓存，其次当前已载入页）。最终快照与临时快照签名相同则保留现有队列（含手动插入歌曲），不同则 <code>replacePlaylistQueue</code> 替换。</li>
-  <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale，供收藏等外部写操作触发下一次 <code>load</code> / <code>poll</code> 重新验证。</li>
   <li><code>applyRemoval(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code> 与 <code>meta.songCount</code>，并把剩余歌曲写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后调用，删除失败时由调用方恢复原数组。</li>
   <li><code>recent</code> 按当前账号持久化到 <code>localStorage</code>（key 前缀见 <a href="#c4-50">§4.50</a>），最多 <code>RECENT_PLAYLIST_LIMIT</code> 条。<code>visit(meta)</code> 在进入歌单页时更新 <code>visitedAtMs</code> 并置顶，超出时淘汰最旧一条；<code>removeRecent</code> 移除条目，不补位。</li>
   <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数；<code>NO_PERMISSION</code> / 歌单不存在时移除条目，其他失败标记 <code>stale</code> 并保留。</li>
@@ -1820,16 +1838,20 @@ export interface PlaylistFeed {
 <pre><code>export function useRecommendStore(): RecommendStore;
 
 interface RecommendStore {
-  readonly feed: RecommendFeed | null;
+  readonly feed: RecommendFeed;
   readonly loading: boolean;
-  readonly refreshing: RecommendSection['id'] | null;
+  readonly loadingIds: Record&lt;RecommendSection['id'], boolean&gt;;
+  readonly errors: Record&lt;RecommendSection['id'], string&gt;;
   load(force?: boolean): Promise&lt;void&gt;;
-  refresh(sectionId?: RecommendSection['id']): Promise&lt;void&gt;;
+  refreshSection(sectionId: RecommendSection['id']): Promise&lt;void&gt;;
+  cancel(): void;
+  reset(): void;
 }
 </code></pre>
 <ul class="note">
-  <li><code>load</code> 读取三区缓存（24 小时）；<code>refresh()</code> 刷新指定分区，指定分区时只替换该区并保留其余分区。</li>
-  <li>未登录时保持空分区，由 <code>DiscoverView</code> 显示登录引导；分区请求失败只标记该区错误并保留已有内容，不使用空数据伪装成功。</li>
+  <li><code>feed.sections</code> 始终按 <code>daily → radar → guess</code> 提供三块；未加载的分区用 <code>refreshedAtMs = 0</code> 的占位表示，页面先渲染骨架。</li>
+  <li><code>load</code> 每次只请求一个分区，完成后立即替换该区，再继续下一区；因此页面不必等待整份 feed。单区失败只写 <code>errors[id]</code>，保留该区占位或已有内容。</li>
+  <li><code>refreshSection</code> 只请求指定分区；<code>cancel</code> 递增会话序号并调用主进程取消当前 token，已返回的结果不再写入 store。</li>
 </ul>
 
 <h3 id="c4-63">4.63 src/renderer/stores/playlist-edit.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1898,8 +1920,10 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 </code></pre>
 <ul class="note">
   <li>三个分区（每日推荐 / 专属雷达 / 猜你喜欢）各自渲染标题、刷新入口与固定宽度歌曲条目；每区固定高度显示 3 行，超出纵向滚动。</li>
+  <li>页面先渲染三块骨架（封面 / 两行文字 / 歌单卡片占位），再按 <code>daily → radar → guess</code> 逐块异步填充；未完成的分区不阻塞其他内容。</li>
   <li>条目为封面图标 + 上方歌名、下方歌手，文字溢出走跑马灯；点击歌曲单曲播放，歌手 / 专辑按 <code>mid</code> 链接。</li>
-  <li>未登录显示登录引导；分区空结果显示合法空状态；失败显示该区错误与重试，不影响其他分区。分区刷新只请求该区。</li>
+  <li>未登录显示登录引导；分区空结果显示合法空状态；失败只显示该区错误与重试，不影响其他分区。分区刷新只请求该区。</li>
+  <li>卸载时调用 <code>recommend.cancel()</code>，取消进行中的推荐请求与后续分区。</li>
 </ul>
 
 <h3 id="c4-69">4.69 src/renderer/views/MvView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -2352,21 +2376,29 @@ app::requestSingleInstanceLock()
 </ul>
 
 <h3 id="c5-13">5.13 推荐加载</h3>
-<pre><code>views/DiscoverView::load()
+<pre><code>views/DiscoverView::load(force)
 └── stores/recommend::load(force)
-    ├── window.lychee.recommend.get()
-    │   └── ipc::handle('recommend.get')
-    │       └── api/recommend::fetchRecommendFeed(force)
-    │           ├── 每日推荐 → api/client::musicu('music.recommend.RecommendFeed', 'get_recommend_feed', ...)
-    │           │   └── api/client::musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', ...)
-    │           ├── 专属雷达 → api/client::musicu('music.recommend.TrackRelationServer', 'GetRadarSong', ...)
-    │           └── 猜你喜欢 → api/client::musicu('mb_track_radio_svr', 'get_radio_track', ...)
-    └── 判断单区刷新 → api/recommend::refreshRecommendSection(sectionId)
+    ├── stores/recommend::fetchSection('daily', force, token)
+    │   └── window.lychee.recommend.get('daily', token) / refresh('daily', token)
+    │       └── ipc::runRecommendFetch(force, 'daily', token)
+    │           └── api/recommend::fetchRecommendFeed(force, 'daily', signal)
+    │               └── api/client::musicu('music.recommend.RecommendFeed', 'get_recommend_feed', ...)
+    │                   └── api/client::musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', ...)
+    ├── stores/recommend::fetchSection('radar', force, token)
+    │   └── ... api/client::musicu('music.recommend.TrackRelationServer', 'GetRadarSong', ...)
+    └── stores/recommend::fetchSection('guess', force, token)
+        └── ... api/client::musicu('mb_track_radio_svr', 'get_radio_track', ...)
+
+views/DiscoverView::onBeforeUnmount()
+└── stores/recommend::cancel()
+    └── window.lychee.recommend.cancel(token)
+        └── ipc::runRecommendFetch → AbortController.abort()
 </code></pre>
 <ul class="note">
-  <li>三区独立请求、独立失败与独立刷新；每区缓存 24 小时，刷新单区只替换该区。</li>
-  <li>每日推荐由 <code>subtype:510</code> 卡片解析出动态歌单后读取完整 30 首；雷达按 <code>Page</code> 翻页最多 4 次；猜你喜欢按 mid 去重补足 20 首。</li>
-  <li>未登录直接返回空分区并显示登录引导；请求失败保留已有分区并提示重试，不用空数据伪装成功。</li>
+  <li>三个分区按固定顺序串行请求，每完成一个就替换对应 store 分区，页面立即从骨架切换到内容。</li>
+  <li>每区缓存 24 小时；单区刷新只请求该区。每日推荐由 <code>subtype:510</code> 卡片解析出动态歌单后读取 30 首。</li>
+  <li>未登录直接返回空分区并显示登录引导；请求失败只标记该区并保留可重试状态。</li>
+  <li>离开页面取消进行中的请求；下载任务不在此调用链内，不受页面生命周期影响，见 <a href="#c4-60">§4.60</a>。</li>
 </ul>
 
 <h3 id="c5-14">5.14 收藏与歌单编辑</h3>

@@ -61,4 +61,21 @@ describe('api/recommend', () => {
     // 猜你喜欢按 mid 去重。
     expect(guess?.songs).toHaveLength(1)
   })
+
+  it('stops before any request when the page signal is already aborted', async () => {
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      return respond(musicuFixture({}))
+    })
+    const { fetchRecommendFeed, clearRecommendCache } = await import(
+      '../../src/main/api/recommend'
+    )
+    clearRecommendCache()
+    const controller = new AbortController()
+    controller.abort()
+
+    await expect(fetchRecommendFeed(true, undefined, controller.signal)).rejects.toThrow()
+    expect(calls).toBe(0)
+  })
 })
