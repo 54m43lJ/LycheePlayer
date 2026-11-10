@@ -1624,10 +1624,10 @@ export function addSongs(id: string, mids: string[]): Promise&lt;PlaylistMutatio
 export function removeSongs(id: string, mids: string[]): Promise&lt;PlaylistMutationResult&gt;;
 </code></pre>
 <ul class="note">
-  <li>创建：<code>music.musicasset.PlaylistBaseWrite / AddPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirName, dirDesc: '', dirPicUrl: '', taglist: '' }</code>；要求 <code>data.retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数，名称最多 20 个 JS 字符。</li>
-  <li>改名：<code>PlaylistBaseWrite / EditPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirId, dirNewName, dirShow: 1, mask: 1 }</code>；<code>retCode === 0</code> 后必须读回 <code>dirinfo.title</code> 确认，不能只看返回码。</li>
-  <li>删除：<code>PlaylistBaseWrite / DelPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirId, dirName }</code>；只允许当前账号自建、非 <code>201</code> 的普通歌单，删除后从歌单列表读回确认已消失。</li>
-  <li>增删歌曲：<code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>，参数 <code>{ dirId, tid, bFmtUtf8: true, v_songInfo: [{ songId, songType }] }</code>；<code>dirId</code> 是当前账号目录 ID，<code>tid</code> 是歌单标识，不能混用；<code>songId</code> 必须为数字 ID 且 <code>songType</code> 取歌曲详情真实值，每批最多 100 首。<code>dirId:201</code> 的收藏写入走签名加密通道，见 <a href="#c4-54">§4.54</a>。</li>
+  <li>创建：<code>music.musicasset.PlaylistBaseWrite / AddPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirName }</code>；要求 <code>data.retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数；返回 <code>id = String(result.tid)</code>（歌单标识）、<code>dirId = result.dirId</code>（目录 ID），两者不能互换；名称最多 20 个 JS 字符。</li>
+  <li>改名：先用 <code>fetchPlaylistPage</code> 读取当前 <code>dirId</code>，再调用 <code>PlaylistBaseWrite / EditPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirNewName, dirShow: 1, mask: 1 }</code>；成功后返回 <code>readMeta</code> 得到的最新 <code>PlaylistMeta</code>。</li>
+  <li>删除：先用 <code>readMeta</code> 读取当前 <code>dirId</code>，再调用 <code>PlaylistBaseWrite / DelPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirName }</code>；只允许当前账号自建、非 <code>201</code> 的普通歌单；删除成功后由主进程清理该歌单缓存，列表刷新由渲染层重新加载。</li>
+  <li>增删歌曲：<code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>，参数 <code>{ dirId, tid, bFmtUtf8: 1, v_songInfo: [{ songId, songType }] }</code>；<code>dirId</code> 是当前账号目录 ID，<code>tid</code> 是歌单标识，不能混用；<code>songId</code> 必须为数字 ID 且 <code>songType</code> 取歌曲详情真实值，每批最多 100 首。<code>dirId:201</code> 的收藏写入走签名加密通道，见 <a href="#c4-54">§4.54</a>。</li>
   <li><strong>写后刷新职责：</strong>增删歌曲只负责写入并返回 <code>PlaylistMutationResult { changed }</code>；<code>80092</code> 视为状态未变化并返回 <code>changed:false</code>。写后歌单内容 / 计数刷新统一由 <code>stores/playlist-edit</code> 调用现有 <code>playlist.invalidate(id)</code> + <code>playlist.poll(id)</code> 完成；不得在写 API 内单独实现整单扫描、尾部读回或其他刷新流程。</li>
   <li>业务码 <code>1000</code> 映射 <code>AUTH_EXPIRED</code>，<code>80105</code> / 权限不足映射 <code>NO_PERMISSION</code>，结构缺失映射 <code>UPSTREAM_CHANGED</code>；不新增错误码。</li>
 </ul>
@@ -1798,18 +1798,21 @@ interface PlaylistStore {
   readonly availabilityLoading: boolean;
   readonly requestedId: string;
   load(id: string, options?: { force?: boolean }): Promise&lt;void&gt;;
+  stop(id?: string): void;
   retry(): Promise&lt;void&gt;;
+  refresh(id: string): Promise&lt;void&gt;;
   poll(id: string): Promise&lt;void&gt;;
   invalidate(id: string): void;
   reset(): void;
   beginQueueBuild(): void;
   setProbeState(state: Record&lt;string, SongAvailability&gt;, loading: boolean): void;
-  applyRemoval(id: string, mids: string[]): void;
+  removeMembers(id: string, mids: string[]): void;
   readonly recent: RecentPlaylist[];
   visit(meta: PlaylistMeta): void;
   loadRecent(): void;
   validateRecent(): Promise&lt;void&gt;;
   removeRecent(id: string): void;
+  clearRecent(): void;
 }
 
 export interface PlaylistFeed {
@@ -1828,7 +1831,7 @@ export interface PlaylistFeed {
   <li>心跳由 <code>PlaylistView</code> 只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时启动；隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时。离开页面调用 <code>stop</code>：清除 timeout、递增刷新序号并调用 <code>playlist.cancelSnapshot</code>。</li>
   <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale；写操作不再删除缓存文件，心跳或下次打开时静默刷新覆盖。只有歌单不存在 / 无权限时才删除持久缓存。</li>
   <li>队列快照：<code>beginQueueBuild()</code> 标记来源；<code>setProbeState()</code> 在每次探测结果变化后尝试推进。最终快照要求 <code>complete &amp;&amp; !stale</code> 且所有歌曲元数据已就绪；之前只生成一次临时快照（优先整份缓存，其次当前已载入页）。最终快照与临时快照签名相同则保留现有队列（含手动插入歌曲），不同则 <code>replacePlaylistQueue</code> 替换。</li>
-  <li><code>applyRemoval(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code> 与 <code>meta.songCount</code>，并把剩余歌曲写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后调用，删除失败时由调用方恢复原数组。</li>
+  <li><code>removeMembers(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code>、<code>sourceTotal</code> 与 <code>meta.songCount</code>，并写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后先调用它做乐观移除，写入失败时由调用方恢复原数组。</li>
   <li><code>recent</code> 按当前账号持久化到 <code>localStorage</code>（key 前缀见 <a href="#c4-50">§4.50</a>），最多 <code>RECENT_PLAYLIST_LIMIT</code> 条。<code>visit(meta)</code> 在进入歌单页时更新 <code>visitedAtMs</code> 并置顶，超出时淘汰最旧一条；<code>removeRecent</code> 移除条目，不补位。</li>
   <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数；<code>NO_PERMISSION</code> / 歌单不存在时移除条目，其他失败标记 <code>stale</code> 并保留。</li>
   <li>当前播放歌单高亮读取 <code>player.queueSource</code>：<code>{ kind: 'playlist', id }</code> 命中即高亮，播放与暂停状态一致；手动队列不高亮。</li>
@@ -2451,18 +2454,19 @@ views/DiscoverView::onBeforeUnmount()
     └── window.lychee.playlist.addSongs(playlistId, mids)
         └── ipc::handle('playlist.addSongs')
             └── api/playlist-write::addSongs(id, mids)
-                ├── api/song::fetchTrack(mid)
+                ├── api/playlist-write::fetchTrackIdentities([mid])
+                │   └── api/client::musicu('music.trackInfo.UniformRuleCtrl', 'CgiGetTrackInfo', ...)
                 └── api/client::musicu('music.musicasset.PlaylistDetailWrite', 'AddSonglist', ...)
 </code></pre>
 <pre><code>components/SongTable::emit('remove', index)
 └── views/PlaylistView::confirmRemove(song)
     ├── 确认歌曲名与歌单名
+    ├── stores/playlist::removeMembers(id, [songMid])          // 本地乐观移除并更新计数
     ├── stores/playlist-edit::removeSongs(id, [mid])
     │   └── window.lychee.playlist.removeSongs(id, [mid])
     │       └── ipc::handle('playlist.removeSongs')
     │           └── api/playlist-write::removeSongs(id, mids)
-    │               └── 写后读回成员可见性
-    ├── 成功 → stores/playlist::applyRemoval(id, [mid])
+    │               └── 写入后由 stores/playlist-edit::refreshAfterWrite 统一刷新
     └── 失败 → 恢复行与歌曲数并提示
 </code></pre>
 <pre><code>components/SongTable::emit('favorite', index)

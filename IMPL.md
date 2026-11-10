@@ -218,7 +218,7 @@
 
 状态：已解决。
 
-### 2.3 歌单写入的读回校验、重复添加与创建 ID 选择未定义
+### 2.3 歌单写入的读回校验、重复添加与创建 ID 选择未定义 [已解决]
 
 > 后续修正：§4.35 修正了可编辑判定；§4.36 把 `id`（tid）与 `dirId` 分开，创建时必须同时返回两者；§4.39 又将写后读回 / 整单扫描移出写 API，`addSongs` / `removeSongs` 只返回 `{ changed }`，刷新统一由 `stores/playlist-edit.ts` 的 `refreshAfterWrite` 触发；§4.49 进一步规定内容写操作不删除歌单缓存。本节原有的 20 页读回、重复过滤与 `dirId` 回退 `tid` 等细节均已失效。
 
@@ -238,6 +238,25 @@
 | `PROVIDER.html` | §4.1 歌单写入 / 歌单增删歌曲 | 改 | 明确 `dirId` 与 `tid` 的区别；写后确认由 CORE 的刷新流程负责，不在写接口内读回。 |
 | `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 写 API 只负责写入并返回 `changed`；创建时 `id = tid`、`dirId = dirId`；写后刷新见 §4.39。 |
 | `EVOLVE.md` | #14 | 不动 | 写后刷新与 ID 契约由 CORE 主责，见上一行。 |
+
+实际操作（2026-11-10，分支 `doc/playlist-write-contract`）：
+
+- `PROVIDER.html` §3.4 收藏写入：把“写后必须读回状态与成员可见性”改为写接口只负责写入，写后刷新由 CORE 的统一歌单刷新流程负责。
+- `PROVIDER.html` §4.1 歌单写入 / 歌单增删歌曲：明确 `AddPlaylist` 的 `result.dirId` 是目录 ID、`result.tid` 是歌单标识；增删歌曲的 `dirId` / `tid` 不能混用；参数行删除未使用的 `dirName`。
+- `PROVIDER.html` §4.2 写操作成功判定：区分收藏写入的读回与普通歌单增删歌曲的渲染层刷新。
+- `PROVIDER.html` §4.3 `QqPlaylistWriteResult` 映射：补 `id = String(result.tid)`、`dirId = result.dirId`，两者不能互换。
+- `CORE.html` §4.55 `api/playlist-write.ts`：创建补 `id = tid` / `dirId = dirId` 与参数 `{ bFmtUtf8: 1, dirName }`；改名改为先读详情拿 `dirId`、成功后返回 `readMeta`；删除改为先读 `dirId`、删除后由主进程清缓存、渲染层重载；保留 `PlaylistMutationResult { changed }` 与 80092 语义。
+- `CORE.html` §4.61 `stores/playlist.ts`：把删除后的 `applyRemoval` 更正为当前 `removeMembers`，并补 `stop` / `refresh` / `clearRecent` 签名，使乐观移除与统一刷新流程一致。
+- `CORE.html` §5.14 歌单编辑调用树：添加歌曲改为 `fetchTrackIdentities` + `CgiGetTrackInfo`；删除改为本地乐观移除 + `refreshAfterWrite` 统一刷新，不再写后读回成员。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/playlist-write.ts`：`createPlaylist` 返回 `id: String(tid)`、`dirId`；`addSongs` / `removeSongs` 只提交写入并返回 `{ changed }`，80092 返回 `changed:false`；`renamePlaylist` / `removePlaylist` 先 `readMeta` 获取 `dirId`。
+- 对照 `src/renderer/stores/playlist-edit.ts`：`addSongs` / `removeSongs` 写后统一调用 `refreshAfterWrite(id)`。
+- `grep "写后读回成员可见性" CORE.html PROVIDER.html` 无结果。
+
+状态：已解决。
 
 ### 2.4 评论点赞的返回结构、`liked` 来源与点赞数处理未定义
 

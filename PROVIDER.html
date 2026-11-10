@@ -126,7 +126,7 @@
   </tr>
   <tr>
     <td>收藏写入</td>
-    <td>201 目录的 <code>AddSonglist</code> / <code>DelSonglist</code> 必须走 <code>u6.y.qq.com/cgi-bin/musics.fcg</code> 的 zzc 签名 + AES-128-GCM <code>ag-1</code> 通道；旧 <code>fcg_music_add2songdir.fcg</code> 在最小 Cookie 下返回 <code>403 invalid request / no permit</code>，不再使用。写后必须读回状态与成员可见性。</td>
+    <td>201 目录的 <code>AddSonglist</code> / <code>DelSonglist</code> 必须走 <code>u6.y.qq.com/cgi-bin/musics.fcg</code> 的 zzc 签名 + AES-128-GCM <code>ag-1</code> 通道；旧 <code>fcg_music_add2songdir.fcg</code> 在最小 Cookie 下返回 <code>403 invalid request / no permit</code>，不再使用。写接口只负责写入；写后状态与成员刷新由 CORE 的统一歌单刷新流程负责（见 <a href="CORE.html#c4-55">CORE §4.55</a> / <a href="CORE.html#c4-61">§4.61</a>），不在写接口内做整单读回。</td>
   </tr>
   <tr>
     <td>播放链接拼装</td>
@@ -265,8 +265,8 @@
   <tr><td>每日推荐</td><td><code>music.recommend.RecommendFeed / get_recommend_feed</code> → <code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>取当天的动态推荐歌单卡片（<code>subtype:510</code>），再读取完整 30 首。</td></tr>
   <tr><td>专属雷达</td><td><code>music.recommend.TrackRelationServer / GetRadarSong</code></td><td>按页获取个性化雷达推荐，返回 <code>VecSongs[].Track</code>；需要登录。</td></tr>
   <tr><td>猜你喜欢</td><td><code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>）</td><td>连续推荐流，返回 <code>data.tracks[]</code>；需要登录。</td></tr>
-  <tr><td>歌单写入</td><td><code>music.musicasset.PlaylistBaseWrite / AddPlaylist | EditPlaylist | DelPlaylist</code></td><td>创建 / 改名 / 删除当前账号自建的普通歌单；固定 201 之外的目录。</td></tr>
-  <tr><td>歌单增删歌曲</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code></td><td>按数字 <code>songId</code> 与真实 <code>songType</code> 增删；每批最多 100 首。</td></tr>
+  <tr><td>歌单写入</td><td><code>music.musicasset.PlaylistBaseWrite / AddPlaylist | EditPlaylist | DelPlaylist</code></td><td>创建 / 改名 / 删除当前账号自建的普通歌单；<code>AddPlaylist</code> 返回的 <code>result.dirId</code> 是目录 ID、<code>result.tid</code> 是歌单标识，两者都必须为正整数。</td></tr>
+  <tr><td>歌单增删歌曲</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code></td><td>按数字 <code>songId</code> 与真实 <code>songType</code> 增删；<code>dirId</code> 是当前账号目录 ID、<code>tid</code> 是歌单标识，两者不能混用；每批最多 100 首。</td></tr>
   <tr><td>MV 搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code>（<code>search_type:4</code>）</td><td>返回 <code>body.mv.list[]</code> 的 MV 结果。</td></tr>
   <tr><td>MV 详情</td><td><code>MvService.MvInfoProServer / GetMvInfoList</code></td><td>按 <code>vidlist</code> 获取封面、简介、时长、歌手与播放数。</td></tr>
   <tr><td>MV 取流</td><td><code>gosrf.Stream.MvUrlProxy / GetMvUrls</code></td><td>按 <code>vids</code> 返回各清晰度的 <code>freeflow_url</code>。</td></tr>
@@ -337,7 +337,7 @@
   </tr>
   <tr>
     <td>歌单增删歌曲</td>
-    <td><code>dirId</code> · <code>tid</code> · <code>bFmtUtf8</code> · <code>dirName</code> · <code>v_songInfo</code>（<code>songId</code> · <code>songType</code>）</td>
+    <td><code>dirId</code>（目录 ID） · <code>tid</code>（歌单标识） · <code>bFmtUtf8</code> · <code>v_songInfo</code>（<code>songId</code> · <code>songType</code>）</td>
   </tr>
   <tr>
     <td>MV 搜索</td>
@@ -485,7 +485,7 @@ interface QqLoginRequest {
 <ul class="note">
   <li>内部错误码与界面文案的对应关系见 <a href="USER.html#u5-3">USER §5.3</a>；类型定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
   <li>登录业务码携带的具体文案来自 <code>mapUpstreamCode</code>；是否直接展示给用户由界面错误策略决定。</li>
-  <li>写操作的成功判定必须同时检查外层 <code>code</code>、目标业务块 <code>code</code> 与 <code>data.retCode</code>（或 <code>subcode</code>），并读回目标状态；只检查 <code>retCode</code> 会把失败误报为成功。</li>
+  <li>写操作的成功判定必须同时检查外层 <code>code</code>、目标业务块 <code>code</code> 与 <code>data.retCode</code>（或 <code>subcode</code>）；收藏写入还要读回目标状态。普通歌单增删歌曲不在写 API 内读回成员，写后刷新由渲染层的统一歌单刷新流程确认。只检查 <code>retCode</code> 会把失败误报为成功。</li>
 </ul>
 
 <h3 id="p4-3">4.3 数据模型与转换</h3>
@@ -929,7 +929,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqPlaylistWriteResult</code> → <code>PlaylistMeta</code></td>
-    <td><code>retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数才成功；<code>dirName</code> 回填名称，<code>editable=true</code>。</td>
+    <td><code>retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数才成功；<code>id = String(result.tid)</code> 是歌单标识，<code>dirId = result.dirId</code> 是目录 ID；<code>dirName</code> 回填名称，<code>editable=true</code>。</td>
   </tr>
   <tr>
     <td><code>QqMvSearchData</code> → <code>MvSummary[]</code></td>
