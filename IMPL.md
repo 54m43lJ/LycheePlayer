@@ -2237,3 +2237,28 @@
 |---|---|---|---|
 | `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 顶部整体进度条为不占布局的 overlay，常驻内容区顶端；不显示数字指示。 |
 | `CORE.html` | 下载中心对应小节 | 改 | `.downloads-progress-track` 使用 fixed 定位、`left: var(--sidebar-width)`、`pointer-events: none`。 |
+
+### 4.53 侧栏退出按钮下方新增切换配色
+
+问题描述：ISSUES 要求在左侧导航“退出”按钮下面增加一个切换配色按钮。
+
+解决方法：
+- `AppIcon.vue` 新增 `theme` 太阳图标。
+- `App.vue` 在“退出”按钮后增加“切换配色”按钮：
+  - 点击读取 `settings.settings.theme`，在 `dark` / `light` 之间切换；
+  - 统一调用 `settings.update({ theme })`，与设置页主题选项共用同一写入与 `applyTheme()` 逻辑；
+  - 成功后 toast 提示“已切换到深色 / 浅色模式”，失败走统一错误提示；
+  - tooltip 显示“切换到深色 / 浅色模式”。
+- 侧栏导航本身可纵向滚动，新增按钮不改变现有布局。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 107 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.2 侧栏与导航 | 改 | 已更新：应用组“退出”下方提供“切换配色”，与设置页共用 `Settings.theme`。 |
+| `CORE.html` | §4.23 `App.vue` | 改 | 已更新：切换配色读取并写回 `Settings.theme`，复用同一 store 与即时应用逻辑。 |
