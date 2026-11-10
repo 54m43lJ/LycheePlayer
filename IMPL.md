@@ -40,7 +40,7 @@
 
 状态：已解决。
 
-### 1.2 PROVIDER 的验证状态与 fixture 证据不一致
+### 1.2 PROVIDER 的验证状态与 fixture 证据不一致 [已解决]
 
 问题描述：`PROVIDER.html` 顶部 note 仍写着“推荐、歌单创建 / 改名 / 删除与 MV 接口仍未完成 fixture 验证”，但 `§4.1 / §4.3` 已列出真实方法名，`EVOLVE.md` #14 也要求删除该 note。同时现有 fixture 并不能覆盖所有映射：`recommend-anonymous.json` 没有 `subtype:510` 的每日推荐卡片，`mv-search.json` 的 `mv.list` 为空，`mv-url.json` 的 `freeflow_url` / `url` 也都是空。文档同时存在“已落地”和“未验证”两种表述，且缺少对 fixture 覆盖范围的说明。
 
@@ -58,6 +58,26 @@
 | `PROVIDER.html` | §4.1 / §4.3 note | 改 | 删除“仍未完成 fixture 验证”，增加“fixtures 覆盖范围与未覆盖字段”说明。 |
 | `EVOLVE.md` | #14 实现思路 | 改 | 把“完成 fixture 验证”细化为必须覆盖的字段清单，并允许记录“fixture 为空”的合法结论。 |
 | `CORE.html` | §4.53 / §4.55 / §4.56 | 不动 | 签名按 #14 验证结果维护，见本表前两行。 |
+
+实际操作（2026-11-10，分支 `doc/provider-fixture-coverage`）：
+
+- `PROVIDER.html` §3.4 末尾 note：删除“推荐、歌单创建 / 改名 / 删除与 MV 接口仍未完成 fixture 验证”。
+- `PROVIDER.html` §4.1 note：补充“fixture 只覆盖部分映射、真实可用性以实际请求为准”，并链接到 §4.3 的覆盖说明。
+- `PROVIDER.html` §4.3 note：新增 fixture 覆盖范围、未覆盖字段与空 fixture 处理原则：
+  - 已用于回放测试：`search-song.json`、`singer-detail.json`、`singer-songs.json`、`album-detail.json`、`album-songs.json`、`mv-detail.json`、`comment-like.json`。
+  - 部分覆盖：`recommend-anonymous.json` 只用于 `RecommendFeed` 入口，缺少 `subtype:510` 每日推荐卡，每日推荐映射未覆盖；雷达 / 猜你喜欢由测试内联数据覆盖。
+  - 未覆盖：`mv-search.json` 的 `mv.list` 为空；`mv-url.json` 的 `freeflow_url` / `url` 为空。
+  - 仓库中存在但当前未被回放测试引用：`recommend-shelves.json`、`comment-list.json`、`playlist-write.json`，不计入已验证范围。
+  - 空 fixture 只按合法空结果处理；映射测试只锁定可回放字段，未覆盖字段以真实请求与代码防御分支为准。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+- `CORE.html` §4.53 / §4.55 / §4.56：按原表“不动”未处理。
+
+验证：
+
+- `grep "仍未完成 fixture 验证" PROVIDER.html` 无结果。
+- 对照 `test/api/*.test.ts` 与 `test/fixtures/`：覆盖清单与测试实际引用的 fixture 一致；空列表 / 空 URL 仅作为合法空结果记录。
+
+状态：已解决。
 
 ### 1.3 EVOLVE #13 的实现入口清单不完整
 
