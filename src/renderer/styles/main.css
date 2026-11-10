@@ -1952,6 +1952,13 @@ a {
   font-size: 11px;
 }
 
+.lyrics-head-actions {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 4px;
+}
+
 .lyrics-list {
   flex: 1;
   overflow-y: auto;
@@ -2081,15 +2088,6 @@ a {
   display: block;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.queue-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 2px 0;
-  color: var(--faint);
-  font-size: 11px;
 }
 
 .feed-footer {
