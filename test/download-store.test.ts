@@ -5,6 +5,7 @@ import type { DownloadTask } from '../src/shared/types'
 const list = vi.fn()
 const storage = vi.fn()
 const assetStates = vi.fn()
+const resumeAll = vi.fn()
 
 function task(id: string): DownloadTask {
   return {
@@ -24,7 +25,7 @@ function task(id: string): DownloadTask {
 
 beforeEach(() => {
   vi.stubGlobal('window', {
-    lychee: { download: { list, storage, assetStates } },
+    lychee: { download: { list, storage, assetStates, resumeAll } },
     setInterval: vi.fn(() => 1),
     clearInterval: vi.fn()
   })
@@ -32,6 +33,7 @@ beforeEach(() => {
   list.mockReset()
   storage.mockReset()
   assetStates.mockReset()
+  resumeAll.mockReset()
 })
 
 afterEach(() => {
@@ -68,5 +70,25 @@ describe('download store visibility', () => {
     store.reset()
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(store.tasks).toHaveLength(1))
+  })
+})
+
+describe('download store bulk resume', () => {
+  it('resumes all paused tasks through one IPC call', async () => {
+    resumeAll.mockResolvedValue({
+      ok: true,
+      data: [{ ...task('a'), status: 'pending' }, { ...task('b'), status: 'pending' }]
+    })
+    const { useDownloadStore } = await import('../src/renderer/stores/download')
+    const store = useDownloadStore()
+    store.tasks = [
+      { ...task('a'), status: 'paused' },
+      { ...task('b'), status: 'paused' }
+    ]
+
+    await store.resumeAll()
+
+    expect(resumeAll).toHaveBeenCalledTimes(1)
+    expect(store.tasks.map((item) => item.status)).toEqual(['pending', 'pending'])
   })
 })

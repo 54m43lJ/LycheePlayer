@@ -37,5 +37,6 @@ describe('DownloadsView', () => {
     expect(html).toContain('downloads-progress-track')
     expect(html).not.toContain('(0/2)')
     expect(html).not.toContain('downloads-progress-count')
+    expect(html).toContain('全部开始')
   })
 })
