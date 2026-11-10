@@ -2166,3 +2166,25 @@
 | `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 已更新：心跳只在页面可见时运行，隐藏停止，恢复立即检查。 |
 | `USER.html` | §2 CONVENTIONS / §5.2.8 歌单详情 | 改 | 已更新：打开先显示缓存；心跳跟随页面；心跳变化优先于 timeout。 |
 | `EVOLVE.md` | #5 歌单 | 改 | 补“写后保留旧缓存、心跳跟随页面、心跳优先于 timeout”的约束。 |
+
+### 4.50 下载页移除数字进度指示并将进度条改为 muted
+
+问题描述：ISSUES 要求下载页顶部的整体进度条不再显示下方的 `(1/100)` 数字指示，并把进度填充色改为 muted。
+
+解决方法：
+- `DownloadsView.vue` 删除 `.downloads-progress-count` 节点；保留顶部 `.downloads-progress-track` 的语义 `<div role="progressbar">` 与百分比宽度。
+- `styles/main.css` 删除 `.downloads-progress-count` 及 900px / 560px 两处响应式规则。
+- `.downloads-progress-track span` 背景由 `var(--palette-purple-light)` 改为 `var(--muted)`。
+- 更新 `downloads-view` SSR 用例：不再出现 `(0/2)` 或 `downloads-progress-count`，同时确认进度条节点仍存在。
+
+验证：
+- `npm run typecheck` 通过；
+- `npx vitest run` 25 个测试文件 / 106 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 顶部只保留 muted 整体进度条，不显示数字 / 失败数量指示；失败数量仍在任务列表与筛选中体现。 |
+| `CORE.html` | 下载中心对应小节 | 改 | 删除 `.downloads-progress-count` 说明；进度条填充使用 `--muted`。 |
