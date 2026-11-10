@@ -1541,3 +1541,39 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.lyrics-head-actions` 头部按钮组样式，删除无引用的 `.queue-footer`。 |
 | `USER.html` | §5.2.9 播放队列 | 改 | 明确清空队列入口固定在面板顶部、使用垃圾桶图标，队列为空时不可用。 |
 | `EVOLVE.md` | — | 不动 | 队列操作位置属于页面实现细节，由 CORE / USER 主责。 |
+
+### 4.35 歌单详情恢复“从歌单删除”按钮与写后校验
+
+问题描述：ISSUES 指出从歌单删除歌曲的按钮和功能没有实现。排查后确认渲染层与 IPC 链路本身已存在，但 `PlaylistView` 只有在 `PlaylistMeta.editable && kind === 'normal'` 时才把 `removable` 传给 `SongTable`，而 `fetchPlaylistPage` 对所有普通歌单都硬编码 `editable: false`：
+
+- `listMine()` 返回的“我的歌单”虽然带 `editable: true`，进入详情页后会被 `CgiGetDiss` 的 `fetchPlaylistPage` 结果覆盖成 `false`；
+- 因此歌单详情永远不会渲染删除按钮，删除功能也不可达；
+- 公开 / 搜索歌单也不应显示删除按钮，不能直接把普通歌单一律改成可编辑。
+
+解决方法：
+
+- `CgiGetDiss` 的 `dirinfo` 补充 `owndir`、`host_uin`、`creator.musicid` 字段；
+- 新增 `canEdit(data)`：优先读取上游 `owndir === 1`；字段缺失或为 0 时，回退比较当前登录 `musicid` 与 `creator.musicid` / `host_uin`；未登录或无归属信息时返回 `false`；
+- 普通歌单的 `editable` 改为 `canEdit(data)`，“我喜欢”仍为可编辑；公开 / 搜索歌单保持不可编辑；
+- 详情页原有删除链路保持不变：确认框 → 本地乐观移除并更新计数 → `playlist.removeSongs` → `DelSonglist` → 读回成员确认 → 失败回滚；
+- 新增 `test/api/playlist-write.test.ts`，用 mock 上游校验删除请求携带数字 `songId` 与真实 `songType`、写后成员消失、非成员歌曲不发起写请求；
+- 扩展 `test/api/playlist-cache.test.ts`，覆盖 `owndir` 判定、非本人歌单不可编辑与 `creator.musicid` 回退。
+
+验证：
+
+- 匿名实测公开歌单 `CgiGetDiss` 返回 `dirinfo.owndir = 0`，确认不能靠“普通歌单即可编辑”判断；
+- 新增 / 扩展测试覆盖归属判定与 `removeSongs` 写入链路；
+- `npm run typecheck` 通过；
+- `npx vitest run` 23 个测试文件 / 81 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌单详情行 / §4.3 `QqPlaylistDirinfo` | 改 | 增 `dirinfo.owndir`、`host_uin`、`creator.musicid`，并说明 `owndir === 1` 表示当前账号拥有该歌单。 |
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | `fetchPlaylistPage` 的普通歌单 `editable` 改为 `owndir` 优先、创建者 ID 回退；未登录或非本人歌单为 `false`。 |
+| `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明删除入口只在普通且 `editable` 的歌单出现，并保留确认、乐观更新、写后读回与失败回滚。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 补 `removeSongs` 的归属前置校验由详情接口提供，删除时按数字 `songId` / `songType` 写 `DelSonglist` 并读回成员。 |
+| `USER.html` | §5.2.8 歌单详情 | 改 | 说明自己创建的歌单在歌曲操作列显示“从歌单删除”，公开歌单不显示；删除只影响歌单成员，不改变播放队列。 |
+| `EVOLVE.md` | #14 | 不动 | 删除歌曲的交互与写后校验已由 CORE / USER 记录，本次仅修复可编辑判定。 |
