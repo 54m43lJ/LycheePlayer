@@ -113,7 +113,7 @@
 
 状态：已解决。
 
-### 1.4 README.md 的同步约定与本次分支要求冲突
+### 1.4 README.md 的同步约定与本次分支要求冲突 [已解决]
 
 问题描述：`EVOLVE.md` §0 要求 `ABOUT.html` 与 `README.md` 同步，并规定“`README.md` 最终以 `ABOUT.html` 的转换结果为准”，各清单项的文档操作也反复要求“`README.md` 同步生成”。但本次任务明确要求删除 `README.md`；当时仓库里还保留 `convert-about.yml`，只要文档提交就会重新生成该文件。文档约定与分支目标直接冲突。
 
@@ -130,6 +130,21 @@
 | `EVOLVE.md` | §0 使用约定 | 改 | 把 `ABOUT.html` / `README.md` 同步改为“以 `ABOUT.html` 为准；本分支不保留 `README.md`”。 |
 | `GUIDELINES.md` | 文档边界 | 改 | 明确 ABOUT 的维护入口，避免各清单项继续要求生成 md。 |
 | `ABOUT.html` | 全文 | 不动 | 产品说明内容不变，只停止生成 Markdown 副本。 |
+
+实际操作（2026-11-10，分支 `doc/about-single-source`）：
+
+- `GUIDELINES.md` 文档边界：删除“`README.md` 是单独维护的项目首页”的表述，改为 `ABOUT.html` 是项目说明的唯一维护入口，本分支不保留 `README.md`。
+- `ABOUT.html`：按原表“不动”，产品说明内容未改。
+- `EVOLVE.md`：仓库中已不存在该文件，无法修改 §0 使用约定。
+- 仓库中 `README.md` 不存在；`.github/workflows/` 只剩 `release.yml`，没有会重新生成 Markdown 的 `convert-about.yml`。
+
+验证：
+
+- `README.md` 不存在。
+- `GUIDELINES.md` 中 `README.md` 只出现在“本分支不保留”的说明里，不再作为独立维护入口。
+- `grep -r "convert-about" .github` 无结果。
+
+状态：已解决。
 
 ## 2. 开发中发现文档没写明的细节
 
