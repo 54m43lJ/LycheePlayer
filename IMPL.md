@@ -431,7 +431,7 @@
 
 ## 3. 其它技术上踩的坑
 
-### 3.1 退出时异步写索引被截断，且未加载下载模块会写空索引
+### 3.1 退出时异步写索引被截断，且未加载下载模块会写空索引 [已解决]
 
 问题描述：下载索引最初用异步 `writeFile` + 防抖落盘。`before-quit` 里 `void save()` 不会等待 Promise，进程退出后最后一批完成 / 暂停状态可能丢失。更严重的是：本次启动若从未打开下载模块，内存里没有任务，退出时仍会写出一份空索引，把上次的下载记录覆盖掉；切换账号时旧的防抖定时器也可能把旧账号任务写进新账号索引。
 
@@ -448,6 +448,19 @@
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 补索引生命周期：`loadedScope` 保护、退出同步落盘、切号先写旧索引。 |
 | `BUILD.html` | §11 存储 | 增 | 索引 `.part` 原子替换、退出时同步写入的约束。 |
 | `EVOLVE.md` | #2 | 不动 | 持久化细节由 CORE / BUILD 主责，见以上两行。 |
+
+实际操作（2026-11-10，分支 `doc/download-index-atomic-save`）：
+
+- `CORE.html` §4.60 `download/manager.ts`：已在 §2.1 更新中写入 `loadedScope` 保护、退出同步 `writeFileSync` + `renameSync` 原子替换、切换账号前先落盘旧账号索引；本次核对与代码一致，无需再改。
+- `BUILD.html` §11 存储：下载行补索引生命周期约束：先写 `<index>.part` 再原子替换；退出时同步写盘；从未加载下载模块时不写空索引；切换账号前先把旧账号索引落盘。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/download/manager.ts`：`flushDownloads()` 使用 `writeFileSync` + `renameSync`；`saveIndex()` / `flushDownloads()` 均有 `if (!loadedScope) return`；切换账号流程先落盘旧索引。
+- `BUILD.html` §11 与 CORE §4.60 对索引原子写、退出同步写、空索引保护的描述一致。
+
+状态：已解决。
 
 ### 3.2 整单下载被单次 IPC 的 100 首上限挡住
 
