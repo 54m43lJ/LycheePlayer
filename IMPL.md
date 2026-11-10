@@ -1577,3 +1577,42 @@
 | `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 补 `removeSongs` 的归属前置校验由详情接口提供，删除时按数字 `songId` / `songType` 写 `DelSonglist` 并读回成员。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 说明自己创建的歌单在歌曲操作列显示“从歌单删除”，公开歌单不显示；删除只影响歌单成员，不改变播放队列。 |
 | `EVOLVE.md` | #14 | 不动 | 删除歌曲的交互与写后校验已由 CORE / USER 记录，本次仅修复可编辑判定。 |
+
+### 4.36 添加到歌单写错 dirId / tid 导致 80092
+
+问题描述：测试“添加到歌单”时持续报 `UPSTREAM_CHANGED: 上游返回错误码 80092（music.musicasset.PlaylistDetailWrite.AddSonglist）`。排查确认不是简单重复添加，而是写接口的两个 ID 被混用：
+
+- `PlaylistDetailWrite` 的 `dirId` 是当前账号下的歌单目录 ID，`tid` 才是歌单标识（disstid / 歌曲列表接口里的歌单 ID），两者不是同一个值；
+- 原实现把 `PlaylistMeta.id` 同时当作 `dirId` 发送，并固定 `tid: 0`；`PlaylistMeta` 也没有保存详情返回的 `dirinfo.dirid`；
+- 创建歌单时又把 `result.dirId` 当成 `id`，丢失了 `result.tid`，后续添加 / 删除 / 打开都拿不到正确的歌单标识；
+- 改名 / 删除歌单也直接用 `PlaylistMeta.id` 当 `dirId`，同样会写错目录；
+- `mapUpstreamCode` 对未知错误码没有保留 `upstreamCode`，导致 80092 这种业务状态无法在写后读回时被识别。
+
+解决方法：
+
+- `PlaylistMeta` 新增可选 `dirId`：`listMine` 从 `dirId / dirid` 读取，`CgiGetDiss` 从 `dirinfo.dirid` 读取，“我喜欢”固定为 201；
+- 创建歌单改为 `id = result.tid`、`dirId = result.dirId`，两者都必须为正整数；
+- `addSongs` / `removeSongs` 使用 `dirId: meta.dirId` 与 `tid: meta.id`，写请求参数收敛为 `{ dirId, tid, bFmtUtf8, v_songInfo }`，不再把歌单名当作写参数；
+- 改名 / 删除歌单先读取详情拿到当前 `dirId`，再提交 `EditPlaylist` / `DelPlaylist`，不再用歌单标识冒充目录 ID；
+- `mapUpstreamCode` 的未知错误统一携带原始 `upstreamCode`；`assertWrite` 同样保留 `retCode`；
+- 80092 不再直接失败：写后读回若已达成目标状态则视为成功，读回未确认时再给出“歌曲可能已在歌单中 / 歌单状态已变化”的明确错误；
+- 更新 `test/api/playlist-write.test.ts`：覆盖添加 / 删除携带 `dirId + tid`、创建返回 `id=tid`、改名 / 删除使用详情目录 ID、80092 由读回判定；扩展 `test/api/playlist-cache.test.ts` 校验详情返回的 `dirId`。
+
+验证：
+
+- 对照上游实现约定核对：`AddPlaylist` 返回的 `result.tid` 是歌单标识，`result.dirId` 是目录 ID；`PlaylistDetailWrite` 同时需要两者；80092 属于业务状态码，应以读回结果判断；
+- `npm run typecheck` 通过；
+- `npx vitest run` 23 个测试文件 / 85 个用例通过；
+- `npm run build` 通过。
+
+修订建议：
+
+| 文档名 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `PROVIDER.html` | §4.1 歌单写入行 / §4.3 歌单模型 | 改 | 明确 `dirId` 是当前账号目录 ID、`tid` 才是歌单标识；`AddPlaylist` 返回的 `result.dirId` / `result.tid` 分别对应两者；80092 属于业务状态码而非请求失败。 |
+| `CORE.html` | §4.1 `types.ts` | 改 | `PlaylistMeta` 增加 `dirId?: number`，与 `id`（歌单标识）分开存储。 |
+| `CORE.html` | §4.12 `api/playlist.ts` | 改 | `listMine` 与 `CgiGetDiss` 都要回填 `dirId`；创建歌单以 `result.tid` 作为 `id`、`result.dirId` 作为目录 ID。 |
+| `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 增删歌曲按 `dirId + tid + bFmtUtf8 + v_songInfo` 写入；改名 / 删除先读取详情获取 `dirId`；80092 写后读回判定。 |
+| `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 未知上游错误需保留 `upstreamCode`，供写操作识别 80092 等业务状态。 |
+| `USER.html` | §5.3 错误与通知 | 改 | 80092 在写后读回确认成功时不提示错误；未生效时提示歌曲可能已在歌单中或歌单状态已变化。 |
+| `EVOLVE.md` | #14 | 不动 | 写接口细节由 CORE / PROVIDER 主责，本次仅修正参数契约。 |
