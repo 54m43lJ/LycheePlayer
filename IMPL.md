@@ -63,11 +63,11 @@
 
 ### 1.4 README.md 的同步约定与本次分支要求冲突
 
-问题描述：`EVOLVE.md` §0 要求 `README.html` 与 `README.md` 同步，并规定“`README.md` 最终以 `README.html` 的转换结果为准”，各清单项的文档操作也反复要求“`README.md` 同步生成”。但本次任务明确要求删除 `README.md`；仓库里还保留 `convert-readme.yml`，只要文档提交就会重新生成该文件。文档约定与分支目标直接冲突。
+问题描述：`EVOLVE.md` §0 要求 `ABOUT.html` 与 `README.md` 同步，并规定“`README.md` 最终以 `ABOUT.html` 的转换结果为准”，各清单项的文档操作也反复要求“`README.md` 同步生成”。但本次任务明确要求删除 `README.md`；当时仓库里还保留 `convert-about.yml`，只要文档提交就会重新生成该文件。文档约定与分支目标直接冲突。
 
 
 解决方法：
-- 以 `README.html` 作为唯一产品说明来源，本次不维护 `README.md`；
+- 以 `ABOUT.html` 作为唯一产品说明来源，本次不维护 `README.md`；
 - 删除 `README.md` 后不再让文档操作引用它；
 - 转换 workflow 是否保留需单独决定，避免 CI 把已删除文件重新提交回来。
 
@@ -75,9 +75,9 @@
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `EVOLVE.md` | §0 使用约定 | 改 | 把 `README.html` / `README.md` 同步改为“以 `README.html` 为准；本分支不保留 `README.md`”。 |
-| `GUIDELINES.md` | 文档边界 | 改 | 明确 README 的维护入口，避免各清单项继续要求生成 md。 |
-| `README.html` | 全文 | 不动 | 产品说明内容不变，只停止生成 Markdown 副本。 |
+| `EVOLVE.md` | §0 使用约定 | 改 | 把 `ABOUT.html` / `README.md` 同步改为“以 `ABOUT.html` 为准；本分支不保留 `README.md`”。 |
+| `GUIDELINES.md` | 文档边界 | 改 | 明确 ABOUT 的维护入口，避免各清单项继续要求生成 md。 |
+| `ABOUT.html` | 全文 | 不动 | 产品说明内容不变，只停止生成 Markdown 副本。 |
 
 ## 2. 开发中发现文档没写明的细节
 
@@ -1493,7 +1493,7 @@
 - `USER.html` §2 新增 Revealer 统一交互约定，并修正播放模式 / 音质的点击行为；§5.2.2 播放条与 §5.2.7 设置页补充音质共享偏好与空状态可用性；
 - `CORE.html` §4.29 / §4.30 / §4.40 补充 `QUALITY_PREFERENCE_OPTIONS`、`qualityPreference`、`updateDefaultQuality`、`cycleQualityPreference` 与音质 revealer 行为；
 - `EVOLVE.md` 新增 #15 统一 revealer 交互需求；
-- `README.html` 播放行同步“点击循环、悬停展开”的交互描述。
+- `ABOUT.html` 播放行同步“点击循环、悬停展开”的交互描述。
 
 验证：
 
@@ -1512,7 +1512,7 @@
 | `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 播放模式与音质按钮点击循环；音质弹层只列其余档位；revealer 样式契约引用 USER §2。 |
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 音质按钮移除边框；音质选项 hover 改用 `--subtle-bg`，与模式选项一致。 |
 | `EVOLVE.md` | #15 | 增 | 记录统一 revealer 交互需求与音量特例。 |
-| `README.html` | §2 用户交互 · 播放行 | 改 | 描述点击循环、悬停展开与音质偏好共享。 |
+| `ABOUT.html` | §2 用户交互 · 播放行 | 改 | 描述点击循环、悬停展开与音质偏好共享。 |
 
 ### 4.34 清空播放队列按钮置顶并改为图标
 
