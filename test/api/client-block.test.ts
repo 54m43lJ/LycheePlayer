@@ -88,3 +88,30 @@ describe('api/client 104009 global block', () => {
     expect(upstreamBlockRemainingMs()).toBe(0)
   })
 })
+
+describe('api/client business error extraction', () => {
+  it('treats a negative top-level data.code as an upstream business error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      async () =>
+        new Response(
+          JSON.stringify({
+            code: 0,
+            req_0: {
+              code: 0,
+              data: { code: -100006, subcode: 0, msg: 'get diss info from tmem error' }
+            }
+          }),
+          { status: 200 }
+        )
+    )
+    const { musicu } = await client()
+
+    await expect(
+      musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', {})
+    ).rejects.toMatchObject({
+      code: 'NO_PERMISSION',
+      upstreamCode: -100006
+    })
+  })
+})

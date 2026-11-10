@@ -14,7 +14,11 @@ import {
   PLAYLIST_PAGE_SIZE
 } from '../../shared/constants'
 import { getCredential } from '../credential'
-import { readPlaylistCache, writePlaylistCache } from '../cache/playlist'
+import {
+  invalidatePlaylistCache,
+  readPlaylistCache,
+  writePlaylistCache
+} from '../cache/playlist'
 import { UpstreamError, musicu } from './client'
 import { rawSongToSong } from './song'
 
@@ -170,7 +174,14 @@ export async function fetchPlaylistPage(id: string, offset: number): Promise<Pla
   if (start > PLAYLIST_PAGE_MAX * PLAYLIST_PAGE_SIZE) {
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单分页超出上限')
   }
-  return requestPage(id, start, PLAYLIST_PAGE_SIZE)
+  try {
+    return await requestPage(id, start, PLAYLIST_PAGE_SIZE)
+  } catch (err) {
+    if (err instanceof UpstreamError && err.code === 'NO_PERMISSION') {
+      await invalidatePlaylistCache(id)
+    }
+    throw err
+  }
 }
 
 /**
@@ -190,26 +201,34 @@ export async function fetchPlaylistSnapshot(
   let total = 0
   let offset = 0
   let pages = 0
-  for (;;) {
-    signal?.throwIfAborted()
-    if (pages >= PLAYLIST_FETCH_PAGE_MAX) {
-      throw new UpstreamError('UPSTREAM_CHANGED', '歌单拉取页数超出上限')
+  try {
+    for (;;) {
+      signal?.throwIfAborted()
+      if (pages >= PLAYLIST_FETCH_PAGE_MAX) {
+        throw new UpstreamError('UPSTREAM_CHANGED', '歌单拉取页数超出上限')
+      }
+      const page = await requestPage(id, offset, PLAYLIST_FETCH_PAGE_SIZE, signal)
+      pages += 1
+      meta = page.meta
+      total = page.total
+      if (page.songs.length === 0 && offset < total) {
+        throw new UpstreamError('UPSTREAM_CHANGED', `歌单分页为空（${offset}/${total}）`)
+      }
+      for (const song of page.songs) {
+        // 固定 offset 分页理论上不重叠；重复 mid 直接跳过，避免把重叠页写进快照。
+        if (song.songMid && seen.has(song.songMid)) continue
+        if (song.songMid) seen.add(song.songMid)
+        songs.push(song)
+      }
+      offset += PLAYLIST_FETCH_PAGE_SIZE
+      if (offset >= total) break
     }
-    const page = await requestPage(id, offset, PLAYLIST_FETCH_PAGE_SIZE, signal)
-    pages += 1
-    meta = page.meta
-    total = page.total
-    if (page.songs.length === 0 && offset < total) {
-      throw new UpstreamError('UPSTREAM_CHANGED', `歌单分页为空（${offset}/${total}）`)
+  } catch (err) {
+    // 歌单已删除 / 无权访问时清掉旧缓存，避免侧栏与缓存长期保留失效条目。
+    if (err instanceof UpstreamError && err.code === 'NO_PERMISSION') {
+      await invalidatePlaylistCache(id)
     }
-    for (const song of page.songs) {
-      // 固定 offset 分页理论上不重叠；重复 mid 直接跳过，避免把重叠页写进快照。
-      if (song.songMid && seen.has(song.songMid)) continue
-      if (song.songMid) seen.add(song.songMid)
-      songs.push(song)
-    }
-    offset += PLAYLIST_FETCH_PAGE_SIZE
-    if (offset >= total) break
+    throw err
   }
   if (!meta) {
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单响应缺少 dirinfo')

@@ -12,7 +12,8 @@ const { musicuMock, cacheState } = vi.hoisted(() => ({
   musicuMock: vi.fn(),
   cacheState: {
     entry: null as PlaylistCacheEntry | null,
-    writes: [] as PlaylistCacheEntry[]
+    writes: [] as PlaylistCacheEntry[],
+    invalidated: [] as string[]
   }
 }))
 
@@ -33,6 +34,9 @@ vi.mock('../../src/main/cache/playlist', () => ({
   writePlaylistCache: async (_scope: string, entry: PlaylistCacheEntry) => {
     cacheState.writes.push(entry)
     cacheState.entry = entry
+  },
+  invalidatePlaylistCache: async (id: string) => {
+    cacheState.invalidated.push(id)
   }
 }))
 
@@ -69,6 +73,7 @@ beforeEach(() => {
   musicuMock.mockReset()
   cacheState.entry = null
   cacheState.writes = []
+  cacheState.invalidated = []
 })
 
 describe('api/playlist cache', () => {
@@ -254,5 +259,35 @@ describe('api/playlist full snapshot', () => {
     const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
     await expect(fetchPlaylistSnapshot('123', controller.signal)).rejects.toThrow()
     expect(musicuMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('api/playlist missing playlist cache cleanup', () => {
+  it('removes the cached entry when upstream reports the playlist no longer exists', async () => {
+    const { UpstreamError } = await import('../../src/main/api/client')
+    musicuMock.mockRejectedValueOnce(
+      new UpstreamError('NO_PERMISSION', '歌单不存在或已失效')
+    )
+    const { fetchPlaylistSnapshot } = await import('../../src/main/api/playlist')
+
+    await expect(fetchPlaylistSnapshot('999999999')).rejects.toMatchObject({
+      code: 'NO_PERMISSION'
+    })
+    expect(cacheState.invalidated).toEqual(['999999999'])
+  })
+})
+
+describe('api/playlist recent validation missing playlist cleanup', () => {
+  it('removes the cached entry when a lightweight page request reports missing', async () => {
+    const { UpstreamError } = await import('../../src/main/api/client')
+    musicuMock.mockRejectedValueOnce(
+      new UpstreamError('NO_PERMISSION', '歌单不存在或已失效')
+    )
+    const { fetchPlaylistPage } = await import('../../src/main/api/playlist')
+
+    await expect(fetchPlaylistPage('999999999', 0)).rejects.toMatchObject({
+      code: 'NO_PERMISSION'
+    })
+    expect(cacheState.invalidated).toEqual(['999999999'])
   })
 })
