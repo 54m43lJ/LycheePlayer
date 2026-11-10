@@ -1581,10 +1581,13 @@ export function writeFlagsFile(content: string): Promise&lt;void&gt;;
   mids: string[],
   options?: ProbeOptions
 ): Promise&lt;SongAvailability[]&gt;;
+export function peekAvailability(mids: string[]): Map&lt;string, SongAvailability&gt;;
 export function clearAvailabilityCache(musicid?: string): void;
 </code></pre>
 <ul class="note">
   <li>探测结果只更新歌单歌曲元数据；不修改播放队列、不改变当前播放。</li>
+  <li><code>peekAvailability</code> 只读现有可用性缓存，不探测、不写缓存；只返回已探测且未过期的条目。未探测过的歌曲不会出现在结果中，调用方按 <code>maxQuality: null</code> / 未知状态处理。</li>
+  <li><code>download.assetStates</code> 用 <code>peekAvailability</code> 补 <code>maxQuality</code>；列表页由 <code>useAvailability</code> 按需探测，因此资产查询不会额外打上游。</li>
   <li><code>song.probe</code> 单次上限为 <code>PROBE_MIDS_MAX = 50</code>，与一个 50 首歌单页对齐；渲染层按 50 分批，探测内部固定按 <code>flac</code> 逐档解析最高可用音质。</li>
   <li><code>PROBE_MAX_SONGS</code> 与页大小/页上限共用 <a href="#c4-50">§4.50</a> 的派生常量；缓存按账号隔离，退出登录时清空。</li>
   <li>登录成功后主进程清空可用性缓存，避免沿用旧会话留下的“不可播”结果；探测请求与其他上游请求共享全局限速。</li>
@@ -1789,7 +1792,7 @@ export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
   <li><code>loadedScope</code> 保护未加载下载模块的退出：从未加载时 <code>flushDownloads</code> / <code>saveIndex</code> 直接返回，避免写出空索引覆盖旧记录；切换账号前先清掉旧定时器并把旧账号索引落盘；退出时使用同步 <code>writeFileSync</code> + <code>renameSync</code> 写 <code>.part</code> 后原子替换。</li>
   <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；文件名由 <code>downloadFileName</code> 按“歌名-歌手-专辑”生成，多个歌手用顿号连接，缺失片段跳过，非法字符替换为 <code>_</code>，全空回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队占位路径仍使用 <code>safeName(songMid)</code>，最终路径在出队时生成；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
   <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> 删除最终文件与 <code>.part</code>；<code>clearDownloadDirectory</code> 先中止活动下载、清空记录，再删除下载目录内容，并拒绝文件系统根目录、用户主目录及其上级目录。</li>
-  <li><code>assetStates</code> 只读取可用性缓存（<code>peekAvailability</code>）与缓存 / 下载信息，不主动探测上游；<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
+  <li><code>assetStates</code> 只读取可用性缓存（<code>peekAvailability</code>）与缓存 / 下载信息，不主动探测上游；未探测过的歌曲 <code>maxQuality</code> 为 <code>null</code>。<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
   <li>下载任务不受页面请求生命周期约束：任务由主进程队列持有，页面只订阅进度；离开页面不取消下载。这是页面请求取消约定的明确例外。</li>
 </ul>
 

@@ -495,7 +495,7 @@
 
 状态：已解决。
 
-### 3.3 资产状态查询触发上游探测风暴
+### 3.3 资产状态查询触发上游探测风暴 [已解决]
 
 问题描述：`download.assetStates` 最初直接调用 `probeAvailability` 补 `maxQuality`。一个 1000 首歌单会分 20 批、每批 50 首，触发大量歌曲详情与 vkey 请求；而 UI 的下载图标其实只依赖缓存 / 下载状态。这个实现会让打开歌单就明显增加上游压力，也更容易触发限流。
 
@@ -512,6 +512,20 @@
 | `CORE.html` | §4.58 `cache/audio.ts` / `availability.ts` | 改 | 增 `peekAvailability` 只读接口及其使用边界。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确 `assetStates` 不触发上游探测，`maxQuality` 可为空。 |
 | `CORE.html` | §4.2 `ipc.ts` | 不动 | IPC 通道与参数不变，只改主进程查询来源。 |
+
+实际操作（2026-11-10，分支 `doc/availability-peek-cache`）：
+
+- `CORE.html` §4.52 `api/availability.ts`（原建议写 §4.58，实际接口在 §4.52）：签名补 `peekAvailability(mids): Map<string, SongAvailability>`；note 明确它只读现有缓存、不探测、不写缓存，未探测歌曲不出现在结果中。
+- `CORE.html` §4.60 `download/manager.ts`：明确 `assetStates` 用 `peekAvailability` 补 `maxQuality`，不主动探测上游；未探测过时 `maxQuality` 为 `null`。
+- `CORE.html` §4.2 `ipc.ts`：按原表“不动”未处理，IPC 通道与参数未变。
+- 注：`cache/audio.ts` 的 `getCachedAudioInfo` 原本就是只读本地文件，无需改动；`peekAvailability` 属于可用性缓存，不在 `cache/audio.ts`。
+
+验证：
+
+- 对照 `src/main/api/availability.ts`：`peekAvailability` 只读取 `accountCache()` 中未过期条目，不发请求；`probeAvailability` 才执行探测。
+- 对照 `src/main/download/manager.ts`：`assetStates` 调用 `peekAvailability(unique)`，`maxQuality` 缺失时为 `null`。
+
+状态：已解决。
 
 ### 3.4 音频代理的 200 / 206 完整响应判定与进度节流
 
