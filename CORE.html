@@ -723,6 +723,7 @@ export interface FlagsFile {
   <li><code>flags</code> 读取 / 保存当前 flags 文件；<code>download</code> 的 <code>storage</code> / <code>openFolder</code> / <code>chooseFolder</code> / <code>clearCache</code> 服务设置页与下载页；<code>start</code> 返回缓存转移或新建任务的结果，<code>list</code> 只返回任务列表。</li>
   <li><code>lyric.decryptQrc</code> 是同步方法，在 preload 内用 Node crypto + zlib 完成解密；主进程只透传密文，接口细节见 <a href="#c4-64">§4.64</a>。</li>
   <li><code>recommend.get</code> / <code>recommend.refresh</code> 在已登录时传 <code>sectionId</code> 只加载并返回该分区，<code>null</code> 才返回完整 feed；未登录直接返回完整空分区用于登录引导。<code>token</code> 用于按请求取消，<code>recommend.cancel</code> 只中止匹配 token 的请求。</li>
+  <li>批量参数上限按通道区分：<code>download.startMany</code> 的 <code>midArray</code> 上限为 <code>DOWNLOAD_QUEUE_MAX = 2000</code>；<code>song.getUrls</code>、<code>playlist.addSongs</code> / <code>removeSongs</code>、<code>favorite.get</code> 等其余 mid 数组使用 <code>IPC_SONG_MIDS_MAX = 100</code>；<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>，渲染层探测调度也按 50 分批。</li>
 </ul>
 
 <h3 id="c4-3">4.3 src/shared/xlogin.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1782,7 +1783,7 @@ export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
 </code></pre>
 <ul class="note">
   <li>任务状态机：<code>pending → downloading → done</code>；暂停把 <code>downloading</code> 置为 <code>paused</code> 并保留 <code>.part</code>；继续使用 <code>Range: bytes=&lt;已有字节&gt;-</code> 追加；失败置 <code>failed</code>，只允许用户手动继续。任务只带 <code>source: 'network' | 'cache'</code>，没有批次字段。</li>
-  <li><code>startDownload</code> / <code>startDownloads</code> 共用 <code>enqueueTask</code>；整单入口按给定顺序去重、截到 <code>DOWNLOAD_QUEUE_MAX</code> 后逐首入队，已有同曲任务直接复用；<code>pump</code> 按 <code>DOWNLOAD_CONCURRENCY = 1</code> 出队，歌曲名、歌手、专辑与音质在出队时解析。</li>
+  <li><code>startDownload</code> / <code>startDownloads</code> 共用 <code>enqueueTask</code>；整单入口按给定顺序去重、截到 <code>DOWNLOAD_QUEUE_MAX</code> 后逐首入队，已有同曲任务直接复用；该上限只作用于整单入队，<code>song.getUrls</code> 等单曲 IPC 仍受 <code>IPC_SONG_MIDS_MAX = 100</code> 限制，<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>。<code>pump</code> 按 <code>DOWNLOAD_CONCURRENCY = 1</code> 出队，歌曲名、歌手、专辑与音质在出队时解析。</li>
   <li>缓存转移优先硬链接，失败回退复制；转移失败会把来源改回 <code>network</code> 并继续正常下载。播放取源固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”。</li>
   <li>下载索引只有 <code>{ tasks: DownloadTask[] }</code>，按账号隔离并放在 <code>downloadDir</code> 下：<code>.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>。只持久化 <code>done</code> / <code>paused</code> 任务；启动时 <code>downloading</code> / <code>pending</code> 统一转为 <code>paused</code>，已丢失文件的 <code>done</code> 任务会被丢弃。</li>
   <li><code>loadedScope</code> 保护未加载下载模块的退出：从未加载时 <code>flushDownloads</code> / <code>saveIndex</code> 直接返回，避免写出空索引覆盖旧记录；切换账号前先清掉旧定时器并把旧账号索引落盘；退出时使用同步 <code>writeFileSync</code> + <code>renameSync</code> 写 <code>.part</code> 后原子替换。</li>

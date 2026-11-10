@@ -462,7 +462,7 @@
 
 状态：已解决。
 
-### 3.2 整单下载被单次 IPC 的 100 首上限挡住
+### 3.2 整单下载被单次 IPC 的 100 首上限挡住 [已解决]
 
 > 后续修正：§4.15 已将 `download.startBatch` 改为 `download.startMany`，常量 `DOWNLOAD_BATCH_MAX` 更名为 `DOWNLOAD_QUEUE_MAX`；“整单入队上限与单曲 IPC 上限分离”的结论不变。
 
@@ -471,16 +471,29 @@
 
 解决方法：
 - `download.startMany` 单独使用 `DOWNLOAD_QUEUE_MAX` 作为 `midArray` 上限；
-- `song.getUrls` / `song.probe` 等仍保持 100 首限制；
+- `song.getUrls` 等仍保持 100 首限制；`song.probe` 使用 `PROBE_MIDS_MAX = 50`；
 - 渲染层资产查询按 100 首分块，整单入队不按 100 分块。
 
 修订建议：
 
 | 文档名 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.2 `ipc.ts` | 改 | 逐通道列出批量上限：整单入队用 `DOWNLOAD_QUEUE_MAX`，播放链接 / 探测仍用 100。 |
+| `CORE.html` | §4.2 `ipc.ts` | 改 | 逐通道列出批量上限：整单入队用 `DOWNLOAD_QUEUE_MAX`，播放链接等仍用 100，探测用 `PROBE_MIDS_MAX = 50`。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 明确整单入队上限与单曲 IPC 上限分离。 |
 | `EVOLVE.md` | #1 | 不动 | 整单下载能力见 #2，上限由 CORE 主责。 |
+
+实际操作（2026-11-10，分支 `doc/download-queue-limit`）：
+
+- `CORE.html` §4.2 `ipc.ts`：新增批量上限说明：`download.startMany` 的 `midArray` 上限为 `DOWNLOAD_QUEUE_MAX = 2000`；`song.getUrls`、`playlist.addSongs` / `removeSongs`、`favorite.get` 等其余 mid 数组使用 `IPC_SONG_MIDS_MAX = 100`；`song.probe` 使用 `PROBE_MIDS_MAX = 50`，渲染层探测调度也按 50 分批。
+- `CORE.html` §4.60 `download/manager.ts`：明确 `DOWNLOAD_QUEUE_MAX` 只作用于整单入队，`song.getUrls` 等单曲 IPC 仍受 `IPC_SONG_MIDS_MAX = 100` 限制，`song.probe` 使用 `PROBE_MIDS_MAX = 50`。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/ipc.ts`：`download.startMany` 使用 `DOWNLOAD_QUEUE_MAX`；`song.getUrls`、`playlist.addSongs` / `removeSongs`、`favorite.get` 使用默认 `IPC_SONG_MIDS_MAX`；`song.probe` 显式使用 `PROBE_MIDS_MAX`。
+- 对照 `src/shared/constants.ts`：`DOWNLOAD_QUEUE_MAX = 2000`、`IPC_SONG_MIDS_MAX = 100`、`PROBE_MIDS_MAX = 50`（已由早期 30 调整为 50）。
+
+状态：已解决。
 
 ### 3.3 资产状态查询触发上游探测风暴
 
