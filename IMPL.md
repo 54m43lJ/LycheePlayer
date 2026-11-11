@@ -2379,7 +2379,7 @@
 
 状态：已解决。
 
-### 4.32 无歌曲时播放条按钮状态与音质弹出
+### 4.32 无歌曲时播放条按钮状态与音质弹出 [已解决]
 
 > 后续修正：§4.33 将音质按钮点击改为按 `auto → 128k → 320k → flac` 固定顺序循环，悬停仍展开其余档位；本节“点击按钮仍可切换”以 §4.33 为准。
 
@@ -2418,6 +2418,27 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 补 `.icon-btn:disabled` 灰化样式；音质弹层与播放模式共用向上 reveal 的定位 / 动画约定。 |
 | `USER.html` | §5.2.2 播放条 / §5.2.7 设置页 | 改 | 无歌曲时喜欢 / 下载 / 上一首 / 下一首 / 播放按钮灰化不可用；音质按钮始终可用，按钮显示当前偏好（含“自动”），悬停弹出其它档位；设置页与播放条共用同一份音质偏好并即时联动。 |
 | `EVOLVE.md` | — | 改 | 补充音质切换与播放模式一致的 revealer 交互要求。 |
+
+实际操作（2026-11-11，分支 `doc/playerbar-empty-quality`）：
+
+- `CORE.html` §4.40 `PlayerBar.vue`：空状态说明补播放 / 上一首 / 下一首 / 收藏 / 下载按钮统一使用 `.icon-btn:disabled` 灰化；音质按钮保持可用，切换只影响下次播放。
+- `CORE.html` §4.29 `stores/player.ts`：核对后已具备 `qualityPreference`、`updateDefaultQuality()` 与 `cycleQualityPreference()`；note 明确 `updateDefaultQuality()` 是设置页与播放条共用入口，`cycleQualityPreference()` 按固定顺序循环。
+- `CORE.html` §4.30 `stores/settings.ts`（原表写作 §4.31）：补充 `Settings.defaultQuality` 是唯一持久化偏好；`QUALITY_PREFERENCE_OPTIONS` 的 `label` / `short` 分别供设置页与播放条 / revealer 使用。
+- `CORE.html` §4.48 `SettingsView.vue`（原表写作 §4.44）：补音质选项复用共享常量、选择调用 `player.updateDefaultQuality()`，与播放条即时联动，组件内不维护本地选项常量。
+- `CORE.html` §4.49 `styles/main.css`：新增 `.icon-btn:disabled` 灰化规则（`--faint`、0.45 透明度、禁用 hover）；新增音质 revealer 样式契约（`.quality-chip` 无边框、当前偏好常驻高亮，`.quality-menu` 使用 `bottom: 0` / 全宽 / 30px 底部预留 / `--panel` 背景与向上阴影，复用 `mode-reveal`，选项 hover / 触屏高亮使用 `--subtle-bg` / `--accent-soft`）。
+- `USER.html` §5.2.3 播放条（原表写作 §5.2.2）：空状态改为播放 / 上一首 / 下一首 / 喜欢 / 下载统一灰化禁用；音质按钮始终可用，按钮显示当前偏好并只影响下次播放。
+- `USER.html` §5.2.7 设置页：核对后已说明音质四档、默认“自动”、与播放条共用同一持久化偏好并即时同步，本次无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/styles/main.css`：`.icon-btn:disabled` 使用 `var(--faint)` 与 `opacity: 0.45`，`:disabled:hover` 不改变颜色 / 背景；`.quality-chip` 无边框，`.quality-menu` 为 `bottom: 0`、`width: 100%`、`padding: 0 0 30px` 并复用 `mode-reveal`。
+- 对照 `src/renderer/components/PlayerBar.vue`：空状态播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用；音质按钮使用 `qualityPreferenceLabel`，点击调用 `cycleQualityPreference()`，菜单只渲染当前偏好之外的档位。
+- 对照 `src/renderer/views/SettingsView.vue`：音质选项来自 `QUALITY_PREFERENCE_OPTIONS`，选择调用 `player.updateDefaultQuality()`，没有本地音质选项常量。
+- 对照 `src/renderer/stores/settings.ts` / `stores/player.ts`：`defaultQuality` 为持久化偏好，`qualityPreference` 只读暴露，`updateDefaultQuality()` 与 `cycleQualityPreference()` 存在。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.33 Revealer 统一交互
 
