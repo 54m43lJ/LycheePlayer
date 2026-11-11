@@ -2115,7 +2115,7 @@
 
 状态：已解决。
 
-### 4.28 取消评论“点赞”排序（上游没有按点赞排序接口）
+### 4.28 取消评论“点赞”排序（上游没有按点赞排序接口） [已解决]
 
 > 后续修正：§4.41 已完全删除“最旧”排序与 `CommentSort`，`comment.get` 只保留 `(songId, cursor?)`；本节“只保留最新 / 最旧”的结论以 §4.41 为准，`GetNewCommentList` + `LastCommentSeqNo` 的使用不变。
 
@@ -2154,6 +2154,22 @@
 | `CORE.html` | §4.15 `comment.ts` | 改 | 删除 hot 分支与 `CommentList2` 读取；`CommentSort` 最终由 §4.41 完全删除，评论只保留最新评论游标分页。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 评论排序先删除“点赞”，随后由 §4.41 删除“最新 / 最旧”切换，只显示“评论”标题；若展示热评，应在评论列表外单独说明。 |
 | `EVOLVE.md` | — | 改 | 删除“评论按点赞排序”的要求；如需热评，改为独立的附加模块需求。 |
+
+实际操作（2026-11-11，分支 `doc/comment-hot-sort-removal`）：
+
+- `PROVIDER.html` §4.3 `QqCommentList`：补充注释说明上游没有按点赞排序参数、`GetHotCommentList` 返回业务码 10000，`CommentList2` 是仅首屏的热评附加模块且应用不读取；映射行同步注明不读取 `CommentList2` / `WithHot`。
+- `CORE.html` §4.15 `comment.ts`：评论读取说明改为只保留最新评论、不提供按点赞排序，并明确不读取 `CommentList2` / `WithHot`。
+- `USER.html` §5.2.5 歌词与评论：补充评论区不展示热评附加模块。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 PROVIDER / CORE / USER。
+
+验证：
+
+- 对照 `src/main/api/comment.ts`：评论读取只调用 `music.globalComment.CommentRead / GetNewCommentList`，没有 `GetHotCommentList`、`WithHot` 或 `CommentList2` 读取。
+- 对照 `src/shared/types.ts` / `src/main/api/comment.ts`：没有 `CommentSort`，`getComments(songId, cursor?)` 只保留最新评论游标。
+- 对照 `src/renderer/components/CommentsPanel.vue`：工具栏只显示“评论”，没有排序切换。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.29 歌词 / 评论改为弹出层并由播放条封面开关
 

@@ -756,10 +756,16 @@ interface QqCommentLikeResult {
 }
 
 interface QqCommentList {
+  // 上游没有按点赞排序参数；GetHotCommentList 返回业务码 10000。
+  // WithHot=1 的 CommentList2 是仅首屏的热评附加模块，不是可分页评论列表，应用不读取。
   CommentList?: {
     Comments?: QqComment[];
     Total?: number;
     HasMore?: number;
+  };
+  CommentList2?: {
+    Comments?: QqComment[];
+    Total?: number;
   };
 }
 
@@ -863,7 +869,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqCommentList</code></td>
     <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> / <code>IsPraised</code> / <code>IsLiked</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
-    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。评论区只提供最新评论读取，不提供“最旧”排序。</td>
+    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。评论区只提供最新评论读取，不提供“最旧”排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，上游没有按点赞排序参数。</td>
   </tr>
   <tr>
     <td><code>QqVipData</code></td>
