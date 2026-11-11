@@ -813,7 +813,7 @@
 
 ## 4. ISSUES 未决项修复记录
 
-### 4.1 播放条合并为单轨进度条并补齐缓冲进度
+### 4.1 播放条合并为单轨进度条并补齐缓冲进度 [已解决]
 
 问题描述：ISSUES 第一项指出播放条实际渲染成两条：播放进度用 `<input class="range">` 的渐变背景表示，缓存进度又在其下单独渲染一条 2px 细线，视觉上分成两行。同时该细线只消费主进程 `audioCache:progress` 的完整响应进度；一旦上游对 `Range` 请求返回局部 206，协议层不会上报进度，界面就长期没有缓冲呈现。ISSUES 要求改成同一条进度条：1 个背景 + 2 个 overlay，分别是缓冲进度与播放进度。
 
@@ -839,6 +839,25 @@
 | `CORE.html` | §4.29 `src/renderer/stores/player.ts` | 改 | 补 `bufferedMs` 状态、切歌清零与暴露给播放条。 |
 | `USER.html` | §5.2.3 播放条 · 进度条 | 改 | 描述单条进度条的背景 / 缓冲 / 播放三层结构；tooltip 改为“缓冲 N% / 缓存完成”。 |
 | `EVOLVE.md` | #3 播放条可视化缓存进度 | 改 | 把“进度条下方增加细缓存进度线”改为“在单条进度条内叠加缓冲 overlay”。 |
+
+实际操作（2026-11-11，分支 `doc/playerbar-buffer-overlay`）：
+
+- `CORE.html` §4.40 `PlayerBar.vue`：删除“下方细缓存进度线”描述，改为单轨 `.progress-track` + `.progress-buffer` / `.progress-played` 两个 overlay + 透明 `.progress-range`；缓冲宽度取 `max(cachePercent, bufferedPercent)`，tooltip 按已下载 / 缓存完成 / 缓冲百分比显示；空状态改为“进度与缓冲 overlay 为 0 并隐藏”。
+- `CORE.html` §4.49 `styles/main.css`：把缓存进度细线说明改为 `.progress-track` / `.progress-buffer` / `.progress-played` / `.progress-range` 单轨样式，缓冲使用 `--buffer`，播放使用 `--accent`。
+- `CORE.html` §4.27 `audio/engine.ts`：签名补 `onBufferChange?(bufferedMs)`，并补 `progress` / `loadedmetadata` / `canplay` / `seeked` 读取 `audio.buffered`、`emptied` 归零的事件约定。
+- `CORE.html` §4.29 `stores/player.ts`：签名补 `readonly bufferedMs`，并说明切歌前清零、播放条用它计算缓冲 overlay。
+- `CORE.html` §5.18 音频缓存进度：同步流程图，把“更新缓存进度线”改为“更新缓冲 overlay（与 `audio.buffered` 取较大值）”。
+- `USER.html` §5.2.3 播放条：补充单条进度条的背景 / 缓冲 / 播放三层结构、范围输入覆盖定位、两侧时间与 tooltip；空状态同步改为缓冲 overlay。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/PlayerBar.vue`：`bufferPercent = Math.max(cachePercent, bufferedPercent)`，模板渲染 `.progress-buffer` 与 `.progress-played`，`.progress-range` 只负责 seek；`bufferLabel` 在已下载 / 缓存完成 / 其他情况下分别输出对应文案。
+- 对照 `src/renderer/audio/engine.ts`：`onBufferChange` 为可选回调，`progress` / `loadedmetadata` / `canplay` / `seeked` 调用 `reportBuffered()`，`emptied` 上报 0。
+- 对照 `src/renderer/stores/player.ts`：暴露 `bufferedMs`，`onBufferChange` 写入，切歌加载前清零。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.2 播放模式改为“按钮即当前项”的 revealer
 

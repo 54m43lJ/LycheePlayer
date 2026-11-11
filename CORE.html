@@ -1082,6 +1082,7 @@ export default router;
 <pre><code>export interface AudioEngineHandlers {
   onTimeUpdate(positionMs: number): void;
   onDurationChange(durationMs: number): void;
+  onBufferChange?(bufferedMs: number): void;
   onPlay(): void;
   onPause(): void;
   onEnded(): void;
@@ -1107,6 +1108,7 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine;
   <li>播放源支持 <code>lychee-audio://</code> 本地协议 URL；缓存命中由主进程协议提供。</li>
   <li><code>seek</code> 必须直接设置 <code>currentTime</code>；只有 <code>duration</code> 为有限正数时才 clamp，未知或 <code>Infinity</code> / <code>NaN</code> 时仍应尝试定位，异常由实现捕获忽略。这样未缓存流在 duration 未知时也能立即 seek。</li>
   <li><code>onDurationChange</code> 只上报有限且大于 0 的时长；未知时长由播放器保留歌曲元数据时长。</li>
+  <li><code>onBufferChange</code> 为可选回调；实现监听 <code>progress</code> / <code>loadedmetadata</code> / <code>canplay</code> / <code>seeked</code>，读取 <code>audio.buffered</code> 所有区间 <code>end</code> 的最大值并换算为毫秒上报；<code>emptied</code> 上报 0。</li>
 </ul>
 
 <h3 id="c4-28">4.28 src/renderer/stores/auth.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1152,6 +1154,7 @@ interface PlayerStore {
   readonly status: 'stopped' | 'playing' | 'paused';
   readonly positionMs: number;
   readonly durationMs: number;
+  readonly bufferedMs: number;
   readonly volume: number;
   readonly mode: PlayMode;
   readonly quality: Quality;
@@ -1194,6 +1197,7 @@ interface PlayerStore {
 </code></pre>
 <ul class="note">
   <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，播放队列面板只绑定 <code>queue</code>。<code>addNext(song)</code> 只把歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>，不切歌、不写历史；无 <code>current</code> 时直接以该歌曲开始播放。</li>
+  <li><code>bufferedMs</code> 保存引擎上报的已缓冲毫秒数，切歌加载新曲前清零；播放条用它计算缓冲 overlay 百分比，并与缓存完成度取较大值。</li>
   <li><code>playNext()</code> 负责手动下一首与自动续播：确定切换到下一首（含列表循环回绕）时，先把原 <code>current</code> 追加到 <code>playHistory</code>，再调用 <code>playAt()</code>；到队尾停止或单曲循环重播不写入历史。<code>playAt()</code> 只做低层定位与加载，不写历史。</li>
   <li><code>startPlaylistPlayback</code> / <code>appendPlaylistQueue</code> / <code>replacePlaylistQueue</code> 维护 <code>queueSource</code> 与 <code>queueBuilding</code>；队列构建由 playlist store 在“歌单快照 → 队列”边界按 <code>playable !== false</code> 过滤，播放器只负责追加 / 替换，不做检测或清理。未完成快照前只允许一次临时快照；最终快照按签名比较后替换，保留手动“下一首播放”的歌曲、当前曲、进度与历史。</li>
   <li><code>onError</code> 对同一歌曲最多每 30 秒自动刷新一次播放链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”并暂停。当前曲不可播（<code>NO_STREAM</code>）时由播放条沿队列向后尝试，内部计数连续不可播次数；达到 <code>NO_STREAM_SKIP_LIMIT</code> 后停止并提示检查登录 / 风控，<code>playList</code> / <code>playNext</code> / <code>previous</code> / <code>setQuality</code> 与成功加载会清零计数。</li>
@@ -1385,7 +1389,7 @@ const emit = defineEmits&lt;{
   <li>点击封面调用 <code>router.push('/lyrics')</code> 进入歌词 / 评论页；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首失败后停止，不读取探测结果。</li>
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>assetStates</code> 的三态渲染（未缓存未下载 / 已缓存 / 已下载），tooltip 显示“已缓存 FLAC / 已下载 320K / 下载”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
-  <li>播放进度条下方增加一条细缓存进度线，订阅 <code>audioCache.onProgress</code>，按当前 <code>songMid + quality</code> 匹配；缓存完成显示满格 / 对勾，关闭播放缓存时隐藏。缓存进度不读取下载 store，与下载进度相互独立。</li>
+  <li>播放进度条为单轨结构：<code>.progress-track</code> 背景轨上叠加 <code>.progress-buffer</code> 缓冲层与 <code>.progress-played</code> 播放层，透明 <code>.progress-range</code> 覆盖在轨道上只负责拖动与点击定位。缓冲宽度取 <code>max(cachePercent, bufferedPercent)</code>：缓存进度按当前 <code>songMid + quality</code> 匹配，已下载歌曲按 100%；HTML5 <code>audio.buffered</code> 由 <code>onBufferChange</code> 上报，切歌清空。tooltip 在已下载 / 缓存完成时显示“已下载到本机” / “缓存完成”，否则显示“缓冲 N%”；无歌曲或缓冲为 0 时只保留灰轨，不渲染 overlay。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
   <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭；点击按钮本身按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换，键盘焦点可打开弹层，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
   <li>播放模式菜单用 <code>modeOpenTimer</code> / <code>modeCloseTimer</code> 分别管理 120ms 打开与 200ms 延迟关闭；Esc 走 <code>closeMenus()</code>，会清空模式、音质与音量的待执行定时器。挂载时注册 document 的 <code>click</code>（捕获阶段）与 <code>keydown</code>，<code>onBeforeUnmount</code> 清除模式打开 / 关闭定时器并移除这两个监听，避免卸载后回调操作旧 ref 或重复注册。</li>
@@ -1393,7 +1397,7 @@ const emit = defineEmits&lt;{
   <li>收藏按钮为特殊 revealer：点击按钮调用 <code>playlist-edit.toggleFavorite()</code>；<code>likeWrap</code> 悬停 / 聚焦 120ms 打开、离开 200ms 关闭，弹层只有一个“加入歌单”图标按钮，点击后通过 <code>Teleport</code> 渲染 <code>PlaylistPicker</code> 并传入当前曲目 mid；没有模式切换。</li>
   <li><code>useRevealerTouch</code> 为播放模式、音质与收藏三个 revealer 提供触屏手势：从按钮开始纵向滑动超过 8px 才打开弹层并捕获指针，按选项中点与手指 Y 距离高亮最近项；松开确认，取消则关闭；滑动后的 click 在容器捕获阶段抑制。轻点不触发手势，保留原有 click 行为。</li>
   <li>音量条为特殊个例：触屏在音量按钮上纵向拖动超过 4px 后进入手势，按 <code>(startY - clientY) / 120</code> 的 delta 叠加到起始音量并夹紧到 0–1，不按手指绝对位置定位；拖动时在窄屏打开音量弹层，松开后关闭。轻点仍切换静音，滑动后的 click 被抑制。</li>
-  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
+  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓冲 overlay 为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
 </ul>
 
 <h3 id="c4-41">4.41 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1486,7 +1490,7 @@ const emit = defineEmits&lt;{
   <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。评论列表使用两行网格，正文完整展示、不使用行数截断；<code>.comments-toolbar</code> 不画下边框，右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，滚动区底部留出按钮空间。</li>
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
   <li>≤900px 侧栏改为单列 grid + 覆盖式抽屉，不再保留 64px / 56px 常驻图标栏；抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code>，默认隐藏，打开时覆盖内容区并显示 backdrop，不压缩主内容。560px 只进一步收窄抽屉宽度。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
-  <li>播放进度条下方叠加一条 2px 缓存进度线，位于播放进度与时间之间；使用独立的 accent 弱色，完成态显示满格 / 对勾，关闭缓存时整条隐藏；不改变播放进度线样式。</li>
+  <li><code>.progress-stack</code> 内为单轨进度条：<code>.progress-track</code> 提供背景与圆角，<code>.progress-buffer</code> 使用独立的 <code>--buffer</code> 弱色，<code>.progress-played</code> 使用 <code>--accent</code>，透明 <code>.progress-range</code> 绝对覆盖并位于最上层。删除旧 <code>.cache-progress</code> 细线；无歌曲时轨道降低透明度且不渲染 overlay。</li>
   <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页每个分区使用 flexbox 横向排列固定宽度条目、纵向 3 行滚动，条目文本溢出时走跑马灯。</li>
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
 </ul>
@@ -2583,7 +2587,7 @@ views/DiscoverView::onBeforeUnmount()
 │   ├── 写缓存
 │   └── webContents.send('audioCache:progress', progress)          // 300ms 节流
 │       └── components/PlayerBar::onProgress()
-│           └── 按当前 songMid + quality 更新缓存进度线
+│           └── 按当前 songMid + quality 更新缓冲 overlay（与 audio.buffered 取较大值）
 └── 判断局部 206 → 只透传，不写缓存、不推进完成度
 </code></pre>
 <ul class="note">
