@@ -1847,7 +1847,7 @@
 
 状态：已解决。
 
-### 4.22 歌手简介过长时提供展开 / 收起
+### 4.22 歌手简介过长时提供展开 / 收起 [已解决]
 
 > 后续修正：§4.44 已把简介折叠逻辑抽取到 `components/CatalogDescription.vue`，`ArtistView.vue` 不再保留 `descRef` / `descExpanded` / `descOverflow` / `measureDesc()` / `toggleDesc()`；本节关于这些局部实现的描述已被组件化取代，交互与溢出判断规则不变。
 
@@ -1876,6 +1876,22 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.catalog-desc-block`、`.catalog-desc.clamped` 与 `.catalog-desc-toggle` 样式；块内简介取消自身宽度与间距。 |
 | `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 改 | 歌手页简介超过 4 行时折叠并显示“展开”，展开后可“收起”；短简介不显示切换按钮。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 补歌手简介折叠与展开 / 收起交互要求。 |
+
+实际操作（2026-11-11，分支 `doc/catalog-description-fold`）：
+
+- `CORE.html` §4.73 `ArtistView.vue`：按后续修正记录为渲染 `CatalogDescription`：默认折叠 4 行、按 `scrollHeight > clientHeight + 1` 判断溢出、仅溢出时显示“展开 / 收起”、`ResizeObserver` 重新测量、文本变化重置折叠；短简介不显示按钮。
+- `CORE.html` §4.49 `styles/main.css`：补 `.catalog-desc-block`、`.catalog-desc.clamped` 与 `.catalog-desc-toggle` 样式，块内简介取消自身宽度与外边距。
+- `USER.html` §5.2.8 页面表 · 歌手页 / 专辑页行：补简介超过 4 行时折叠、可展开 / 收起，短简介不显示切换按钮。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/CatalogDescription.vue`：默认 `expanded=false`，`measure()` 使用 `scrollHeight > clientHeight + 1`，`ResizeObserver` 监听尺寸，`watch(text)` 重置展开状态。
+- 对照 `src/renderer/styles/main.css`：`.catalog-desc-block` 为 `max-width: 900px`，`.catalog-desc.clamped` 为 4 行 `-webkit-line-clamp`，`.catalog-desc-toggle` 为 accent 文字 + 透明背景。
+- 对照 `src/renderer/views/ArtistView.vue` / `AlbumView.vue`：均在 `description` 非空时渲染 `CatalogDescription`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.23 下载文件改为“歌名-歌手-专辑.格式”命名
 

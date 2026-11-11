@@ -1506,6 +1506,7 @@ const emit = defineEmits&lt;{
   <li>深色与浅色 token 定义在 <code>:root</code> / <code>[data-theme]</code>；视觉契约见 <a href="USER.html#u5">USER §5</a>。</li>
   <li>主题 token 增 <code>--shadow-color</code>（深色 <code>var(--text)</code> 20%、浅色 14% 混色）与统一缩放后的 <code>--shadow-sm: 0 2px 6px</code>、<code>--shadow: 0 5px 16px</code>、<code>--shadow-lg: 0 7px 22px</code>、<code>--shadow-up: 0 -4px 12px</code>、<code>--shadow-left: -8px 0 24px</code>、<code>--shadow-right: 8px 0 24px</code>、<code>--shadow-handle: 3px 0 10px</code>。</li>
   <li>删除空状态占位封面的虚线边框；品牌、按钮、封面 / 头像、弹层、面板、Toast、模态框、抽屉与拖拽把手等全部投影改用上述 fg 阴影 token。焦点环（<code>0 0 0 Npx</code>）、输入框 inset 高光与遮罩纯背景不属于投影，保持独立。</li>
+  <li><code>.catalog-desc-block</code> 限宽 900px 并承担底部间距；块内 <code>.catalog-desc</code> 取消自身宽度与外边距；<code>.catalog-desc.clamped</code> 为 4 行 <code>-webkit-line-clamp</code>；<code>.catalog-desc-toggle</code> 使用 accent 文字、透明背景，悬停加下划线。</li>
   <li>组件样式与响应式断点也在同一文件维护。</li>
   <li>布局最小阈值由 <code>--layout-min-width</code>（当前 <code>420px</code>）与 <code>--layout-min-height</code>（<code>--player-height + 170px</code>）统一声明；<code>.app-shell</code> 同时设置 <code>min-width</code> / <code>min-height</code>，<code>body</code> 使用 <code>overflow: auto</code> 提供整窗双向滚动。低于阈值时布局停止压缩，侧栏导航内部纵向滚动、账号入口固定、播放条保持第二行；内容区仍独立滚动。</li>
   <li>按钮文字不换行：<code>.btn</code> 使用 <code>white-space: nowrap</code>；歌单操作区 <code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，子按钮 <code>flex: 0 0 auto</code> 保持内容宽度，空间不足时整组换行；≤900px 媒体查询不再重复声明 <code>flex-wrap</code>。</li>
@@ -2053,6 +2054,7 @@ interface DownloadStore {
 </code></pre>
 <ul class="note">
   <li>按路由参数调用 <code>artist.get(mid, offset, sort)</code> 加载歌手信息与歌曲，<code>sort</code> 默认 <code>hot</code>；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
+  <li>简介非空时渲染 <code>CatalogDescription</code>：默认折叠为 4 行（<code>-webkit-line-clamp</code>），用 <code>scrollHeight &gt; clientHeight + 1</code> 判断是否溢出，仅溢出时显示“展开 / 收起”并同步 <code>aria-expanded</code>；<code>ResizeObserver</code> 在尺寸变化时重新测量，<code>text</code> 变化时重置为折叠。短简介不显示切换按钮。</li>
   <li>歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；不可播标记与最高音质沿用 <code>useAvailability</code>。</li>
   <li>歌曲标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；列表区显示加载态，滚动位置回到页面顶部；失败时回退原排序并保留旧列表。滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
   <li>分页固定 50 首/页；根节点 <code>pageRef</code> 通过 <code>closest('.main')</code> 找到外层滚动容器，注册 <code>passive</code> 的 <code>scroll</code> 监听，距底部小于 <code>SCROLL_LOAD_THRESHOLD = 160px</code> 且 <code>hasMore=true</code>、当前没有首屏或追加加载时自动调用 <code>load(false)</code>，卸载时移除监听。页面不提供“加载更多”按钮，底部按状态显示 spinner + “正在加载更多” / “继续向下滚动加载更多”，无更多歌曲时显示“已经到底了”。加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
