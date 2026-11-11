@@ -1744,7 +1744,7 @@
 
 状态：已解决。
 
-### 4.20 播放模式按钮点击遍历与顺序播放图标区分
+### 4.20 播放模式按钮点击遍历与顺序播放图标区分 [已解决]
 
 问题描述：ISSUES 要求播放模式按钮点击时按预设顺序遍历模式，而不是停留在当前模式；同时顺序播放图标与播放队列图标都使用 `list`（左侧三个点 + 三条横线），视觉上难以区分，要求把左侧三个点改成向下的长箭头。
 
@@ -1774,6 +1774,23 @@
 | `USER.html` | §5.2.3 播放条 · 播放模式 | 改 | 点击按钮按“顺序 / 列表循环 / 单曲循环 / 随机”依次切换；悬停展开菜单可直接选择其它模式。 |
 | `USER.html` | §5.2.3 播放条 · 播放队列入口 | 改 | 播放队列继续使用三点 + 横线图标，与顺序播放的向下箭头图标区分。 |
 | `EVOLVE.md` | #9 播放模式 | 改 | 补点击遍历顺序与 `sequence` 图标区分要求。 |
+
+实际操作（2026-11-11，分支 `doc/sequence-icon-cycle`）：
+
+- `CORE.html` §4.36 `AppIcon.vue`：补充 `sequence` 为左侧向下长箭头 + 三条横线，`list` 专用于播放队列（左侧三点 + 三条横线）。
+- `CORE.html` §4.40 `PlayerBar.vue`：明确按钮点击按固定顺序遍历、`MODE_ICON.sequence` 使用 `sequence` 专用图标，菜单中的顺序播放项同用该图标。
+- `CORE.html` §4.29 `stores/player.ts`：`cycleMode()` 改为说明供播放模式按钮点击使用，顺序为 `sequence → repeat-all → repeat-one → shuffle → sequence`。
+- `USER.html` §5.2.3 播放条：播放模式补充“向下长箭头 + 三条横线”图标；播放队列入口明确继续使用“左侧三点 + 三条横线”图标。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/AppIcon.vue`：`sequence` 为 `M9 6h11` / `M9 12h11` / `M9 18h11` / `M4 3v16` / `M1.5 16.5 4 19l2.5-2.5`；`list` 为三条横线 + 三个点。
+- 对照 `src/renderer/components/PlayerBar.vue`：`MODE_ICON.sequence = 'sequence'`，按钮点击调用 `cyclePlayMode()`。
+- 对照 `src/renderer/stores/player.ts`：`cycleMode()` 使用 `MODES[(currentIndex + 1) % MODES.length]`，顺序固定。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.21 空播放条封面去掉边框并统一收敛全部阴影
 
