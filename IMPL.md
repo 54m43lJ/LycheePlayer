@@ -1936,7 +1936,7 @@
 
 状态：已解决。
 
-### 4.24 侧栏拖拽手势限定窄屏，并消除与文本选择的冲突
+### 4.24 侧栏拖拽手势限定窄屏，并消除与文本选择的冲突 [已解决]
 
 问题描述：ISSUES 指出在歌手详情页选中歌手介绍文字时，界面会突然变暗，且只有某些文本选中时发生。根因是 `App.vue` 的全局侧栏滑动手势：`pointerdown` 记录起点，`pointerup` 在水平位移超过 60px 时打开 / 关闭侧栏。用户在文字上向右拖动选择文本时，同一手势同时被判定为“向右拉出侧栏”，侧栏打开后 `.sidebar-backdrop` 覆盖主界面，看起来就像界面突然变暗；是否触发取决于拖动距离和方向。
 
@@ -1964,6 +1964,21 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 增窄屏非触屏 `user-select: none` 规则，输入框 / 文本域恢复可选中。 |
 | `USER.html` | §5.2.1 窗口与布局 | 改 | 明确宽屏不提供主界面拖拽手势；窄屏触屏长按选择文本、拖动切换侧栏；窄屏鼠标端不支持文本选择。 |
 | `EVOLVE.md` | #11 优化左侧导航 | 改 | 补“拖拽手势仅窄屏启用”“触屏长按选择优先”“窄屏非触屏禁用文本选择”约束。 |
+
+实际操作（2026-11-11，分支 `doc/sidebar-drag-narrow-selection`）：
+
+- `CORE.html` §4.23 `App.vue`：补充主界面拖拽手势仅 ≤900px 启用；触屏 `pointerup` 存在非折叠选区时跳过侧栏切换；`pointercancel` 清理拖拽起点。
+- `CORE.html` §4.49 `styles/main.css`：补窄屏非触屏 `user-select: none` 规则，输入框与文本域恢复 `user-select: text`，宽屏不受影响。
+- `USER.html` §5.2.1 窗口与布局：新增“侧栏手势”行，明确宽屏不响应拖拽、窄屏触屏长按选择优先、窄屏鼠标端禁用文本选择。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/App.vue`：`narrowQuery = matchMedia('(max-width: 900px)')`；`onPointerDown` 在 `!narrowQuery.matches` 时直接返回；`onPointerUp` 在 `pointerType === 'touch' && hasSelectedText()` 时返回；`pointercancel` 调用 `onPointerCancel`。
+- 对照 `src/renderer/styles/main.css`：`@media (max-width: 900px) and (hover: hover) and (pointer: fine)` 对 `.app-shell` 设置 `user-select: none`，`input` / `textarea` 恢复 `user-select: text`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.25 歌曲探测改用批量详情接口
 

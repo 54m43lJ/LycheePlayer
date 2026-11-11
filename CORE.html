@@ -1070,6 +1070,7 @@ export function destroyTray(): void;
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
   <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
+  <li>主界面拖拽手势仅 ≤900px 启用：<code>pointerdown</code> 在宽屏直接返回；触屏 <code>pointerup</code> 若存在非折叠选区则跳过侧栏切换，长按选择文本优先；<code>pointercancel</code> 清理拖拽起点。窄屏非触屏由 §4.49 的 CSS 禁用文本选择。</li>
   <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。</li>
   <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
 </ul>
@@ -1518,6 +1519,7 @@ const emit = defineEmits&lt;{
   <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。<code>.lyrics-page-list</code> 水平 padding 为 0，<code>.lyric-line</code> 水平居中、左右 padding 与左边框均为 0，高亮背景条铺满整行，不显示左侧强调边。评论列表使用两行网格，正文完整展示、不使用行数截断；<code>.comments-toolbar</code> 不画下边框，右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，滚动区底部留出按钮空间。</li>
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
   <li>≤900px 侧栏改为单列 grid + 覆盖式抽屉，不再保留 64px / 56px 常驻图标栏；抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code>，默认隐藏，打开时覆盖内容区并显示 backdrop，不压缩主内容。560px 只进一步收窄抽屉宽度。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
+  <li>窄屏非触屏（<code>(max-width: 900px) and (hover: hover) and (pointer: fine)</code>）对 <code>.app-shell</code> 设置 <code>user-select: none</code>，输入框与文本域恢复 <code>user-select: text</code>；宽屏不受影响。</li>
   <li><code>.progress-stack</code> 内为单轨进度条：<code>.progress-track</code> 提供背景与圆角，<code>.progress-buffer</code> 使用独立的 <code>--buffer</code> 弱色，<code>.progress-played</code> 使用 <code>--accent</code>，透明 <code>.progress-range</code> 绝对覆盖并位于最上层。删除旧 <code>.cache-progress</code> 细线；无歌曲时轨道降低透明度且不渲染 overlay。</li>
   <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页每个分区使用 flexbox 横向排列固定宽度条目、纵向 3 行滚动，条目文本溢出时走跑马灯。</li>
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
