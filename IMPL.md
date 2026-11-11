@@ -2872,7 +2872,7 @@
 
 状态：已解决。
 
-### 4.40 评论区取消正文截断并修复分页游标
+### 4.40 评论区取消正文截断并修复分页游标 [已解决]
 
 > 后续修正：§4.41 已删除“最旧”排序与 `CommentSort`，本节“最旧排序继续在合并结果上本地重排”的结论失效；游标分页、`SeqNo` 精度、正文不截断与按 id 去重仍然有效。
 
@@ -2926,6 +2926,27 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 删除 `.comment-text` 的 `-webkit-line-clamp` 与 `overflow: hidden`，正文完整展示。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 评论正文完整展示、不截断；滚动到底加载更多。 |
 | `EVOLVE.md` | #5 | 改 | 补“长评论完整展示”与“使用 `LastCommentSeqNo` 游标分页”的要求。 |
+
+实际操作（2026-11-11，分支 `doc/comment-pagination-cursor`）：
+
+- `PROVIDER.html` §4.1 歌曲评论行 / §4.3 `QqCommentList`：核对后已包含 `SeqNo`、`PageNum` 不生效、使用最后一条评论 `SeqNo` 作为 `LastCommentSeqNo`、19 位整数按字符串保留精度与 25 条单页上限，本次无需再改。
+- `CORE.html` §4.1 `types.ts` / §4.2 `ipc.ts`：核对后 `CommentPage` 已含 `nextCursor?: string`，`comment.get(songId, cursor?)` 已使用游标参数，本次无需再改。
+- `CORE.html` §4.15 `api/comment.ts`：核对后已使用 `LastCommentSeqNo`、`PageNum` 固定 0、`hasMore` 要求游标非空、`stringFields: ['SeqNo']` 保留精度，本次无需再改。
+- `CORE.html` §4.8 `api/client.ts`：签名补 `UpstreamRequest.stringFields` 与 `MusicuOptions.stringFields`；note 说明在 `JSON.parse` 前把指定字段裸数字转字符串，评论请求使用 `['SeqNo']`。
+- `CORE.html` §4.42 `CommentsPanel.vue`：分页说明补组件使用 `cursor` 状态保存 `nextCursor`、不保留 `pageNo`；正文完整展示说明保留。
+- `CORE.html` §4.49 `styles/main.css`：评论样式说明明确 `.comment-text` 不使用 `-webkit-line-clamp` / `overflow: hidden`，正文完整换行展示。
+- `USER.html` §5.2.5 歌词与评论：核对后已说明正文完整展示、不截断，滚动到底自动加载下一页，本次无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 PROVIDER / CORE / USER。
+
+验证：
+
+- 对照 `src/main/api/comment.ts`：`getComments(songId, cursor)` 传 `LastCommentSeqNo: cursor`、`PageNum: 0`，`nextCursor = String(raw.at(-1)?.SeqNo ?? '')`，`hasMore = Boolean(list.HasMore) && /^\d+$/.test(nextCursor)`。
+- 对照 `src/main/api/client.ts`：`UpstreamRequest` / `MusicuOptions` 均有 `stringFields?: string[]`，解析前执行 `stringifyNumberFields`；评论请求使用 `stringFields: ['SeqNo']`。
+- 对照 `src/renderer/components/CommentsPanel.vue`：使用 `cursor` ref 与 `page.nextCursor` 加载下一页，不保留 `pageNo`；追加前按 `id` 去重。
+- 对照 `src/renderer/styles/main.css`：`.comment-text` 不再有 `-webkit-line-clamp` / `overflow: hidden`，正文完整展示。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.41 取消最旧排序，改为评论区跳转顶部 / 底部
 
