@@ -2603,7 +2603,7 @@
 
 状态：已解决。
 
-### 4.36 添加到歌单写错 dirId / tid 导致 80092
+### 4.36 添加到歌单写错 dirId / tid 导致 80092 [已解决]
 
 > 后续修正：§4.39 已把 80092 的处理收敛为写 API 返回 `{ changed: false }`，写后读回与刷新由渲染层 `refreshAfterWrite` 负责；本节原“写后读回若已达成目标状态则视为成功”的结论已失效，`dirId` / `tid` 契约不变。
 
@@ -2643,6 +2643,27 @@
 | `CORE.html` | §4.2 `ipc.ts` / `api/client.ts` | 改 | 未知上游错误需保留 `upstreamCode`，供写操作识别 80092 等业务状态。 |
 | `USER.html` | §5.3 错误与通知 | 改 | 80092 在统一刷新确认未变化时提示歌曲可能已在歌单中或歌单状态已变化。 |
 | `EVOLVE.md` | #14 | 不动 | 写接口细节由 CORE / PROVIDER 主责，本次仅修正参数契约。 |
+
+实际操作（2026-11-11，分支 `doc/playlist-dirid-tid`）：
+
+- `PROVIDER.html` §4.1 歌单增删歌曲行：补 `80092` 表示歌曲已存在 / 不存在等业务状态，不作为请求失败；`dirId` / `tid` 区分与 `AddPlaylist` 返回的 `result.dirId` / `result.tid` 说明原有内容已存在，本次核对。
+- `CORE.html` §4.1 `types.ts`：`PlaylistMeta` 增加可选 `dirId?: number`，注明它是当前账号目录 ID、公开歌单可能没有；`id` 仍是歌单标识。
+- `CORE.html` §4.1 note：补充 `id`（tid / disstid）与 `dirId` 不能互换。
+- `CORE.html` §4.12 `api/playlist.ts`：补 `listMine` 从 `dirId` / `dirid`、`CgiGetDiss` 从 `dirinfo.dirid` 回填 `dirId`；「我喜欢」固定 201，公开歌单缺失时保持 `undefined`；创建歌单的 `id = result.tid` / `dirId = result.dirId` 指向 §4.55。
+- `CORE.html` §4.8 `api/client.ts`：补 `mapUpstreamCode` 对未识别业务码返回 `UPSTREAM_CHANGED` 并保留原始 `upstreamCode`（如 80092），供写 API 与 `assertWrite` 识别“状态未变化”。
+- `CORE.html` §4.55 `api/playlist-write.ts`：现有 `dirId + tid` 写入、改名 / 删除先读详情 `dirId`、80092 视为 `changed:false` 与写后刷新职责已覆盖，本次核对无需再改。
+- `USER.html` §5.3 错误与通知：补 80092 在统一刷新确认未变化时提示“歌曲可能已在歌单中”或“歌单状态已变化”，不按请求失败处理、不反复重试。
+- `EVOLVE.md`：按原表“不动”未处理，仓库中也不存在该文件。
+
+验证：
+
+- 对照 `src/shared/types.ts`：`PlaylistMeta.dirId?: number` 存在，注释说明为写入接口的目录 ID。
+- 对照 `src/main/api/playlist.ts`：`toMeta` 从 `dirId / dirid` 回填 `dirId`，`CgiGetDiss` 从 `dirinfo.dirid` 回填；创建歌单见 `playlist-write.ts` 返回 `id = String(tid)`、`dirId = result.dirId`。
+- 对照 `src/main/api/playlist-write.ts`：`writeDetail` 使用 `dirId` + `numericId(id)`（tid）与 `v_songInfo`；改名 / 删除先 `readMeta` 取 `dirId`；`addSongs` / `removeSongs` 对 80092 返回 `changed:false`。
+- 对照 `src/main/api/client.ts`：`mapUpstreamCode` 未知码返回 `UPSTREAM_CHANGED` 且保留 `upstreamCode`；`playlist-write.ts` 的 `assertWrite` 同样保留 `retCode`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.37 原生删除确认替换为应用内确认框
 

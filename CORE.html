@@ -320,6 +320,8 @@ export type PlaylistKind = 'normal' | 'favorites';
 
 export interface PlaylistMeta {
   id: string;
+  /** 当前账号下的歌单目录 ID（写入接口的 dirId）；公开歌单可能没有。 */
+  dirId?: number;
   name: string;
   coverUrl: string;
   songCount: number;
@@ -622,7 +624,7 @@ export interface FlagsFile {
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
   <li><code>Comment</code> / <code>CommentPage</code> 是 <code>comment.get</code> 的跨 IPC 数据模型；原始字段映射见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
   <li><code>PlaylistDetail.songs</code> 是歌单当前已载入的歌曲；<code>playlist.get</code> 使用 <code>PlaylistPage</code> 分页返回，<code>playlist.getCached</code> / <code>playlist.saveCache</code> 使用整份 <code>PlaylistCacheEntry</code> / <code>PlaylistSnapshot</code>。</li>
-  <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。</li>
+  <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。<code>id</code> 是歌单标识（tid / disstid），<code>dirId</code> 是当前账号目录 ID（写入接口使用），两者不能互换；公开歌单可能没有 <code>dirId</code>。</li>
   <li><code>Lyric.format</code> 为 <code>lrc</code> / <code>qrc</code>；逐字行类型见 <a href="#c4-33">§4.33</a>。</li>
   <li><code>ProbeOptions</code> / <code>SongAvailability</code> 是 <code>song.probe</code> 的跨 IPC 模型；探测结果只更新歌单歌曲元数据。</li>
 </ul>
@@ -864,6 +866,7 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
   <li><code>fetchOnce</code> 在取令牌前后各调用一次 <code>assertUpstreamAvailable()</code>，排队期间进入截断也会在真正 fetch 前失败；<code>favorite.ts</code> 的签名写入与 <code>login.ts</code> 的 OAuth authorize 等绕过 <code>fetchOnce</code> 的请求，在取令牌后同样显式检查。</li>
   <li><code>musicu</code> 默认在 104009 时调用 <code>tripUpstreamBlock()</code>；vkey 通过 <code>deferBlock: true</code> 暂停截断，先尝试经典入口与 <code>UrlGetVkey</code> 备用入口，只有两个入口都返回 104009 才由 <code>song.ts</code> 触发截断，备用入口成功则不进入冷却。</li>
   <li><code>musicu</code> 在 <code>req_0.code</code> 为 1000 时优先读取 <code>data.retcode</code>，避免把 vkey 的 <code>104009 invalidq</code> 误判成登录过期；<code>mapUpstreamCode</code> 把 104009 映射为 <code>UPSTREAM_NETWORK</code> 并保留 <code>upstreamCode</code> 供 vkey 备用入口判断。</li>
+  <li><code>mapUpstreamCode</code> 对未识别的业务码统一返回 <code>UPSTREAM_CHANGED</code> 并保留原始 <code>upstreamCode</code>（例如 80092）；写 API 与 <code>assertWrite</code> 据此把 80092 识别为“状态未变化”，而不是普通失败。</li>
   <li><code>getGuid</code> 返回进程级稳定 GUID，供 vkey 请求使用。</li>
 </ul>
 
@@ -935,6 +938,7 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 <ul class="note">
   <li><code>fetchPlaylistPage</code> 只负责轻量首页 / 最近歌单校验；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
   <li>普通歌单的 <code>editable</code> 由 <code>canEdit(data)</code> 判定：未登录返回 <code>false</code>；<code>dirinfo.owndir === 1</code> 返回 <code>true</code>；字段缺失或为 0 时回退比较当前登录 <code>musicid</code> 与 <code>dirinfo.creator.musicid</code> / <code>dirinfo.host_uin</code>，匹配才可编辑。「我喜欢」固定 <code>editable: true</code>，公开 / 他人歌单为 <code>false</code>。</li>
+  <li><code>listMine</code> 从 <code>dirId</code> / <code>dirid</code> 回填 <code>PlaylistMeta.dirId</code>，<code>CgiGetDiss</code> 从 <code>dirinfo.dirid</code> 回填；「我喜欢」固定为 <code>201</code>，公开歌单缺失时保持 <code>undefined</code>。创建歌单的 <code>id</code> / <code>dirId</code> 取值见 <a href="#c4-55">§4.55</a>。</li>
   <li>固定收藏歌单 ID 统一引用 <code>FAVORITES_PLAYLIST_ID = 'liked'</code>（<a href="#c4-50">§4.50</a>），模块内不再保留本地 <code>FAVORITES_ID</code> 字面量；收藏分支判断与收藏歌单元数据都使用该共享常量。</li>
   <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin</code> 递增、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；任一分页失败、空页、覆盖不足或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>。</li>
   <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存按账号 + 歌单 ID 持久化，上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>。</li>
