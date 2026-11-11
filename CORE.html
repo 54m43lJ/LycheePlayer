@@ -984,7 +984,7 @@ export function unlikeComment(commentId: string): Promise&lt;CommentLikeResult&g
 </code></pre>
 <ul class="note">
   <li>评论读取未登录时匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>。点赞状态优先取 <code>IsPraised</code>，缺失时回退 <code>IsLiked</code>（仅兼容旧字段），两者都缺失按 <code>false</code>；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
-  <li><code>latest</code> 使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。上游 <code>PageSize</code> 实测上限为 25（26 起返回业务码 10000），应用固定每页 25 条。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留“最新”读取，不提供“最旧”或按点赞排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，热评附加模块不进入评论列表。</li>
+  <li>评论读取使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。上游 <code>PageSize</code> 实测上限为 25（26 起返回业务码 10000），应用固定每页 25 条。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留最新评论游标分页，不提供“最旧”或按点赞排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，热评附加模块不进入评论列表。</li>
   <li>点赞使用 <code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code>，参数 <code>{ comment_id, type: 3 | 4, uin }</code>（3 点赞、4 取消）；需要登录，响应的 <code>data.code</code> / <code>msg</code> / <code>subcode</code> 全为 0 才算成功。上游不返回点赞数量，<code>CommentLikeResult.likedCount</code> 为可选；返回的 <code>liked</code> 由请求 <code>type</code> 决定，前端乐观更新计数，失败时回滚。</li>
 </ul>
 
@@ -1385,7 +1385,7 @@ export function useToast(): {
 <pre><code>const props = withDefaults(defineProps&lt;{ name: string; size?: number }&gt;(), { size: 20 });
 </code></pre>
 <ul class="note">
-  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式由播放模式按钮本身表示；其中 <code>sequence</code> 为左侧向下长箭头 + 三条横线，<code>list</code> 专用于播放队列（左侧三点 + 三条横线）；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>，其中 <code>download-cached</code> 与普通下载图标同形（下载箭头 + 完整底线），缓存态由按钮的 24px surface 状态框表达，不使用带框或断线图标；添加到歌单使用 <code>playlist-add</code>（简单加号），下一首播放使用 <code>play-next</code>（横线 + 上箭头）。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
+  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式由播放模式按钮本身表示；其中 <code>sequence</code> 为左侧向下长箭头 + 三条横线，<code>list</code> 专用于播放队列（左侧三点 + 三条横线）；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>，其中 <code>download-cached</code> 与普通下载图标同形（下载箭头 + 完整底线），缓存态由按钮的 24px surface 状态框表达，不使用带框或断线图标；添加到歌单使用 <code>playlist-add</code>（简单加号），下一首播放使用 <code>play-next</code>（横线 + 上箭头）；评论区跳转使用 <code>to-top</code> / <code>to-bottom</code>（箭头 + 底线）。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
 </ul>
 
 <h3 id="c4-37">4.37 src/renderer/components/CoverArt.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1569,7 +1569,7 @@ const emit = defineEmits&lt;{
   <li><code>.icon-btn:disabled</code> 使用 <code>--faint</code> 颜色与 0.45 透明度，悬停不再改变颜色或背景；播放条空状态下播放 / 上一首 / 下一首 / 收藏 / 下载按钮统一灰化，音质按钮不受影响。</li>
   <li>窄屏音量弹层复用模式 revealer：<code>.volume-menu</code> 使用 <code>bottom: 0</code>、<code>width: 100%</code>、<code>padding-bottom: 34px</code>、9px 圆角、<code>--panel</code> 背景且无边框，<code>.volume-wrap.open</code> 时按钮以 <code>z-index</code> 浮在其底部；<code>.volume-slider</code> 高 96px，<code>.volume-track</code> 为 4px 圆角条并上下各留 10px，<code>.volume-fill</code> 用强调色填充，范围输入旋转成 34×76px 热区并用负 margin 归中。宽屏使用 <code>.volume-range-inline</code>，宽度 <code>clamp(56px, 6vw, 84px)</code>。删除旧 <code>.volume-popover</code> / <code>.vertical-range</code> 的 padding、边框与百分比文案。</li>
   <li><code>.lyrics-overlay</code> 固定在内容区：<code>position: fixed</code>、<code>top: 0</code>、<code>left: var(--sidebar-width)</code>、<code>right: 0</code>、<code>bottom: var(--player-height)</code>，<code>z-index: 25</code>，背景 <code>var(--bg)</code>；位于侧栏右侧、播放条下方（播放条 <code>z-index: 30</code>），窄屏侧栏宽度为 0 时铺满窗口。歌词 / 评论页面样式沿用原 <code>.lyrics-page*</code>。</li>
-  <li>歌词 / 评论弹出层：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。<code>.lyrics-page-list</code> 水平 padding 为 0，<code>.lyric-line</code> 水平居中、左右 padding 与左边框均为 0，高亮背景条铺满整行，不显示左侧强调边。评论列表使用两行网格，<code>.comment-text</code> 不使用 <code>-webkit-line-clamp</code> / <code>overflow: hidden</code>，正文完整换行展示；<code>.comments-toolbar</code> 不画下边框，右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，滚动区底部留出按钮空间。</li>
+  <li>歌词 / 评论弹出层：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。<code>.lyrics-page-list</code> 水平 padding 为 0，<code>.lyric-line</code> 水平居中、左右 padding 与左边框均为 0，高亮背景条铺满整行，不显示左侧强调边。评论列表使用两行网格，<code>.comment-text</code> 不使用 <code>-webkit-line-clamp</code> / <code>overflow: hidden</code>，正文完整换行展示；<code>.comments-toolbar</code> 不画下边框，<code>.comments-title</code> 提供“评论”标题样式；右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，<code>.comments-scroll</code> 底部 padding 72px，避免最后一条评论被按钮遮挡。</li>
   <li>播放队列头部按钮组 <code>.lyrics-head-actions</code> 使用 flex 水平排列、固定不收缩并与标题区两端对齐；清空 / 关闭按钮复用 <code>.icon-btn</code>，空队列时按 <code>.icon-btn:disabled</code> 灰化。列表底部不再保留 <code>.queue-footer</code> 或文字按钮样式。</li>
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
   <li>≤900px 侧栏改为单列 grid + 覆盖式抽屉，不再保留 64px / 56px 常驻图标栏；抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code>，默认隐藏，打开时覆盖内容区并显示 backdrop，不压缩主内容。560px 只进一步收窄抽屉宽度。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
@@ -2516,12 +2516,12 @@ app::requestSingleInstanceLock()
     │   ├── 查找活动行并滚动居中
     │   └── 判断点击 / 拖拽 / 滚轮 → player.seek(positionMs)
     └── components/CommentsPanel::watch(player.current)
-        ├── window.lychee.comment.get(songId, sort, pageNo)
+        ├── window.lychee.comment.get(songId, cursor)
         │   └── ipc::handle('comment.get')
-        │       └── api/comment::getComments(songId, sort, pageNo)
-        │           └── api/client::musicu('music.globalComment.CommentRead', 'GetNewCommentList', ...)
-        ├── 判断上游不支持排序 → 本地按 createdAtMs 重排
-        ├── 判断滚动到底 && hasMore → 加载下一页
+        │       └── api/comment::getComments(songId, cursor)
+        │           └── api/client::musicu('music.globalComment.CommentRead', 'GetNewCommentList', ..., stringFields: ['SeqNo'])
+        ├── 判断滚动到底 && hasMore && cursor → 加载下一页
+        ├── 判断点击“跳转到底部” → 串行 loadMore 直到无下一页 / COMMENT_LOAD_ALL_PAGE_MAX
         └── components/CommentsPanel::onLike(comment)
             ├── 乐观更新 liked / likedCount
             ├── window.lychee.comment.like(commentId)

@@ -2948,7 +2948,7 @@
 
 状态：已解决。
 
-### 4.41 取消最旧排序，改为评论区跳转顶部 / 底部
+### 4.41 取消最旧排序，改为评论区跳转顶部 / 底部 [已解决]
 
 > 后续修正：§4.42 实测单页上限为 25 条，并把 `COMMENT_LOAD_ALL_PAGE_MAX` 从 50 调整为 40；本节记录的是调整前的 20 条/页、最多 50 页，最终数值以 §4.42 与代码为准（25 × 40 ≈ 1000 条）。
 
@@ -2997,6 +2997,29 @@
 | `PROVIDER.html` | §4.3 `QqCommentList` | 改 | 删除最旧排序 / 旧版接口说明，只保留最新评论游标分页。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 删除最新 / 最旧排序，改为“评论”标题；增加右下角跳转顶部 / 底部按钮与跳转底部的补拉行为。 |
 | `EVOLVE.md` | #5 | 改 | 删除最旧排序要求；补跳转顶部 / 底部交互、补拉上限与取消约束。 |
+
+实际操作（2026-11-11，分支 `doc/comment-jump-buttons`）：
+
+- `CORE.html` §4.1 `types.ts` / §4.2 `ipc.ts`：核对后已无 `CommentSort` / `nextPage` / `pageNo`，`comment.get(songId, cursor?)` 只保留最新评论游标，本次无需再改。
+- `CORE.html` §4.15 `api/comment.ts`：评论读取说明改为“只保留最新评论游标分页”，删除残留的 `latest` 措辞；`GetNewCommentList` + `LastCommentSeqNo` 与 25 条单页上限保持不变。
+- `CORE.html` §4.36 `AppIcon.vue`：补 `to-top` / `to-bottom` 两个“箭头 + 底线”图标用于评论区跳转。
+- `CORE.html` §4.42 `CommentsPanel.vue`：核对后已说明工具栏只显示“评论”、右下角按钮按滚动位置出现、跳转底部串行补拉至 `COMMENT_LOAD_ALL_PAGE_MAX`、卸载 / 切歌 / 刷新时通过 token 取消，本次无需再改。
+- `CORE.html` §4.49 `styles/main.css`：补 `.comments-title` 标题样式与 `.comments-scroll` 底部 72px padding；保留 `.comments-toolbar` 无下边框、`.comments-jump` / `.comments-jump-btn` 圆形按钮说明。
+- `CORE.html` §4.50 `shared/constants.ts`：核对后 `COMMENT_LOAD_ALL_PAGE_MAX = 40` 已存在，本次无需再改。
+- `CORE.html` §5.9 歌词与评论调用树：`comment.get(songId, sort, pageNo)` 改为 `comment.get(songId, cursor)`，删除“按 createdAtMs 重排”分支，补“跳转到底部串行 loadMore 直到无下一页 / 上限”的判断行。
+- `PROVIDER.html` §4.3 `QqCommentList`：核对后已无最旧排序 / 旧版接口说明，只保留最新评论游标分页，本次无需再改。
+- `USER.html` §5.2.5 歌词与评论：核对后已说明“评论”标题、跳转顶部 / 底部按钮、跳转底部补拉与离开取消，本次无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / PROVIDER / USER。
+
+验证：
+
+- 对照 `src/renderer/components/CommentsPanel.vue`：工具栏只有“评论”标题与刷新；`cursor` 游标分页；右下角 `comments-jump` 按钮按 `scrollTop > 120` 与 `hasMore` / 未到底显示；跳转底部串行 `loadMore()` 至 `COMMENT_LOAD_ALL_PAGE_MAX`，token 变化后停止。
+- 对照 `src/main/api/comment.ts` / `src/shared/types.ts` / `src/shared/ipc.ts`：无 `CommentSort` / `nextPage` / `pageNo`，`comment.get(songId, cursor?)` 与 `nextCursor` 为唯一分页契约。
+- 对照 `src/renderer/components/AppIcon.vue`：存在 `to-top` / `to-bottom` 图标。
+- 对照 `src/shared/constants.ts`：`COMMENT_LOAD_ALL_PAGE_MAX = 40`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.42 评论单次拉取上限实测与批量参数调整
 
