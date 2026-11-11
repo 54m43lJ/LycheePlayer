@@ -768,6 +768,7 @@ function handle(
 <ul class="note">
   <li><code>registerIpc</code> 注册全部请求型通道、<code>app.quit</code> 与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>；<code>player:state</code> 同时分发到 MPRIS 与托盘。</li>
   <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程；<code>app.quit</code> 是单向消息，直接调用 <code>app.quit()</code>，不复用 <code>handle</code>。<code>handle</code> 支持 <code>{ silent: true }</code>：异常仍以 <code>IpcResult</code> 返回给渲染层，但不写 <code>[ipc]</code> 错误日志；背景 <code>song.probe</code> 使用该模式，避免可用性探测失败刷屏。</li>
+  <li><code>download</code> 命名空间用 <code>startMany</code> 取代批次接口，不提供批次级暂停 / 继续 / 删除 / 重试；<code>download.clearDirectory</code> 删除下载目录内容与任务记录，不影响播放缓存。</li>
 </ul>
 
 <h3 id="c4-6">4.6 src/main/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -880,6 +881,7 @@ function buildStreamUrl(purl: string): string;
   <li>vkey 请求先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>；若响应或 <code>data.retcode</code> 为 <code>104009</code>，再以相同 filename 尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
   <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>isVipUser()</code> 通用文案。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
+  <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。</li>
   <li>显示名优先 <code>title.trim()</code>，为空时回退 <code>name.trim()</code>；专辑名与歌手名同样 <code>trim()</code>，避免尾部空白把 VIP / 音质徽标推离标题。<code>title</code> 含 Explicit / Remix 等版本标签，<code>name</code> 是基础名；原始响应没有独立标签布尔字段。</li>
   <li>歌手映射：<code>singer[]</code> 成员只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空；只有 <code>name</code> 为空的成员被丢弃，不因缺少 <code>mid</code> 丢名字。列表响应缺名字时，歌曲进入可见列表后可用 <code>getDetail</code> 的 <code>track_info.singer[]</code> 补全；补全结果不改变播放队列。</li>
 </ul>
@@ -1716,13 +1718,14 @@ export function audioCacheStats(): Promise&lt;{ bytes: number; files: number }&g
 <h3 id="c4-59">4.59 src/main/media/audio-protocol.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function registerAudioProtocol(): void;
 export function audioProtocolUrl(filePath: string): string;
-export function audioStreamUrl(url: string, songMid: string, quality: Quality): string;
+export function audioStreamUrl(url: string, songMid: string, quality: Quality, filePath?: string): string;
 export function clearAudioTemp(): Promise&lt;void&gt;;
 export function readAudioFile(path: string): Promise&lt;Buffer&gt;;
 </code></pre>
 <ul class="note">
   <li>模块加载阶段调用 <code>protocol.registerSchemesAsPrivileged()</code> 注册 <code>lychee-audio</code>（<code>standard</code> / <code>secure</code> / <code>supportFetchAPI</code> / <code>stream</code> / <code>bypassCSP</code>）；<code>app.whenReady()</code> 后由 <code>registerAudioProtocol()</code> 调用 <code>protocol.handle()</code>。</li>
   <li>URL 只有两种：缓存文件 <code>lychee-audio://file/&lt;base64url(path)&gt;</code>；未缓存流 <code>lychee-audio://stream/&lt;uuid&gt;</code>。stream token 在主进程内映射上游 URL、<code>songMid</code> 与 <code>quality</code>，渲染进程永远拿不到上游链接。</li>
+  <li><code>audioStreamUrl</code> 可携带本地下载文件 <code>filePath</code>；<code>handleStream</code> 优先用该文件响应并立即上报 <code>complete: true</code> 的缓存进度，未命中本地文件才回源上游。</li>
   <li>token 只保存在进程内 Map，无持久化、无主动过期；应用重启后 token 失效，但缓存文件仍可通过 <code>file</code> 分支读取。</li>
   <li>渲染层取消读取时，协议处理必须同时 abort 上游 <code>net.fetch</code>：只 cancel body 可能把未读完的连接留在 socket 池，后续音频流复用该连接时会一直等到上游超时（约 10 秒）才报错重试。</li>
   <li>取消路径先调用 <code>abortUpstream()</code>，随后必须用 <code>reader.cancel(reason).catch(() =&gt; undefined)</code> 等待并吞掉取消 Promise。abort 或对端关闭后 <code>reader.cancel()</code> 会以 <code>net::ERR_CONNECTION_CLOSED</code> / <code>ERR_CONTENT_LENGTH_MISMATCH</code> 拒绝，不能使用 <code>void</code> 丢弃，否则会产生进程级未处理 Promise；只吞取消路径的关闭类拒绝，正常读取错误仍照常处理。</li>
@@ -1824,7 +1827,7 @@ export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
   <li>下载索引只有 <code>{ tasks: DownloadTask[] }</code>，按账号隔离并放在 <code>downloadDir</code> 下：<code>.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>。只持久化 <code>done</code> / <code>paused</code> 任务；启动时 <code>downloading</code> / <code>pending</code> 统一转为 <code>paused</code>，已丢失文件的 <code>done</code> 任务会被丢弃。</li>
   <li><code>loadedScope</code> 保护未加载下载模块的退出：从未加载时 <code>flushDownloads</code> / <code>saveIndex</code> 直接返回，避免写出空索引覆盖旧记录；切换账号前先清掉旧定时器并把旧账号索引落盘；退出时使用同步 <code>writeFileSync</code> + <code>renameSync</code> 写 <code>.part</code> 后原子替换。</li>
   <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；文件名由 <code>downloadFileName</code> 按“歌名-歌手-专辑”生成，多个歌手用顿号连接，缺失片段跳过，非法字符替换为 <code>_</code>，全空回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队占位路径仍使用 <code>safeName(songMid)</code>，最终路径在出队时生成；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
-  <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> 删除最终文件与 <code>.part</code>；<code>clearDownloadDirectory</code> 先中止活动下载、清空记录，再删除下载目录内容，并拒绝文件系统根目录、用户主目录及其上级目录。</li>
+  <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> 删除最终文件与 <code>.part</code>；<code>clearDownloadDirectory</code> 先中止活动下载、清空记录，再删除下载目录内容，并拒绝文件系统根目录、用户主目录及其上级目录；该操作不影响播放缓存。</li>
   <li><code>assetStates</code> 只读取可用性缓存（<code>peekAvailability</code>）与缓存 / 下载信息，不主动探测上游；未探测过的歌曲 <code>maxQuality</code> 为 <code>null</code>。<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
   <li>下载任务不受页面请求生命周期约束：任务由主进程队列持有，页面只订阅进度；离开页面不取消下载。这是页面请求取消约定的明确例外。</li>
 </ul>

@@ -1438,7 +1438,7 @@
 
 状态：已解决。
 
-### 4.15 整单下载彻底取消批次并复用统一队列
+### 4.15 整单下载彻底取消批次并复用统一队列 [已解决]
 
 问题描述：ISSUES 先要求整单下载与单曲下载共用队列、歌曲信息在出队时再拉取；后续又明确要求下载任务不按批次合并，完全取消“批次”概念。原实现虽然已经不再预取歌曲详情，但仍保留 `DownloadBatch`、`batchId` / `playlistId`、`startBatch` 与批次级暂停 / 继续 / 删除 / 重试，下载中心也按批次分组。
 
@@ -1491,6 +1491,31 @@
 | `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 下载目录行增加“清空目录”，确认后删除目录内已下载文件、封面、分片与记录；播放缓存独立清理。 |
 | `USER.html` | §5.2.8 页面结构 · 下载中心 | 改 | 下载中心只展示单一任务列表，不再按批次分组；顶部操作区提供“清空目录”（§4.31 改为完整页面后位置由底部移到顶部）。 |
 | `EVOLVE.md` | #2 下载队列 | 改 | 删除批次模型与批次控制，补充统一入队、出队时解析歌曲信息、已下载文件本地播放与清空下载目录约束。 |
+
+实际操作（2026-11-11，分支 `doc/download-unified-queue`）：
+
+- `CORE.html` §4.1 `types.ts`：核对后已无 `DownloadBatch`、`batchId` / `playlistId`、`DownloadSource = 'batch'` 与 `DownloadStorageInfo.batchCount`，本次无需再改。
+- `CORE.html` §4.60 `download/manager.ts`：核对后已有 `clearDownloadDirectory` 的中止、清空与根目录 / 主目录保护，补充“该操作不影响播放缓存”。
+- `CORE.html` §4.2 `ipc.ts`：补充 `download.startMany` 取代批次接口，`clearDirectory` 删除目录内容与记录且不影响播放缓存。
+- `CORE.html` §4.59 `audio-protocol.ts`：`audioStreamUrl` 签名补可选 `filePath`，说明 `handleStream` 优先读取本地下载文件并上报完成态缓存进度。
+- `CORE.html` §4.11 `api/song.ts`：补充 `getStreamUrls` 先查已下载文件，命中时跳过详情 / vkey。
+- `CORE.html` §4.40 `PlayerBar.vue`：核对后已说明“当前曲已下载时缓存进度按 100%”与 tooltip“已下载到本机”，本次无需再改（原表章节号写作 §4.49，按实际组件章节落到 §4.40）。
+- `USER.html` §1 TERMS “下载任务 / 下载中心”与“下载限制”：改为统一队列、无批次，整单下载按歌单顺序入队。
+- `USER.html` §5.2.7 设置页：下载目录行补“清空目录”，说明确认框展示实际目录、删除文件与记录、播放缓存不受影响。
+- `USER.html` §5.2.8 页面结构：歌单详情“下载全部”改为加入统一队列；下载中心改为 `/downloads` 完整页面、单一任务列表、顶部“清空目录”等操作。
+- `USER.html` §5.3 错误与通知：下载说明改为无批次、单任务删除与清空目录语义。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/shared/types.ts`：只有 `DownloadSource = 'network' | 'cache'`、`DownloadTask` 与 `DownloadIndex { tasks }`，没有批次字段。
+- 对照 `src/main/download/manager.ts`：`startDownloads` 逐首走 `enqueueTask`；`findDownloadedAudio` 与 `clearDownloadDirectory` 存在；清空目录拒绝根目录、主目录及其上级。
+- 对照 `src/main/ipc.ts` / `src/shared/ipc.ts`：下载命名空间使用 `startMany` 与 `clearDirectory`，没有批次通道。
+- 对照 `src/main/media/audio-protocol.ts`：`audioStreamUrl` 接受可选 `filePath`，`handleStream` 命中本地文件时立即上报完成态。
+- 对照 `src/main/api/song.ts`：`getStreamUrls` 先查已下载文件，命中时直接返回本地代理 URL。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.17 下载按钮的缓存 / 下载状态在播放条与歌曲表统一
 
