@@ -3122,7 +3122,7 @@
 
 状态：已解决。
 
-### 4.44 专辑简介支持展开 / 收起并抽取共用简介组件
+### 4.44 专辑简介支持展开 / 收起并抽取共用简介组件 [已解决]
 
 问题描述：ISSUES 要求专辑页也提供简介展开 / 收起。歌手页在 §4.22 已实现“折叠 4 行、按实际高度判断溢出、仅溢出时显示展开 / 收起”，但专辑页仍直接渲染完整 `.catalog-desc`，简介较长时会把歌曲列表推到首屏之外。两页的测量、溢出判断与展开状态完全一致，复制一份逻辑会形成两份需要同步维护的实现。
 
@@ -3148,6 +3148,24 @@
 | `CORE.html` | §4.73 `ArtistView.vue` / §4.74 `AlbumView.vue` | 改 | 简介折叠逻辑移入 `CatalogDescription`；两个页面只在描述非空时渲染该组件。 |
 | `USER.html` | §5.2.8 页面表 · 专辑页行 | 改 | 专辑简介超过 4 行时折叠并显示“展开”，展开后可“收起”；短简介不显示切换按钮。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 补专辑简介与歌手简介一致的折叠、展开 / 收起要求。 |
+
+实际操作（2026-11-11，分支 `doc/catalog-description-component`）：
+
+- `CORE.html` §1 File tree：`components/` 新增 `CatalogDescription.vue`（`#c4-82`）。
+- `CORE.html` 新增 §4.82 `components/CatalogDescription.vue`：记录 `text` prop、`measure()` / `toggle()`、4 行 `-webkit-line-clamp`、`scrollHeight > clientHeight + 1` 溢出判断、仅溢出时显示“展开 / 收起”与 `aria-expanded`、`ResizeObserver` 重测、`text` 变化重置与卸载断开。
+- `CORE.html` §4.73 `ArtistView.vue`：原有简介折叠说明已指向 `CatalogDescription`，本次核对无需再改。
+- `CORE.html` §4.74 `AlbumView.vue`：补简介非空时渲染 `CatalogDescription`，复用与歌手页相同的折叠 / 展开逻辑；短简介不显示切换按钮。
+- `USER.html` §5.2.8 页面表 · 歌手页 / 专辑页行：核对后已说明简介超过 4 行折叠、可展开 / 收起、短简介不显示按钮，本次无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/CatalogDescription.vue`：`text` prop；`measure()` 使用 `scrollHeight > clientHeight + 1` 且展开态跳过；`toggle()` 切换 `expanded`；`ResizeObserver` 监听元素并在卸载时断开；`watch(text)` 重置折叠并重新测量。
+- 对照 `src/renderer/views/ArtistView.vue` / `AlbumView.vue`：均在 `description` 非空时渲染 `CatalogDescription`。
+- 对照 `src/renderer/styles/main.css`：`.catalog-desc.clamped` 为 4 行 `-webkit-line-clamp`，`.catalog-desc-toggle` 为 accent 文字、透明背景。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.45 歌单改为后台整份刷新、原子替换与本地浏览
 

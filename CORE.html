@@ -115,7 +115,8 @@
 │       │   ├── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
 │       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
 │       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
-│       │   └── <a href="#c4-81">ConfirmDialog.vue</a>          应用内确认框
+│       │   ├── <a href="#c4-81">ConfirmDialog.vue</a>          应用内确认框
+│       │   └── <a href="#c4-82">CatalogDescription.vue</a>     歌手 / 专辑简介折叠
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
 │       │   ├── <a href="#c4-73">ArtistView.vue</a>            歌手页
@@ -2140,6 +2141,7 @@ interface DownloadStore {
 </code></pre>
 <ul class="note">
   <li>按路由参数调用 <code>album.get(mid, offset)</code>；展示专辑名、封面、发行日期、简介与歌手，简介为空时隐藏。</li>
+  <li>简介非空时渲染 <code>CatalogDescription</code>，复用与歌手页相同的 4 行折叠、按实际高度判断溢出与展开 / 收起逻辑；短简介不显示切换按钮。</li>
   <li>歌手行按 <code>mid</code> 链接到歌手页；歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单。</li>
   <li>分页固定 50 首/页；加载中、合法空状态与失败重试各自渲染。返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
 </ul>
@@ -2253,6 +2255,19 @@ const emit = defineEmits&lt;{ confirm: []; cancel: [] }&gt;();
   <li>复用 <code>.dialog-backdrop</code> / <code>.dialog</code> 视觉，<code>.confirm-dialog</code> 限宽 440px；<code>.confirm-message</code> 使用 <code>white-space: pre-line</code>，说明文本保留换行。</li>
   <li>打开后默认聚焦“取消”；<code>Esc</code>、点击遮罩、点击关闭按钮或取消按钮都发出 <code>cancel</code>，避免破坏性操作被回车误确认。确认按钮可传 <code>danger</code> 使用红色危险态，<code>busy</code> 时禁用。</li>
   <li>所有删除 / 清空确认统一使用该组件，渲染层不再调用原生 <code>window.confirm</code>。</li>
+</ul>
+
+<h3 id="c4-82">4.82 src/renderer/components/CatalogDescription.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>const props = defineProps&lt;{ text: string }&gt;();
+
+function measure(): void;
+function toggle(): void;
+</code></pre>
+<ul class="note">
+  <li>接收 <code>text</code>，渲染 <code>.catalog-desc-block</code> 与 <code>.catalog-desc</code>；折叠态加 <code>.clamped</code>（4 行 <code>-webkit-line-clamp</code>），展开态恢复正常高度。</li>
+  <li><code>measure()</code> 仅在折叠态用 <code>scrollHeight &gt; clientHeight + 1</code> 判断是否溢出；只有溢出时才渲染“展开 / 收起”按钮，并同步 <code>aria-expanded</code>。</li>
+  <li><code>ResizeObserver</code> 监听简介元素，窗口宽度或换行变化时重新测量；<code>text</code> 变化时重置为折叠并重新测量。组件卸载时断开 observer。</li>
+  <li>歌手页与专辑页共用该组件，页面只在简介非空时渲染；短简介不显示切换按钮。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
