@@ -150,7 +150,7 @@
   </tr>
   <tr>
     <td>评论读取</td>
-    <td>固定匿名发送，不携带凭证；单页条数不超过 25，应用固定 20。条数与上游参数见 <a href="#p4-1">§4.1</a>，内部签名见 <a href="CORE.html#c4-15">CORE §4.15</a>。</td>
+    <td>未登录时匿名发送；登录后携带 Cookie 以读取 <code>IsPraised</code>。单页条数不超过 25，应用固定 25。条数与上游参数见 <a href="#p4-1">§4.1</a>，内部签名见 <a href="CORE.html#c4-15">CORE §4.15</a>。</td>
   </tr>
   <tr>
     <td>VIP 状态</td>
@@ -398,7 +398,7 @@
   <tr><td>歌单详情 <code>CgiGetDiss</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>我的歌单 <code>GetPlaylistByUin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>歌词 <code>fcg_query_lyric_new.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=5381</code></td></tr>
-  <tr><td>歌曲评论 <code>GetNewCommentList</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>匿名；不携带 Cookie</td></tr>
+  <tr><td>歌曲评论 <code>GetNewCommentList</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>未登录匿名；登录后携带 Cookie 以读取 <code>IsPraised</code></td></tr>
   <tr><td>VIP 状态 <code>vip_login_base</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>用户资料 <code>fcg_get_profile_homepage.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=hash33(musickey, 5381)</code></td></tr>
   <tr><td>QQ 登录换证 <code>QQLogin</code></td><td>iPhone iOS 13</td><td><code>https://y.qq.com/</code></td><td>JSON；不携带凭证</td></tr>

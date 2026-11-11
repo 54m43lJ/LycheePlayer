@@ -1069,7 +1069,7 @@
 
 状态：已解决。
 
-### 4.7 评论点赞状态未加载
+### 4.7 评论点赞状态未加载 [已解决]
 
 问题描述：ISSUES 指出评论区刷新后已点赞的评论会回到未点赞状态，但服务端实际仍保留点赞；此时再次点击“点赞”会让 UI 数字继续增加，而服务端不重复计数，随后取消点赞会出现数字 `-2`。原实现同时存在两个问题：
 
@@ -1095,6 +1095,22 @@
 | `PROVIDER.html` | §4.1 歌曲评论行 / 验证记录 | 改 | 删除“评论请求固定匿名”的表述，改为“未登录匿名；登录后携带 Cookie 以读取 `IsPraised`”。 |
 | `CORE.html` | §4.15 `api/comment.ts` | 改 | 修正 `liked` 来源与凭据策略：`IsPraised → liked`，登录时携带凭证，`IsLiked` 仅作兼容。 |
 | `EVOLVE.md` | #5 / #14 | 不动 | 页面与点赞流程不变，仅修正上游字段与鉴权细节。 |
+
+实际操作（2026-11-11，分支 `doc/comment-liked-credential`）：
+
+- `PROVIDER.html` §4.1 请求约定“评论读取”：删除“固定匿名发送，不携带凭证”，改为“未登录匿名；登录后携带 Cookie 以读取 `IsPraised`”，并把应用固定条数改为 25。
+- `PROVIDER.html` §4.1 端点表“歌曲评论 `GetNewCommentList`”：特别配置改为“未登录匿名；登录后携带 Cookie 以读取 `IsPraised`”。
+- `PROVIDER.html` §4.3 `QqComment`：核对后已包含 `IsPraised?: number` 与兼容字段 `IsLiked?: number`，映射行也已注明“登录后才会按当前用户返回点赞状态”，本次无需再改。
+- `CORE.html` §4.15 `api/comment.ts`：在 `liked` 映射说明中明确 `IsLiked` 仅作旧字段兼容，`IsPraised` 优先。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/main/api/comment.ts`：`RawComment` 含 `IsPraised?: number` 与 `IsLiked?: number`；`liked: Number(raw.IsPraised ?? raw.IsLiked ?? 0) === 1`；读取评论使用当前凭证，未登录时由 `musicu` 自然匿名。
+- 对照 `PROVIDER.html`：评论读取与端点表不再出现“固定匿名 / 不携带 Cookie”；`QqComment` 字段与映射说明保持 `IsPraised` 优先、`IsLiked` 兼容。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.8 点击歌词跳转失效与高亮样式调整
 

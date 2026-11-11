@@ -923,7 +923,7 @@ export function unlikeComment(commentId: string): Promise&lt;CommentLikeResult&g
 
 </code></pre>
 <ul class="note">
-  <li>评论读取未登录时匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>。点赞状态优先取 <code>IsPraised</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按 <code>false</code>；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
+  <li>评论读取未登录时匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>。点赞状态优先取 <code>IsPraised</code>，缺失时回退 <code>IsLiked</code>（仅兼容旧字段），两者都缺失按 <code>false</code>；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
   <li><code>latest</code> 使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。上游 <code>PageSize</code> 实测上限为 25（26 起返回业务码 10000），应用固定每页 25 条。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留“最新”读取，不提供“最旧”排序。</li>
   <li>点赞使用 <code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code>，参数 <code>{ comment_id, type: 3 | 4, uin }</code>（3 点赞、4 取消）；需要登录，响应的 <code>data.code</code> / <code>msg</code> / <code>subcode</code> 全为 0 才算成功。上游不返回点赞数量，<code>CommentLikeResult.likedCount</code> 为可选；返回的 <code>liked</code> 由请求 <code>type</code> 决定，前端乐观更新计数，失败时回滚。</li>
 </ul>
