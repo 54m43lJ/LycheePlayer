@@ -1611,7 +1611,7 @@
 
 状态：已解决。
 
-### 4.18 设置页新增带节点的播放缓存上限滑动条
+### 4.18 设置页新增带节点的播放缓存上限滑动条 [已解决]
 
 > 后续修正：本节后半的“追加修复（缓存上限持久化）”已取代前面“只在 `change` 时写盘”的描述；最终为 `input` 防抖 200ms 保存、`change` 立即 flush、卸载兜底，主进程使用同步原子写。
 
@@ -2171,7 +2171,7 @@
 
 状态：已解决。
 
-### 4.29 歌词 / 评论改为弹出层并由播放条封面开关
+### 4.29 歌词 / 评论改为弹出层并由播放条封面开关 [已解决]
 
 问题描述：ISSUES 要求播放条封面点击在“打开歌词 / 评论”和“关闭歌词 / 评论”之间切换，而不是只负责打开。原实现把歌词 / 评论作为独立路由页 `/lyrics`，`PlayerBar.vue` 的 `openLyrics()` 无条件 `router.push('/lyrics')`，已经在该页时再次点击封面没有反应。按新的交互要求，歌词 / 评论不再作为独立页面，而是覆盖当前内容区的弹出层，样式保持不变。
 
@@ -2200,6 +2200,39 @@
 | `CORE.html` | §4.72 `LyricsView.vue` | 改 | 文件改为 `components/LyricsOverlay.vue`；返回按钮关闭弹出层；从路由表删除 `/lyrics`。 |
 | `USER.html` | §3.4 页面表 / §5.2.5 歌词与评论 | 改 | 歌词 / 评论改为从播放条封面打开的弹出层，不再作为独立路由页；再次点击封面或返回按钮关闭。 |
 | `EVOLVE.md` | — | 改 | 删除“歌词 / 评论为普通路由页”的要求，改为内容区弹出层。 |
+
+实际操作（2026-11-11，分支 `doc/lyrics-overlay`）：
+
+- `CORE.html` §4.31 `stores/ui.ts`：签名补 `lyricsOpen`、`toggleLyrics()`、`closeLyrics()`；note 改为播放队列、窄屏抽屉与歌词 / 评论弹出层都由界面状态控制，歌词 / 评论不占路由。
+- `CORE.html` §4.40 `PlayerBar.vue`：封面点击改为 `ui.toggleLyrics()`，不再导航；title 在“歌词与评论 / 关闭歌词与评论”之间切换，无当前歌曲时封面禁用。
+- `CORE.html` §4.49 `styles/main.css`：新增 `.lyrics-overlay` 固定在内容区（`left: var(--sidebar-width)`、`bottom: var(--player-height)`、`z-index: 25`），位于侧栏右侧、播放条下方；原 `.lyrics-page*` 样式沿用。
+- `CORE.html` §4.72（原 `views/LyricsView.vue`）：章节改为 `components/LyricsOverlay.vue`；记录关闭按钮调用 `ui.closeLyrics()`、不再 `router.back()`，并注明路由变化、侧栏导航与 Esc 也会关闭弹出层。
+- `CORE.html` §1 File tree：`LyricsOverlay.vue` 移入 `components/`，`views/` 删除 `LyricsView.vue`；`LyricsPanel.vue` / `CommentsPanel.vue` 描述改为弹出层左右列。
+- `CORE.html` §4.23 `App.vue`：改为按 `ui.lyricsOpen` 渲染 `LyricsOverlay`，覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 关闭。
+- `CORE.html` §4.25 `router/index.ts`：路由表删除 `/lyrics`，注明歌词 / 评论由界面状态控制、不占路由。
+- `CORE.html` §4.41 / §4.42：`LyricsPanel` / `CommentsPanel` 的上层容器引用改为 `LyricsOverlay`，评论区不再监听路由。
+- `CORE.html` §5.9 歌词与评论调用树：入口改为 `App.vue::render(<LyricsOverlay v-if="ui.lyricsOpen">)`，评论区只监听当前歌曲；说明改为封面开合、关闭不改变播放状态。
+- `USER.html` §2 CONVENTIONS 页面 / URL 跳转：歌词 / 评论改为不占路由的内容区弹出层，列出再次点击封面、关闭按钮、Esc、路由变化与侧栏导航的关闭入口。
+- `USER.html` §3.4 页面 / URL 架构图：说明歌词 / 评论弹出层不进入路由节点；`diagram/page-url-architecture.puml` 删除 `LYRICS` 节点与相关边，并用 `plantuml -tsvg` 重新导出 SVG。
+- `USER.html` §5.2.1 / §5.2.3：骨架说明改为覆盖内容区、不覆盖侧栏与播放条；播放条封面改为开合弹出层，tooltip 随状态切换。
+- `USER.html` §5.2.5 歌词与评论：改为弹出层；左上角为关闭按钮，不再 `router.back()` / 回 `/search`；保留左右各 50%、拖拽 / 滚轮 / 点击定位与评论行为。
+- `USER.html` §5.2.8 页面表：行改为“歌词 / 评论弹出层”，注明不占路由、由封面开合、顶部关闭按钮。
+- `USER.html` §5.3 错误与通知：把“歌词 / 评论页”改为“歌词 / 评论弹出层”。
+- `ABOUT.html` 用户交互表“歌词 / 评论”：改为点击播放条封面开合弹出层，再次点击封面或关闭按钮收起。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER / ABOUT。
+
+验证：
+
+- 对照 `src/renderer/stores/ui.ts`：存在 `lyricsOpen`、`toggleLyrics()`、`closeLyrics()`。
+- 对照 `src/renderer/components/PlayerBar.vue`：封面点击调用 `toggleLyrics()`，`lyricsTitle` 随 `ui.lyricsOpen` 在“歌词与评论 / 关闭歌词与评论”之间切换；无当前歌曲时按钮禁用。
+- 对照 `src/renderer/App.vue`：`<LyricsOverlay v-if="ui.lyricsOpen" />` 位于内容区之后；路由 `fullPath`、侧栏导航与 Esc 都调用 `ui.closeLyrics()`。
+- 对照 `src/renderer/components/LyricsOverlay.vue`：关闭按钮调用 `ui.closeLyrics()`；布局组合 `LyricsPanel` 与 `CommentsPanel`，无标题行。
+- 对照 `src/renderer/router/index.ts`：路由表没有 `/lyrics`。
+- 对照 `src/renderer/styles/main.css`：`.lyrics-overlay` 为 `position: fixed`、`left: var(--sidebar-width)`、`bottom: var(--player-height)`、`z-index: 25`；播放条 `z-index: 30`。
+- `grep -n 'LyricsView\|/lyrics' CORE.html USER.html ABOUT.html diagram/page-url-architecture.puml` 在 USER / ABOUT / 图源中无结果；CORE 只剩 `composables/lyrics` 路径与 §4.72 的“`/lyrics` 不再存在”说明，不再把歌词 / 评论描述为路由页；重新导出的 SVG 不含 `LYRICS` 节点。
+- 本次只修改文档与图表，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.30 批量下载卡住页面与 104009 全局截断
 
