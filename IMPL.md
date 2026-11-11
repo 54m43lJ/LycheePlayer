@@ -1340,7 +1340,7 @@
 
 状态：已解决。
 
-### 4.13 song.probe 请求量与 IP 104009 风控核查（后由 §4.25 / §4.30 完成）
+### 4.13 song.probe 请求量与 IP 104009 风控核查（后由 §4.25 / §4.30 完成） [已解决]
 
 > 后续修正：§4.25 已采用本节“方案 2”，把逐首详情改为 `CgiGetTrackInfo` 批量详情（50 首/次，缺失才单曲兜底）；§4.30 又补充了 104009 后的 60 秒全局截断。本节“未完成 / 待决定”的状态仅代表当时，后续已按方案 2 + 全局截断落地。
 
@@ -1362,6 +1362,20 @@
 5. 评估是否需要把可用性缓存 TTL 从 10 分钟延长，减少重复探测。
 
 状态（当时）：ISSUES 已新增顶层记录，未标记已解决；后续已按方案 2 + 全局截断落地，见 §4.25 / §4.30。
+
+实际操作（2026-11-11，分支 `doc/song-probe-batch-status`）：
+
+- 本节是风控核查记录，没有独立的“修订建议”表；实际修复已由 §4.25（批量详情）与 §4.30（104009 全局截断）完成，本节只补充状态，不重复这两项的文档动作。
+- 核对 `src/shared/constants.ts`：存在 `SONG_DETAIL_BATCH = 50` 与 `UPSTREAM_BLOCK_MS = 60_000`。
+- 核对 `src/main/api/song.ts`：`fetchTrackBatch` 按 `SONG_DETAIL_BATCH` 分块调用批量详情，`fetchTracksById` 只对缺失歌曲单曲兜底；vkey 使用 `deferBlock`，两个入口都 104009 后才触发截断。
+- 核对 `src/main/api/client.ts`：`tripUpstreamBlock` / `upstreamBlockRemainingMs` / `assertUpstreamAvailable` 提供进程级截断，`fetchOnce` 在取令牌前后检查。
+
+验证：
+
+- 本节无独立文档修订动作；`CORE.html` / `PROVIDER.html` / `USER.html` 中与批量详情、104009 截断有关的同步由 §4.25 / §4.30 跟踪。
+- `npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.14 歌曲标题的版本标签、尾部空白与徽标位置
 
