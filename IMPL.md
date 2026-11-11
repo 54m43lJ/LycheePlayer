@@ -632,7 +632,7 @@
 
 状态：已解决。
 
-### 3.7 歌曲表内的链接 / 按钮会触发行双击播放
+### 3.7 歌曲表内的链接 / 按钮会触发行双击播放 [已解决]
 
 问题描述：`SongTable` 的整行绑定了 `dblclick` 播放，操作列又有收藏、下载、下一首、添加歌单、删除等按钮，歌名 / 歌手 / 专辑还改成了 `RouterLink`。如果不在这些子元素上阻止冒泡，双击链接或连续点击按钮会同时触发行播放；窄屏“...”菜单还会被 document 的全局点击监听立刻关掉。
 
@@ -650,6 +650,24 @@
 | `CORE.html` | §4.39 `SongTable.vue` | 改 | 补链接 / 按钮事件边界、菜单外部关闭、matchMedia 同步与列宽。 |
 | `CORE.html` | §4.40 `PlayerBar.vue` | 不动 | 播放条事件不在本项，见 #9。 |
 | `USER.html` | §5.2.4 歌曲列表 | 不动 | 列与操作项由 #4 / #8 / #14 维护。 |
+
+实际操作（2026-11-11，分支 `doc/songtable-event-boundary`）：
+
+- `CORE.html` §4.39 `SongTable.vue`：
+  - 补充事件边界：行 `dblclick` 只绑定在 `tr` 上，歌手 / 专辑链接与操作列按钮统一使用 `@click.stop`，点击不触发行播放；
+  - 补充窄屏菜单：`.song-more-wrap` 使用 `@click.stop` 隔断行事件，document 的 click 只负责点击外部关闭，Esc 同样关闭，选择菜单项时先关闭菜单再发出 emit；
+  - 补充 `matchMedia('(max-width: 900px)')` 与样式断点同步，断点变化时更新 `compact` 并关闭已打开菜单；click / keydown 与 media query 监听在卸载时清理；
+  - 补充操作列列宽：宽屏 160px，≤900px 为 40px。
+- `CORE.html` §4.40 `PlayerBar.vue`：按原表“不动”未处理。
+- `USER.html` §5.2.4 歌曲列表：按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/components/SongTable.vue`：行只在 `tr` 上绑定 `@dblclick`；操作按钮与歌手 / 专辑 `RouterLink` 均为 `@click.stop`；`.song-more-wrap` 为 `@click.stop`；`onDocumentClick`、`onKeydown` 与 `matchMedia` 的 `change` 监听均在 `onBeforeUnmount` 移除。
+- 对照 `src/renderer/styles/main.css`：`.song-action` 末尾覆盖为 160px，`@media (max-width: 900px)` 收窄为 40px。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 3.8 筛选后的索引映射容易误删 / 误播
 
