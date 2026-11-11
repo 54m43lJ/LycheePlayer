@@ -493,8 +493,13 @@ interface QqLoginRequest {
 <pre><code>interface QqSong {
   id?: number | string;
   mid?: string;
+  // name 为基础名，可能带尾部空白；title 为官方展示标题，含 Explicit / Remix 等版本标签。
+  // 原始响应没有独立的 explicit / remix 布尔字段；version / tag 为数值，语义不稳定。
   name?: string;
   title?: string;
+  subtitle?: string;
+  version?: number;
+  tag?: number;
   interval?: number;
   singer?: Array&lt;{ mid?: string; name?: string }&gt;;
   album?: { mid?: string; name?: string };

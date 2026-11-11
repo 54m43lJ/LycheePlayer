@@ -1377,7 +1377,7 @@
 
 状态：已解决。
 
-### 4.14 歌曲标题的版本标签、尾部空白与徽标位置
+### 4.14 歌曲标题的版本标签、尾部空白与徽标位置 [已解决]
 
 问题描述：ISSUES 指出部分歌曲名尾部有多余空白，VIP / 音质徽标因此被推离标题；同时 Big Dawgs 在 QQ 音乐手机客户端显示为 `Big Dawgs (Remix|Explicit)`，本应用只显示 `Big Dawgs`。需要确认 Explicit / Remix 等标签是歌词名称的一部分还是单独元数据。
 
@@ -1421,6 +1421,22 @@
 | `CORE.html` | §4.11 `api/song.ts` | 改 | 显示名改为 `title.trim() || name.trim()`，并说明专辑名、歌手名同步 trim；徽标仍固定在标题后。 |
 | `CORE.html` | §4.49 `styles/main.css` | 改 | `.song-title .marquee` 使用 `flex: 0 1 auto`，不得撑满标题列；VIP / 音质徽标紧随歌名。 |
 | `USER.html` | §5.2.4 歌曲列表 · 标题与徽标 | 改 | 明确歌曲显示名使用上游展示标题（含 Explicit / Remix 版本标签），VIP / 音质徽标紧随标题且不被尾部空白推离。 |
+
+实际操作（2026-11-11，分支 `doc/song-title-display-badges`）：
+
+- `PROVIDER.html` §4.3 `QqSong`：补 `subtitle` / `version` / `tag` 字段，并注明 `name` 是基础名、`title` 是含 Explicit / Remix 标签的展示标题，原始响应没有独立标签布尔字段。
+- `CORE.html` §4.11 `api/song.ts`：补充显示名规则 `title.trim() || name.trim()`，专辑名与歌手名同步 `trim()`，避免尾部空白推开徽标。
+- `CORE.html` §4.49 `styles/main.css`：补充 `.song-title .marquee` 使用 `flex: 0 1 auto`，不得撑满标题列，短标题时徽标紧随歌名。
+- `USER.html` §5.2.4 歌曲列表：明确显示名使用上游展示标题（含版本标签），首尾空白被清理，VIP / 音质徽标紧随标题。
+
+验证：
+
+- 对照 `src/main/api/song.ts`：`toSong` 中 `name = (raw.title ?? '').trim() || (raw.name ?? '').trim()`；`singers[].name` 与 `album.name` 均 `trim()`。
+- 对照 `src/renderer/styles/main.css`：`.song-title .marquee` 为 `flex: 0 1 auto; min-width: 0`；`.pay-badge` / `.quality-badge` 为 `flex: 0 0 auto`。
+- 对照 `PROVIDER.html`：`QqSong` 已包含 `title` / `subtitle` / `version` / `tag`，并注明基础名与展示标题的区别。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.15 整单下载彻底取消批次并复用统一队列
 
