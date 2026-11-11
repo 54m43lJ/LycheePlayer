@@ -1245,7 +1245,7 @@
 
 状态：已解决。
 
-### 4.11 部分歌手因旧详情接口返回 `code -1` 无法加载
+### 4.11 部分歌手因旧详情接口返回 `code -1` 无法加载 [已解决]
 
 问题描述：ISSUES 新增记录，部分歌手（如 Charlie Jeer）打开歌手页时报 `[ipc] UPSTREAM_CHANGED: 歌手详情响应缺少 getSingerInfo`，页面完全加载不出来。
 
@@ -1275,6 +1275,23 @@
 | `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录旧详情失败返回 `null`、`fetchSingerProfile` 兜底、名称回退歌曲歌手名、头像与计数降级规则。 |
 | `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 不动 | 页面结构与交互不变，仅修复上游数据源。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 接口验证补“旧详情接口可能返回 code -1，需使用 SingerInfoInter 兜底”。 |
+
+实际操作（2026-11-11，分支 `doc/artist-detail-fallback`）：
+
+- `PROVIDER.html` §4.1 歌手详情行：注明旧 `fcg_v8_singer_detail_cp.fcg` 对部分歌手只返回 `code -1`，需使用下方 `SingerInfoInter` 兜底；新增“歌手资料兜底”行，记录 `singer_mids: [mid]`、`pic / ex_singer / wiki_singer / group_singer` 参数及 `singer_list[].basic_info/ex_info/pic` 字段。
+- `PROVIDER.html` §4.3：新增 `QqSingerProfile` 接口与注释，记录 `SingerInfoInter / GetSingerDetail` 的响应结构。
+- `CORE.html` §4.75 `api/artist.ts`：补充旧详情接口失败返回 `null`、`fetchSingerProfile` 兜底、名称回退歌曲歌手名、头像回退规则，以及歌曲数 / 专辑数降级与“仅在 `albumCount > 0` 时显示专辑数”。
+- `USER.html` §5.2.8 页面表 · 歌手页 / 专辑页行：按原表“不动”未处理。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 PROVIDER / CORE。
+
+验证：
+
+- 对照 `src/main/api/artist.ts`：`fetchArtistInfo` 在缺少 `getSingerInfo` 或请求异常时返回 `null`；`fetchSingerProfile` 请求 `SingerInfoInter / GetSingerDetail` 并携带 `singer_mids`、`group_singer`、`wiki_singer`、`ex_singer`、`pic`、`photos`；`normalizeCover` 把 `http://` 改为 `https://`。
+- `getArtist` 在 `info` 为空时使用 `profile.name`，缺失则 `singerNameFromSongs`；`coverUrl` 使用 `profile.coverUrl`，缺失则保持 `T001R500x500M000<mid>.jpg`；`songCount` 优先 `total_song`，`albumCount` 缺失为 0。
+- 对照 `src/renderer/views/ArtistView.vue`：专辑数仅在 `detail.albumCount > 0` 时渲染。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.12 歌手页空闲时连续出现 104009 播放链接错误
 
