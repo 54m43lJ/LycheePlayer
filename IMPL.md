@@ -2234,7 +2234,7 @@
 
 状态：已解决。
 
-### 4.30 批量下载卡住页面与 104009 全局截断
+### 4.30 批量下载卡住页面与 104009 全局截断 [已解决]
 
 > 后续修正：§4.31 已删除 `DownloadDrawer`，下载中心改为 `/downloads` 完整页面；§4.50 / §4.52 又移除数字指示并把进度条改为 fixed overlay。本节“仅在 `ui.downloadOpen` 时渲染抽屉”的修复被页面改造取代；轮询只在状态变化时刷新资产、下载不受页面生命周期取消、104009 全局截断等结论继续有效。
 
@@ -2285,6 +2285,34 @@
 | `USER.html` | §5.3 错误与通知 | 改 | 收到 104009 时提示已暂停上游请求 60 秒，请检查网络 / VPN / 代理出口；期间播放、搜索、下载等上游操作直接失败。 |
 | `USER.html` | §5.2.8 下载中心 | 改 | 下载中心关闭时不渲染全量任务列表、不扫描目录用量；有活动任务时仍轮询状态以更新歌曲表图标，全部结束后停止；打开时刷新用量与完整进度。 |
 | `PROVIDER.html` | §4.1 vkey / 错误码表 | 改 | 补 104009 触发全局 60 秒截断：两个 vkey 入口都拒绝后不再请求上游。 |
+
+实际操作（2026-11-11，分支 `doc/download-104009-block`）：
+
+- `CORE.html` §4.1 `types.ts`：新增 `UpstreamBlockedEvent { untilMs, reason }`，作为 104009 截断通知的跨进程载荷。
+- `CORE.html` §4.2 `shared/ipc.ts`：`window.lychee` 增加 `upstream.onBlocked`；IPC 表补 `upstream:blocked` 事件行，说明同一窗口只发送一次。
+- `CORE.html` §4.5 `main/ipc.ts`：补 `registerIpc` 注册 `setUpstreamBlockNotifier`，通过 `broadcast('upstream:blocked', event)` 通知所有窗口。
+- `CORE.html` §4.8 `api/client.ts`：签名补 `setUpstreamBlockNotifier` / `upstreamBlockRemainingMs` / `tripUpstreamBlock` / `assertUpstreamAvailable`，`MusicuOptions` 补 `deferBlock`；note 记录 `fetchOnce` 取令牌前后各检查一次、`favorite.ts` / `login.ts` 绕过入口取令牌后显式检查、`musicu` 默认截断而 vkey 等两个入口都失败后才截断。
+- `CORE.html` §4.50 `shared/constants.ts`：新增 `UPSTREAM_BLOCK_MS = 60_000`，note 说明窗口内所有上游请求直接失败、下载泵暂停出队。
+- `CORE.html` §4.60 `download/manager.ts`：补 104009 截断窗口内 `pump` 在出队前检查剩余时长并暂停，窗口结束 + 1 秒后恢复；正在解析的任务收到 104009 时保持 `pending`、清空错误，不标记 `failed`。
+- `CORE.html` §4.71 `stores/download.ts`：补下载页可见性对轮询的影响——仅可见时刷新目录用量；不可见但有活动任务时继续轮询任务状态以更新歌曲表图标，全部结束后停止；`remove` / `clearDirectory` / `reset` 同步清理资产与状态记录。
+- `USER.html` §5.2.8 下载中心：补离开页面后的渲染 / 用量扫描 / 轮询行为，重新打开时刷新用量与完整进度。
+- `USER.html` §5.3 错误与通知：补收到 104009 时的 60 秒全局截断 Toast，说明期间播放 / 搜索 / 下载等上游操作直接失败、同一窗口只提示一次，并提示检查网络 / VPN / 代理出口。
+- `PROVIDER.html` §3.3 播放链接协议：补两个 vkey 入口都返回 104009 后进入 60 秒全局截断，窗口内应用不再请求上游。
+- `PROVIDER.html` §4.1 vkey 行 / 错误码表 / `QqVkeyData` 说明：同步 104009 的备用入口与 60 秒全局截断语义。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER / PROVIDER。
+
+验证：
+
+- 对照 `src/shared/constants.ts`：`UPSTREAM_BLOCK_MS = 60_000`。
+- 对照 `src/main/api/client.ts`：存在 `setUpstreamBlockNotifier` / `upstreamBlockRemainingMs` / `tripUpstreamBlock` / `assertUpstreamAvailable`；`fetchOnce` 在 `throttleUpstream()` 前后各调用一次 `assertUpstreamAvailable()`；`musicu` 仅在 `!options.deferBlock` 时触发截断。
+- 对照 `src/main/api/song.ts`：两个 vkey 入口均使用 `{ deferBlock: true }`，备用入口仍为 104009 时调用 `tripUpstreamBlock()`。
+- 对照 `src/main/api/favorite.ts` / `login.ts`：绕过 `fetchOnce` 的请求在取令牌后调用 `assertUpstreamAvailable()`。
+- 对照 `src/main/download/manager.ts`：`pump` 在出队前检查 `upstreamBlockRemainingMs()`，任务收到 104009 时保持 `pending` 并调用 `schedulePumpAfterBlock()`。
+- 对照 `src/main/ipc.ts` / `src/preload/index.ts` / `src/renderer/App.vue`：主进程广播 `upstream:blocked`，preload 暴露 `upstream.onBlocked`，`App.vue` 收到后以 Toast 显示暂停秒数与原因。
+- 对照 `src/renderer/stores/download.ts`：目录用量仅在 `visible` 为真时刷新；资产状态只刷新状态变化的任务；不可见且无活动任务时停止轮询；`remove` / `clearDirectory` / `reset` 同步清理 `knownStatuses` 与 `assets`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.31 下载中心改为完整页面
 

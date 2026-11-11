@@ -519,6 +519,12 @@ export interface AudioCacheStats {
   files: number;
 }
 
+/** 主进程收到 104009 后进入全局上游截断窗口的通知。 */
+export interface UpstreamBlockedEvent {
+  untilMs: number;
+  reason: string;
+}
+
 export interface DownloadStorageInfo {
   directory: string;
   bytes: number;
@@ -723,12 +729,16 @@ export interface FlagsFile {
     sendState(state: PlayerState): void;
     onCommand(callback: (command: MprisCommand) =&gt; void): () =&gt; void;
   };
+  upstream: {
+    onBlocked(callback: (event: UpstreamBlockedEvent) =&gt; void): () =&gt; void;
+  };
 }
 </code></pre>
 <table>
   <tr><th>方向</th><th>通道</th><th>载荷</th><th>说明</th></tr>
   <tr><td>main → renderer</td><td><code>player:command</code></td><td><code>MprisCommand</code></td><td>MPRIS / 托盘反向播放控制命令。</td></tr>
   <tr><td>renderer → main</td><td><code>player:state</code></td><td><code>PlayerState</code></td><td>播放器状态发布，主进程转投 MPRIS。</td></tr>
+  <tr><td>main → renderer</td><td><code>upstream:blocked</code></td><td><code>UpstreamBlockedEvent</code></td><td>收到 104009 进入全局截断窗口时通知渲染层展示 Toast；同一窗口只发送一次。</td></tr>
 </table>
 <ul class="note">
   <li>该接口经 preload 暴露为 <code>window.lychee</code>；返回取消订阅函数的方法是推送订阅。</li>
@@ -773,6 +783,7 @@ function handle(
   <li><code>registerIpc</code> 注册全部请求型通道、<code>app.quit</code> 与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>；<code>player:state</code> 同时分发到 MPRIS 与托盘。</li>
   <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程；<code>app.quit</code> 是单向消息，直接调用 <code>app.quit()</code>，不复用 <code>handle</code>。<code>handle</code> 支持 <code>{ silent: true }</code>：异常仍以 <code>IpcResult</code> 返回给渲染层，但不写 <code>[ipc]</code> 错误日志；背景 <code>song.probe</code> 使用该模式，避免可用性探测失败刷屏。</li>
   <li><code>download</code> 命名空间用 <code>startMany</code> 取代批次接口，不提供批次级暂停 / 继续 / 删除 / 重试；<code>download.clearDirectory</code> 删除下载目录内容与任务记录，不影响播放缓存。</li>
+  <li><code>registerIpc</code> 注册 <code>setUpstreamBlockNotifier</code>，104009 首次进入截断窗口时通过 <code>broadcast('upstream:blocked', event)</code> 通知所有窗口；preload 暴露 <code>window.lychee.upstream.onBlocked</code>，同一窗口内只发送一次。</li>
 </ul>
 
 <h3 id="c4-6">4.6 src/main/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -809,6 +820,12 @@ export async function clearCredential(): Promise&lt;void&gt;;
 export function getGuid(): string;
 export function toIpcError(err: unknown): IpcError;
 export function throttleUpstream(): Promise&lt;void&gt;;
+export function setUpstreamBlockNotifier(
+  notifier: ((event: UpstreamBlockedEvent) =&gt; void) | null
+): void;
+export function upstreamBlockRemainingMs(): number;
+export function tripUpstreamBlock(reason?: string): void;
+export function assertUpstreamAvailable(): void;
 function dataErrorCode(data: unknown): number | null;
 
 export interface UpstreamRequest {
@@ -825,6 +842,8 @@ export interface UpstreamRequest {
 export interface MusicuOptions {
   comm?: Record&lt;string, unknown&gt; | false;
   credential?: Credential | null;
+  /** vkey 需要先尝试备用入口，104009 由调用方在两次失败后统一触发截断。 */
+  deferBlock?: boolean;
 }
 
 export function upstreamRequest&lt;T&gt;(req: UpstreamRequest): Promise&lt;T&gt;;
@@ -840,6 +859,9 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
 <ul class="note">
   <li><code>upstreamRequest</code> 负责 UA / Referer / Cookie 注入、超时、HTTP 错误与 HTTP 非 2xx 退避；<code>musicu</code> 负责组装 <code>comm</code> / <code>req_0</code> 并处理瞬时繁忙码。</li>
   <li><code>fetchOnce</code> 在真正发出请求前调用 <code>throttleUpstream()</code>：全局令牌桶按 <code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> 补充、最多积压 <code>UPSTREAM_RATE_LIMIT_BURST</code> 个令牌；OAuth authorize 与收藏签名写入等绕过 <code>upstreamRequest</code> 的请求也显式取令牌。</li>
+  <li>进程级 104009 截断由 <code>tripUpstreamBlock()</code> 设置，截止时间为当前时间加 <code>UPSTREAM_BLOCK_MS</code>；<code>upstreamBlockRemainingMs()</code> 返回剩余时长，<code>assertUpstreamAvailable()</code> 在窗口内直接抛 <code>UPSTREAM_NETWORK</code>（保留 <code>upstreamCode = 104009</code>）且不重试。窗口内重复触发只延长截止时间，不重复通知渲染层。</li>
+  <li><code>fetchOnce</code> 在取令牌前后各调用一次 <code>assertUpstreamAvailable()</code>，排队期间进入截断也会在真正 fetch 前失败；<code>favorite.ts</code> 的签名写入与 <code>login.ts</code> 的 OAuth authorize 等绕过 <code>fetchOnce</code> 的请求，在取令牌后同样显式检查。</li>
+  <li><code>musicu</code> 默认在 104009 时调用 <code>tripUpstreamBlock()</code>；vkey 通过 <code>deferBlock: true</code> 暂停截断，先尝试经典入口与 <code>UrlGetVkey</code> 备用入口，只有两个入口都返回 104009 才由 <code>song.ts</code> 触发截断，备用入口成功则不进入冷却。</li>
   <li><code>musicu</code> 在 <code>req_0.code</code> 为 1000 时优先读取 <code>data.retcode</code>，避免把 vkey 的 <code>104009 invalidq</code> 误判成登录过期；<code>mapUpstreamCode</code> 把 104009 映射为 <code>UPSTREAM_NETWORK</code> 并保留 <code>upstreamCode</code> 供 vkey 备用入口判断。</li>
   <li><code>getGuid</code> 返回进程级稳定 GUID，供 vkey 请求使用。</li>
 </ul>
@@ -1544,6 +1566,7 @@ export declare const UPSTREAM_QUOTA_BACKOFF_MS: number;     // 600 ms
 export declare const MUSICU_BUSY_BACKOFF_MS: number;        // 500 ms
 export declare const UPSTREAM_RATE_LIMIT_PER_SECOND: number; // 4
 export declare const UPSTREAM_RATE_LIMIT_BURST: number;      // 8
+export declare const UPSTREAM_BLOCK_MS: number;             // 60_000 ms；104009 全局截断时长
 export declare const SEARCH_EMPTY_RETRY_MS: number;         // 350 ms
 export declare const SEARCH_EMPTY_RETRY_COUNT: number;      // 1
 export declare const SEARCH_PAGE_NO_MAX: number;            // 100
@@ -1610,7 +1633,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li><code>PROBE_MAX_SONGS</code> 使用 <code>PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX</code> 派生，当前为 1,000,000；修改页大小或页上限时自动跟随。</li>
   <li><code>PROBE_MIDS_MAX</code> / <code>PROBE_VKEY_BATCH</code> 不得大于 <code>IPC_SONG_MIDS_MAX</code>；推荐与页大小 50 对齐，使一个歌单页一次探测、一批 vkey。修改任一值时同步评估其余常量。</li>
   <li><code>SONG_DETAIL_BATCH = 50</code> 为批量详情单次上限；<code>PROBE_DETAIL_CONCURRENCY = 2</code> 仅用于批量缺口的单曲兜底，不再逐首探测。</li>
-  <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
+  <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>UPSTREAM_BLOCK_MS</code> 为收到 104009 后的全局截断时长（推荐 60_000 ms），窗口内所有上游请求直接失败、下载泵暂停出队；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
   <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制推荐分区缓存；<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页每区展示的歌曲上限（30 首，界面固定 3 行滚动）。</li>
   <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，统一队列按入队顺序串行；<code>DOWNLOAD_QUEUE_MAX</code> 限制单次“下载全部”的入队数量；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
   <li><code>RECENT_PLAYLIST_LIMIT</code> 限制最近歌单条数；<code>RECENT_PLAYLIST_CHECK_THROTTLE_MS</code> 与单飞互斥共同限制校验频率；<code>RECENT_PLAYLIST_STORAGE_PREFIX</code> 与账号 musicid 拼接为 localStorage key；<code>SIDEBAR_DRAG_THRESHOLD_PX</code> 为抽屉开关的位移阈值。</li>
@@ -1853,6 +1876,7 @@ export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
   <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；文件名由 <code>downloadFileName</code> 按“歌名-歌手-专辑”生成，多个歌手用顿号连接，缺失片段跳过，非法字符替换为 <code>_</code>，全空回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队占位路径仍使用 <code>safeName(songMid)</code>，最终路径在出队时生成；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
   <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> 删除最终文件与 <code>.part</code>；<code>clearDownloadDirectory</code> 先中止活动下载、清空记录，再删除下载目录内容，并拒绝文件系统根目录、用户主目录及其上级目录；该操作不影响播放缓存。</li>
   <li><code>assetStates</code> 只读取可用性缓存（<code>peekAvailability</code>）与缓存 / 下载信息，不主动探测上游；未探测过的歌曲 <code>maxQuality</code> 为 <code>null</code>。<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
+  <li>104009 全局截断窗口内 <code>pump</code> 在出队前检查 <code>upstreamBlockRemainingMs()</code>，窗口内不再取下一个任务，并按剩余时长 + 1 秒安排恢复；正在解析的任务收到 104009 时保持 <code>pending</code>、清空错误并安排恢复，不标记 <code>failed</code>。</li>
   <li>下载任务不受页面请求生命周期约束：任务由主进程队列持有，页面只订阅进度；离开页面不取消下载。这是页面请求取消约定的明确例外。</li>
 </ul>
 
@@ -2046,7 +2070,7 @@ interface DownloadStore {
 }
 </code></pre>
 <ul class="note">
-  <li><code>load</code> 读取任务列表；目录用量只在下载页可见时刷新；资产状态只刷新状态发生变化的任务，避免大批量下载时每轮全量查询。</li>
+  <li><code>load</code> 读取任务列表；目录用量只在下载页可见时刷新；资产状态只刷新状态发生变化的任务，避免大批量下载时每轮全量查询。页面不可见时若有活动任务仍轮询任务状态以更新歌曲表图标，全部结束后停止；<code>remove</code> 刷新该曲资产，<code>clearDirectory</code> / <code>reset</code> 清空资产与状态记录。</li>
   <li><code>start</code> 复用 <code>startMany</code>；<code>startMany</code> 不自动打开下载页，有活动任务时启动轮询以更新歌曲表图标。任务按数组倒序展示，不改变主进程队列顺序。</li>
   <li>没有批次状态或批次控制；<code>clearCompleted</code> 只清记录，<code>clearDirectory</code> 清空下载目录内容与记录，<code>reset</code> 在页面可见时立即重新加载。</li>
 </ul>
