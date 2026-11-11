@@ -1792,7 +1792,7 @@
 
 状态：已解决。
 
-### 4.21 空播放条封面去掉边框并统一收敛全部阴影
+### 4.21 空播放条封面去掉边框并统一收敛全部阴影 [已解决]
 
 问题描述：ISSUES 指出没有歌曲播放时，播放条封面占位元素仍有边框；并追加要求把阴影效果改为 fg 色、略降强度，且整体缩小尺寸。后续澄清：是整体阴影尺寸缩小，不是只压缩宽度，并且该策略要应用到所有阴影效果，而不只是封面。原实现中 `.player-empty-state .player-cover.placeholder` 使用 `1px dashed var(--border-strong)`；阴影则分散为多组黑色硬编码值（如 `0 18px 50px rgba(0,0,0,.45)`、`0 10px 26px`、`-24px 0 60px` 等），范围偏大且与主题前景色无关。
 
@@ -1829,6 +1829,23 @@
 | `USER.html` | §5.2.3 播放条 · 空状态 | 改 | 封面占位不再显示边框；全局阴影统一为 fg 色、略降强度并整体缩小。 |
 | `USER.html` | §5.1 视觉规范 | 改 | 阴影统一使用 fg 混色而非纯黑，范围整体缩小；不再出现按宽度单独压缩的例外。 |
 | `EVOLVE.md` | #5 播放条空状态 | 改 | 补封面占位无边框与全局 fg 轻阴影策略。 |
+
+实际操作（2026-11-11，分支 `doc/shadow-tokens-empty-cover`）：
+
+- `CORE.html` §4.49 `styles/main.css`：补 `--shadow-color` 与 `--shadow-sm/base/lg/up/left/right/handle` 主题 token，说明深色 fg 20%、浅色 14% 与整体缩小尺寸；删除空状态占位封面虚线边框，全部投影改用 fg 阴影 token，焦点环与 inset 高光保持独立。
+- `CORE.html` §4.40 `PlayerBar.vue`：空状态封面改为无边框，有封面与占位共用 `--shadow-sm`。
+- `USER.html` §5.2.3 播放条 · 空状态：补充占位无边框、全局阴影改为 fg 混色、略降强度并整体缩小。
+- `USER.html` §5.1 视觉规范：补充阴影统一使用 `--shadow-color` 与缩放后的 token，不再使用纯黑硬编码投影或按宽度单独压缩。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/styles/main.css`：深色 `--shadow-color: color-mix(in srgb, var(--text) 20%, transparent)`，浅色为 14%；`--shadow-sm` 到 `--shadow-handle` 均为缩放后的 token；各组件 `box-shadow` 引用 token。
+- `.player-empty-state .player-cover.placeholder` 只保留弱背景，没有 `border` / `dashed` 声明；`.player-cover` 使用 `box-shadow: var(--shadow-sm)`。
+- 焦点环与输入框 inset 高光未改为阴影 token。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.22 歌手简介过长时提供展开 / 收起
 

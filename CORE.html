@@ -1419,7 +1419,7 @@ const emit = defineEmits&lt;{
   <li><code>useRevealerTouch</code> 为播放模式、音质与收藏三个 revealer 提供触屏手势：从按钮开始纵向滑动超过 8px 才打开弹层并捕获指针，按选项中点与手指 Y 距离高亮最近项；松开确认，取消则关闭；滑动后的 click 在容器捕获阶段抑制。轻点不触发手势，保留原有 click 行为。</li>
   <li>音量保留宽 / 窄屏分支：宽屏 <code>v-if="!compact"</code> 渲染常驻横向 <code>.volume-range-inline</code>，窄屏隐藏该滑块并仅在 <code>compact &amp;&amp; volumeOpen</code> 时渲染竖直 <code>.volume-menu</code>。音量按钮在两种布局下都只负责静音 / 恢复；窄屏悬停 120ms 打开、离开 200ms 关闭，Esc 与外部点击关闭，宽屏悬停不打开弹层。窗口跨过 900px 变宽时关闭弹层并清理音量定时器。</li>
   <li>音量条为特殊个例：触屏在音量按钮上纵向拖动超过 4px 后进入手势，按 <code>(startY - clientY) / 120</code> 的 delta 叠加到起始音量并夹紧到 0–1，不按手指绝对位置定位；拖动时在窄屏打开音量弹层，松开后关闭。轻点仍切换静音，滑动后的 click 被抑制。</li>
-  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓冲 overlay 为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
+  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位、无边框，有歌曲封面与占位共用 <code>--shadow-sm</code>；歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓冲 overlay 为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
 </ul>
 
 <h3 id="c4-41">4.41 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1504,6 +1504,8 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>深色与浅色 token 定义在 <code>:root</code> / <code>[data-theme]</code>；视觉契约见 <a href="USER.html#u5">USER §5</a>。</li>
+  <li>主题 token 增 <code>--shadow-color</code>（深色 <code>var(--text)</code> 20%、浅色 14% 混色）与统一缩放后的 <code>--shadow-sm: 0 2px 6px</code>、<code>--shadow: 0 5px 16px</code>、<code>--shadow-lg: 0 7px 22px</code>、<code>--shadow-up: 0 -4px 12px</code>、<code>--shadow-left: -8px 0 24px</code>、<code>--shadow-right: 8px 0 24px</code>、<code>--shadow-handle: 3px 0 10px</code>。</li>
+  <li>删除空状态占位封面的虚线边框；品牌、按钮、封面 / 头像、弹层、面板、Toast、模态框、抽屉与拖拽把手等全部投影改用上述 fg 阴影 token。焦点环（<code>0 0 0 Npx</code>）、输入框 inset 高光与遮罩纯背景不属于投影，保持独立。</li>
   <li>组件样式与响应式断点也在同一文件维护。</li>
   <li>布局最小阈值由 <code>--layout-min-width</code>（当前 <code>420px</code>）与 <code>--layout-min-height</code>（<code>--player-height + 170px</code>）统一声明；<code>.app-shell</code> 同时设置 <code>min-width</code> / <code>min-height</code>，<code>body</code> 使用 <code>overflow: auto</code> 提供整窗双向滚动。低于阈值时布局停止压缩，侧栏导航内部纵向滚动、账号入口固定、播放条保持第二行；内容区仍独立滚动。</li>
   <li>按钮文字不换行：<code>.btn</code> 使用 <code>white-space: nowrap</code>；歌单操作区 <code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，子按钮 <code>flex: 0 0 auto</code> 保持内容宽度，空间不足时整组换行；≤900px 媒体查询不再重复声明 <code>flex-wrap</code>。</li>
