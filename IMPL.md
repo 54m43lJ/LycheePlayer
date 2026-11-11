@@ -3082,7 +3082,7 @@
 
 状态：已解决。
 
-### 4.43 歌词页拖拽滚动滞后于指针
+### 4.43 歌词页拖拽滚动滞后于指针 [已解决]
 
 问题描述：ISSUES 指出歌词页上下拖动手感不对、不跟手。`LyricsPanel.vue` 在 `pointermove` 中直接写 `listRef.value.scrollTop`，但 `.lyrics-list` 同时设置了 `scroll-behavior: smooth`。按 CSSOM 语义，写 `scrollTop` 会使用元素自身的 `scroll-behavior`，浏览器会把每次赋值变成一段平滑滚动；指针已经移动，列表还在追赶动画，快速拖动时尤其明显。另一个冲突来源是 `activeIndex` 的自动回中也走平滑滚动：按下之后、越过 6px 拖拽阈值之前 `dragging` 仍为 `false`，此时歌词推进仍会触发 `centerActive()`，与用户手势抢滚动位置。
 
@@ -3106,6 +3106,21 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | `.lyrics-list` 的 `scroll-behavior` 为 `auto`；平滑只用于 `scrollIntoView` 自动回中。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 明确鼠标拖拽与指针 1:1 跟手；触屏使用原生惯性滚动；点击定位与拖拽互不误触。 |
 | `EVOLVE.md` | #5 | 改 | 在歌词交互中补充“拖拽即时跟手、触屏走原生滚动”的约束。 |
+
+实际操作（2026-11-11，分支 `doc/lyrics-drag-scroll`）：
+
+- `CORE.html` §4.41 `LyricsPanel.vue`：补拖拽写 `scrollTop` 必须即时生效、与指针 1:1；`pointerType === 'touch'` 不进入自定义拖拽，交给原生滚动与惯性；`activeIndex` 在 `pressing` 期间也跳过自动回中，避免抢滚动位置。
+- `CORE.html` §4.49 `styles/main.css`：补 `.lyrics-list` 使用 `scroll-behavior: auto`，拖拽写 `scrollTop` 立即生效；自动回中单独用 `scrollIntoView({ behavior: 'smooth' })`。
+- `USER.html` §5.2.5 歌词与评论：补鼠标拖拽与指针 1:1 跟手、触屏使用原生惯性滚动、点击定位与拖拽互不误触。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/LyricsPanel.vue`：`onPointerDown` 忽略 `pointerType === 'touch'`；`pointermove` 直接写 `scrollTop`；`pressing` / `dragging` 期间跳过 `centerActive()`；6px 阈值与 `setPointerCapture` 保持不变。
+- 对照 `src/renderer/styles/main.css`：`.lyrics-list` 为 `scroll-behavior: auto`；自动回中使用 `scrollIntoView({ behavior: 'smooth' })`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.44 专辑简介支持展开 / 收起并抽取共用简介组件
 
