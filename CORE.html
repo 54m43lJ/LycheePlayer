@@ -934,6 +934,7 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 </code></pre>
 <ul class="note">
   <li><code>fetchPlaylistPage</code> 只负责轻量首页 / 最近歌单校验；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
+  <li>普通歌单的 <code>editable</code> 由 <code>canEdit(data)</code> 判定：未登录返回 <code>false</code>；<code>dirinfo.owndir === 1</code> 返回 <code>true</code>；字段缺失或为 0 时回退比较当前登录 <code>musicid</code> 与 <code>dirinfo.creator.musicid</code> / <code>dirinfo.host_uin</code>，匹配才可编辑。「我喜欢」固定 <code>editable: true</code>，公开 / 他人歌单为 <code>false</code>。</li>
   <li>固定收藏歌单 ID 统一引用 <code>FAVORITES_PLAYLIST_ID = 'liked'</code>（<a href="#c4-50">§4.50</a>），模块内不再保留本地 <code>FAVORITES_ID</code> 字面量；收藏分支判断与收藏歌单元数据都使用该共享常量。</li>
   <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin</code> 递增、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；任一分页失败、空页、覆盖不足或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>。</li>
   <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存按账号 + 歌单 ID 持久化，上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>。</li>
@@ -1504,7 +1505,7 @@ const emit = defineEmits&lt;{
   <li>心跳由 <code>playlist.poll(id)</code> 用 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 检查首页；发现名称、封面、首屏顺序或数量显著变化时立即后台刷新，并取消待执行的 5 分钟 timeout。</li>
   <li>接入 <code>useAvailability</code>，按当前歌单歌曲集合触发探测；探测只更新歌单歌曲元数据，并把 <code>availability</code> / <code>loading</code> 同步给 playlist store，用于判断最终快照是否就绪。</li>
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
-  <li>处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后触发静默刷新，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
+  <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。显示筛选数与已下载数量，无匹配时显示空结果状态。</li>
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
@@ -1722,6 +1723,7 @@ export function removeSongs(id: string, mids: string[]): Promise&lt;PlaylistMuta
   <li>改名：先用 <code>fetchPlaylistPage</code> 读取当前 <code>dirId</code>，再调用 <code>PlaylistBaseWrite / EditPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirNewName, dirShow: 1, mask: 1 }</code>；成功后返回 <code>readMeta</code> 得到的最新 <code>PlaylistMeta</code>。</li>
   <li>删除：先用 <code>readMeta</code> 读取当前 <code>dirId</code>，再调用 <code>PlaylistBaseWrite / DelPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirName }</code>；只允许当前账号自建、非 <code>201</code> 的普通歌单；删除成功后由主进程清理该歌单缓存，列表刷新由渲染层重新加载。</li>
   <li>增删歌曲：<code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>，参数 <code>{ dirId, tid, bFmtUtf8: 1, v_songInfo: [{ songId, songType }] }</code>；<code>dirId</code> 是当前账号目录 ID，<code>tid</code> 是歌单标识，不能混用；<code>songId</code> 必须为数字 ID 且 <code>songType</code> 取歌曲详情真实值，每批最多 100 首。<code>dirId:201</code> 的收藏写入走签名加密通道，见 <a href="#c4-54">§4.54</a>。</li>
+  <li><code>removeSongs</code> 的归属前置校验由详情接口的 <code>editable</code> 提供；写入前先 <code>readMeta</code> 取 <code>dirId</code>，再用 <code>fetchTrackIdentities</code> 取得数字 <code>songId</code> 与真实 <code>songType</code>，提交 <code>DelSonglist</code>；不读回成员，<code>80092</code> 视为 <code>changed:false</code>，写后刷新由 <code>stores/playlist-edit</code> 统一负责。</li>
   <li><strong>写后刷新职责：</strong>增删歌曲只负责写入并返回 <code>PlaylistMutationResult { changed }</code>；<code>80092</code> 视为状态未变化并返回 <code>changed:false</code>。写后歌单内容 / 计数刷新统一由 <code>stores/playlist-edit</code> 调用现有 <code>playlist.invalidate(id)</code> + <code>playlist.poll(id)</code> 完成；不得在写 API 内单独实现整单扫描、尾部读回或其他刷新流程。</li>
   <li>业务码 <code>1000</code> 映射 <code>AUTH_EXPIRED</code>，<code>80105</code> / 权限不足映射 <code>NO_PERMISSION</code>，结构缺失映射 <code>UPSTREAM_CHANGED</code>；不新增错误码。</li>
 </ul>

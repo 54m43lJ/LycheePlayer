@@ -563,6 +563,10 @@ interface QqPlaylistData {
     title?: string;
     picurl?: string;
     songnum?: number;
+    dirid?: string | number;
+    owndir?: string | number;
+    host_uin?: string | number;
+    creator?: { musicid?: string | number };
   };
   songlist?: QqSong[];
 }
@@ -848,8 +852,8 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqPlaylistData</code></td>
-    <td><code>dirinfo.id</code> / <code>title</code> / <code>picurl</code> / <code>songnum</code> · <code>songlist[]</code></td>
-    <td><code>songlist[]</code> 是单页结果；单次最多返回 100 首，应用固定 50 首/页；总数以 <code>dirinfo.songnum</code> 为准。<code>songnum</code> 与 <code>songlist</code> 成员可能短暂不一致：写入后总数可能先变化，列表成员稍后才可见；总数增加或状态读回 true 都不能单独作为收藏成功依据。</td>
+    <td><code>dirinfo.id</code> / <code>title</code> / <code>picurl</code> / <code>songnum</code> / <code>dirid</code> / <code>owndir</code> / <code>host_uin</code> / <code>creator.musicid</code> · <code>songlist[]</code></td>
+    <td><code>songlist[]</code> 是单页结果；单次最多返回 100 首，应用固定 50 首/页；总数以 <code>dirinfo.songnum</code> 为准。<code>songnum</code> 与 <code>songlist</code> 成员可能短暂不一致：写入后总数可能先变化，列表成员稍后才可见；总数增加或状态读回 true 都不能单独作为收藏成功依据。<code>owndir === 1</code> 表示当前账号拥有该歌单；字段缺失或为 0 时应用回退比较当前账号与 <code>creator.musicid</code> / <code>host_uin</code>，任一匹配才视为可编辑。</td>
   </tr>
   <tr>
     <td><code>QqMineData</code></td>

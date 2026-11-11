@@ -2546,7 +2546,7 @@
 
 状态：已解决。
 
-### 4.35 歌单详情恢复“从歌单删除”按钮与写后校验
+### 4.35 歌单详情恢复“从歌单删除”按钮与写后校验 [已解决]
 
 > 后续修正：§4.39 已把写后读回 / 整单扫描移出写 API，删除链路改为 `playlist.removeSongs` 返回 `{ changed }` 后由 `stores/playlist-edit.ts` 的 `refreshAfterWrite` 统一刷新；本节关于“DelSonglist → 读回成员确认”的描述以 §4.39 为准，可编辑判定与乐观移除仍有效。
 
@@ -2583,6 +2583,25 @@
 | `CORE.html` | §4.55 `api/playlist-write.ts` | 改 | 补 `removeSongs` 的归属前置校验由详情接口提供，删除时按数字 `songId` / `songType` 写 `DelSonglist`；写后刷新由 §4.39 统一流程负责。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 说明自己创建的歌单在歌曲操作列显示“从歌单删除”，公开歌单不显示；删除只影响歌单成员，不改变播放队列。 |
 | `EVOLVE.md` | #14 | 不动 | 删除歌曲的交互与写后校验已由 CORE / USER 记录，本次仅修复可编辑判定。 |
+
+实际操作（2026-11-11，分支 `doc/playlist-remove-button`）：
+
+- `PROVIDER.html` §4.3 `QqPlaylistData`：`dirinfo` 补 `dirid` / `owndir` / `host_uin` / `creator.musicid` 字段；字段说明补 `owndir === 1` 表示当前账号拥有该歌单，缺失或为 0 时回退比较创建者 / host。
+- `CORE.html` §4.12 `api/playlist.ts`：补普通歌单 `editable` 的 `canEdit(data)` 规则——未登录为 `false`，`owndir === 1` 为 `true`，否则回退比较当前 `musicid` 与 `creator.musicid` / `host_uin`；「我喜欢」固定可编辑，公开 / 他人歌单不可编辑。
+- `CORE.html` §4.46 `PlaylistView.vue`：删除入口说明补“仅普通且 `editable` 为真时传入 `removable`”；「我喜欢」与公开 / 他人歌单不显示删除按钮；保留确认、乐观移除、失败回滚，写后由 `stores/playlist-edit` 统一刷新。
+- `CORE.html` §4.55 `api/playlist-write.ts`：补 `removeSongs` 归属前置校验由详情接口提供；写入前 `readMeta` 取 `dirId`，`fetchTrackIdentities` 取数字 `songId` 与真实 `songType`，提交 `DelSonglist`；不读回成员，`80092` 视为 `changed:false`，写后刷新由渲染层统一负责。
+- `USER.html` §5.2.8 歌单详情：补自己创建的歌单在歌曲操作列显示“从歌单删除”，公开 / 他人歌单不显示；删除只影响歌单成员，不改变播放队列。
+- `EVOLVE.md`：按原表“不动”未处理，仓库中也不存在该文件。
+
+验证：
+
+- 对照 `src/main/api/playlist.ts`：`canEdit` 未登录返回 `false`，`owndir === 1` 返回 `true`，否则比较 `creator.musicid ?? host_uin` 与当前 `musicid`；普通歌单 `editable: canEdit(data)`，「我喜欢」固定 `true`。
+- 对照 `src/renderer/views/PlaylistView.vue`：`removable` 为 `meta.editable && kind === 'normal'`，删除前确认，失败恢复行与计数。
+- 对照 `src/main/api/playlist-write.ts`：`removeSongs` 先 `readMeta`，`writeDetail` 用 `fetchTrackIdentities` 生成数字 `songId` / 真实 `songType`，提交 `DelSonglist`；`80092` 返回 `changed:false`。
+- 对照 `PROVIDER.html`：`QqPlaylistData` 已包含 `dirid` / `owndir` / `host_uin` / `creator.musicid` 与归属说明。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.36 添加到歌单写错 dirId / tid 导致 80092
 
