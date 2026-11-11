@@ -2811,7 +2811,7 @@
 
 状态：已解决。
 
-### 4.39 纠正：写后刷新应复用歌单刷新流程
+### 4.39 纠正：写后刷新应复用歌单刷新流程 [已解决]
 
 问题描述：§4.38 把“写后读回 / 整单扫描”定义在 `api/playlist-write.ts` 内部，误解了职责边界。添加 / 删除写接口只应负责写入，写后歌单内容与计数的确认必须触发现有歌单刷新流程，由同一份代码统一处理；否则每个写操作都会重复实现一套“扫描 + 校验”，既慢又容易与轮询 / 缓存逻辑漂移。
 
@@ -2848,6 +2848,29 @@
 | `CORE.html` | §4.65 `composables/availability.ts` 附近 / §4.61 `stores/playlist.ts` | 改 | 说明写后刷新复用 `invalidate` + `poll`，不要在写操作内重复实现刷新或校验。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 添加 / 删除后歌单内容与计数由统一刷新流程更新；重复添加提示“已在歌单中”，未变化删除提示“歌曲不在歌单中”。 |
 | `EVOLVE.md` | #14 | 改 | 补“歌单写后刷新必须复用既有歌单刷新流程，不得在写接口内单独实现扫描 / 读回”的约束。 |
+
+实际操作（2026-11-11，分支 `doc/playlist-refresh-after-write`）：
+
+- `CORE.html` §4.1 `types.ts`：新增 `PlaylistMutationResult { changed: boolean }`，注明 80092 等业务状态返回 `false`。
+- `CORE.html` §4.2 `shared/ipc.ts`：`playlist.addSongs` / `playlist.removeSongs` 返回类型从 `PlaylistMeta` 改为 `PlaylistMutationResult`。
+- `CORE.html` §4.55 `api/playlist-write.ts`：核对后已明确写接口只负责写入并返回 `{ changed }`，不做写后读回 / 整单扫描，本次无需再改。
+- `CORE.html` §4.61 `stores/playlist.ts`：补 `stores/playlist-edit` 的 `refreshAfterWrite(id)` 在写后立即调用 `invalidate(id)` + `poll(id)`，复用同一刷新流程。
+- `CORE.html` §4.63 `stores/playlist-edit.ts`（原表写作 §4.31）：签名改为 `addSongs` / `removeSongs` 返回 `Promise<boolean>`；补两者统一调用 `refreshAfterWrite`、当前页立即 poll / 未打开只失效缓存、根据 `changed` 提示“已添加 / 已在歌单中 / 已移除 / 歌曲不在歌单中”；移除旧的“从响应刷新成员 / 按 songCount 去重”描述。
+- `CORE.html` §4.77 `PlaylistPicker.vue`：签名改为当前 `songMids` / `added` 事件；说明完整缓存命中时本地重复预检直接提示，未命中再调用 `playlist-edit.addSongs`，`createAndAdd` 复用同一入口。
+- `CORE.html` §4.65 `composables/availability.ts`：按原表核对，写后刷新不涉及可用性探测，未改。
+- `USER.html` §5.2.8 歌单详情：补添加 / 删除后内容与计数由统一刷新更新；重复添加提示“已在歌单中”，未变化删除提示“歌曲不在歌单中”。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/main/api/playlist-write.ts`：`addSongs` / `removeSongs` 只提交写入并返回 `{ changed }`，80092 返回 `changed:false`；没有写后读回或整单扫描。
+- 对照 `src/renderer/stores/playlist-edit.ts`：`addSongs` / `removeSongs` 均调用 `refreshAfterWrite(id)`；该函数执行 `playlist.invalidate(id)` 与 `void playlist.poll(id)`，并按 `changed` 提示。
+- 对照 `src/renderer/components/PlaylistPicker.vue`：完整缓存命中时本地预检提示“已在歌单中”，否则调用 `playlist-edit.addSongs`；`createAndAdd` 复用同一入口。
+- 对照 `src/renderer/stores/playlist.ts`：`invalidate(id)` 只标记 stale，`poll(id)` 走已有刷新 / 分页加载流程。
+- 对照 `src/shared/types.ts` / `src/shared/ipc.ts`：`PlaylistMutationResult { changed }` 与 IPC 返回类型一致。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.40 评论区取消正文截断并修复分页游标
 

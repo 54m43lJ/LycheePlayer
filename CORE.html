@@ -330,6 +330,11 @@ export interface PlaylistMeta {
   editable: boolean;
 }
 
+export interface PlaylistMutationResult {
+  /** 上游是否实际改变了歌单成员；80092 等业务状态返回 false。 */
+  changed: boolean;
+}
+
 export interface PlaylistDetail {
   meta: PlaylistMeta;
   songs: Song[];
@@ -662,8 +667,8 @@ export interface FlagsFile {
     create(name: string): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
     rename(id: string, name: string): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
     remove(id: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
-    addSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
-    removeSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
+    addSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMutationResult&gt;&gt;;
+    removeSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMutationResult&gt;&gt;;
   };
   favorite: {
     get(mids: string[]): Promise&lt;IpcResult&lt;FavoriteState[]&gt;&gt;;
@@ -1937,7 +1942,7 @@ export interface PlaylistFeed {
   <li>打开歌单先读取整份缓存并立即展示（<code>complete=false</code> 显示为 <code>partial</code>），同时调用 <code>refresh</code> 在后台拉取完整快照；只有 <code>getSnapshot</code> 成功才一次性替换 <code>feed</code>。失败保留缓存、标记 <code>stale</code>，并安排 <code>PLAYLIST_REFRESH_RETRY_MS</code> 定时重试。</li>
   <li><code>refresh</code> 开始前清除 timeout；<code>poll</code> 心跳发现名称、封面、首屏顺序或数量显著变化时立即调用 <code>refresh</code>，因此心跳变化优先于 5 分钟 timeout。无变化且内容完整时保留 timeout，不做额外刷新。</li>
   <li>心跳由 <code>PlaylistView</code> 只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时启动；隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时。离开页面调用 <code>stop</code>：清除 timeout、递增刷新序号并调用 <code>playlist.cancelSnapshot</code>。</li>
-  <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale；写操作不再删除缓存文件，心跳或下次打开时静默刷新覆盖。只有歌单不存在 / 无权限时才删除持久缓存。</li>
+  <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale；写操作不再删除缓存文件，心跳或下次打开时静默刷新覆盖。只有歌单不存在 / 无权限时才删除持久缓存。<code>stores/playlist-edit</code> 的 <code>refreshAfterWrite(id)</code> 在写后立即调用 <code>invalidate(id)</code> + <code>poll(id)</code>，复用同一刷新流程。</li>
   <li>队列快照：<code>beginQueueBuild()</code> 标记来源；<code>setProbeState()</code> 在每次探测结果变化后尝试推进。最终快照要求 <code>complete &amp;&amp; !stale</code> 且所有歌曲元数据已就绪；之前只生成一次临时快照（优先整份缓存，其次当前已载入页）。最终快照与临时快照签名相同则保留现有队列（含手动插入歌曲），不同则 <code>replacePlaylistQueue</code> 替换。</li>
   <li><code>removeMembers(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code>、<code>sourceTotal</code> 与 <code>meta.songCount</code>，并写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后先调用它做乐观移除，写入失败时由调用方恢复原数组。</li>
   <li><code>recent</code> 按当前账号持久化到 <code>localStorage</code>（key 前缀见 <a href="#c4-50">§4.50</a>），最多 <code>RECENT_PLAYLIST_LIMIT</code> 条。<code>visit(meta)</code> 在进入歌单页时更新 <code>visitedAtMs</code> 并置顶，超出时淘汰最旧一条；<code>removeRecent</code> 移除条目，不补位。</li>
@@ -1976,8 +1981,8 @@ interface PlaylistEditStore {
   create(name: string): Promise&lt;void&gt;;
   rename(id: string, name: string): Promise&lt;void&gt;;
   remove(id: string): Promise&lt;void&gt;;
-  addSongs(id: string, mids: string[]): Promise&lt;void&gt;;
-  removeSongs(id: string, mids: string[]): Promise&lt;void&gt;;
+  addSongs(id: string, mids: string[]): Promise&lt;boolean&gt;;
+  removeSongs(id: string, mids: string[]): Promise&lt;boolean&gt;;
   loadFavorites(mids: string[]): Promise&lt;void&gt;;
   toggleFavorite(songMid: string): Promise&lt;void&gt;;
 }
@@ -1986,8 +1991,9 @@ interface PlaylistEditStore {
   <li><code>loadFavorites</code> 按 <code>IPC_SONG_MIDS_MAX = 100</code> 分批读取收藏状态；读取失败保留当前集合。</li>
   <li><code>toggleFavorite</code> 先乐观更新 <code>favorites</code>；成功后按返回状态校正，递增 <code>favoriteVersion</code>，调用 <code>playlist.invalidate('liked')</code>，若当前正打开“我喜欢”则立即 <code>poll('liked')</code>；失败回滚并提示。</li>
   <li><code>LibraryView</code> 监听 <code>favoriteVersion</code> 重新拉取“我的歌单”卡片；歌单写入失败时保留原状态并提示。</li>
-  <li><code>removeSongs</code> 调用 <code>playlist.removeSongs</code> 并从响应刷新成员；失败抛错，由 <code>PlaylistView</code> 恢复行与计数。</li>
-  <li><code>create</code> / <code>rename</code> / <code>remove</code> 成功后刷新“我的歌单”并清除对应缓存；<code>addSongs</code> 按目标歌单去重，重复歌曲不重复提交，成功后更新目标歌单缓存与轮询。所有写入共用 <code>AUTH_EXPIRED</code> / <code>NO_PERMISSION</code> / <code>UPSTREAM_CHANGED</code> 映射，失败保留原状态。</li>
+  <li><code>addSongs</code> / <code>removeSongs</code> 调用 IPC 后统一执行 <code>refreshAfterWrite(id)</code>：先 <code>playlist.invalidate(id)</code>，再 <code>void playlist.poll(id)</code>。当前打开该歌单时立即走已有分页加载流程；未打开时只失效缓存，下次进入再加载。返回 <code>changed</code>，并提示“已添加到歌单 / 已从歌单移除”或“已在歌单中 / 歌曲不在歌单中”。</li>
+  <li>写 API 不读回成员，添加 / 删除后的最终内容与计数以统一刷新结果为准；<code>PlaylistView</code> 的乐观移除在刷新前保留，失败时恢复行与计数。<code>PlaylistPicker</code> 先用完整缓存做本地重复预检，命中直接提示“已在歌单中”，未命中再调用 <code>addSongs</code>；<code>createAndAdd</code> 复用同一入口。</li>
+  <li><code>create</code> / <code>rename</code> / <code>remove</code> 成功后刷新“我的歌单”并清除对应缓存；所有写入共用 <code>AUTH_EXPIRED</code> / <code>NO_PERMISSION</code> / <code>UPSTREAM_CHANGED</code> 映射，失败保留原状态。</li>
 </ul>
 
 <h3 id="c4-64">4.64 src/renderer/utils/qrc.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -2182,12 +2188,12 @@ export function getArtistSongs(
 </ul>
 
 <h3 id="c4-77">4.77 src/renderer/components/PlaylistPicker.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>const props = defineProps&lt;{ open: boolean; song: Song | null }&gt;();
-const emit = defineEmits&lt;{ close: []; picked: [playlistId: string] }&gt;();
+<pre><code>const props = defineProps&lt;{ open: boolean; songMids: string[]; songName?: string }&gt;();
+const emit = defineEmits&lt;{ close: []; added: [id: string] }&gt;();
 </code></pre>
 <ul class="note">
   <li>列出当前账号可编辑的普通歌单（排除“我喜欢”），提供“新建歌单”；空列表、加载中与错误分别渲染。</li>
-  <li>选择歌单后发出 <code>picked(playlistId)</code>，由调用方执行 <code>playlist-edit.addSongs</code>；歌曲已在目标歌单时不重复提交并 Toast“已在歌单中”。</li>
+  <li>选择歌单后直接调用 <code>playlist-edit.addSongs</code>；完整缓存命中时由本地重复预检直接提示“已在歌单中”，未命中再提交写入。成功发出 <code>added</code> / <code>close</code>，失败提示；<code>createAndAdd</code> 复用同一入口。</li>
   <li>新建歌单复用 <code>PlaylistEditDialog</code>，创建成功后直接加入当前歌曲；<code>open</code> 关闭时清空临时状态。</li>
 </ul>
 
