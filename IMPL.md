@@ -1293,7 +1293,7 @@
 
 状态：已解决。
 
-### 4.12 歌手页空闲时连续出现 104009 播放链接错误
+### 4.12 歌手页空闲时连续出现 104009 播放链接错误 [已解决]
 
 问题描述：用户停在歌手页、没有播放任何歌曲时，控制台仍连续输出 `[ipc] UPSTREAM_NETWORK: QQ 音乐拒绝了播放链接请求（104009）…`。
 
@@ -1324,6 +1324,21 @@
 | `CORE.html` | §4.2 `ipc.ts` | 改 | `handle` 增加 `{ silent?: boolean }`；`song.probe` 失败不写 IPC 错误日志。 |
 | `USER.html` | §5.3 错误与通知 | 不动 | 背景探测仍静默处理，不新增用户可见提示。 |
 | `EVOLVE.md` | #5 歌词 / 评论或 #4 歌手页 | 不动 | 属于可用性探测的生命周期修复，不改变产品交互。 |
+
+实际操作（2026-11-11，分支 `doc/availability-dispose-silent-probe`）：
+
+- `CORE.html` §4.65 `composables/availability.ts`：补充 `onScopeDispose` 卸载清理——递增 `generation` 并取消待执行 idle / timeout，已发出请求的结果不再落入状态；探测暂停条件加入 `UPSTREAM_NETWORK`（含 104009），并停止后续批次与 `rerun`。
+- `CORE.html` §4.2 `ipc.ts`：`handle` 签名补 `{ silent?: boolean }`，说明异常仍以 `IpcResult` 返回但不写 `[ipc]` 日志；`song.probe` 使用静默模式。
+- `USER.html` §5.3 错误与通知：按原表“不动”未处理。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/composables/availability.ts`：`onScopeDispose` 中 `generation += 1`，并调用 `cancelIdleCallback` / `clearTimeout` 取消 `scheduled`；`probe` 的 catch 在 `QUOTA_LIMITED` / `AUTH_EXPIRED` / `UPSTREAM_NETWORK` 时设置 `suspended = true`，循环与 `rerun` 均受其约束。
+- 对照 `src/main/ipc.ts`：`envelope(fn, logError = true)` 按 `logError` 决定是否 `console.error`；`handle(..., options: { silent?: boolean })` 传入 `!options.silent`；`song.probe` 注册时带 `{ silent: true }`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.13 song.probe 请求量与 IP 104009 风控核查（后由 §4.25 / §4.30 完成）
 

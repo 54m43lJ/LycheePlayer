@@ -757,13 +757,17 @@ function showMainWindow(): void;
 <pre><code>export function registerIpc(): void;
 export function sendPlayerCommand(command: MprisCommand): void;
 
-function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;): Promise&lt;IpcResult&lt;T&gt;&gt;;
-function handle(channel: string, fn: (...args: any[]) =&gt; Promise&lt;unknown&gt;): void;
+function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;, logError?: boolean): Promise&lt;IpcResult&lt;T&gt;&gt;;
+function handle(
+  channel: string,
+  fn: (...args: any[]) =&gt; Promise&lt;unknown&gt;,
+  options?: { silent?: boolean }
+): void;
 
 </code></pre>
 <ul class="note">
   <li><code>registerIpc</code> 注册全部请求型通道、<code>app.quit</code> 与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>；<code>player:state</code> 同时分发到 MPRIS 与托盘。</li>
-  <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程；<code>app.quit</code> 是单向消息，直接调用 <code>app.quit()</code>，不复用 <code>handle</code>。</li>
+  <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程；<code>app.quit</code> 是单向消息，直接调用 <code>app.quit()</code>，不复用 <code>handle</code>。<code>handle</code> 支持 <code>{ silent: true }</code>：异常仍以 <code>IpcResult</code> 返回给渲染层，但不写 <code>[ipc]</code> 错误日志；背景 <code>song.probe</code> 使用该模式，避免可用性探测失败刷屏。</li>
 </ul>
 
 <h3 id="c4-6">4.6 src/main/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1936,7 +1940,8 @@ export function parseQrcLyric(text: string, trans: string | null): LyricLine[];
 <ul class="note">
   <li>监听歌曲 mid 集合，使用 <code>requestIdleCallback</code>（超时 <code>PROBE_IDLE_TIMEOUT_MS</code>）或 <code>PROBE_IDLE_FALLBACK_MS</code> 调度；按 <code>PROBE_MIDS_MAX = 50</code> 分批调用 <code>song.probe</code>。</li>
   <li><code>covered</code> 记录已探测的 mid：歌单追加新页时只探测新增歌曲，不因集合变化重复探测已覆盖部分；探测未完成时再次调度只置 <code>rerun</code>，由当前循环续跑，避免并发探测。</li>
-  <li>连续 <code>PROBE_EMPTY_BATCH_LIMIT</code> 个整批（每批 50 首）都不可播，或探测返回 <code>QUOTA_LIMITED</code> / <code>AUTH_EXPIRED</code> 时暂停本轮探测，避免鉴权 / 风控异常时继续轰炸上游；登录账号变化时清空已探测集合、结果与暂停状态并重新调度。新一批探测会递增 generation，旧响应不会覆盖新结果；其他读取失败静默保留未知状态。<code>refresh()</code> 强制重探。</li>
+  <li>连续 <code>PROBE_EMPTY_BATCH_LIMIT</code> 个整批（每批 50 首）都不可播，或探测返回 <code>QUOTA_LIMITED</code> / <code>AUTH_EXPIRED</code> / <code>UPSTREAM_NETWORK</code>（含 104009）时暂停本轮探测，停止后续批次与 <code>rerun</code>，避免鉴权 / 风控 / 网络异常时继续轰炸上游；登录账号变化时清空已探测集合、结果与暂停状态并重新调度。新一批探测会递增 generation，旧响应不会覆盖新结果；其他读取失败静默保留未知状态。<code>refresh()</code> 强制重探。</li>
+  <li>注册 <code>onScopeDispose</code>：组件卸载时递增 <code>generation</code> 并取消待执行的 idle / timeout，已发出的请求结果因 token 不匹配不再写入状态，避免离开歌单页后探测继续在后台执行。</li>
 </ul>
 
 <h3 id="c4-66">4.66 src/renderer/components/PlaylistEditDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
