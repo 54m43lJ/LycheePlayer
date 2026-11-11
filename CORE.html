@@ -22,6 +22,7 @@
 <pre><code>lychee-player/
 ├── diagram/                                  PlantUML 图源与导出 SVG
 ├── resources/                                应用与托盘图标
+│   ├── tray.png                             22×22 全彩 RGBA 托盘图标（无单色变体）
 │   └── flags.conf.example                    启动参数示例
 ├── scripts/
 │   ├── probe.mjs                             上游接口可达性探针
@@ -1010,6 +1011,7 @@ export function destroyTray(): void;
   <li>播放 / 暂停点击不直接广播 <code>toggle</code>：托盘侧读取最近一次 <code>player:state</code>，解析为明确的 <code>play</code> 或 <code>pause</code> 后下发，避免渲染进程状态滞后导致第一次点击被吞；同一 200ms 窗口内的重复命令去重，但不合并用户连续操作（去重后仍下发最新一条）。</li>
   <li>菜单重建时重新绑定点击回调，避免重建丢失回调导致首次点击无效；Linux AppIndicator 可能延迟首帧，作为外部限制记录在 <a href="USER.html#u5-4">USER §5.4</a>。</li>
   <li>单击托盘图标只显示主窗口；GNOME 需要 AppIndicator 扩展，初始化失败静默降级。</li>
+  <li>托盘图标固定加载 <code>resources/tray.png</code> 的 22×22 全彩 RGBA PNG，<code>loadTrayImage()</code> 直接 <code>nativeImage.createFromPath()</code>，不在运行时缩放，避免高 DPI 下导出 44×44 <code>IconPixmap</code>；显式 <code>setTemplateImage(false)</code>，空图标输出警告并放弃创建托盘。</li>
 </ul>
 
 <h3 id="c4-20">4.20 src/main/types/mpris-service.d.ts <a class="backlink" href="#c1">文件树</a></h3>
