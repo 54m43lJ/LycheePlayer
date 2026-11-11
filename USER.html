@@ -404,8 +404,9 @@
   <div class="ui-proto u-side" style="width: 224px; height: 470px; border-radius: 10px; border-right: 1px solid var(--p-line)">
     <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>QQ Music · Linux</small></span></div>
     <div class="u-nav-label">浏览</div>
-    <div class="u-nav-item active">搜索</div>
-    <div class="u-nav-item">发现</div>
+    <div class="u-nav-item active">发现</div>
+    <div class="u-nav-item">搜索</div>
+    <div class="u-nav-item">我喜欢</div>
     <div class="u-nav-item">我的歌单</div>
     <div class="u-nav-item" style="padding-left: 28px; opacity: .85">我喜欢的音乐</div>
     <div class="u-nav-item" style="padding-left: 28px; opacity: .85">华语流行</div>
@@ -419,8 +420,9 @@
   <div class="ui-proto u-side" style="width: 224px; height: 470px; border-radius: 10px; box-shadow: 6px 0 18px rgba(0,0,0,.35)">
     <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>窄屏抽屉 · 默认隐藏</small></span></div>
     <div class="u-nav-label">浏览</div>
-    <div class="u-nav-item active">搜索</div>
-    <div class="u-nav-item">发现</div>
+    <div class="u-nav-item active">发现</div>
+    <div class="u-nav-item">搜索</div>
+    <div class="u-nav-item">我喜欢</div>
     <div class="u-nav-item">我的歌单</div>
     <div class="u-nav-item" style="padding-left: 28px; opacity: .85">华语流行 <span class="u-qmark">播放中</span></div>
     <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>已登录 · 0123456789</small></span></div>
@@ -428,7 +430,7 @@
 </div>
 </div>
 <ul class="note">
-  <li>宽屏（&gt;900px）固定侧栏 224px：品牌、浏览组（“搜索 / 发现 / 我的歌单”）、应用组（“下载 / 设置 / 退出” + 配色切换图标）与底部账号 pill；导航项激活态使用 accent 软填充与强调文字，悬停态只改变背景与文字颜色。</li>
+  <li>宽屏（&gt;900px）固定侧栏 224px：品牌、浏览组（“发现 / 搜索 / 我喜欢 / 我的歌单”，“我喜欢”仅登录后显示并与“我的歌单”同级，进入固定收藏歌单）、应用组（“下载 / 设置 / 退出” + 配色切换图标）与底部账号 pill；导航项激活态使用 accent 软填充与强调文字，悬停态只改变背景与文字颜色。</li>
   <li>“我的歌单”下最多显示 5 条最近访问歌单作为子条目；点击进入对应歌单。进入歌单页时更新该条目并置顶，超过 5 条淘汰最旧的一条；已删除或无权限的歌单在校验后移除，且不从第 6 条补位；歌单信息变化时更新名称 / 封面 / 歌曲数。</li>
   <li>当前正在播放的歌单在最近列表中高亮，播放与暂停状态都高亮，与当前路由无关；手动队列（无歌单来源）不高亮。</li>
   <li>≤900px：侧栏改为覆盖式抽屉，默认隐藏；主界面在前、抽屉在后，抽屉左侧带少量阴影形成 revealer 效果。左边缘把手指针可打开；主界面向右拖动显示、向左拖动隐藏，松手按位移 / 速度吸附；Esc、点击外部关闭；<code>prefers-reduced-motion</code> 时取消动画。抽屉打开时焦点进入侧栏，关闭后回到触发点。</li>

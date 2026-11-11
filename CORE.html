@@ -890,6 +890,7 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 </code></pre>
 <ul class="note">
   <li><code>fetchPlaylistPage</code> 只负责轻量首页 / 最近歌单校验；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
+  <li>固定收藏歌单 ID 统一引用 <code>FAVORITES_PLAYLIST_ID = 'liked'</code>（<a href="#c4-50">§4.50</a>），模块内不再保留本地 <code>FAVORITES_ID</code> 字面量；收藏分支判断与收藏歌单元数据都使用该共享常量。</li>
   <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin</code> 递增、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；任一分页失败、空页、覆盖不足或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>。</li>
   <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存按账号 + 歌单 ID 持久化，上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>。</li>
   <li>歌单不存在 / 无权限时才删除缓存；添加、删除、改名、收藏等写操作只标记旧缓存为过期，不删除文件，下一次打开仍先展示旧内容。</li>
@@ -1050,6 +1051,7 @@ export function destroyTray(): void;
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
   <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
+  <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。</li>
   <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），点击进入对应歌单，校验失败条目显示失效态；正在播放的歌单按 <code>player.queueSource</code> 高亮，与路由无关。</li>
 </ul>
 
@@ -1516,6 +1518,7 @@ export declare const SEARCH_PAGE_SIZE_MAX: number;          // 50
 export declare const PLAYLIST_PAGE_SIZE: number;            // 50
 export declare const PLAYLIST_PAGE_MAX: number;             // 20_000
 export declare const PLAYLIST_POLL_INTERVAL_MS: number;     // 15_000 ms
+export declare const FAVORITES_PLAYLIST_ID: string;         // 'liked'
 export declare const PLAYLIST_CACHE_MAX_BYTES: number;      // 16 × 1024 × 1024
 export declare const PLAYLIST_PAGE_RETRY_ATTEMPTS: number;  // 3
 export declare const PLAYLIST_PAGE_RETRY_BACKOFF_MS: number; // 500 ms

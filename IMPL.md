@@ -986,7 +986,7 @@
 
 状态：已解决。
 
-### 4.5 侧栏新增“我喜欢”入口
+### 4.5 侧栏新增“我喜欢”入口 [已解决]
 
 > 后续修正：§4.19 将侧栏“浏览”组顺序改为“发现 → 搜索 → 我喜欢 → 我的歌单”，并把根路径默认页改为发现页；“我喜欢”入口本身不变。
 
@@ -1012,6 +1012,23 @@
 | `CORE.html` | §4.12 `main/api/playlist.ts` | 改 | 固定收藏歌单 ID 改为引用共享常量，删除模块内重复字面量。 |
 | `USER.html` | §5.2.2 侧栏与导航 | 改 | 浏览组顺序补“我喜欢”；说明登录后显示、与“我的歌单”同级。 |
 | `EVOLVE.md` | #11 优化左侧导航 | 改 | 侧栏内容补“我喜欢”快捷入口。 |
+
+实际操作（2026-11-11，分支 `doc/sidebar-favorites-entry`）：
+
+- `CORE.html` §4.23 `App.vue`：新增“浏览”组顺序“发现 / 搜索 / 我喜欢 / 我的歌单”，说明“我喜欢”仅登录后显示、与“我的歌单”同级、链接到 `/playlist/${FAVORITES_PLAYLIST_ID}`，点击走 `onSidebarNavigate()` 关闭窄屏抽屉，并复用 PlaylistView 的 favorites 分支。
+- `CORE.html` §4.50 `shared/constants.ts`：签名补 `FAVORITES_PLAYLIST_ID: string // 'liked'`。
+- `CORE.html` §4.12 `main/api/playlist.ts`：说明固定收藏歌单 ID 引用共享常量，模块内不再保留本地 `FAVORITES_ID` 字面量。
+- `USER.html` §5.2.2 侧栏与导航：两处侧栏原型和文字说明同步为“发现 / 搜索 / 我喜欢 / 我的歌单”，补充“我喜欢”仅登录后显示并与“我的歌单”同级。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/shared/constants.ts`：存在 `FAVORITES_PLAYLIST_ID = 'liked'`。
+- 对照 `src/main/api/playlist.ts`：导入 `FAVORITES_PLAYLIST_ID`，收藏分支与收藏歌单元数据均使用该常量，模块内没有本地 `FAVORITES_ID`。
+- 对照 `src/renderer/App.vue`：导入共享常量，`favoritesPath = /playlist/${FAVORITES_PLAYLIST_ID}`；“我喜欢”链接 `v-if="auth.loggedIn"`，位于“我的歌单”之前，点击调用 `onSidebarNavigate()`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.6 最近歌单子条目按当前路由高亮
 
