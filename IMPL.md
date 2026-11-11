@@ -1030,7 +1030,7 @@
 
 状态：已解决。
 
-### 4.6 最近歌单子条目按当前路由高亮
+### 4.6 最近歌单子条目按当前路由高亮 [已解决]
 
 问题描述：ISSUES 指出侧栏“我的歌单”下的最近歌单子条目，在打开对应歌单时不会高亮。原实现只把 `item.id` 与 `currentPlaylistId` 比较，而 `currentPlaylistId` 来自 `player.queueSource`（正在播放的歌单），与当前浏览路由无关；因此打开一个未在播放的歌单时，子条目没有高亮。
 
@@ -1052,6 +1052,22 @@
 | `CORE.html` | §4.61 `stores/playlist.ts` | 改 | 把“当前播放歌单高亮读取 `queueSource`”改为“高亮读取路由 + `queueSource`；播放图标仍只由 `queueSource` 决定”。 |
 | `USER.html` | §5.2.2 侧栏与导航 | 改 | 高亮规则改为：当前打开的最近歌单与正在播放的歌单都高亮，播放状态由音量图标单独表示。 |
 | `EVOLVE.md` | #11 优化左侧导航 | 改 | 把“当前正在播放的歌单在最近列表中高亮，与当前路由无关”改为同时考虑当前路由。 |
+
+实际操作（2026-11-11，分支 `doc/recent-playlist-route-highlight`）：
+
+- `CORE.html` §4.23 `App.vue`：最近歌单子条目高亮改为 `item.id === viewedPlaylistId || item.id === currentPlaylistId`；说明 `viewedPlaylistId` 只在 `route.name === 'playlist'` 时读取路由参数，避免 `/mv/:id` 等误命中；“正在播放”图标仍只由 `queueSource` 决定。
+- `CORE.html` §4.61 `stores/playlist.ts`：把“当前播放歌单高亮读取 `queueSource`”改为“当前 `playlist` 路由与 `queueSource` 都参与高亮；播放图标只由 `queueSource` 决定”，并说明 store 不读取路由、不改变 recent 排序 / 校验 / `visit`。
+- `USER.html` §5.2.2 侧栏与导航：高亮规则改为“当前打开与正在播放的歌单都高亮，播放状态由音量图标单独表示”。
+- `USER.html` §2 术语表“最近歌单”相关三处：同步为“当前打开或正在播放的歌单高亮”，并删除“与当前路由无关”。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/App.vue`：`viewedPlaylistId` 仅在 `route.name === 'playlist'` 时读取 `route.params.id`；最近条目 class 使用 `item.id === viewedPlaylistId || item.id === currentPlaylistId`，播放图标仅用 `item.id === currentPlaylistId`。
+- `playlistStore.recent` 的排序、校验与 `visit` 逻辑未在本次文档中改写，文档仍与 store 实现一致。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.7 评论点赞状态未加载
 

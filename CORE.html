@@ -1052,7 +1052,7 @@ export function destroyTray(): void;
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
   <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
   <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。</li>
-  <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），点击进入对应歌单，校验失败条目显示失效态；正在播放的歌单按 <code>player.queueSource</code> 高亮，与路由无关。</li>
+  <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
 </ul>
 
 <h3 id="c4-24">4.24 src/renderer/api.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1859,7 +1859,7 @@ export interface PlaylistFeed {
   <li><code>removeMembers(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code>、<code>sourceTotal</code> 与 <code>meta.songCount</code>，并写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后先调用它做乐观移除，写入失败时由调用方恢复原数组。</li>
   <li><code>recent</code> 按当前账号持久化到 <code>localStorage</code>（key 前缀见 <a href="#c4-50">§4.50</a>），最多 <code>RECENT_PLAYLIST_LIMIT</code> 条。<code>visit(meta)</code> 在进入歌单页时更新 <code>visitedAtMs</code> 并置顶，超出时淘汰最旧一条；<code>removeRecent</code> 移除条目，不补位。</li>
   <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数。<code>NO_PERMISSION</code> / <code>AUTH_EXPIRED</code> / <code>UPSTREAM_CHANGED</code> / 歌单不存在时移除条目且不补位；网络 / 超时等其余失败保留条目并标记 <code>stale</code>，展示缓存元数据。</li>
-  <li>当前播放歌单高亮读取 <code>player.queueSource</code>：<code>{ kind: 'playlist', id }</code> 命中即高亮，播放与暂停状态一致；手动队列不高亮。</li>
+  <li>最近歌单的展示态由视图组合：当前 <code>playlist</code> 路由打开的歌单与正在播放的 <code>queueSource</code> 歌单都高亮；“正在播放”图标仍只由 <code>queueSource</code> 决定。store 本身不读取路由，也不改变 <code>recent</code> 的排序、校验与 <code>visit</code> 逻辑。</li>
 </ul>
 
 <h3 id="c4-62">4.62 src/renderer/stores/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
