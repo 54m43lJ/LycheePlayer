@@ -1408,7 +1408,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li><a href="#c4-72">LyricsView</a> 左列的歌词区；顶部歌曲信息与返回入口由 <code>LyricsView</code> 提供，本组件不含“歌词 / 评论”标题行。</li>
-  <li>按 <code>player.positionMs</code> 计算活动行并保持其居中；滚动容器上下边缘使用渐隐遮罩。支持滚轮、左键拖拽（松手后恢复跟随）与点击行调用 <code>player.seek()</code>；有逐字数据时按词高亮。</li>
+  <li>按 <code>player.positionMs</code> 计算活动行并保持其居中；滚动容器上下边缘使用渐隐遮罩。支持滚轮、左键拖拽（松手后恢复跟随）与点击行调用 <code>player.seek()</code>；拖拽采用 6px 阈值：<code>pointerdown</code> 只记录起点，纵向移动超过阈值后才进入 <code>dragging</code> 并调用 <code>setPointerCapture</code>。未拖动时指针从未被捕获，原生 click 命中 <code>.lyric-line</code> 触发跳转；拖拽结束用 <code>suppressClick</code> 兜底阻止误点击，<code>pointercancel</code> / <code>pointerleave</code> 清理按下状态。有逐字数据时按词高亮。</li>
   <li>加载中、无歌词与加载失败分别渲染 spinner / 空状态 / 错误重试；无当前歌曲时不渲染歌词内容。</li>
 </ul>
 
@@ -1493,7 +1493,7 @@ const emit = defineEmits&lt;{
   <li>歌曲表操作列四个图标按钮在 <code>.song-action-inner</code> 内等距排列；≤900px 隐藏图标按钮、只显示 <code>more</code> 触发按钮。操作菜单为绝对定位浮层，项内“图标 + 文字”横排，点击外部或 Esc 关闭。</li>
   <li>播放模式为包含式 revealer：<code>.mode-button</code> 使用 32px 方形、9px 圆角、<code>--accent-soft</code> 背景与 <code>--accent-strong</code> 图标；<code>.mode-wrap.open</code> 时按钮提升到 <code>z-index</code> 浮层之上。菜单 <code>.mode-menu</code> 使用 <code>bottom: 0</code>、<code>width: 100%</code>、<code>padding-bottom: 32px</code> 包住按钮，<code>--panel</code> 背景、9px 圆角与向上阴影，并通过 <code>mode-reveal</code> 的 <code>scaleY</code> 向上展开；菜单只列纯图标 <code>.mode-option</code>，不再有 <code>.mode-option.current</code>。</li>
   <li>窄屏音量弹层复用模式 revealer：<code>.volume-menu</code> 使用 <code>bottom: 0</code>、<code>width: 100%</code>、<code>padding-bottom: 34px</code>、9px 圆角、<code>--panel</code> 背景且无边框，<code>.volume-wrap.open</code> 时按钮以 <code>z-index</code> 浮在其底部；<code>.volume-slider</code> 高 96px，<code>.volume-track</code> 为 4px 圆角条并上下各留 10px，<code>.volume-fill</code> 用强调色填充，范围输入旋转成 34×76px 热区并用负 margin 归中。宽屏使用 <code>.volume-range-inline</code>，宽度 <code>clamp(56px, 6vw, 84px)</code>。删除旧 <code>.volume-popover</code> / <code>.vertical-range</code> 的 padding、边框与百分比文案。</li>
-  <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。评论列表使用两行网格，正文完整展示、不使用行数截断；<code>.comments-toolbar</code> 不画下边框，右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，滚动区底部留出按钮空间。</li>
+  <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。<code>.lyrics-page-list</code> 水平 padding 为 0，<code>.lyric-line</code> 水平居中、左右 padding 与左边框均为 0，高亮背景条铺满整行，不显示左侧强调边。评论列表使用两行网格，正文完整展示、不使用行数截断；<code>.comments-toolbar</code> 不画下边框，右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，滚动区底部留出按钮空间。</li>
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
   <li>≤900px 侧栏改为单列 grid + 覆盖式抽屉，不再保留 64px / 56px 常驻图标栏；抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code>，默认隐藏，打开时覆盖内容区并显示 backdrop，不压缩主内容。560px 只进一步收窄抽屉宽度。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
   <li><code>.progress-stack</code> 内为单轨进度条：<code>.progress-track</code> 提供背景与圆角，<code>.progress-buffer</code> 使用独立的 <code>--buffer</code> 弱色，<code>.progress-played</code> 使用 <code>--accent</code>，透明 <code>.progress-range</code> 绝对覆盖并位于最上层。删除旧 <code>.cache-progress</code> 细线；无歌曲时轨道降低透明度且不渲染 overlay。</li>

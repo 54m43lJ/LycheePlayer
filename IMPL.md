@@ -1112,7 +1112,7 @@
 
 状态：已解决。
 
-### 4.8 点击歌词跳转失效与高亮样式调整
+### 4.8 点击歌词跳转失效与高亮样式调整 [已解决]
 
 问题描述：ISSUES 指出歌词页点击某一行不再跳转到对应时间。`LyricsPanel.vue` 的 `@click="seekLine(...)"` 仍存在，但拖拽实现从 `pointerdown` 起就对整个列表调用 `setPointerCapture`。指针捕获后，`pointerup` 目标被重定向到列表容器，浏览器派发的 `click` 目标是按下与抬起目标的共同祖先，不再是 `.lyric-line` 按钮，因此按钮的 click 永远不触发。该回归是在加入“拖拽与滚轮滚动歌词”后出现的。
 
@@ -1137,6 +1137,21 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 补歌词页 `.lyrics-page-list` 水平 padding 为 0、`.lyric-line` 居中且无左边框，高亮条铺满整行。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 明确歌词文字水平居中、高亮背景无左侧强调边、背景条左右不留空白，并保留点击定位与拖拽滚动。 |
 | `EVOLVE.md` | #5 | 不动 | 交互需求未变，仅修正实现回归与视觉细节。 |
+
+实际操作（2026-11-11，分支 `doc/lyrics-click-drag-threshold`）：
+
+- `CORE.html` §4.41 `LyricsPanel.vue`：补充拖拽阈值与指针捕获约束——`pointerdown` 只记录起点，纵向移动超过 6px 才进入拖拽并 `setPointerCapture`；未拖动时保留原生 click，拖拽结束用 `suppressClick` 兜底，`pointercancel` / `pointerleave` 清理按下状态。
+- `CORE.html` §4.49 `styles/main.css`：补充歌词页布局——`.lyrics-page-list` 水平 padding 为 0，`.lyric-line` 水平居中、左右 padding 与左边框为 0，高亮背景铺满整行。
+- `USER.html` §5.2.5 歌词与评论：明确歌词文字水平居中、高亮背景无左侧强调边且铺满整行；拖拽超过 6px 才进入滚动，未拖动时点击歌词行仍正常跳转。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/components/LyricsPanel.vue`：`DRAG_THRESHOLD = 6`；`onPointerDown` 不调用 `setPointerCapture`，`onPointerMove` 仅在超过阈值后设置 `dragging` 并捕获指针；`seekLine()` 受 `suppressClick` 保护，`pointercancel` / `pointerleave` 清理状态。
+- 对照 `src/renderer/styles/main.css`：`.lyrics-page-list` 为 `padding: 38% 0`（水平 0）；`.lyrics-page-list .lyric-line` 为 `padding: 0`、`border-left: 0`、`text-align: center`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.9 歌手页改为滚动到底自动分页
 
