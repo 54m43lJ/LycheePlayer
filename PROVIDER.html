@@ -268,7 +268,7 @@
   <tr><td>专属雷达</td><td><code>music.recommend.TrackRelationServer / GetRadarSong</code></td><td>按页获取个性化雷达推荐，返回 <code>VecSongs[].Track</code>；需要登录。</td></tr>
   <tr><td>猜你喜欢</td><td><code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>）</td><td>连续推荐流，返回 <code>data.tracks[]</code>；需要登录。</td></tr>
   <tr><td>歌单写入</td><td><code>music.musicasset.PlaylistBaseWrite / AddPlaylist | EditPlaylist | DelPlaylist</code></td><td>创建 / 改名 / 删除当前账号自建的普通歌单；<code>AddPlaylist</code> 返回的 <code>result.dirId</code> 是目录 ID、<code>result.tid</code> 是歌单标识，两者都必须为正整数。</td></tr>
-  <tr><td>歌单增删歌曲</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code></td><td>按数字 <code>songId</code> 与真实 <code>songType</code> 增删；<code>dirId</code> 是当前账号目录 ID、<code>tid</code> 是歌单标识，两者不能混用；每批最多 100 首。<code>80092</code> 表示歌曲已存在 / 不存在等业务状态，不作为请求失败。</td></tr>
+  <tr><td>歌单增删歌曲</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code></td><td>按数字 <code>songId</code> 与真实 <code>songType</code> 增删；<code>dirId</code> 是当前账号目录 ID、<code>tid</code> 是歌单标识，两者不能混用；每批最多 100 首。<code>AddSonglist</code> 通常追加到末尾；写接口只负责写入，写后刷新统一由应用侧歌单流程完成，不每次全量扫描。<code>80092</code> 表示歌曲已存在 / 不存在等业务状态，不作为请求失败。</td></tr>
   <tr><td>MV 搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code>（<code>search_type:4</code>）</td><td>返回 <code>body.mv.list[]</code> 的 MV 结果。</td></tr>
   <tr><td>MV 详情</td><td><code>MvService.MvInfoProServer / GetMvInfoList</code></td><td>按 <code>vidlist</code> 获取封面、简介、时长、歌手与播放数。</td></tr>
   <tr><td>MV 取流</td><td><code>gosrf.Stream.MvUrlProxy / GetMvUrls</code></td><td>按 <code>vids</code> 返回各清晰度的 <code>freeflow_url</code>。</td></tr>

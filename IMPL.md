@@ -2722,7 +2722,7 @@
 
 状态：已解决。
 
-### 4.38 添加到歌单链路耗时分析与优化
+### 4.38 添加到歌单链路耗时分析与优化 [已解决]
 
 > 后续修正：§4.39 已把写后读回 / 整单扫描移出写 API，改为渲染层触发统一的歌单刷新流程。本节保留原问题分析、实测耗时与优化背景，最终职责划分以 §4.39 为准。
 
@@ -2793,6 +2793,23 @@
 | `PROVIDER.html` | §4.1 歌单增删歌曲行 | 改 | 说明 `AddSonglist` 通常追加到末尾；写后读回可只查尾部页，重复 / 异常时再全量扫描；80092 不能单独作为失败依据。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 添加到歌单正常应在约 1 秒内完成，且不随歌单长度明显变慢；重复添加直接提示“已在歌单中”。 |
 | `EVOLVE.md` | #14 | 改 | 补“歌单写入确认不得每次全量扫描，优先尾页读回”的性能约束。 |
+
+实际操作（2026-11-11，分支 `doc/add-to-playlist-performance`）：
+
+- `CORE.html` §4.55 `api/playlist-write.ts`：补“写入前不做整单成员预扫描或重复检查”；`addSongs` / `removeSongs` 只读取一次歌单元数据、批量获取歌曲身份并提交写入，重复 / 不存在交给 `80092` 与写后统一刷新确认，耗时不再随歌单长度线性增长。§4.39 已取消写 API 内的尾部读回 / 整单扫描，文档按最终职责描述。
+- `CORE.html` §4.11 `api/song.ts`：核对后歌曲身份已统一走批量详情 `CgiGetTrackInfo`（`SONG_DETAIL_BATCH = 50` 分块），仅缺失歌曲用单曲兜底，本次无需再改。
+- `PROVIDER.html` §4.1 歌单增删歌曲行：补 `AddSonglist` 通常追加到末尾；写接口只负责写入，写后由应用侧统一歌单流程刷新，不每次全量扫描；80092 为业务状态，不作为请求失败。
+- `USER.html` §5.2.8 歌单详情：补添加到歌单正常约 1 秒内完成、耗时不随歌单长度明显变长；重复添加直接提示“已在歌单中”。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / PROVIDER / USER。
+
+验证：
+
+- 对照 `src/main/api/playlist-write.ts`：`addSongs` / `removeSongs` 只 `readMeta`、`fetchTrackIdentities` 并提交 `AddSonglist` / `DelSonglist`，没有整单成员预扫描或写后读回；`80092` 返回 `changed:false`。
+- 对照 `src/renderer/stores/playlist-edit.ts`：`addSongs` / `removeSongs` 写后统一调用 `refreshAfterWrite(id)`，由 `playlist.invalidate` + `playlist.poll` 刷新，不在写 API 内重复实现扫描。
+- 对照 `src/main/api/song.ts`：`fetchTrackBatch` 按 `SONG_DETAIL_BATCH = 50` 分块调用 `CgiGetTrackInfo`，`fetchTracksById` 仅对缺失歌曲单曲兜底。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.39 纠正：写后刷新应复用歌单刷新流程
 
