@@ -658,7 +658,7 @@
 <h4 id="u5-2-9">5.2.9 播放队列</h4>
 <div class="ui-proto-wrap">
 <div class="ui-proto" style="width: 390px; padding: 14px">
-  <div class="u-lyrics-head"><div><h5>播放队列</h5><small>接下来 3 首</small></div><span class="u-ctl">×</span></div>
+  <div class="u-lyrics-head"><div><h5>播放队列</h5><small>接下来 3 首</small></div><span><span class="u-ctl" title="清空播放队列">🗑</span> <span class="u-ctl">×</span></span></div>
   <div class="u-rowline" style="padding: 10px 0"><span>正在播放<br /><small>晴天 · 周杰伦</small></span></div>
   <div class="u-table">
     <div class="u-th"><span>#</span><span>标题</span><span>操作</span></div>
@@ -666,14 +666,13 @@
     <div class="u-tr"><span class="u-idx">2</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">句号</span><small>G.E.M. 邓紫棋</small></span></span><span><span class="u-tab" title="从队列移除">✕</span></span></div>
     <div class="u-tr"><span class="u-idx">3</span><span class="u-cell"><span class="u-cover"></span><span><span class="u-title">孤勇者</span><small>陈奕迅</small></span></span><span><span class="u-tab" title="从队列移除">✕</span></span></div>
   </div>
-  <div class="u-rowline" style="padding-top: 10px"><span class="u-tab">清空队列</span></div>
 </div>
 </div>
 <ul class="note">
   <li>入口为播放条上的“播放队列”按钮；面板固定于内容区右侧，同一时间只打开一个。</li>
   <li>当前歌曲单独显示在面板顶部并标注“正在播放”，不计入队列；下方只列当前歌曲之后的待播放歌曲，顺序即实际播放顺序。队列行只显示序号、封面、歌名 / 歌手与移除图标按钮，<strong>不显示专辑名</strong>；网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略。</li>
   <li>面板顶部提供筛选输入框：按歌名 / 歌手 / 专辑做本地、不区分大小写匹配；过滤后保留原始序号，移除操作作用于真实队列项；筛选不改变随机顺序与队列快照。</li>
-  <li>队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲、播放历史与队列顺序。移除按钮为图标按钮，tooltip 与无障碍标签均为“从队列移除”，点击不触发播放；键盘 Enter / Space 可用，最后一列宽 32px 与图标对齐。“下一首播放”是手动加入队列的唯一入口，把歌曲插入队列头，当前歌曲不变。</li>
+  <li>清空队列入口固定在面板顶部、与关闭按钮同组，使用垃圾桶图标；队列为空时灰化不可用，滚动或筛选都不会隐藏该入口。队列为空时显示空状态；支持移除单曲与清空队列，操作只影响待播放歌曲，不改变当前歌曲、播放历史与队列顺序。移除按钮为图标按钮，tooltip 与无障碍标签均为“从队列移除”，点击不触发播放；键盘 Enter / Space 可用，最后一列宽 32px 与图标对齐。“下一首播放”是手动加入队列的唯一入口，把歌曲插入队列头，当前歌曲不变。</li>
   <li>队列快照：播放开始时若歌单尚未完整加载，允许一次临时快照顶替（优先整份缓存，缓存没有当前曲时用已载入页）；歌单完整、非 stale 且 VIP / 音质 / 可用性探测完成后生成最终快照，签名不同才替换。当前曲、进度与播放历史保持不变；手动插入的歌曲在替换时保留。</li>
   <li>已知不可播歌曲在进入快照前剔除，当前曲除外；队列本身不做检测或清理。播放时仍独立校验取流，当前曲不可播时沿队列向后尝试到可播或队列空；连续 10 首不可播即停止，避免登录失效或风控时无限切歌。</li>
   <li>上一首按播放历史回退；播放历史只记录本次播放开始后实际播放过的歌曲，重建队列时清空。</li>

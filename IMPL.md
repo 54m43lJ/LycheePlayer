@@ -2502,7 +2502,7 @@
 
 状态：已解决。
 
-### 4.34 清空播放队列按钮置顶并改为图标
+### 4.34 清空播放队列按钮置顶并改为图标 [已解决]
 
 问题描述：ISSUES 要求把播放队列的“清空队列”按钮移到面板顶部，并用图标代替文字。原实现在队列列表底部渲染 `.queue-footer` 与文字按钮，队列较长时需要滚动到底才能操作；按钮位于 `v-else` 的列表分支内，筛选结果为空时又完全不可见，入口不稳定。
 
@@ -2529,6 +2529,22 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.lyrics-head-actions` 头部按钮组样式，删除无引用的 `.queue-footer`。 |
 | `USER.html` | §5.2.9 播放队列 | 改 | 明确清空队列入口固定在面板顶部、使用垃圾桶图标，队列为空时不可用。 |
 | `EVOLVE.md` | — | 不动 | 队列操作位置属于页面实现细节，由 CORE / USER 主责。 |
+
+实际操作（2026-11-11，分支 `doc/queue-clear-header`）：
+
+- `CORE.html` §4.23 `App.vue`：补播放队列头部 `.lyrics-head-actions` 同时放置“清空播放队列”和“关闭播放队列”图标按钮；清空按钮使用 `trash` 图标，队列为空时 `disabled` 并沿用 `.icon-btn:disabled` 灰化，滚动 / 筛选不影响入口；列表底部不再渲染 `.queue-footer` 或文字按钮，`player.clearQueue()` 语义不变。
+- `CORE.html` §4.49 `styles/main.css`：补 `.lyrics-head-actions` 的 flex 排列、固定不收缩与两端对齐说明；空队列按钮按既有 disabled 规则灰化；明确不再保留 `.queue-footer` 样式。
+- `USER.html` §5.2.9 播放队列：原型把垃圾桶图标移到面板头部与关闭按钮同组，删除底部“清空队列”文字入口；说明清空入口固定在顶部、队列为空时灰化不可用，滚动或筛选都不会隐藏。
+- `EVOLVE.md`：按原表“不动”未处理，仓库中也不存在该文件。
+
+验证：
+
+- 对照 `src/renderer/App.vue`：清空按钮位于 `.lyrics-head` 内、`class="icon-btn"`、`AppIcon name="trash"`，`title` / `aria-label` 为“清空播放队列”，`:disabled="player.queue.length === 0"`；关闭按钮同组；队列列表底部没有 `.queue-footer`。
+- 对照 `src/renderer/styles/main.css`：存在 `.lyrics-head-actions { display: flex; flex: none; align-items: center; gap: 4px; }`，不存在 `.queue-footer` 规则。
+- 对照 `src/renderer/stores/player.ts`：`clearQueue()` 仍只清空当前曲之后的队列，不改变当前歌曲与播放历史。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.35 歌单详情恢复“从歌单删除”按钮与写后校验
 
