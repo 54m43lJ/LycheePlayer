@@ -1980,7 +1980,7 @@
 
 状态：已解决。
 
-### 4.25 歌曲探测改用批量详情接口
+### 4.25 歌曲探测改用批量详情接口 [已解决]
 
 问题描述：ISSUES 指出歌曲探测一首一首请求太笨拙，并引用 `sansenjian/qq-music-api` 的 `POST /batchGetSongInfo` 作为参考。原 `getDetail` 与 `resolveStreams` 都通过 `music.pf_song_detail_svr / get_song_detail_yqq` 逐首获取详情，再用并发 2 的 `mapLimit` 限制；打开一个 50 首歌单仍会产生约 50 次详情请求，再叠加 vkey 请求，探测形态集中且容易触发限流。
 
@@ -2013,6 +2013,24 @@
 | `CORE.html` | §4.50 `shared/constants.ts` | 改 | 增 `SONG_DETAIL_BATCH`，推荐值 50；`PROBE_DETAIL_CONCURRENCY` 仅用于批量缺口的单曲兜底。 |
 | `USER.html` | §5.2.4 歌曲列表 / §5.3 错误与通知 | 不动 | 探测结果与用户可见状态不变，仅减少上游请求次数。 |
 | `EVOLVE.md` | — | 增 | 补“歌曲详情改用批量接口探测，50 首分块，缺失才单曲兜底”的要求。 |
+
+实际操作（2026-11-11，分支 `doc/song-detail-batch`）：
+
+- `PROVIDER.html` §4.1：歌曲详情行注明单曲接口作为批量缺口的兜底；新增“批量歌曲详情”行，记录 `CgiGetTrackInfo` 的 `mids` / `types` / `modify_stamp` / `ctx` / `client` 与 `tracks[]`，并说明字段与 `track_info` 一致、按 `mid` 索引。
+- `PROVIDER.html` §4.3：新增 `QqTrackBatch` 接口，记录 `tracks[]` 字段与单曲详情同构。
+- `CORE.html` §4.11 `api/song.ts`：补 `fetchTrackBatch` / `fetchTracksById`：50 首分块、按 mid 索引、缺失歌曲单曲兜底，`getDetail` / `resolveStreams` 共用。
+- `CORE.html` §4.50 `shared/constants.ts`：补 `SONG_DETAIL_BATCH = 50`，并说明 `PROBE_DETAIL_CONCURRENCY = 2` 仅用于批量缺口兜底。
+- `USER.html` §5.2.4 / §5.3：按原表“不动”未处理。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“新增”无法执行；对应约束已落到 PROVIDER / CORE。
+
+验证：
+
+- 对照 `src/main/api/song.ts`：`fetchTrackBatch` 按 `SONG_DETAIL_BATCH` 分块调用 `music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo`，参数含 `types` / `modify_stamp` / `ctx: 0` / `client: 1` / `mids`；`fetchTracksById` 只对缺失 mid 用 `mapLimit(..., PROBE_DETAIL_CONCURRENCY, fetchTrack)` 兜底。
+- 对照 `src/shared/constants.ts`：`SONG_DETAIL_BATCH = 50`、`PROBE_DETAIL_CONCURRENCY = 2`。
+- 对照 `src/main/api/song.ts`：`getDetail` 与 `resolveStreams` 的详情获取均走 `fetchTracksById`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.26 设置页“退出应用”移到右侧独立区块
 

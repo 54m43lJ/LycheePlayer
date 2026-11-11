@@ -884,6 +884,7 @@ function buildStreamUrl(purl: string): string;
   <li>vkey 请求先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>；若响应或 <code>data.retcode</code> 为 <code>104009</code>，再以相同 filename 尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
   <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>isVipUser()</code> 通用文案。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
+  <li><code>fetchTrackBatch</code> 按 <code>SONG_DETAIL_BATCH = 50</code> 分块调用 <code>music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo</code>（<code>mids</code> / <code>types</code> / <code>modify_stamp</code> / <code>ctx</code> / <code>client</code>），按 <code>mid</code> 建索引；<code>fetchTracksById</code> 先走批量详情，仅对缺失歌曲用 <code>PROBE_DETAIL_CONCURRENCY = 2</code> 单曲兜底；<code>getDetail</code> 与 <code>resolveStreams</code> 共用该入口。</li>
   <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。播放取源优先级固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”，与 <a href="#c4-59">§4.59</a> 的 <code>handleStream</code> 顺序一致。</li>
   <li>显示名优先 <code>title.trim()</code>，为空时回退 <code>name.trim()</code>；专辑名与歌手名同样 <code>trim()</code>，避免尾部空白把 VIP / 音质徽标推离标题。<code>title</code> 含 Explicit / Remix 等版本标签，<code>name</code> 是基础名；原始响应没有独立标签布尔字段。</li>
   <li>歌手映射：<code>singer[]</code> 成员只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空；只有 <code>name</code> 为空的成员被丢弃，不因缺少 <code>mid</code> 丢名字。列表响应缺名字时，歌曲进入可见列表后可用 <code>getDetail</code> 的 <code>track_info.singer[]</code> 补全；补全结果不改变播放队列。</li>
@@ -1554,7 +1555,8 @@ export declare const RECENT_PLAYLIST_CHECK_THROTTLE_MS: number; // 5000 ms
 export declare const RECENT_PLAYLIST_STORAGE_PREFIX: string; // 'lychee:recent-playlists:'
 export declare const SIDEBAR_DRAG_THRESHOLD_PX: number;      // 48 px
 export declare const PROBE_MIDS_MAX: number;                // 50；≤ IPC_SONG_MIDS_MAX
-export declare const PROBE_DETAIL_CONCURRENCY: number;      // 2
+export declare const SONG_DETAIL_BATCH: number;             // 50；批量详情单次上限
+export declare const PROBE_DETAIL_CONCURRENCY: number;      // 2；仅用于批量缺口的单曲兜底
 export declare const PROBE_VKEY_BATCH: number;              // 50；≤ IPC_SONG_MIDS_MAX
 export declare const PROBE_CACHE_TTL_MS: number;            // 10 × 60_000 ms
 export declare const PROBE_MAX_SONGS: number;               // = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX
@@ -1601,6 +1603,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li><code>AUDIO_CACHE_LIMIT_STEPS_BYTES</code> 提供设置页 6 个固定档位；<code>normalizeAudioCacheLimitBytes</code> 对合法档位原样返回，越界 / 非档位值归一到最近档位，非法值回退默认档；<code>AUDIO_CACHE_MAX_BYTES</code> 作为默认 / 最大档位。</li>
   <li><code>PROBE_MAX_SONGS</code> 使用 <code>PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX</code> 派生，当前为 1,000,000；修改页大小或页上限时自动跟随。</li>
   <li><code>PROBE_MIDS_MAX</code> / <code>PROBE_VKEY_BATCH</code> 不得大于 <code>IPC_SONG_MIDS_MAX</code>；推荐与页大小 50 对齐，使一个歌单页一次探测、一批 vkey。修改任一值时同步评估其余常量。</li>
+  <li><code>SONG_DETAIL_BATCH = 50</code> 为批量详情单次上限；<code>PROBE_DETAIL_CONCURRENCY = 2</code> 仅用于批量缺口的单曲兜底，不再逐首探测。</li>
   <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
   <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制推荐分区缓存；<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页每区展示的歌曲上限（30 首，界面固定 3 行滚动）。</li>
   <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，统一队列按入队顺序串行；<code>DOWNLOAD_QUEUE_MAX</code> 限制单次“下载全部”的入队数量；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>

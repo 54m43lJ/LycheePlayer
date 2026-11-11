@@ -252,7 +252,8 @@
   <tr><th>接口</th><th>方法 / 路径</th><th>用途</th></tr>
   <tr><td>内容 RPC</td><td><code>https://u.y.qq.com/cgi-bin/musicu.fcg</code>（内容请求 GET；登录换证 / 续期 POST）</td><td>统一 <code>musicu</code> 请求入口；搜索、歌曲详情、vkey、歌单、资料、评论、VIP 状态、登录与续期。</td></tr>
   <tr><td>搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code></td><td>按单曲 / 歌手 / 专辑 / 歌单搜索。单曲结果携带完整 <code>singer[{ mid, name }]</code>；fixture <code>test/fixtures/search-song.json</code> 验证两项字段均存在。</td></tr>
-  <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code>、歌曲展示字段与真实 <code>songType</code>；<code>track_info.singer[]</code> 与搜索同结构，可能出现 <code>name</code> 有值而 <code>mid</code> 为空的条目。</td></tr>
+  <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code>、歌曲展示字段与真实 <code>songType</code>；<code>track_info.singer[]</code> 与搜索同结构，可能出现 <code>name</code> 有值而 <code>mid</code> 为空的条目。批量详情缺失个别歌曲时作为单曲兜底。</td></tr>
+  <tr><td>批量歌曲详情</td><td><code>music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo</code></td><td>一次最多 50 首：等长数组 <code>mids</code> / <code>types</code> / <code>modify_stamp</code>，附 <code>ctx: 0</code> / <code>client: 1</code>；响应 <code>tracks[]</code> 字段与 <code>get_song_detail_yqq</code> 的 <code>track_info</code> 一致，按 <code>mid</code> 建索引，响应顺序不影响结果。</td></tr>
   <tr><td>歌手详情</td><td><code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg</code></td><td>按 <code>singermid</code> 获取歌手名、简介、歌曲数与专辑数；部分歌手可能只返回 <code>code -1</code> 且无歌手字段，此时使用下方的 <code>SingerInfoInter</code> 兜底。</td></tr>
   <tr><td>歌手资料兜底</td><td><code>music.musichallSinger.SingerInfoInter / GetSingerDetail</code></td><td>按 <code>singer_mids: [mid]</code> 请求，开启 <code>pic / ex_singer / wiki_singer / group_singer</code>；读取 <code>singer_list[].basic_info.name</code> / <code>ex_info.desc</code> / <code>pic.pic</code>，<code>http:</code> 头像升为 <code>https:</code>。</td></tr>
   <tr><td>歌手歌曲</td><td><code>musichall.song_list_server / GetSingerSongList</code></td><td>按 <code>singerMid</code> 分页获取歌曲；<code>order=1</code> 为最热，<code>order=0</code> 及其它值等价于最新，未知值不报错，只有这两种有效顺序；<code>musicu</code> 返回的 <code>req_0.data</code> 为扁平 <code>{ totalNum, songList }</code>，<code>singerSongList.data</code> 仅作为外层兼容形状；单页最多 100 首。</td></tr>
@@ -530,6 +531,25 @@ interface QqTrackIdentity {
     mid?: string;
     type?: number;
   };
+}
+
+// CgiGetTrackInfo 批量详情：tracks[] 的字段与单曲响应的 track_info 一致。
+interface QqTrackBatch {
+  tracks?: Array&lt;{
+    id?: number | string;
+    mid?: string;
+    type?: number;
+    name?: string;
+    title?: string;
+    singer?: Array&lt;{ mid?: string; name?: string }&gt;;
+    album?: { mid?: string; name?: string };
+    file?: {
+      media_mid?: string;
+      size_128mp3?: number;
+      size_320mp3?: number;
+      size_flac?: number;
+    };
+  }&gt;;
 }
 
 interface QqSongInfoParam {
