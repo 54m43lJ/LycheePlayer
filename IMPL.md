@@ -2665,7 +2665,7 @@
 
 状态：已解决。
 
-### 4.37 原生删除确认替换为应用内确认框
+### 4.37 原生删除确认替换为应用内确认框 [已解决]
 
 问题描述：歌单删除仍使用 `window.confirm`，样式由操作系统决定，与应用主题和圆角面板不一致；原生弹窗还会阻塞渲染进程，且无法表达危险操作、补充说明和统一键盘行为。
 
@@ -2697,6 +2697,30 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 增 `.btn.danger`、`.confirm-dialog`、`.confirm-message` 样式。 |
 | `USER.html` | §5.2.8 歌单详情 / §5.2.7 设置页 / §5.2.8 下载中心 | 改 | 确认框为应用内圆角面板，危险操作使用红色确认按钮，Esc / 点击遮罩取消。 |
 | `EVOLVE.md` | — | 增 | 补“不调用原生 `window.confirm`，统一使用应用内确认框”的约束。 |
+
+实际操作（2026-11-11，分支 `doc/confirm-dialog`）：
+
+- `CORE.html` §1 File tree：`components/` 新增 `ConfirmDialog.vue`（`#c4-81`）。
+- `CORE.html` 新增 §4.81 `components/ConfirmDialog.vue`：记录 props（`open` / `title` / `message` / `confirmLabel` / `danger` / `busy`）、事件（`confirm` / `cancel`）、默认聚焦取消、Esc / 遮罩 / 关闭按钮取消、`danger` 红色确认按钮与 `busy` 禁用。
+- `CORE.html` §4.39 `SongTable.vue`：补 `SongTable` 不弹确认框、不调用 `window.confirm`，`remove` 只发事件，由页面用 `ConfirmDialog` 确认。
+- `CORE.html` §4.45 `LibraryView.vue`（原表写作 §4.68）：删除歌单改用 `ConfirmDialog` 危险态确认。
+- `CORE.html` §4.46 `PlaylistView.vue`：删除歌曲确认改为 `ConfirmDialog` 危险态，保留歌曲名 / 歌单名说明。
+- `CORE.html` §4.48 `SettingsView.vue`：清空下载目录使用 `ConfirmDialog` 危险态，展示实际目录与影响范围，Esc / 遮罩取消。
+- `CORE.html` §4.67 `DownloadsView.vue`：清空目录与删除单任务均使用 `ConfirmDialog` 危险态。
+- `CORE.html` §4.49 `styles/main.css`：补 `.btn.danger`、`.confirm-dialog` 限宽 440px、`.confirm-message` 的 `white-space: pre-line` 说明。
+- `USER.html` §5.2.7 设置页：清空下载目录补充应用内圆角确认面板、红色危险按钮与 Esc / 遮罩取消。
+- `USER.html` §5.2.8 我的歌单 / 歌单详情 / 下载中心：删除歌单、删除歌曲、清空目录与删除单任务统一说明为应用内确认面板与危险按钮，Esc / 点击遮罩取消。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“增”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/ConfirmDialog.vue`：默认聚焦取消按钮；`Esc`、点击遮罩、关闭按钮与取消按钮都发出 `cancel`；确认按钮按 `danger` 切换红色危险态，`busy` 时禁用。
+- 对照 `src/renderer/views/PlaylistView.vue` / `LibraryView.vue` / `SettingsView.vue` / `DownloadsView.vue`：均导入并使用 `ConfirmDialog`，删除 / 清空动作带 `danger`。
+- `grep -rn "window.confirm" src/renderer` 无结果。
+- 对照 `src/renderer/styles/main.css`：存在 `.btn.danger`、`.confirm-dialog`、`.confirm-message` 样式。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.38 添加到歌单链路耗时分析与优化
 

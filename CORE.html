@@ -114,7 +114,8 @@
 │       │   ├── <a href="#c4-72">LyricsOverlay.vue</a>         歌词 / 评论弹出层
 │       │   ├── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
 │       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
-│       │   └── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
+│       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
+│       │   └── <a href="#c4-81">ConfirmDialog.vue</a>          应用内确认框
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
 │       │   ├── <a href="#c4-73">ArtistView.vue</a>            歌手页
@@ -1435,6 +1436,7 @@ const emit = defineEmits&lt;{
   <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。操作列宽屏 160px，≤900px 收窄到 40px，五个图标按钮在单元格内横向排列。</li>
   <li>行的 <code>dblclick</code> 只绑定在 <code>tr</code> 上；歌手 / 专辑链接与操作列按钮统一使用 <code>@click.stop</code>，把点击事件截在子元素内，不触发整行播放。</li>
   <li>操作列基础结构为收藏、下载、下一首播放（<code>play-next</code>）、添加到歌单（<code>playlist-add</code>）、从歌单删除五个图标按钮。<code>addable</code> 为真时渲染“添加到歌单”，点击发出 <code>addToPlaylist(index)</code>；删除按钮仅在 <code>removable</code> 为真时渲染，由 <code>PlaylistView</code> 按 <code>PlaylistMeta.editable</code> 且非“我喜欢”传入；点击发出 <code>remove(index)</code>，不触发行播放。</li>
+  <li><code>SongTable</code> 不弹确认框，也不调用 <code>window.confirm</code>；<code>remove</code> 只发出事件，由页面使用 <a href="#c4-81">ConfirmDialog</a> 确认后再调用删除 API。</li>
   <li><code>addable</code> 由使用歌曲表的页面按登录态传入（搜索结果、歌单详情、歌手页、专辑页）；页面监听 <code>addToPlaylist</code> 打开 <a href="#c4-77">PlaylistPicker</a>，再把选择结果交给 <code>playlist-edit.addSongs</code>。</li>
   <li>≤900px 时五个按钮收为一个 <code>more</code> 图标按钮，弹出“图标 + 文字”菜单；菜单项顺序与宽屏一致。<code>.song-more-wrap</code> 用 <code>@click.stop</code> 隔断行事件，选择菜单项时先关闭菜单再发出对应 emit；document 的 click 只负责点击外部关闭，Esc 同样关闭。</li>
   <li>组件用 <code>matchMedia('(max-width: 900px)')</code> 与样式断点同步：断点变化时更新 <code>compact</code> 并立即关闭已打开菜单；document 的 click / keydown 监听与 media query 监听在卸载时清理，避免重复注册。</li>
@@ -1497,7 +1499,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>登录后加载“我的歌单”，支持刷新与退出登录；未登录显示空状态。</li>
   <li>监听 <code>playlist-edit.favoriteVersion</code>，收藏成功后重新拉取歌单列表，更新“我喜欢”卡片数量；歌单卡片提供改名 / 删除 / 新建菜单。</li>
-  <li>新建 / 改名 / 删除歌单走 <code>playlist-edit</code> 的真实写入：创建与改名复用 <code>PlaylistEditDialog</code>，删除需确认；成功后刷新“我的歌单”卡片并清除对应缓存，失败保留原状态并提示。</li>
+  <li>新建 / 改名 / 删除歌单走 <code>playlist-edit</code> 的真实写入：创建与改名复用 <code>PlaylistEditDialog</code>，删除使用 <a href="#c4-81">ConfirmDialog</a> 的危险态按钮确认；成功后刷新“我的歌单”卡片并清除对应缓存，失败保留原状态并提示。</li>
 </ul>
 
 <h3 id="c4-46">4.46 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1509,7 +1511,7 @@ const emit = defineEmits&lt;{
   <li>心跳由 <code>playlist.poll(id)</code> 用 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 检查首页；发现名称、封面、首屏顺序或数量显著变化时立即后台刷新，并取消待执行的 5 分钟 timeout。</li>
   <li>接入 <code>useAvailability</code>，按当前歌单歌曲集合触发探测；探测只更新歌单歌曲元数据，并把 <code>availability</code> / <code>loading</code> 同步给 playlist store，用于判断最终快照是否就绪。</li>
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
-  <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
+  <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。显示筛选数与已下载数量，无匹配时显示空结果状态。</li>
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
@@ -1532,7 +1534,7 @@ const emit = defineEmits&lt;{
   <li>设置项即时写盘；播放中切换默认音质会立即重载当前曲目。</li>
   <li>音质选项复用 <code>stores/settings.ts</code> 的 <code>QUALITY_PREFERENCE_OPTIONS</code>，选择调用 <code>player.updateDefaultQuality()</code>，与播放条共用 <code>Settings.defaultQuality</code> 并即时联动；组件内不维护本地选项常量。</li>
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
-  <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示。</li>
+  <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
   <li>账号区展示登录态、到期时间、续期与退出登录；窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
 </ul>
@@ -1548,6 +1550,7 @@ const emit = defineEmits&lt;{
   <li>组件样式与响应式断点也在同一文件维护。</li>
   <li>布局最小阈值由 <code>--layout-min-width</code>（当前 <code>420px</code>）与 <code>--layout-min-height</code>（<code>--player-height + 170px</code>）统一声明；<code>.app-shell</code> 同时设置 <code>min-width</code> / <code>min-height</code>，<code>body</code> 使用 <code>overflow: auto</code> 提供整窗双向滚动。低于阈值时布局停止压缩，侧栏导航内部纵向滚动、账号入口固定、播放条保持第二行；内容区仍独立滚动。</li>
   <li>按钮文字不换行：<code>.btn</code> 使用 <code>white-space: nowrap</code>；歌单操作区 <code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，子按钮 <code>flex: 0 0 auto</code> 保持内容宽度，空间不足时整组换行；≤900px 媒体查询不再重复声明 <code>flex-wrap</code>。</li>
+  <li>危险操作使用 <code>.btn.danger</code>：透明边框、<code>--danger</code> 背景与 <code>--on-accent</code> 文字，悬停使用 danger 与 text 的混色。确认框 <code>.confirm-dialog</code> 复用 <code>.dialog-backdrop</code> / <code>.dialog</code>，限宽 440px；<code>.confirm-message</code> 使用 <code>white-space: pre-line</code> 保留说明换行。</li>
   <li>歌曲表使用 <code>table-layout: fixed</code> 与 <code>width: 100%</code>；<code>.page</code> 不设最大宽度，铺满内容区。操作单元格禁止改为 flex；内部容器负责按钮排列，行边框只挂在 <code>tr</code>。</li>
   <li>歌单底部 <code>.feed-footer</code> 使用 flex，<code>.spinner</code> 为 <code>inline-block</code> 且 <code>flex: none</code>；播放队列行网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，不包含专辑列，最后一列只容纳图标按钮。</li>
   <li>歌曲表操作列四个图标按钮在 <code>.song-action-inner</code> 内等距排列；≤900px 隐藏图标按钮、只显示 <code>more</code> 触发按钮。操作菜单为绝对定位浮层，项内“图标 + 文字”横排，点击外部或 Esc 关闭。</li>
@@ -2025,9 +2028,9 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 <ul class="note">
   <li>由侧栏“下载”<code>RouterLink</code> 进入；挂载时调用 <code>download.setVisible(true)</code>，卸载时调用 <code>setVisible(false)</code>，下载任务本身继续由主进程队列执行。</li>
   <li>顶部整体进度条为 fixed overlay，不占页面布局，不显示完成数 / 总数或失败数等数字指示；进度百分比由 <a href="#c4-80">utils/download-progress.ts</a> 的 <code>downloadOverallProgress</code> 计算。标题区复用普通 <code>.page</code> 的留白与背景。</li>
-  <li><code>page-head-actions</code> 提供“清除已完成”“清空目录”“打开文件夹”：前者只清记录，后两者分别删除目录内容与记录、打开下载目录；清空目录需确认并展示实际路径，播放缓存不受影响。</li>
+  <li><code>page-head-actions</code> 提供“清除已完成”“清空目录”“打开文件夹”：前者只清记录，后两者分别删除目录内容与记录、打开下载目录；清空目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认并展示实际路径，播放缓存不受影响。</li>
   <li>任务面板顶部左侧为“全部 / 进行中 / 已完成 / 未成功”过滤，右侧为“全部开始”继续所有暂停任务；过滤只影响展示，整体进度仍按全部任务计算。任务按新到旧展示，不改变主进程队列顺序。</li>
-  <li>列表复用统一下载任务行，支持单任务暂停 / 继续 / 删除；空状态区分“没有任务”与“没有符合条件的任务”。</li>
+  <li>列表复用统一下载任务行，支持单任务暂停 / 继续 / 删除；删除任务使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认；空状态区分“没有任务”与“没有符合条件的任务”。</li>
 </ul>
 
 <h3 id="c4-68">4.68 src/renderer/views/DiscoverView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -2215,6 +2218,26 @@ export function downloadOverallProgress(
 <ul class="note">
   <li>按任务状态统计：<code>done</code> / <code>failed</code> 分别计数，其余（<code>pending</code> / <code>downloading</code> / <code>paused</code>）计入 <code>active</code>；<code>total</code> 为任务总数。</li>
   <li><code>percent</code> 固定按 <code>Math.round(done / total * 100)</code> 计算，失败任务不计入完成，空列表返回 0；下载页顶部 overlay 只消费该结果，不在组件内重复计算。</li>
+</ul>
+
+<h3 id="c4-81">4.81 src/renderer/components/ConfirmDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>const props = withDefaults(
+  defineProps&lt;{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    danger?: boolean;
+    busy?: boolean;
+  }&gt;(),
+  { confirmLabel: '确定', danger: false, busy: false }
+);
+const emit = defineEmits&lt;{ confirm: []; cancel: [] }&gt;();
+</code></pre>
+<ul class="note">
+  <li>复用 <code>.dialog-backdrop</code> / <code>.dialog</code> 视觉，<code>.confirm-dialog</code> 限宽 440px；<code>.confirm-message</code> 使用 <code>white-space: pre-line</code>，说明文本保留换行。</li>
+  <li>打开后默认聚焦“取消”；<code>Esc</code>、点击遮罩、点击关闭按钮或取消按钮都发出 <code>cancel</code>，避免破坏性操作被回车误确认。确认按钮可传 <code>danger</code> 使用红色危险态，<code>busy</code> 时禁用。</li>
+  <li>所有删除 / 清空确认统一使用该组件，渲染层不再调用原生 <code>window.confirm</code>。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
