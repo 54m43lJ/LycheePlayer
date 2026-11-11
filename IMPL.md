@@ -2440,7 +2440,7 @@
 
 状态：已解决。
 
-### 4.33 Revealer 统一交互
+### 4.33 Revealer 统一交互 [已解决]
 
 > 后续修正：§4.54 将播放条收藏定义为特殊 revealer（点击收藏 / 取消收藏，弹层只有“加入歌单”），§4.55 将音量触屏改为按拖动距离 delta 调节；统一“点击循环”规则只适用于播放模式与音质，收藏 / 音量为例外。
 
@@ -2481,6 +2481,26 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 音质按钮移除边框；音质选项 hover 改用 `--subtle-bg`，与模式选项一致。 |
 | `EVOLVE.md` | #15 | 增 | 记录统一 revealer 交互需求与音量特例。 |
 | `ABOUT.html` | §2 用户交互 · 播放行 | 改 | 描述点击循环、悬停展开与音质偏好共享。 |
+
+实际操作（2026-11-11，分支 `doc/revealer-unified`）：
+
+- `USER.html` §2 CONVENTIONS：核对后已有「Revealer 统一交互与样式」约定，覆盖点击循环、悬停 / 聚焦展开、除当前项外按固定顺序列出、向上包住按钮、无边框、选项 hover 使用 `--subtle-bg` 与触屏滑动；未规定悬停延迟，本次无需再改。
+- `USER.html` §2 播放模式切换、§5.2.3 播放条、§5.2.7 设置页：核对后已说明播放模式点击循环、音质按钮点击按 `自动 → 128K → 320K → FLAC` 循环、悬停展示其余档位、设置页与播放条共用偏好、空状态下音质仍可用，本次无需再改（原表章节号写作 §5.2.2，实际播放条为 §5.2.3）。
+- `CORE.html` §4.29 `stores/player.ts` / §4.30 `stores/settings.ts`（原表写作 §4.31）：核对后已有 `QUALITY_PREFERENCE_OPTIONS`、`qualityPreference`、`updateDefaultQuality()`、`cycleQualityPreference()` 与固定顺序说明，本次无需再改。
+- `CORE.html` §4.40 `PlayerBar.vue`：音质 revealer 说明补充“交互与呈现遵循 USER §2 的 Revealer 统一约定”，保留点击循环、悬停展开与弹层互斥描述。
+- `CORE.html` §4.49 `styles/main.css`：音质 revealer 样式说明补充“呈现约定见 USER §2”；已记录 `.quality-chip` 无边框、选项 hover 使用 `--subtle-bg`，与播放模式一致。
+- `ABOUT.html` 用户交互表“播放”行：核对后已描述播放模式与音质按钮点击循环、悬停展开、当前项由按钮高亮、音质与设置页共用偏好，本次无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“增”无法执行；对应约束已落到 USER / CORE / ABOUT。
+
+验证：
+
+- 对照 `src/renderer/components/PlayerBar.vue`：播放模式按钮调用 `cyclePlayMode()`，音质按钮调用 `cycleQuality()` → `player.cycleQualityPreference()`；悬停弹层只渲染 `otherModes` / 当前偏好之外的档位，选择调用 `setMode()` / `updateDefaultQuality()`。
+- 对照 `src/renderer/styles/main.css`：`.quality-chip` 为 `border: 0`，`.quality-menu button:hover` 使用 `--subtle-bg`；播放模式与音质共用 `mode-reveal` 向上展开动画。
+- 对照 `src/renderer/stores/player.ts` / `stores/settings.ts`：`QUALITY_PREFERENCE_OPTIONS` 固定顺序为 `auto → 128k → 320k → flac`，`cycleQualityPreference()` 从当前项前进一格。
+- 对照 `USER.html` §2 / §5.2.3 / §5.2.7：Revealer 约定、点击循环、空状态音质可用与设置页 / 播放条共享偏好均已存在。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.34 清空播放队列按钮置顶并改为图标
 
