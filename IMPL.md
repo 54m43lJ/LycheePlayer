@@ -2314,7 +2314,7 @@
 
 状态：已解决。
 
-### 4.31 下载中心改为完整页面
+### 4.31 下载中心改为完整页面 [已解决]
 
 > 后续修正：§4.50 已删除 `(完成/总数)` 与失败数等数字指示；§4.52 将整体进度条改为不占布局的 fixed overlay；§4.51 在筛选同行右侧新增“全部开始”。本节关于数字指示、吸顶 / 通栏布局与操作栏的描述以这三节为准。
 
@@ -2354,6 +2354,30 @@
 | `USER.html` | §3.4 页面表 / §5.2.8 下载中心 | 改 | 下载中心改为侧栏可进入的完整页面；顶部整体进度条为不占布局的 fixed overlay，不显示数字 / 失败数指示；标题区与设置 / 我的歌单页使用相同的页面留白与背景；条目区面板边框内顶部提供“全部 / 进行中 / 已完成 / 未成功”过滤，右侧提供“全部开始”；任务按新到旧展示。 |
 | `USER.html` | §5.2.2 侧栏 | 改 | “下载”改为路由入口，指向 `/downloads`；不再打开右侧抽屉。 |
 | `EVOLVE.md` | — | 改 | 下载中心由抽屉改为完整页面，补充顶部操作区与整体进度栏要求。 |
+
+实际操作（2026-11-11，分支 `doc/downloads-page`）：
+
+- `CORE.html` §1 File tree：删除 `components/DownloadDrawer.vue`，在 `views/` 下新增 `DownloadsView.vue`（仍使用 `#c4-67` 锚点）；新增 `utils/download-progress.ts`（`#c4-80`）。
+- `CORE.html` §4.23 `App.vue`：外壳描述删除下载抽屉，改为下载中心由 `/downloads` 路由页承载；不再与播放队列面板互斥。
+- `CORE.html` §4.31 `stores/ui.ts`：补说明下载中心是路由页，不进入 ui store，也不参与播放队列 / 侧栏抽屉互斥；签名中已无 `downloadOpen` / `toggleDownload` / `closeDownload`。
+- `CORE.html` §4.67：章节改为 `views/DownloadsView.vue`，补页面挂载 / 卸载时 `setVisible`、fixed overlay 整体进度、顶部操作区、过滤与“全部开始”、任务新到旧展示、单任务操作与空状态。
+- `CORE.html` §4.71 `stores/download.ts`：核对后已具备 `visible` / `setVisible`、可见时刷新目录用量、不可见时仅在活动任务存在时轮询、任务追加与 `reset()` 重载，本次无需再改。
+- `CORE.html` 新增 §4.80 `utils/download-progress.ts`：补 `DownloadOverallProgress` 与 `downloadOverallProgress`，说明 done / failed / active / percent 的统计规则与空列表返回 0。
+- `USER.html` §3.4 页面 / URL 架构图：下载中心改为 `/downloads` 完整页面，由侧栏“下载”进入；`diagram/page-url-architecture.puml` 新增 `DOWNLOADS` 节点与“侧栏为全局入口”注记，并用 `plantuml -tsvg` 重新导出 SVG。
+- `USER.html` §5.2.2 侧栏：“下载”改为指向 `/downloads` 的路由入口并跟随路由高亮，不再打开右侧抽屉，也不与播放队列面板互斥。
+- `USER.html` §5.2.8 下载中心：补标题区与设置 / 我的歌单页相同的页面留白与背景、任务新到旧展示；保留 fixed overlay 进度条、无数字指示、过滤 / “全部开始”、清空目录与离开页面后的轮询行为。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/views/DownloadsView.vue`：页面挂载 / 卸载调用 `downloads.setVisible(true/false)`；顶部进度条使用 `downloadOverallProgress`；`page-head-actions` 提供清除已完成 / 清空目录 / 打开文件夹；过滤与“全部开始”位于同一工具栏；任务按 `[...tasks].reverse()` 展示。
+- 对照 `src/renderer/stores/download.ts`：存在 `visible` / `setVisible`，目录用量仅在可见时刷新，不可见时有活动任务才继续轮询，`reset()` 在可见时立即重新加载。
+- 对照 `src/renderer/stores/ui.ts`：没有 `downloadOpen` / `toggleDownload` / `closeDownload`。
+- 对照 `src/renderer/router/index.ts`：存在 `/downloads` 路由；`src/renderer/components/DownloadDrawer.vue` 已不存在。
+- 对照 `src/renderer/utils/download-progress.ts`：`downloadOverallProgress` 返回 `total` / `done` / `failed` / `active` / `percent`，空列表 `percent = 0`。
+- 本次只修改文档与图表，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.32 无歌曲时播放条按钮状态与音质弹出
 

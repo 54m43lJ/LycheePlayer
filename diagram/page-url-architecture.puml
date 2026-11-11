@@ -13,6 +13,7 @@ skinparam shadowing false
 [专辑\n/album/:mid] as ALBUM
 [登录\n/login] as LOGIN
 [设置\n/settings] as SETTINGS
+[下载中心\n/downloads] as DOWNLOADS
 
 ROOT --> SEARCH : 重定向
 SEARCH --> PLAYLIST : 点击歌单
@@ -28,4 +29,8 @@ PLAYLIST --> LIBRARY : 返回我的歌单
 LOGIN --> LIBRARY : 登录成功
 ARTIST --> ALBUM : 打开专辑
 ALBUM --> ARTIST : 打开歌手
+
+note bottom of DOWNLOADS
+  侧栏“下载”为全局入口
+end note
 @enduml

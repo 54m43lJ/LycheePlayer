@@ -96,6 +96,7 @@
 │       │   ├── <a href="#c4-33">lrc.ts</a>                    LRC / QRC 解析与活动行查找
 │       │   ├── queue.ts                     队列快照过滤（不可播歌曲在入队前剔除）
 │       │   ├── <a href="#c4-79">download-state.ts</a>        下载按钮三态解析
+│       │   ├── <a href="#c4-80">download-progress.ts</a>     下载中心整体进度计算
 │       │   └── <a href="#c4-64">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
@@ -113,8 +114,7 @@
 │       │   ├── <a href="#c4-72">LyricsOverlay.vue</a>         歌词 / 评论弹出层
 │       │   ├── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
 │       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
-│       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
-│       │   └── <a href="#c4-67">DownloadDrawer.vue</a>         下载中心抽屉
+│       │   └── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
 │       │   ├── <a href="#c4-73">ArtistView.vue</a>            歌手页
@@ -124,6 +124,7 @@
 │       │   ├── <a href="#c4-47">LoginView.vue</a>             登录页
 │       │   ├── <a href="#c4-48">SettingsView.vue</a>          设置页
 │       │   ├── <a href="#c4-68">DiscoverView.vue</a>          发现页
+│       │   ├── <a href="#c4-67">DownloadsView.vue</a>         下载中心
 │       │   └── <a href="#c4-69">MvView.vue</a>                MV 播放页
 │       ├── <a href="#c4-49">styles/main.css</a>               主题 token、布局与组件样式
 │       └── index.html                        渲染进程 HTML 入口
@@ -1084,12 +1085,12 @@ export function destroyTray(): void;
 </code></pre>
 
 <h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板、下载抽屉与 Toast。
+<pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板与 Toast；下载中心由路由页承载。
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
   <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
-  <li>挂载下载抽屉；与播放队列面板互斥。</li>
+  <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；切换成功不弹 Toast。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
@@ -1298,6 +1299,7 @@ interface UiStore {
 </code></pre>
 <ul class="note">
   <li>播放队列面板、窄屏侧栏抽屉与歌词 / 评论弹出层都由界面状态控制；<code>lyricsOpen</code> 与当前歌曲驱动歌词 / 评论，不占路由。</li>
+  <li>下载中心是 <code>/downloads</code> 路由页，不进入 ui store，也不参与播放队列 / 侧栏抽屉互斥。</li>
   <li><code>sidebarOpen</code> 只影响 ≤900px 的抽屉；宽屏固定侧栏忽略该状态，路由切换时自动关闭抽屉。</li>
 </ul>
 
@@ -2006,9 +2008,16 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
   <li>提交后由调用方执行 <code>playlist-edit.create</code> / <code>rename</code>，成功关闭对话框；失败保留输入并提示。</li>
 </ul>
 
-<h3 id="c4-67">4.67 src/renderer/components/DownloadDrawer.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits；绑定 download IPC 与下载设置。
+<h3 id="c4-67">4.67 src/renderer/views/DownloadsView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。路由 /downloads 的下载中心页面。
 </code></pre>
+<ul class="note">
+  <li>由侧栏“下载”<code>RouterLink</code> 进入；挂载时调用 <code>download.setVisible(true)</code>，卸载时调用 <code>setVisible(false)</code>，下载任务本身继续由主进程队列执行。</li>
+  <li>顶部整体进度条为 fixed overlay，不占页面布局，不显示完成数 / 总数或失败数等数字指示；进度百分比由 <a href="#c4-80">utils/download-progress.ts</a> 的 <code>downloadOverallProgress</code> 计算。标题区复用普通 <code>.page</code> 的留白与背景。</li>
+  <li><code>page-head-actions</code> 提供“清除已完成”“清空目录”“打开文件夹”：前者只清记录，后两者分别删除目录内容与记录、打开下载目录；清空目录需确认并展示实际路径，播放缓存不受影响。</li>
+  <li>任务面板顶部左侧为“全部 / 进行中 / 已完成 / 未成功”过滤，右侧为“全部开始”继续所有暂停任务；过滤只影响展示，整体进度仍按全部任务计算。任务按新到旧展示，不改变主进程队列顺序。</li>
+  <li>列表复用统一下载任务行，支持单任务暂停 / 继续 / 删除；空状态区分“没有任务”与“没有符合条件的任务”。</li>
+</ul>
 
 <h3 id="c4-68">4.68 src/renderer/views/DiscoverView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits；使用 recommend store。
@@ -2177,6 +2186,24 @@ export function downloadStateIcon(
 <ul class="note">
   <li>下载按钮状态的唯一来源：按 <code>downloaded → cached → none</code> 返回单一状态；即使资产同时带 <code>downloadedQuality</code> 与 <code>cachedQuality</code>，也只返回已下载。</li>
   <li><code>SongTable</code> / <code>PlayerBar</code> 的 class、图标与 tooltip 都从该状态派生，不各自判断两个档位。</li>
+</ul>
+
+<h3 id="c4-80">4.80 src/renderer/utils/download-progress.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export interface DownloadOverallProgress {
+  total: number;
+  done: number;
+  failed: number;
+  active: number;
+  percent: number;
+}
+
+export function downloadOverallProgress(
+  tasks: Array&lt;Pick&lt;DownloadTask, 'status'&gt;&gt;
+): DownloadOverallProgress;
+</code></pre>
+<ul class="note">
+  <li>按任务状态统计：<code>done</code> / <code>failed</code> 分别计数，其余（<code>pending</code> / <code>downloading</code> / <code>paused</code>）计入 <code>active</code>；<code>total</code> 为任务总数。</li>
+  <li><code>percent</code> 固定按 <code>Math.round(done / total * 100)</code> 计算，失败任务不计入完成，空列表返回 0；下载页顶部 overlay 只消费该结果，不在组件内重复计算。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
