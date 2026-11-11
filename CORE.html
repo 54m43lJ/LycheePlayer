@@ -94,6 +94,7 @@
 │       │   ├── <a href="#c4-32">format.ts</a>                 时长、计数、封面与歌手格式化
 │       │   ├── <a href="#c4-33">lrc.ts</a>                    LRC / QRC 解析与活动行查找
 │       │   ├── queue.ts                     队列快照过滤（不可播歌曲在入队前剔除）
+│       │   ├── <a href="#c4-79">download-state.ts</a>        下载按钮三态解析
 │       │   └── <a href="#c4-64">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
@@ -881,7 +882,7 @@ function buildStreamUrl(purl: string): string;
   <li>vkey 请求先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>；若响应或 <code>data.retcode</code> 为 <code>104009</code>，再以相同 filename 尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
   <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>isVipUser()</code> 通用文案。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
-  <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。</li>
+  <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。播放取源优先级固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”，与 <a href="#c4-59">§4.59</a> 的 <code>handleStream</code> 顺序一致。</li>
   <li>显示名优先 <code>title.trim()</code>，为空时回退 <code>name.trim()</code>；专辑名与歌手名同样 <code>trim()</code>，避免尾部空白把 VIP / 音质徽标推离标题。<code>title</code> 含 Explicit / Remix 等版本标签，<code>name</code> 是基础名；原始响应没有独立标签布尔字段。</li>
   <li>歌手映射：<code>singer[]</code> 成员只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空；只有 <code>name</code> 为空的成员被丢弃，不因缺少 <code>mid</code> 丢名字。列表响应缺名字时，歌曲进入可见列表后可用 <code>getDetail</code> 的 <code>track_info.singer[]</code> 补全；补全结果不改变播放队列。</li>
 </ul>
@@ -1334,7 +1335,7 @@ export function useToast(): {
 <pre><code>const props = withDefaults(defineProps&lt;{ name: string; size?: number }&gt;(), { size: 20 });
 </code></pre>
 <ul class="note">
-  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式由播放模式按钮本身表示；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>；添加到歌单使用 <code>playlist-add</code>（简单加号），下一首播放使用 <code>play-next</code>（横线 + 上箭头）。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
+  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式由播放模式按钮本身表示；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>，其中 <code>download-cached</code> 与普通下载图标同形（下载箭头 + 完整底线），缓存态由按钮的 24px surface 状态框表达，不使用带框或断线图标；添加到歌单使用 <code>playlist-add</code>（简单加号），下一首播放使用 <code>play-next</code>（横线 + 上箭头）。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
 </ul>
 
 <h3 id="c4-37">4.37 src/renderer/components/CoverArt.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1389,7 +1390,7 @@ const emit = defineEmits&lt;{
   <li>列顺序固定为 <code># / 标题 / 专辑 / 操作 / 时长</code>，所有 <code>th</code> 与操作 / 时长单元格左对齐；操作列在时长列左侧。≤900px 隐藏专辑列。</li>
   <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由加号图标按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。</li>
   <li><code>availability</code> 提供不可播标记与最高可用音质；不可播行禁用 <code>play</code> / <code>playNext</code>。收藏与下载按钮分别发出 <code>favorite</code> / <code>download</code>；未知可用性按可播处理。</li>
-  <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态，下载图标据此切换三态：未缓存未下载 / 已缓存 / 已下载，tooltip 显示档位；同时存在时显示“已下载”。</li>
+  <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态；下载按钮三态由 <code>resolveDownloadState</code> 派生为唯一状态（已下载 / 已缓存 / 普通），class、图标与 tooltip 共用该状态。已缓存与已下载互斥，下载优先；即使资产同时带两个档位也只显示已下载，tooltip 只显示当前状态。状态框固定 24px，按钮点击热区不变。</li>
   <li>专辑列与歌手行渲染为链接：歌手 <code>mid</code> 非空链接到 <code>/artist/:mid</code>，专辑 <code>mid</code> 非空链接到 <code>/album/:mid</code>，点击不触发行播放；<code>mid</code> 为空时按纯文本展示，名称为空不渲染。标题、歌手、专辑统一使用 <code>MarqueeText</code>，仅在溢出时滚动；≤900px 隐藏专辑列。</li>
   <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：窄窗口优先省略歌名，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与 tooltip。</li>
   <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。操作列宽屏 160px，≤900px 收窄到 40px，五个图标按钮在单元格内横向排列。</li>
@@ -1406,7 +1407,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>点击封面调用 <code>router.push('/lyrics')</code> 进入歌词 / 评论页；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首失败后停止，不读取探测结果。</li>
-  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>assetStates</code> 的三态渲染（未缓存未下载 / 已缓存 / 已下载），tooltip 显示“已缓存 FLAC / 已下载 320K / 下载”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
+  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px surface 状态块已缓存 / 24px accent 高亮已下载），与歌曲表共用状态与图标；tooltip 只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
   <li>播放进度条为单轨结构：<code>.progress-track</code> 背景轨上叠加 <code>.progress-buffer</code> 缓冲层与 <code>.progress-played</code> 播放层，透明 <code>.progress-range</code> 覆盖在轨道上只负责拖动与点击定位。缓冲宽度取 <code>max(cachePercent, bufferedPercent)</code>：缓存进度按当前 <code>songMid + quality</code> 匹配，已下载歌曲按 100%；HTML5 <code>audio.buffered</code> 由 <code>onBufferChange</code> 上报，切歌清空。tooltip 在已下载 / 缓存完成时显示“已下载到本机” / “缓存完成”，否则显示“缓冲 N%”；无歌曲或缓冲为 0 时只保留灰轨，不渲染 overlay。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
   <li>播放模式按钮本身即当前模式：<code>.mode-button</code> 常驻 <code>--accent-soft</code> 背景与 <code>--accent-strong</code> 图标，图标由 <code>MODE_ICON</code> 映射；点击按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换（不展开菜单）。悬停 120ms / 离开 200ms 打开或关闭向上弹出的仅图标菜单，菜单只渲染 <code>otherModes</code>（当前模式之外的其余三项，保持固定顺序），不重复显示当前模式；键盘焦点可打开，Esc、外部点击与选择后关闭，选择项调用 <code>player.setMode()</code>，不弹 Toast。</li>
@@ -1516,6 +1517,7 @@ const emit = defineEmits&lt;{
   <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页每个分区使用 flexbox 横向排列固定宽度条目、纵向 3 行滚动，条目文本溢出时走跑马灯。</li>
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
   <li><code>.song-title .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。</li>
+  <li>下载按钮三态使用共用的 24px <code>::before</code> 状态框：<code>.cached:not(.downloaded)</code> 为 <code>var(--panel)</code> surface 背景，<code>.downloaded</code> 为 <code>var(--accent-soft)</code> 填充且覆盖缓存态；不画按钮外沿 inset 边框，不使用 <code>background-clip</code>，播放条与歌曲表尺寸一致、点击热区不变。</li>
 </ul>
 
 <h3 id="c4-50">4.50 src/shared/constants.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1725,7 +1727,7 @@ export function readAudioFile(path: string): Promise&lt;Buffer&gt;;
 <ul class="note">
   <li>模块加载阶段调用 <code>protocol.registerSchemesAsPrivileged()</code> 注册 <code>lychee-audio</code>（<code>standard</code> / <code>secure</code> / <code>supportFetchAPI</code> / <code>stream</code> / <code>bypassCSP</code>）；<code>app.whenReady()</code> 后由 <code>registerAudioProtocol()</code> 调用 <code>protocol.handle()</code>。</li>
   <li>URL 只有两种：缓存文件 <code>lychee-audio://file/&lt;base64url(path)&gt;</code>；未缓存流 <code>lychee-audio://stream/&lt;uuid&gt;</code>。stream token 在主进程内映射上游 URL、<code>songMid</code> 与 <code>quality</code>，渲染进程永远拿不到上游链接。</li>
-  <li><code>audioStreamUrl</code> 可携带本地下载文件 <code>filePath</code>；<code>handleStream</code> 优先用该文件响应并立即上报 <code>complete: true</code> 的缓存进度，未命中本地文件才回源上游。</li>
+  <li><code>audioStreamUrl</code> 可携带本地下载文件 <code>filePath</code>；<code>handleStream</code> 固定按“本机下载文件 &gt; 播放缓存 &gt; 网络”取源，命中本地文件时直接响应并立即上报 <code>complete: true</code> 的缓存进度，未命中才回源上游。代码注释锁定该顺序，与 <a href="#c4-11">§4.11</a> 的 <code>getStreamUrls</code> 一致。</li>
   <li>token 只保存在进程内 Map，无持久化、无主动过期；应用重启后 token 失效，但缓存文件仍可通过 <code>file</code> 分支读取。</li>
   <li>渲染层取消读取时，协议处理必须同时 abort 上游 <code>net.fetch</code>：只 cancel body 可能把未读完的连接留在 socket 池，后续音频流复用该连接时会一直等到上游超时（约 10 秒）才报错重试。</li>
   <li>取消路径先调用 <code>abortUpstream()</code>，随后必须用 <code>reader.cancel(reason).catch(() =&gt; undefined)</code> 等待并吞掉取消 Promise。abort 或对端关闭后 <code>reader.cancel()</code> 会以 <code>net::ERR_CONNECTION_CLOSED</code> / <code>ERR_CONTENT_LENGTH_MISMATCH</code> 拒绝，不能使用 <code>void</code> 丢弃，否则会产生进程级未处理 Promise；只吞取消路径的关闭类拒绝，正常读取错误仍照常处理。</li>
@@ -2115,6 +2117,18 @@ const emit = defineEmits&lt;{ close: []; picked: [playlistId: string] }&gt;();
   <li>列出当前账号可编辑的普通歌单（排除“我喜欢”），提供“新建歌单”；空列表、加载中与错误分别渲染。</li>
   <li>选择歌单后发出 <code>picked(playlistId)</code>，由调用方执行 <code>playlist-edit.addSongs</code>；歌曲已在目标歌单时不重复提交并 Toast“已在歌单中”。</li>
   <li>新建歌单复用 <code>PlaylistEditDialog</code>，创建成功后直接加入当前歌曲；<code>open</code> 关闭时清空临时状态。</li>
+</ul>
+
+<h3 id="c4-79">4.79 src/renderer/utils/download-state.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export type DownloadState = 'downloaded' | 'cached' | 'none';
+export function resolveDownloadState(asset: SongAssetState | null | undefined): DownloadState;
+export function downloadStateIcon(
+  state: DownloadState
+): 'download-done' | 'download-cached' | 'download';
+</code></pre>
+<ul class="note">
+  <li>下载按钮状态的唯一来源：按 <code>downloaded → cached → none</code> 返回单一状态；即使资产同时带 <code>downloadedQuality</code> 与 <code>cachedQuality</code>，也只返回已下载。</li>
+  <li><code>SongTable</code> / <code>PlayerBar</code> 的 class、图标与 tooltip 都从该状态派生，不各自判断两个档位。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>

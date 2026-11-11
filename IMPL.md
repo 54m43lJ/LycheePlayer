@@ -1536,7 +1536,7 @@
 
 状态：已解决。
 
-### 4.17 下载按钮的缓存 / 下载状态在播放条与歌曲表统一
+### 4.17 下载按钮的缓存 / 下载状态在播放条与歌曲表统一 [已解决]
 
 > 后续修正：本节后半的“追加修复（遗留问题）”已取代前半的 2px inset 边框方案，最终统一为 24px `::before` 状态框（缓存态 surface 背景、下载态 accent 填充）。以追加修复与本节末尾结论为准。
 
@@ -1588,6 +1588,28 @@
 | `USER.html` | §5.2.3 播放条 · 右区下载 | 改 | 三态呈现改为：普通图标 / 24px surface 背景块（已缓存）/ 24px accent 实心高亮（已下载）；缓存与下载互斥，有下载时只显示已下载，tooltip 不再同时列出两种状态。 |
 | `USER.html` | §5.2.4 歌曲列表 · 操作列 | 改 | 与播放条一致：已缓存为 24px surface 背景块，已下载为 accent 高亮；两种状态只显示一种，下载优先。 |
 | `EVOLVE.md` | #2 下载队列 / #9 播放条 | 改 | 删除“tooltip 补充缓存档位”与状态可共存表述，改为单一状态且下载优先；播放取源固定下载 > 缓存 > 网络。 |
+
+实际操作（2026-11-11，分支 `doc/download-badge-states`）：
+
+- `CORE.html` §4.36 `AppIcon.vue`：说明 `download-cached` 与普通下载图标同形（箭头 + 完整底线），缓存态改由按钮的 24px surface 状态框表达。
+- `CORE.html` §1 File tree + 新增 §4.79 `utils/download-state.ts`：记录 `DownloadState`、`resolveDownloadState` / `downloadStateIcon` 作为下载按钮状态的唯一来源。
+- `CORE.html` §4.39 `SongTable.vue`：三态改由 `resolveDownloadState` 派生，class / 图标 / tooltip 共用同一状态，缓存与下载互斥、下载优先，状态框 24px。
+- `CORE.html` §4.40 `PlayerBar.vue`：与歌曲表共用状态与 24px 状态框，tooltip 只显示当前优先级状态，不再拼接“已下载 · 已缓存”。
+- `CORE.html` §4.49 `styles/main.css`：删除外沿 inset 边框与 `background-clip` 方案，改为 `.cached` / `.downloaded` 共用 24px `::before`，缓存态 `var(--panel)`、下载态 `var(--accent-soft)` 且覆盖缓存态。
+- `CORE.html` §4.11 / §4.59：明确取源优先级“本机下载文件 > 播放缓存 > 网络”，两处一致且注释锁定。
+- `USER.html` §5.2.3 / §5.2.4 / §1 TERMS“已缓存 / 已下载”：统一为单一状态呈现，缓存为 24px surface 块、下载为 24px accent 高亮，下载优先且 tooltip 不再同时列出两种状态。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/AppIcon.vue`：`download` 与 `download-cached` 路径均为 `M12 4v11` / `M8 11l4 4 4-4` / `M5 19h14`。
+- 对照 `src/renderer/utils/download-state.ts`：`resolveDownloadState` 按 `downloaded → cached → none` 返回单一状态。
+- 对照 `src/renderer/components/SongTable.vue` / `PlayerBar.vue`：两者均导入 `downloadStateIcon` / `resolveDownloadState`，class 与 tooltip 由同一状态派生。
+- 对照 `src/renderer/styles/main.css`：`.cached` / `.downloaded` 共用 24×24 `::before`，下载态 `var(--accent-soft)` 覆盖缓存态 `var(--panel)`。
+- 对照 `src/main/api/song.ts` / `src/main/media/audio-protocol.ts`：取源顺序为下载文件 > 播放缓存 > 网络，且注释已锁定。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.18 设置页新增带节点的播放缓存上限滑动条
 
