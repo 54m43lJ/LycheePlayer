@@ -3249,7 +3249,7 @@
 
 状态：已解决。
 
-### 4.46 歌单缓存优先、静默刷新、已下载计数与快速跳转
+### 4.46 歌单缓存优先、静默刷新、已下载计数与快速跳转 [已解决]
 
 问题描述：ISSUES 要求改进歌单缓存：打开页面即加载缓存，后台更新不再对用户可见，失败不提示；所有歌单按 ID 持久缓存，发现歌单不存在时清理缓存；把歌曲标题右侧的“668 / 668 首”改为提示已下载数量；并像评论页一样增加快速到达顶部 / 底部的按钮。
 
@@ -3289,6 +3289,27 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 新增 `.page-jump` 固定定位；`.page-jump-btn` 与评论跳转按钮共用样式。 |
 | `USER.html` | §5.2.8 页面表 · 歌单详情行 | 改 | 打开立即显示缓存；后台更新失败不提示；歌曲区显示已下载数量；右下角提供快速到顶部 / 底部按钮。 |
 | `EVOLVE.md` | #5 歌单 | 改 | 补缓存优先、静默刷新、失效歌单清理、已下载计数与快速跳转要求。 |
+
+实际操作（2026-11-11，分支 `doc/playlist-cache-jump`）：
+
+- `PROVIDER.html` §4.1 歌单详情行：补充失效歌单响应形状——`req_0.code` 仍为 `0`、顶层 `data.code = -100006`、`dirinfo` 为空壳、`songlist` 为空，不能只看 `retcode`。
+- `PROVIDER.html` §4.3 `QqPlaylistData`：新增可选 `code` 字段并注明 `-100006`；映射表补充 `code` 消费字段，说明应用把该负数码映射为 `NO_PERMISSION` 并清理持久缓存。
+- `CORE.html` §4.8 `api/client.ts`：把 `dataErrorCode` 的规则写为“先取非 0 的 `data.retcode`，再取顶层负数 `data.code`；`req_0.code` 为 `0` / `1000` 时优先采用”，并记录 `-100006 → NO_PERMISSION`。
+- `CORE.html` §4.12 `api/playlist.ts`：明确 `fetchPlaylistSnapshot` / `fetchPlaylistPage` 遇到 `NO_PERMISSION`（含 `data.code = -100006` 的失效歌单）时调用 `invalidatePlaylistCache(id)`，并保留“缓存按账号 + 歌单 ID 持久化”的说明。
+- `CORE.html` §4.46 `PlaylistView.vue`：补充歌曲区标题“已下载 X / Y 首”（按 `downloadedQuality` 统计，不含播放缓存；筛选时前置“筛选 N ·”）与快速跳转——`closest('.main')` 滚动监听、`ResizeObserver`、`scrollTop > 120` 显示顶部按钮、未到底部显示底部按钮、平滑滚动与卸载清理。
+- `CORE.html` §4.49 `styles/main.css`：补 `.page-jump` 固定右下角并避开播放条；`.page-jump-btn` 与 `.comments-jump-btn` 共用圆形按钮样式。
+- `USER.html` §5.2.8 页面表 · 歌单详情行：补充“已下载 X / Y 首”与右下角按滚动位置显示顶部 / 底部跳转按钮。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 PROVIDER / CORE / USER。
+
+验证：
+
+- 对照 `src/main/api/client.ts`：`dataErrorCode` 先读 `data.retcode`，再读顶层负数 `data.code`；`-100006` 映射为 `NO_PERMISSION`。
+- 对照 `src/main/api/playlist.ts`：`fetchPlaylistPage` 与 `fetchPlaylistSnapshot` 捕获 `NO_PERMISSION` 后调用 `invalidatePlaylistCache(id)`；缓存按账号 + 歌单 ID 持久化。
+- 对照 `src/renderer/views/PlaylistView.vue`：`downloadedCount` 使用 `downloadedQuality`；`pageRef` 通过 `closest('.main')` 绑定滚动容器，`JUMP_THRESHOLD = 120`，顶部 / 底部按钮调用 `scrollTo({ behavior: 'smooth' })`；卸载时移除监听、断开 `ResizeObserver` 并调用 `playlist.stop()`。
+- 对照 `src/renderer/styles/main.css`：`.page-jump` 为 `position: fixed; right: 22px; bottom: calc(var(--player-height) + 18px)`；`.page-jump-btn` 与 `.comments-jump-btn` 共用按钮规则。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.47 歌单缓存从未落盘：Vue 响应式代理无法通过 IPC 结构化克隆
 
