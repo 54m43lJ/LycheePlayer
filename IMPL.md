@@ -737,7 +737,7 @@
 
 状态：已解决。
 
-### 3.10 播放模式悬停菜单的定时器与外部监听泄漏
+### 3.10 播放模式悬停菜单的定时器与外部监听泄漏 [已解决]
 
 问题描述：播放模式菜单用 120ms 延迟打开、200ms 延迟关闭，还挂了 document 的点击 / 键盘监听。如果组件卸载或路由切换时只清菜单状态、不清定时器，延迟回调仍会操作已卸载组件的 ref；document 监听也会在多次挂载后重复注册。
 
@@ -755,6 +755,20 @@
 | `CORE.html` | §4.40 `PlayerBar.vue` | 改 | 补 120/200ms 定时器与 document 监听的卸载清理。 |
 | `CORE.html` | §4.49 `styles/main.css` | 不动 | 菜单定位与高亮样式由 #9 维护。 |
 | `USER.html` | §5.2.3 播放模式 | 不动 | 交互契约由 #9 维护，见该节。 |
+
+实际操作（2026-11-11，分支 `doc/playerbar-mode-timer-cleanup`）：
+
+- `CORE.html` §4.40 `PlayerBar.vue`：补充播放模式菜单的定时器与监听生命周期——`modeOpenTimer` / `modeCloseTimer` 管理 120ms 打开与 200ms 关闭；Esc 走 `closeMenus()` 清除模式、音质与音量的待执行定时器；挂载时注册 document `click`（捕获阶段）与 `keydown`，`onBeforeUnmount` 清除模式定时器并移除这两个监听。
+- `CORE.html` §4.49 `styles/main.css`：按原表“不动”未处理。
+- `USER.html` §5.2.3 播放模式：按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/components/PlayerBar.vue`：`openModeMenu()` / `scheduleCloseModeMenu()` 分别使用 120ms / 200ms 定时器；`onMounted` 以捕获阶段注册 `document.addEventListener('click', ..., true)` 并注册 `keydown`；`onBeforeUnmount` 清理 `modeOpenTimer` / `modeCloseTimer` 并移除两个监听。
+- 点击外部只关闭已打开的菜单；Esc 调用 `closeMenus()`，会同时清空模式、音质与音量的待执行定时器。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 3.11 音频代理取消时 `reader.cancel` 拒绝产生未处理 Promise
 
