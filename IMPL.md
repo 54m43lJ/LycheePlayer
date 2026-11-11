@@ -3311,7 +3311,7 @@
 
 状态：已解决。
 
-### 4.47 歌单缓存从未落盘：Vue 响应式代理无法通过 IPC 结构化克隆
+### 4.47 歌单缓存从未落盘：Vue 响应式代理无法通过 IPC 结构化克隆 [已解决]
 
 问题描述：切换到歌单时仍会显示一段“正在加载歌单”。检查实际用户目录发现 `cache/playlist` 目录根本不存在，说明不是缓存读取慢，而是缓存从未写入；每次切换都在等完整网络快照。
 
@@ -3343,6 +3343,22 @@
 | `CORE.html` | §4.61 `stores/playlist.ts` | 改 | 明确写缓存前必须把响应式 feed 展开为纯对象；Electron IPC 不能克隆 Vue Proxy。 |
 | `CORE.html` | §4.12 `api/playlist.ts` | 改 | 缓存快照结构不变；缓存上限提高到 64MB，1 万首左右的快照可正常保留。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 首次成功加载后写入缓存；后续打开优先命中缓存，避免重复网络等待。 |
+
+实际操作（2026-11-12，分支 `doc/playlist-cache-plain-snapshot`）：
+
+- `CORE.html` §4.61 `stores/playlist.ts`：新增缓存写入约束——`persistCache()` 只在 feed 为 `complete` 且非 `stale` 时执行；写 IPC 前用 `{ ...meta }` 与 `plainSong()` 逐层展开 `singers` / `album` / `pay`，只提交纯对象；说明 Electron IPC 的结构化克隆不能处理 Vue Proxy，直接传响应式对象会抛 `DataCloneError`，并记录写入串行化、合并待写与失败不阻塞展示。
+- `CORE.html` §4.12 `api/playlist.ts`：明确缓存快照结构保持 `{ meta, songs, total, sourceTotal, complete, fetchedAtMs }` 不变，上限为 `PLAYLIST_CACHE_MAX_BYTES = 64MB`，约 1 万首的快照可正常保留，超出后按文件 mtime 最旧优先清理。
+- `CORE.html` §4.50 `shared/constants.ts`：把 `PLAYLIST_CACHE_MAX_BYTES` 的注释从 16MB 更正为 `64 × 1024 × 1024`。
+- `USER.html` §5.2.8 页面表 · 歌单详情行：补充“首次成功加载后写入整份缓存；之后打开优先命中缓存”，避免重复网络等待。
+
+验证：
+
+- 对照 `src/renderer/stores/playlist.ts`：`plainSong()` 逐层复制 `singers` / `album` / `pay`，`persistCache()` 提交 `{ ...current.meta }` 与 `current.songs.map(plainSong)`，且仅在 `complete` 且非 `stale` 时写入；写入串行化，失败被捕获且不阻塞展示。
+- 对照 `src/main/cache/playlist.ts` / `src/shared/constants.ts`：缓存结构为 `PlaylistCacheEntry`，`PLAYLIST_CACHE_MAX_BYTES = 64 * 1024 * 1024`，超限按 `mtimeMs` 最旧优先删除。
+- 对照 `src/main/api/playlist.ts`：缓存按账号 `scope` + 歌单 ID 写入与读取，快照结构未变。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.48 发现页骨架加载、分区独立填充与离开取消
 

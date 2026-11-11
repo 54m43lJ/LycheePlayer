@@ -956,7 +956,7 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
   <li><code>listMine</code> 从 <code>dirId</code> / <code>dirid</code> 回填 <code>PlaylistMeta.dirId</code>，<code>CgiGetDiss</code> 从 <code>dirinfo.dirid</code> 回填；「我喜欢」固定为 <code>201</code>，公开歌单缺失时保持 <code>undefined</code>。创建歌单的 <code>id</code> / <code>dirId</code> 取值见 <a href="#c4-55">§4.55</a>。</li>
   <li>固定收藏歌单 ID 统一引用 <code>FAVORITES_PLAYLIST_ID = 'liked'</code>（<a href="#c4-50">§4.50</a>），模块内不再保留本地 <code>FAVORITES_ID</code> 字面量；收藏分支判断与收藏歌单元数据都使用该共享常量。</li>
   <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin = 0 / 2000 / 4000 …</code> 递增（不能按返回条数累加）、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；跨页重复 <code>mid</code> 直接去重。任一分页失败、offset 小于总数时返回空页、最终条数低于 <code>PLAYLIST_FETCH_MISSING_RATIO = 0.02</code> / <code>PLAYLIST_FETCH_MISSING_MIN = 10</code> 容差或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>；<code>requestPage</code> 接受 <code>pageSize</code> 与 <code>AbortSignal</code>，取消会中止当前网络请求。</li>
-  <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存按账号 + 歌单 ID 持久化，上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>。</li>
+  <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存快照结构保持 <code>{ meta, songs, total, sourceTotal, complete, fetchedAtMs }</code> 不变，按账号 + 歌单 ID 持久化。上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>，约 1 万首的快照可正常保留；超出后按文件 mtime 最旧优先清理。</li>
   <li><code>fetchPlaylistSnapshot</code> / <code>fetchPlaylistPage</code> 遇到 <code>NO_PERMISSION</code>（含顶层 <code>data.code = -100006</code> 的失效歌单）时调用 <code>invalidatePlaylistCache(id)</code> 删除持久缓存；添加、删除、改名、收藏等写操作只标记旧缓存为过期，不删除文件，下一次打开仍先展示旧内容。</li>
   <li>歌单歌曲条目复用 <a href="#c4-11">§4.11</a> 的 <code>rawSongToSong</code>；歌单响应可能只带 <code>singer[].name</code> 而没有 <code>mid</code>，此时保留名称、<code>mid</code> 留空，界面按纯文本展示。</li>
 </ul>
@@ -1613,7 +1613,7 @@ export declare const PLAYLIST_PAGE_MAX: number;            // 20_000
 export declare const PLAYLIST_POLL_INTERVAL_MS: number;     // 15_000 ms
 export declare const PLAYLIST_REFRESH_RETRY_MS: number;     // 5 × 60_000 ms
 export declare const FAVORITES_PLAYLIST_ID: string;         // 'liked'
-export declare const PLAYLIST_CACHE_MAX_BYTES: number;      // 16 × 1024 × 1024
+export declare const PLAYLIST_CACHE_MAX_BYTES: number;      // 64 × 1024 × 1024
 export declare const RECENT_PLAYLIST_LIMIT: number;          // 5
 export declare const RECENT_PLAYLIST_CHECK_THROTTLE_MS: number; // 5000 ms
 export declare const RECENT_PLAYLIST_STORAGE_PREFIX: string; // 'lychee:recent-playlists:'
@@ -1957,6 +1957,7 @@ export interface PlaylistFeed {
 </code></pre>
 <ul class="note">
   <li>打开歌单先读取整份缓存并立即展示（<code>complete=false</code> 显示为 <code>partial</code>），同时调用 <code>refresh</code> 在后台拉取完整快照；只有 <code>getSnapshot</code> 成功才一次性替换 <code>feed</code>。失败保留缓存、标记 <code>stale</code>，并安排 <code>PLAYLIST_REFRESH_RETRY_MS</code> 定时重试。</li>
+  <li><code>persistCache()</code> 只在整个 feed 为 <code>complete</code> 且非 <code>stale</code> 时写缓存；传给 IPC 前用 <code>{ ...meta }</code> 与 <code>plainSong()</code> 逐层展开 <code>singers</code> / <code>album</code> / <code>pay</code>，只提交纯对象快照。Electron IPC 使用结构化克隆，直接传 Vue 响应式 Proxy 会抛 <code>DataCloneError</code>，导致缓存从未落盘。写入串行化，期间再次成功刷新则合并为一次待写，避免旧快照覆盖新快照；写缓存失败不阻塞展示。</li>
   <li>浏览分页完全本地：<code>feed.songs</code> 就是完整快照，滚动 / 筛选不再请求上游分页；只有打开、心跳变化、手动重试等触发的 <code>refresh</code> 会重新拉取整份快照。</li>
   <li><code>refresh</code> 开始前清除 timeout；<code>poll</code> 心跳发现名称、封面、首屏顺序或数量显著变化时立即调用 <code>refresh</code>，因此心跳变化优先于 5 分钟 timeout。无变化且内容完整时保留 timeout，不做额外刷新。</li>
   <li>心跳由 <code>PlaylistView</code> 只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时启动；隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时。离开页面调用 <code>stop</code>：清除 timeout、递增刷新序号并调用 <code>playlist.cancelSnapshot</code>。</li>
