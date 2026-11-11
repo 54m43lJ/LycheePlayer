@@ -3360,7 +3360,7 @@
 
 状态：已解决。
 
-### 4.48 发现页骨架加载、分区独立填充与离开取消
+### 4.48 发现页骨架加载、分区独立填充与离开取消 [已解决]
 
 问题描述：ISSUES 要求确认“发现页加载时打开歌单容易触发风控”的根因，并写明“页面离开必须取消上游请求、下载例外”的统一约定；同时发现页不得等三块内容全部完成才渲染，应先显示骨架，再按组件分别填充。
 
@@ -3404,6 +3404,25 @@
 | `CORE.html` | §4.1 `api/client.ts` | 改 | 记录全局令牌桶 4 req/s、突发 8；限流不等于取消，页面仍需主动 abort。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 不动 | 已在本节说明下载不受页面生命周期约束。 |
 | `EVOLVE.md` | #5 / #14 | 改 | 补“页面离开取消上游请求、下载例外、发现页骨架与分区独立填充”的约束。 |
+
+实际操作（2026-11-12，分支 `doc/discover-skeleton-cancel`）：
+
+- `PROVIDER.html` §4.1 播放链接行：补充 `104009` 主要出现在 vkey / 播放链接请求，整单可用性探测按 50 首分批会放大触发概率。
+- `CORE.html` §4.8 `api/client.ts`（原建议写 §4.1，实际章节为 §4.8）：在令牌桶说明中写入推荐值 4 req/s、突发 8；明确限流只平滑请求、不等于取消，页面离开仍须通过 `recommend.cancel` / `AbortController` 主动中止，并链接 §2 页面请求生命周期。
+- `CORE.html` §4.60 `download/manager.ts`：按原表“不动”未处理；该节已说明下载任务由主进程队列持有、离开页面不取消，是页面请求生命周期的例外。
+- 核对 `CORE.html` §2 / §4.53 / §4.62 / §4.68 / §5.13、`USER.html` §2 / §5.2.8 与 `GUIDELINES.md` #12：骨架、逐区填充、离开取消与下载例外均已写入，本次无需重复修改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 GUIDELINES / PROVIDER / CORE / USER。
+
+验证：
+
+- 对照 `src/main/api/client.ts` / `src/shared/constants.ts`：`UPSTREAM_RATE_LIMIT_PER_SECOND = 4`、`UPSTREAM_RATE_LIMIT_BURST = 8`；限流实现不负责取消，取消由调用方 signal 完成。
+- 对照 `src/main/api/recommend.ts`：`loadDaily` / `loadRadar` / `loadGuess` / `loadSection` / `buildFeed` / `fetchRecommendFeed` 均接受并透传 `AbortSignal`，取消后不继续填充后续分区。
+- 对照 `src/main/ipc.ts` / `src/preload/index.ts`：存在 `recommend.get(sectionId, token)` / `recommend.refresh(sectionId, token)` / `recommend.cancel(token)`，主进程按 token 管理 `AbortController`。
+- 对照 `src/renderer/stores/recommend.ts`：三区占位逐块替换，`cancel()` 递增会话序号并取消当前 token；对照 `DiscoverView.vue`：卸载调用 `recommend.cancel()`。
+- 对照 `src/renderer/components/DiscoverSkeleton.vue`：默认 30 条歌曲占位，复用 `.discover-strip` / `.discover-item` / `.card` 等真实布局类。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.49 歌单写后仍保留缓存、心跳跟随页面并优先于 timeout
 
