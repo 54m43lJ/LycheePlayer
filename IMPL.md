@@ -946,7 +946,7 @@
 
 状态：已解决。
 
-### 4.4 按钮文字不再自动换行
+### 4.4 按钮文字不再自动换行 [已解决]
 
 问题描述：ISSUES 指出按钮没有固定宽度，歌单界面的“播放全部 / 下载全部”会出现文字换行。`.btn` 虽然是 `inline-flex`，但没有 `white-space: nowrap`；`.playlist-actions` 只在 ≤900px 时才 `flex-wrap`，宽屏下按钮作为 flex 子项默认 `flex-shrink: 1`，空间不足时被压缩，中文标题就会在按钮内部折行。仅写死宽度并不能解决问题：宽度不足时文字仍会换行，正确做法是禁止文字折行并让整组按钮换行。
 
@@ -970,6 +970,21 @@
 | `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 说明“播放全部 / 下载全部 / 返回”按钮文字单行，窄容器时整组换行而不是按钮内折行。 |
 | `USER.html` | §5.2.8 歌单详情 | 改 | 补一句：歌单头操作按钮保持文字单行，空间不足时按钮组整体换行。 |
 | `EVOLVE.md` | — | 不动 | 按钮排版属于样式实现细节，由 CORE / USER 主责。 |
+
+实际操作（2026-11-11，分支 `doc/button-nowrap-wrap`）：
+
+- `CORE.html` §4.49 `styles/main.css`：补充 `.btn { white-space: nowrap }`、`.playlist-actions { flex-wrap: wrap }`、`.playlist-actions .btn { flex: 0 0 auto }`，并说明 ≤900px 媒体查询不再重复声明 `flex-wrap`。
+- `CORE.html` §4.46 `PlaylistView.vue`：补充歌单头操作按钮文字单行、空间不足时整组换行的布局规则。
+- `USER.html` §5.2.8 歌单详情：补充“操作按钮文字保持单行，空间不足时按钮组整体换行”。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“不动”未处理。
+
+验证：
+
+- 对照 `src/renderer/styles/main.css`：`.btn` 含 `white-space: nowrap`；`.playlist-actions` 声明 `display: flex; flex-wrap: wrap; gap: 10px`；`.playlist-actions .btn` 为 `flex: 0 0 auto`；900px 媒体查询中没有重复的 `.playlist-actions { flex-wrap: wrap }`。
+- 对照 `src/renderer/views/PlaylistView.vue`：歌单头操作区使用 `.playlist-actions`，播放全部 / 下载全部 / 返回按钮都复用 `.btn`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.5 侧栏新增“我喜欢”入口
 

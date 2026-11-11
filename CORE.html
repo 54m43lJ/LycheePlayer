@@ -1455,6 +1455,7 @@ const emit = defineEmits&lt;{
   <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。显示筛选数与已下载数量，无匹配时显示空结果状态。</li>
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
+  <li>歌单头操作按钮文字始终单行：<code>.btn</code> 使用 <code>white-space: nowrap</code>，<code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，按钮自身 <code>flex: 0 0 auto</code>；空间不足时“播放全部 / 下载全部 / 返回”整组换行，不压缩按钮或在按钮内折行。</li>
   <li>歌单头的“下载全部”按钮与“播放全部”并列，仅登录且存在可播歌曲时可用；点击调用 <code>download.startMany(songMids, quality)</code>，按歌单顺序去重入队，成功后提示“已加入下载队列”。不再创建批次或读取批次汇总；调用 <code>download.assetStates</code> 填充歌曲表下载图标。</li>
 </ul>
 
@@ -1484,6 +1485,7 @@ const emit = defineEmits&lt;{
   <li>深色与浅色 token 定义在 <code>:root</code> / <code>[data-theme]</code>；视觉契约见 <a href="USER.html#u5">USER §5</a>。</li>
   <li>组件样式与响应式断点也在同一文件维护。</li>
   <li>布局最小阈值由 <code>--layout-min-width</code>（当前 <code>420px</code>）与 <code>--layout-min-height</code>（<code>--player-height + 170px</code>）统一声明；<code>.app-shell</code> 同时设置 <code>min-width</code> / <code>min-height</code>，<code>body</code> 使用 <code>overflow: auto</code> 提供整窗双向滚动。低于阈值时布局停止压缩，侧栏导航内部纵向滚动、账号入口固定、播放条保持第二行；内容区仍独立滚动。</li>
+  <li>按钮文字不换行：<code>.btn</code> 使用 <code>white-space: nowrap</code>；歌单操作区 <code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，子按钮 <code>flex: 0 0 auto</code> 保持内容宽度，空间不足时整组换行；≤900px 媒体查询不再重复声明 <code>flex-wrap</code>。</li>
   <li>歌曲表使用 <code>table-layout: fixed</code> 与 <code>width: 100%</code>；<code>.page</code> 不设最大宽度，铺满内容区。操作单元格禁止改为 flex；内部容器负责按钮排列，行边框只挂在 <code>tr</code>。</li>
   <li>歌单底部 <code>.feed-footer</code> 使用 flex，<code>.spinner</code> 为 <code>inline-block</code> 且 <code>flex: none</code>；播放队列行网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，不包含专辑列，最后一列只容纳图标按钮。</li>
   <li>歌曲表操作列四个图标按钮在 <code>.song-action-inner</code> 内等距排列；≤900px 隐藏图标按钮、只显示 <code>more</code> 触发按钮。操作菜单为绝对定位浮层，项内“图标 + 文字”横排，点击外部或 Esc 关闭。</li>
