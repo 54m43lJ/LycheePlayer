@@ -3021,7 +3021,7 @@
 
 状态：已解决。
 
-### 4.42 评论单次拉取上限实测与批量参数调整
+### 4.42 评论单次拉取上限实测与批量参数调整 [已解决]
 
 问题描述：跳转到底部需要大量补拉评论，原实现每页 20 条、最多 50 页，会发出 50 次上游请求，在 4 req/s 全局限速下明显卡顿。需要确定单次请求能否直接拉 500 条。
 
@@ -3063,6 +3063,24 @@
 | `CORE.html` | §4.42 `CommentsPanel.vue` | 改 | 跳转底部最多 40 页、约 1000 条；保持串行请求与取消机制。 |
 | `USER.html` | §5.2.5 歌词与评论 | 改 | 评论单页 25 条；跳转底部最多约 1000 条。 |
 | `EVOLVE.md` | #5 | 改 | 补评论单页上限 25 与跳转底部 40 页的约束。 |
+
+实际操作（2026-11-11，分支 `doc/comment-page-size`）：
+
+- `PROVIDER.html` §4.1 歌曲评论行：补“单页固定 25 条（26 起返回业务码 `10000`）”，避免继续尝试 500 条/页；§4.3 `QqCommentList` 原有 `PageSize` 上限与 `SeqNo` 说明已覆盖，本次核对无需再改。
+- `CORE.html` §4.50 `shared/constants.ts`：签名已含 `COMMENT_PAGE_SIZE = 25` 与 `COMMENT_LOAD_ALL_PAGE_MAX = 40`；note 补两值含义与“跳转到底部最多约 1000 条、保持串行与取消机制”。
+- `CORE.html` §4.42 `CommentsPanel.vue`：核对后已说明每页 25 条、跳转底部最多 `COMMENT_LOAD_ALL_PAGE_MAX = 40` 页、补拉 spinner 与卸载 / 切歌 / 刷新取消，本次无需再改。
+- `CORE.html` §4.15 `api/comment.ts`：核对后已说明上游 `PageSize` 上限 25、26 起业务码 10000，应用固定 25 条，本次无需再改。
+- `USER.html` §5.2.5 歌词与评论：核对后已说明单页 25 条上限、跳转底部最多 40 页 / 约 1000 条与取消行为，本次无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 PROVIDER / CORE / USER。
+
+验证：
+
+- 对照 `src/shared/constants.ts`：`COMMENT_PAGE_SIZE = 25`、`COMMENT_LOAD_ALL_PAGE_MAX = 40`。
+- 对照 `src/main/api/comment.ts`：评论请求使用 `COMMENT_PAGE_SIZE`，单页 25 条；`nextCursor` 游标分页保持不变。
+- 对照 `src/renderer/components/CommentsPanel.vue`：跳转底部最多补拉 `COMMENT_LOAD_ALL_PAGE_MAX` 页，期间显示 spinner，组件卸载 / 切歌 / 刷新时取消。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.43 歌词页拖拽滚动滞后于指针
 
