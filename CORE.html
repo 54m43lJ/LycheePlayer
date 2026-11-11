@@ -662,6 +662,8 @@ export interface FlagsFile {
   };
   playlist: {
     get(id: string, options?: { offset?: number }): Promise&lt;IpcResult&lt;PlaylistPage&gt;&gt;;
+    getSnapshot(id: string, token: number): Promise&lt;IpcResult&lt;PlaylistSnapshot&gt;&gt;;
+    cancelSnapshot(id: string, token: number): Promise&lt;IpcResult&lt;null&gt;&gt;;
     getCached(id: string): Promise&lt;IpcResult&lt;PlaylistCacheEntry | null&gt;&gt;;
     saveCache(id: string, snapshot: PlaylistSnapshot, complete: boolean): Promise&lt;IpcResult&lt;null&gt;&gt;;
     listMine(): Promise&lt;IpcResult&lt;PlaylistMeta[]&gt;&gt;;
@@ -793,6 +795,7 @@ function handle(
   <li><code>registerIpc</code> 注册全部请求型通道、<code>app.quit</code> 与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>；<code>player:state</code> 同时分发到 MPRIS 与托盘。</li>
   <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程；<code>app.quit</code> 是单向消息，直接调用 <code>app.quit()</code>，不复用 <code>handle</code>。<code>handle</code> 支持 <code>{ silent: true }</code>：异常仍以 <code>IpcResult</code> 返回给渲染层，但不写 <code>[ipc]</code> 错误日志；背景 <code>song.probe</code> 使用该模式，避免可用性探测失败刷屏。</li>
   <li><code>download</code> 命名空间用 <code>startMany</code> 取代批次接口，不提供批次级暂停 / 继续 / 删除 / 重试；<code>download.clearDirectory</code> 删除下载目录内容与任务记录，不影响播放缓存。</li>
+  <li><code>playlist.getSnapshot</code> / <code>playlist.cancelSnapshot</code> 按歌单 ID 保存 <code>{ token, AbortController }</code>；只允许匹配 token 的取消操作中止对应请求，新请求会先中止同歌单的旧请求。取消后当前网络请求立即中止，快照不会替换内容或写缓存。</li>
   <li><code>registerIpc</code> 注册 <code>setUpstreamBlockNotifier</code>，104009 首次进入截断窗口时通过 <code>broadcast('upstream:blocked', event)</code> 通知所有窗口；preload 暴露 <code>window.lychee.upstream.onBlocked</code>，同一窗口内只发送一次。</li>
 </ul>
 
@@ -952,7 +955,7 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
   <li>普通歌单的 <code>editable</code> 由 <code>canEdit(data)</code> 判定：未登录返回 <code>false</code>；<code>dirinfo.owndir === 1</code> 返回 <code>true</code>；字段缺失或为 0 时回退比较当前登录 <code>musicid</code> 与 <code>dirinfo.creator.musicid</code> / <code>dirinfo.host_uin</code>，匹配才可编辑。「我喜欢」固定 <code>editable: true</code>，公开 / 他人歌单为 <code>false</code>。</li>
   <li><code>listMine</code> 从 <code>dirId</code> / <code>dirid</code> 回填 <code>PlaylistMeta.dirId</code>，<code>CgiGetDiss</code> 从 <code>dirinfo.dirid</code> 回填；「我喜欢」固定为 <code>201</code>，公开歌单缺失时保持 <code>undefined</code>。创建歌单的 <code>id</code> / <code>dirId</code> 取值见 <a href="#c4-55">§4.55</a>。</li>
   <li>固定收藏歌单 ID 统一引用 <code>FAVORITES_PLAYLIST_ID = 'liked'</code>（<a href="#c4-50">§4.50</a>），模块内不再保留本地 <code>FAVORITES_ID</code> 字面量；收藏分支判断与收藏歌单元数据都使用该共享常量。</li>
-  <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin</code> 递增、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；任一分页失败、空页、覆盖不足或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>。</li>
+  <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin = 0 / 2000 / 4000 …</code> 递增（不能按返回条数累加）、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；跨页重复 <code>mid</code> 直接去重。任一分页失败、offset 小于总数时返回空页、最终条数低于 <code>PLAYLIST_FETCH_MISSING_RATIO = 0.02</code> / <code>PLAYLIST_FETCH_MISSING_MIN = 10</code> 容差或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>；<code>requestPage</code> 接受 <code>pageSize</code> 与 <code>AbortSignal</code>，取消会中止当前网络请求。</li>
   <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存按账号 + 歌单 ID 持久化，上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>。</li>
   <li>歌单不存在 / 无权限时才删除缓存；添加、删除、改名、收藏等写操作只标记旧缓存为过期，不删除文件，下一次打开仍先展示旧内容。</li>
   <li>歌单歌曲条目复用 <a href="#c4-11">§4.11</a> 的 <code>rawSongToSong</code>；歌单响应可能只带 <code>singer[].name</code> 而没有 <code>mid</code>，此时保留名称、<code>mid</code> 留空，界面按纯文本展示。</li>
@@ -1600,13 +1603,16 @@ export declare const SEARCH_EMPTY_RETRY_COUNT: number;      // 1
 export declare const SEARCH_PAGE_NO_MAX: number;            // 100
 export declare const SEARCH_PAGE_SIZE_DEFAULT: number;      // 20
 export declare const SEARCH_PAGE_SIZE_MAX: number;          // 50
-export declare const PLAYLIST_PAGE_SIZE: number;            // 50
-export declare const PLAYLIST_PAGE_MAX: number;             // 20_000
+export declare const PLAYLIST_PAGE_SIZE: number;            // 50；轻量校验 / 轮询首页
+export declare const PLAYLIST_FETCH_PAGE_SIZE: number;     // 2000；完整快照单次拉取
+export declare const PLAYLIST_FETCH_PAGE_MAX: number;      // 10；约 2 万首
+export declare const PLAYLIST_FETCH_MISSING_RATIO: number; // 0.02；缺失容差
+export declare const PLAYLIST_FETCH_MISSING_MIN: number;   // 10；缺失容差下限
+export declare const PLAYLIST_PAGE_MAX: number;            // 20_000
 export declare const PLAYLIST_POLL_INTERVAL_MS: number;     // 15_000 ms
+export declare const PLAYLIST_REFRESH_RETRY_MS: number;     // 5 × 60_000 ms
 export declare const FAVORITES_PLAYLIST_ID: string;         // 'liked'
 export declare const PLAYLIST_CACHE_MAX_BYTES: number;      // 16 × 1024 × 1024
-export declare const PLAYLIST_PAGE_RETRY_ATTEMPTS: number;  // 3
-export declare const PLAYLIST_PAGE_RETRY_BACKOFF_MS: number; // 500 ms
 export declare const RECENT_PLAYLIST_LIMIT: number;          // 5
 export declare const RECENT_PLAYLIST_CHECK_THROTTLE_MS: number; // 5000 ms
 export declare const RECENT_PLAYLIST_STORAGE_PREFIX: string; // 'lychee:recent-playlists:'
@@ -1666,7 +1672,8 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制推荐分区缓存；<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页每区展示的歌曲上限（30 首，界面固定 3 行滚动）。</li>
   <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，统一队列按入队顺序串行；<code>DOWNLOAD_QUEUE_MAX</code> 限制单次“下载全部”的入队数量；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
   <li><code>RECENT_PLAYLIST_LIMIT</code> 限制最近歌单条数；<code>RECENT_PLAYLIST_CHECK_THROTTLE_MS</code> 与单飞互斥共同限制校验频率；<code>RECENT_PLAYLIST_STORAGE_PREFIX</code> 与账号 musicid 拼接为 localStorage key；<code>SIDEBAR_DRAG_THRESHOLD_PX</code> 为抽屉开关的位移阈值。</li>
-  <li>已删除 <code>PLAYLIST_CACHE_TTL_MS</code> 与 <code>PLAYLIST_PREFETCH_CONCURRENCY</code>：缓存改为整份快照，分页串行加载且不做预取。</li>
+  <li>已删除 <code>PLAYLIST_CACHE_TTL_MS</code>、<code>PLAYLIST_PREFETCH_CONCURRENCY</code> 与只服务旧逐页补全的 <code>PLAYLIST_PAGE_RETRY_*</code>：缓存改为整份快照，分页串行加载且不做预取。</li>
+  <li><code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、<code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 控制整份快照拉取；<code>PLAYLIST_FETCH_MISSING_RATIO = 0.02</code> / <code>PLAYLIST_FETCH_MISSING_MIN = 10</code> 允许上游静默省略少量不可用曲目；<code>PLAYLIST_REFRESH_RETRY_MS = 5 × 60_000</code> 为失败后的自动重试间隔。<code>PLAYLIST_PAGE_SIZE = 50</code> 只用于最近歌单校验与轮询首页。</li>
 </ul>
 
 <h3 id="c4-51">4.51 src/main/startup-flags.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1949,6 +1956,7 @@ export interface PlaylistFeed {
 </code></pre>
 <ul class="note">
   <li>打开歌单先读取整份缓存并立即展示（<code>complete=false</code> 显示为 <code>partial</code>），同时调用 <code>refresh</code> 在后台拉取完整快照；只有 <code>getSnapshot</code> 成功才一次性替换 <code>feed</code>。失败保留缓存、标记 <code>stale</code>，并安排 <code>PLAYLIST_REFRESH_RETRY_MS</code> 定时重试。</li>
+  <li>浏览分页完全本地：<code>feed.songs</code> 就是完整快照，滚动 / 筛选不再请求上游分页；只有打开、心跳变化、手动重试等触发的 <code>refresh</code> 会重新拉取整份快照。</li>
   <li><code>refresh</code> 开始前清除 timeout；<code>poll</code> 心跳发现名称、封面、首屏顺序或数量显著变化时立即调用 <code>refresh</code>，因此心跳变化优先于 5 分钟 timeout。无变化且内容完整时保留 timeout，不做额外刷新。</li>
   <li>心跳由 <code>PlaylistView</code> 只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时启动；隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时。离开页面调用 <code>stop</code>：清除 timeout、递增刷新序号并调用 <code>playlist.cancelSnapshot</code>。</li>
   <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale；写操作不再删除缓存文件，心跳或下次打开时静默刷新覆盖。只有歌单不存在 / 无权限时才删除持久缓存。<code>stores/playlist-edit</code> 的 <code>refreshAfterWrite(id)</code> 在写后立即调用 <code>invalidate(id)</code> + <code>poll(id)</code>，复用同一刷新流程。</li>

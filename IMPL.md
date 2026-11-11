@@ -3167,7 +3167,7 @@
 
 状态：已解决。
 
-### 4.45 歌单改为后台整份刷新、原子替换与本地浏览
+### 4.45 歌单改为后台整份刷新、原子替换与本地浏览 [已解决]
 
 问题描述：ISSUES 要求重做歌单刷新：后台异步分页拉完整份歌单并校验，完整才一次性替换当前内容；任一分页失败保持旧内容并进入 5 分钟 timeout 后重试；离开页面终止拉取 / timeout；打开页面立即拉取；浏览分页改为纯本地；同时测试拉取上限、减少 API 调用。旧实现先拉第 0 页，再在后台逐页 `loadPage` 并把每页直接追加进 `feed`，因此浏览期间内容会持续增长、失败时留下半份内容、每页都写缓存，也没有 5 分钟重试；离开页面只能靠 `generation` 忽略结果，无法中止主进程请求。
 
@@ -3225,6 +3225,29 @@
 | `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 切换歌单与卸载时调用 `playlist.stop(id)`，终止进行中的完整刷新与重试 timer。 |
 | `USER.html` | §5.2.8 页面表 · 歌单详情行 | 改 | 打开时立即后台刷新，完整后一次性更新；失败保留当前内容并 5 分钟后自动重试；滚动 / 筛选不再触发上游分页。 |
 | `EVOLVE.md` | #5 歌单 / #14 接口 | 改 | 补“整份快照原子替换、失败 5 分钟重试、离开页面取消、浏览纯本地、大页拉取与固定 offset”的约束。 |
+
+实际操作（2026-11-11，分支 `doc/playlist-full-refresh`）：
+
+- `PROVIDER.html` §4.1 歌单详情行：补 `song_num` 单次可返回约 1 万首、大歌单静默省略少量不可用曲目、分页须用固定 `song_begin` 递增。
+- `PROVIDER.html` §4.3 `QqPlaylistData`：把“单次最多 100 首 / 固定 50 首”更新为轻量校验 50 首、完整快照固定 `song_begin` 每页 2000 首、单次可返回约 1 万首、允许 2% / 10 首缺失容差，不能按返回条数累加 offset。
+- `CORE.html` §4.2 `shared/ipc.ts`：playlist 命名空间补 `getSnapshot(id, token)` / `cancelSnapshot(id, token)`。
+- `CORE.html` §4.5 `main/ipc.ts`：补按歌单 ID 保存 `{ token, AbortController }`，只取消匹配 token 的请求，新请求先中止同歌单旧请求。
+- `CORE.html` §4.12 `api/playlist.ts`：`fetchPlaylistSnapshot` 说明补固定 `song_begin = 0 / 2000 / 4000 …`、跨页 mid 去重、缺失容差 2% / 10 首、`sourceTotal` 与 `AbortSignal` 透传；仍为最多 10 页、任一分页失败整次失败。
+- `CORE.html` §4.50 `shared/constants.ts`：补 `PLAYLIST_FETCH_PAGE_SIZE = 2000`、`PLAYLIST_FETCH_PAGE_MAX = 10`、`PLAYLIST_FETCH_MISSING_RATIO = 0.02`、`PLAYLIST_FETCH_MISSING_MIN = 10`、`PLAYLIST_REFRESH_RETRY_MS = 5 分钟`；删除 `PLAYLIST_PAGE_RETRY_*`。
+- `CORE.html` §4.61 `stores/playlist.ts`：补浏览分页完全本地、`feed.songs` 为完整快照、滚动 / 筛选不请求上游分页。
+- `CORE.html` §4.46 `PlaylistView.vue`：核对后已在切换歌单 / 卸载时调用 `playlist.stop(id)`，本次无需再改。
+- `USER.html` §5.2.8 歌单详情：补滚动与筛选只作用于本地完整快照、不触发上游分页。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 PROVIDER / CORE / USER。
+
+验证：
+
+- 对照 `src/shared/constants.ts`：`PLAYLIST_FETCH_PAGE_SIZE = 2000`、`PLAYLIST_FETCH_PAGE_MAX = 10`、`PLAYLIST_FETCH_MISSING_RATIO = 0.02`、`PLAYLIST_FETCH_MISSING_MIN = 10`、`PLAYLIST_REFRESH_RETRY_MS = 300000`；没有 `PLAYLIST_PAGE_RETRY_*`。
+- 对照 `src/main/api/playlist.ts`：`fetchPlaylistSnapshot` 固定 `song_begin` 递增 2000、最多 10 页、跨页按 mid 去重、失败整次抛出、返回 `sourceTotal`；`requestPage` 接受 `pageSize` / `AbortSignal`。
+- 对照 `src/shared/ipc.ts` / `src/main/ipc.ts`：存在 `playlist.getSnapshot` / `playlist.cancelSnapshot`，主进程按歌单 ID + token 管理 `AbortController`。
+- 对照 `src/renderer/stores/playlist.ts`：`refresh` 只在 `getSnapshot` 成功后 `replaceFeed`；失败保留旧内容并安排 `PLAYLIST_REFRESH_RETRY_MS`；`stop` 取消 snapshot 并清 timer。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.46 歌单缓存优先、静默刷新、已下载计数与快速跳转
 

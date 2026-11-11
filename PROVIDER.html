@@ -262,7 +262,7 @@
   <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。</td></tr>
   <tr><td>收藏状态</td><td><code>music.musicasset.SongFavRead / IsSongFanByMid</code></td><td>按 <code>v_songMid</code> 批量读取 <code>m_fan</code> 红心状态。</td></tr>
   <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-4">§3.4</a>。</td></tr>
-  <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表。</td></tr>
+  <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表；<code>song_num</code> 单次可返回约 1 万首，大歌单会静默省略少量不可用曲目，分页须用固定 <code>song_begin</code> 递增。</td></tr>
   <tr><td>我的歌单</td><td><code>music.musicasset.PlaylistBaseRead / GetPlaylistByUin</code></td><td>当前账号创建 / 收藏的歌单列表。</td></tr>
   <tr><td>每日推荐</td><td><code>music.recommend.RecommendFeed / get_recommend_feed</code> → <code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>取当天的动态推荐歌单卡片（<code>subtype:510</code>），再读取完整 30 首。</td></tr>
   <tr><td>专属雷达</td><td><code>music.recommend.TrackRelationServer / GetRadarSong</code></td><td>按页获取个性化雷达推荐，返回 <code>VecSongs[].Track</code>；需要登录。</td></tr>
@@ -853,7 +853,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqPlaylistData</code></td>
     <td><code>dirinfo.id</code> / <code>title</code> / <code>picurl</code> / <code>songnum</code> / <code>dirid</code> / <code>owndir</code> / <code>host_uin</code> / <code>creator.musicid</code> · <code>songlist[]</code></td>
-    <td><code>songlist[]</code> 是单页结果；单次最多返回 100 首，应用固定 50 首/页；总数以 <code>dirinfo.songnum</code> 为准。<code>songnum</code> 与 <code>songlist</code> 成员可能短暂不一致：写入后总数可能先变化，列表成员稍后才可见；总数增加或状态读回 true 都不能单独作为收藏成功依据。<code>owndir === 1</code> 表示当前账号拥有该歌单；字段缺失或为 0 时应用回退比较当前账号与 <code>creator.musicid</code> / <code>host_uin</code>，任一匹配才视为可编辑。</td>
+    <td><code>songlist[]</code> 是单页结果；轻量校验固定 50 首/页，完整快照使用固定 <code>song_begin</code> 递增、每页 2000 首，单次实测可返回约 1 万首。大歌单会静默省略少量不可用曲目，应用允许 2% / 至少 10 首的缺失容差；不能按返回条数累加 offset。总数以 <code>dirinfo.songnum</code> 为准。<code>songnum</code> 与 <code>songlist</code> 成员可能短暂不一致：写入后总数可能先变化，列表成员稍后才可见；总数增加或状态读回 true 都不能单独作为收藏成功依据。<code>owndir === 1</code> 表示当前账号拥有该歌单；字段缺失或为 0 时应用回退比较当前账号与 <code>creator.musicid</code> / <code>host_uin</code>，任一匹配才视为可编辑。</td>
   </tr>
   <tr>
     <td><code>QqMineData</code></td>
