@@ -1084,11 +1084,11 @@ export function describeError(error: unknown): string;
 </code></pre>
 
 <h3 id="c4-25">4.25 src/renderer/router/index.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>const router: Router = createRouter({ history: createWebHashHistory(), routes: [] });   // hash history；/ → /search
+<pre><code>const router: Router = createRouter({ history: createWebHashHistory(), routes: [] });   // hash history；/ → /discover
 export default router;
 </code></pre>
 <ul class="note">
-  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/artist/:mid</code>、<code>/album/:mid</code>、<code>/lyrics</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>。</li>
+  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/artist/:mid</code>、<code>/album/:mid</code>、<code>/lyrics</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>。根路径 <code>/</code> 重定向到 <code>/discover</code>，启动与访问根路径都默认进入发现页。</li>
 </ul>
 
 <h3 id="c4-26">4.26 src/renderer/env.d.ts <a class="backlink" href="#c1">文件树</a></h3>

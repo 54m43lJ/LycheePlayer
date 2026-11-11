@@ -285,7 +285,7 @@
 <h3 id="u3-4">3.4 页面 / URL 架构图</h3>
 <div class="diagram"><img src="diagram/page-url-architecture.svg" alt="页面与 URL 跳转关系图"></div>
 <ul class="note">
-  <li>节点为页面，边为跳转关系；根路径 <code>/</code> 重定向到 <code>/search</code>。</li>
+  <li>节点为页面，边为跳转关系；根路径 <code>/</code> 重定向到 <code>/discover</code>，启动默认落在发现页。</li>
   <li>歌单详情的返回入口指向 <code>/library</code>；登录成功后进入 <code>/library</code>。</li>
   <li>“发现”为 <code>/discover</code>，MV 播放页为 <code>/mv/:id</code>；歌词 / 评论为 <code>/lyrics</code>，入口是任意页面播放条的封面；歌手页 / 专辑页为 <code>/artist/:mid</code> / <code>/album/:mid</code>；下载中心为侧栏抽屉，不占独立路由。</li>
   <li>页面结构与视觉契约见 <a href="#u5-2-8">§5.2.8</a>。</li>
