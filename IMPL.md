@@ -1190,7 +1190,7 @@
 
 状态：已解决。
 
-### 4.10 歌手歌曲排序能力验证与“最热 / 最新”切换
+### 4.10 歌手歌曲排序能力验证与“最热 / 最新”切换 [已解决]
 
 问题描述：ISSUES 要求确认歌手页的歌曲接口是否支持不同排序方式。`GetSingerSongList` 一直写死 `order: 1`，文档也未说明其它取值的行为，无法判断能否提供排序选项。
 
@@ -1225,6 +1225,25 @@
 | `CORE.html` | §4.75 `api/artist.ts` | 改 | 记录 `hot → order=1`、`latest → order=0` 的映射，并补 `getArtistSongs` 不拉取歌手详情。 |
 | `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 改 | 歌手页补充歌曲排序控件：最热 / 最新，默认最热。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 补歌手歌曲排序能力与“最热 / 最新”切换。 |
+
+实际操作（2026-11-11，分支 `doc/artist-song-sort`）：
+
+- `PROVIDER.html` §4.1 歌手歌曲行：注明 `order=1` 为最热，`order=0` 及其它值等价于最新，未知值不报错，仅两种有效顺序；请求参数行改为 `order（1 最热 / 0 最新）`。
+- `PROVIDER.html` §4.3 `QqArtistSongData`：补充 `order` 语义注释（1 最热、0 及其它值最新）。
+- `CORE.html` §4.2 `ipc.ts`：`artist.get(mid, offset?, sort?)` 增加 `ArtistSongSort`，新增 `artist.getSongs(mid, offset?, sort?)` 返回 `ArtistSongPage`。
+- `CORE.html` §4.73 `ArtistView.vue`：补充“最热 / 最新”切换控件、默认 `hot`、只重载歌曲列表并重置偏移、保留头部信息、失败回退与滚动分页走 `artist.getSongs`。
+- `CORE.html` §4.75 `api/artist.ts`：签名补 `getArtist(... sort?)` 与 `getArtistSongs(...)`；记录 `hot → order=1`、`latest → order=0`，并注明 `getArtistSongs` 不拉取歌手详情。
+- `USER.html` §5.2.8 页面表 · 歌手页 / 专辑页行：补充歌曲排序控件“最热 / 最新”，默认最热，切换只重载歌曲列表。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 PROVIDER / CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/views/ArtistView.vue`：`SONG_SORTS` 为 `hot` / `latest`，默认 `songSort = 'hot'`；`changeSort()` 滚动回顶并调用 `reloadSongs()`，后者调用 `artist.getSongs(id, 0, next)`，失败回退原排序并保留旧列表。
+- 对照 `src/main/api/artist.ts`：`fetchArtistSongs` 使用 `order: sort === 'hot' ? 1 : 0`；`getArtistSongs` 只调用 `fetchArtistSongs`，不请求歌手详情；`getArtist` 并行加载详情与歌曲。
+- 对照 `src/shared/ipc.ts` / `src/main/ipc.ts`：`artist.get` 与 `artist.getSongs` 均接受 `sort`，IPC 把 `latest` 归一为 `latest`，其余为 `hot`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.11 部分歌手因旧详情接口返回 `code -1` 无法加载
 

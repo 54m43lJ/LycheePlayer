@@ -685,7 +685,16 @@ export interface FlagsFile {
     onProgress(callback: (progress: AudioCacheProgress) =&gt; void): () =&gt; void;
   };
   artist: {
-    get(mid: string, offset?: number): Promise&lt;IpcResult&lt;ArtistDetail&gt;&gt;;
+    get(
+      mid: string,
+      offset?: number,
+      sort?: ArtistSongSort
+    ): Promise&lt;IpcResult&lt;ArtistDetail&gt;&gt;;
+    getSongs(
+      mid: string,
+      offset?: number,
+      sort?: ArtistSongSort
+    ): Promise&lt;IpcResult&lt;ArtistSongPage&gt;&gt;;
   };
   album: {
     get(mid: string, offset?: number): Promise&lt;IpcResult&lt;AlbumDetail&gt;&gt;;
@@ -2021,8 +2030,9 @@ interface DownloadStore {
 <pre><code>// 无 props / emits。路由 /artist/:mid 的歌手页。
 </code></pre>
 <ul class="note">
-  <li>按路由参数调用 <code>artist.get(mid, offset)</code> 加载歌手信息与歌曲；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
+  <li>按路由参数调用 <code>artist.get(mid, offset, sort)</code> 加载歌手信息与歌曲，<code>sort</code> 默认 <code>hot</code>；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
   <li>歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；不可播标记与最高音质沿用 <code>useAvailability</code>。</li>
+  <li>歌曲标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；列表区显示加载态，滚动位置回到页面顶部；失败时回退原排序并保留旧列表。滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
   <li>分页固定 50 首/页；根节点 <code>pageRef</code> 通过 <code>closest('.main')</code> 找到外层滚动容器，注册 <code>passive</code> 的 <code>scroll</code> 监听，距底部小于 <code>SCROLL_LOAD_THRESHOLD = 160px</code> 且 <code>hasMore=true</code>、当前没有首屏或追加加载时自动调用 <code>load(false)</code>，卸载时移除监听。页面不提供“加载更多”按钮，底部按状态显示 spinner + “正在加载更多” / “继续向下滚动加载更多”，无更多歌曲时显示“已经到底了”。加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
   <li>返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>；点击歌曲不改变路由。</li>
 </ul>
@@ -2037,11 +2047,21 @@ interface DownloadStore {
 </ul>
 
 <h3 id="c4-75">4.75 src/main/api/artist.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function getArtist(mid: string, offset: number): Promise&lt;ArtistDetail&gt;;
+<pre><code>export function getArtist(
+  mid: string,
+  offset: number,
+  sort?: ArtistSongSort
+): Promise&lt;ArtistDetail&gt;;
+export function getArtistSongs(
+  mid: string,
+  offset?: number,
+  sort?: ArtistSongSort
+): Promise&lt;ArtistSongPage&gt;;
 </code></pre>
 <ul class="note">
   <li>歌手信息使用 <code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg?singermid=&lt;mid&gt;&amp;format=json</code>：<code>getSingerInfo.Fsinger_name</code> → <code>name</code>、<code>singerBrief</code> → <code>description</code>、<code>total_song</code> / <code>total_album</code> → 计数；封面由 <code>mid</code> 拼 <code>https://y.gtimg.cn/music/photo_new/T001R500x500M000&lt;mid&gt;.jpg</code>。</li>
-  <li>歌曲使用 <code>musicu</code> 的模块 <code>musichall.song_list_server</code>、方法 <code>GetSingerSongList</code>，参数 <code>{ order: 1, singerMid, begin: offset, num: 50 }</code>；<code>musicu</code> 返回的 <code>req_0.data</code> 优先按扁平 <code>{ totalNum, songList }</code> 解析，若为 <code>{ singerSongList: { data: ... } }</code> 包裹则回退到该包裹；<code>songList[].songInfo</code> 统一经 <code>rawSongToSong</code> 映射为 <code>Song</code>。上游单页上限 100 首。</li>
+  <li>歌曲使用 <code>musicu</code> 的模块 <code>musichall.song_list_server</code>、方法 <code>GetSingerSongList</code>，参数 <code>{ order, singerMid, begin: offset, num: 50 }</code>；<code>sort</code> 映射为 <code>hot → order=1</code>、<code>latest → order=0</code>。<code>musicu</code> 返回的 <code>req_0.data</code> 优先按扁平 <code>{ totalNum, songList }</code> 解析，若为 <code>{ singerSongList: { data: ... } }</code> 包裹则回退到该包裹；<code>songList[].songInfo</code> 统一经 <code>rawSongToSong</code> 映射为 <code>Song</code>。上游单页上限 100 首。</li>
+  <li><code>getArtistSongs(mid, offset, sort)</code> 只请求 <code>GetSingerSongList</code> 并返回 <code>ArtistSongPage</code>，不拉取歌手详情；<code>getArtist</code> 首次进入时并行加载详情与首屏歌曲。</li>
   <li><code>mid</code> 为空时直接返回空歌曲与空简介，不发起请求；详情或歌曲失败映射为 <code>UPSTREAM_CHANGED</code> / 现有网络错误，不用搜索接口或当前歌单数据兜底。</li>
 </ul>
 
