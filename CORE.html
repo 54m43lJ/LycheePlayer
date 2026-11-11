@@ -1498,7 +1498,7 @@ const emit = defineEmits&lt;{
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
   <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
-  <li>账号区展示登录态、到期时间、续期与退出登录；窗口区另提供“退出应用”，调用 <code>window.lychee.system.quit()</code>。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>账号区展示登录态、到期时间、续期与退出登录；窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
 </ul>
 
 <h3 id="c4-49">4.49 src/renderer/styles/main.css <a class="backlink" href="#c1">文件树</a></h3>
