@@ -1476,7 +1476,7 @@
 
 状态：已解决。
 
-### 4.16 已下载歌曲改用本地文件播放并修正缓存进度
+### 4.16 已下载歌曲改用本地文件播放并修正缓存进度 [已解决]
 
 问题描述：ISSUES 指出歌曲已下载后，播放条缓存进度仍跟着播放缓冲变化。排查确认不是单纯 UI 问题：`audio-protocol.handleStream` 只检查播放缓存 `getCachedAudio`，不读取下载目录；`getStreamUrls` 也总是先请求上游链接。因此已下载歌曲既没有用上本地文件，缓存进度事件也不会立即变成完成态。
 
@@ -1516,6 +1516,25 @@
 | `USER.html` | §5.2.7 设置页 · 缓存与下载 | 改 | 下载目录行增加“清空目录”，确认后删除目录内已下载文件、封面、分片与记录；播放缓存独立清理。 |
 | `USER.html` | §5.2.8 页面结构 · 下载中心 | 改 | 下载中心只展示单一任务列表，不再按批次分组；顶部操作区提供“清空目录”（§4.31 改为完整页面后位置由底部移到顶部）。 |
 | `EVOLVE.md` | #2 下载队列 | 改 | 删除批次模型与批次控制，补充统一入队、出队时解析歌曲信息、已下载文件本地播放与清空下载目录约束。 |
+
+实际操作（2026-11-11，分支 `doc/downloaded-local-playback`）：
+
+- 表内前六行（`types.ts`、`download/manager.ts`、`ipc.ts`、`audio-protocol.ts`、`api/song.ts`、`PlayerBar.vue`）与 §4.15 共用，已在 `doc/download-unified-queue` 中完成；本节核对后无需重复修改。
+- `CORE.html` §4.40 `PlayerBar.vue`（原表章节号写作 §4.49）：已说明当前曲已下载时缓存进度按 100% 显示、tooltip 使用“已下载到本机”，本次核对无需再改。
+- `CORE.html` §4.59 / §4.11：已分别说明 `audioStreamUrl` 可选 `filePath`、`handleStream` 优先本地下载文件并上报完成态，以及 `getStreamUrls` 命中已下载文件时跳过上游。
+- `CORE.html` §4.60：已说明播放取源固定为“本机下载文件 > 播放缓存 > 网络”。
+- `USER.html` §1 TERMS“下载限制”：补充“已下载歌曲直接使用本地文件播放，不再重新请求上游链接或重新缓冲”。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/main/download/manager.ts`：`findDownloadedAudio(songMid, quality)` 优先请求档位、其次最高已下载档，并校验文件存在。
+- 对照 `src/main/api/song.ts`：`getStreamUrls` 命中已下载文件时返回 `audioStreamUrl('', mid, quality, filePath)`，不调用上游详情 / vkey。
+- 对照 `src/main/media/audio-protocol.ts`：`audioStreamUrl` 接受可选 `filePath`；`handleStream` 命中后直接读取本地文件并上报 `complete: true`。
+- 对照 `src/renderer/components/PlayerBar.vue`：当前曲已下载时 `cachePercent = 100`，tooltip 为“已下载到本机”。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.17 下载按钮的缓存 / 下载状态在播放条与歌曲表统一
 
