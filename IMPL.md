@@ -859,7 +859,7 @@
 
 状态：已解决。
 
-### 4.2 播放模式改为“按钮即当前项”的 revealer
+### 4.2 播放模式改为“按钮即当前项”的 revealer [已解决]
 
 > 后续修正：§4.20 / §4.33 已把播放模式按钮点击从“开合菜单”改为按固定顺序 `sequence → repeat-all → repeat-one → shuffle` 循环；悬停仍打开其余模式菜单，按钮仍表示当前模式。本节其余样式与菜单结构结论有效。
 
@@ -884,6 +884,23 @@
 | `CORE.html` | §4.49 `styles/main.css` | 改 | 增加 `.mode-button`、`.mode-wrap.open`、`.mode-menu` 的包含式 reveal 样式；删除 `.mode-option.current`。 |
 | `USER.html` | §5.2.3 播放条 · 播放模式 | 改 | 改为“按钮本身即当前模式高亮，展开后只显示其余模式”。 |
 | `EVOLVE.md` | #9 播放模式 | 改 | 把“当前模式固定在菜单底部”改为“当前模式固定在触发按钮上”。 |
+
+实际操作（2026-11-11，分支 `doc/mode-revealer-button`）：
+
+- `CORE.html` §4.40 `PlayerBar.vue`：把播放模式说明改为“按钮本身即当前模式”——`.mode-button` 常驻 accent 背景与当前模式图标，点击循环切换；悬停 / 聚焦菜单只渲染 `otherModes`（当前模式之外的其余三项），不重复显示当前项。
+- `CORE.html` §4.49 `styles/main.css`：改为包含式 revealer 样式——`.mode-button` 为 32px / 9px 圆角，`.mode-wrap.open` 提升按钮层级，`.mode-menu` 使用 `bottom: 0`、`width: 100%`、`padding-bottom: 32px`、panel 背景与向上阴影，`mode-reveal` 使用 `scaleY` 展开；明确不再有 `.mode-option.current`。
+- `USER.html` §5.2.3 播放条：改为按钮本身高亮当前模式，菜单只展示其余三种；保留点击循环、悬停 / Esc / 外部关闭与触屏手势。
+- `USER.html` §2 术语表“播放模式”：同步为“按钮显示当前模式，菜单只列其余三种”。
+- `CORE.html` §4.36 `AppIcon.vue`：删除“当前模式另叠加对勾标记”的过时描述，改为当前模式由按钮本身表示。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/PlayerBar.vue`：`MODE_ICON` 提供四种模式图标；`otherModes` 为固定顺序过滤掉当前模式；模板按钮调用 `cyclePlayMode()`，菜单 `v-for="otherModes"`。
+- 对照 `src/renderer/styles/main.css`：`.mode-button` 为 32×32、9px 圆角、`var(--accent-soft)` 背景；`.mode-menu` 为 `bottom: 0` / `width: 100%` / `padding: 0 0 32px`；`@keyframes mode-reveal` 使用 `scaleY(0.72) → 1`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.3 音量改为响应式：宽屏常驻滑块，窄屏悬停 revealer
 
