@@ -194,7 +194,7 @@
   </tr>
   <tr>
     <td>设置持久化</td>
-    <td><code>settings.set</code> 以浅合并更新并立即写盘；加载时对未知值回退默认值。</td>
+    <td><code>settings.set</code> 以浅合并更新并立即写盘；缓存上限变化后调用 <code>enforceAudioCacheLimit()</code> 并按落盘后的设置返回；加载时对未知值回退默认值。</td>
   </tr>
   <tr>
     <td>工程常量</td>
@@ -553,6 +553,8 @@ export interface Settings {
   audioCacheEnabled: boolean;
   /** 下载目录；缺省为 ~/Music/Lychee Player。 */
   downloadDir?: string;
+  /** 播放缓存上限；限定为 AUDIO_CACHE_LIMIT_STEPS_BYTES 的 6 个档位。 */
+  audioCacheMaxBytes: number;
 }
 
 export interface AuthStatus {
@@ -778,10 +780,10 @@ export function getSettings(): Settings;
 export async function saveSettings(next: Settings): Promise&lt;void&gt;;
 </code></pre>
 <ul class="note">
-  <li>默认值：<code>defaultQuality='auto'</code>、<code>closeToTray=true</code>、<code>theme='dark'</code>、<code>audioCacheEnabled=true</code>、<code>downloadDir=~/Music/Lychee Player</code>；下载目录在模块加载阶段不调用 <code>app.getPath()</code>，由首次懒加载生成。</li>
+  <li>默认值：<code>defaultQuality='auto'</code>、<code>closeToTray=true</code>、<code>theme='dark'</code>、<code>audioCacheEnabled=true</code>、<code>audioCacheMaxBytes=2 GiB</code>、<code>downloadDir=~/Music/Lychee Player</code>；下载目录在模块加载阶段不调用 <code>app.getPath()</code>，由首次懒加载生成。</li>
   <li><code>createDefaultSettings</code> 与 <code>sanitize</code> 都不再包含 <code>audioEngine</code>；设置模型只保留 HTML5 Audio 引擎，旧字段不读取、不写回。</li>
-  <li><code>sanitize</code> 对未知值回退默认：非法音质 / 主题取默认，布尔字段只接受布尔值。</li>
-  <li>保存为浅合并后立即写盘，文件权限 <code>0600</code>。</li>
+  <li><code>sanitize</code> 对未知值回退默认：非法音质 / 主题取默认，布尔字段只接受布尔值；<code>audioCacheMaxBytes</code> 经 <code>normalizeAudioCacheLimitBytes</code> 归一到最近档位。</li>
+  <li><code>saveSettings</code> 使用同步原子写：先写 <code>settings.json.part</code>，再 <code>renameSync</code> 覆盖正式文件，权限 <code>0600</code>；退出时保存不依赖异步 Promise，也不会留下半截 JSON。</li>
 </ul>
 
 <h3 id="c4-7">4.7 src/main/credential.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1492,7 +1494,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>设置项即时写盘；播放中切换默认音质会立即重载当前曲目。</li>
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
-  <li>缓存区提供开关、当前占用与清理；下载区提供目录、容量与剩余空间提示。</li>
+  <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
   <li>账号区展示登录态、到期时间、续期与退出登录；窗口区另提供“退出应用”，调用 <code>window.lychee.system.quit()</code>。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
 </ul>
@@ -1518,6 +1520,7 @@ const emit = defineEmits&lt;{
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
   <li><code>.song-title .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。</li>
   <li>下载按钮三态使用共用的 24px <code>::before</code> 状态框：<code>.cached:not(.downloaded)</code> 为 <code>var(--panel)</code> surface 背景，<code>.downloaded</code> 为 <code>var(--accent-soft)</code> 填充且覆盖缓存态；不画按钮外沿 inset 边框，不使用 <code>background-clip</code>，播放条与歌曲表尺寸一致、点击热区不变。</li>
+  <li>播放缓存上限滑杆使用 <code>.cache-limit-row</code> / <code>.cache-slider</code> / <code>.cache-slider-nodes</code>：accent 填充轨道、滑块、已选节点与焦点环，未到节点保持弱色；轨道两端各留 7px 与滑块半径对齐，节点绝对定位，首尾标签不挤出面板。</li>
 </ul>
 
 <h3 id="c4-50">4.50 src/shared/constants.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1578,7 +1581,10 @@ export declare const FAVORITE_STATUS_CACHE_MS: number;      // 30_000 ms
 export declare const VIP_CACHE_MS: number;                  // 5 × 60_000 ms
 export declare const COMMENT_PAGE_SIZE: number;             // 25；上游实测上限
 export declare const COMMENT_LOAD_ALL_PAGE_MAX: number;     // 40；跳转底部最多补拉 1000 条
-export declare const AUDIO_CACHE_MAX_BYTES: number;         // 2 GiB
+export declare const AUDIO_CACHE_MAX_BYTES: number;         // 2 GiB；默认 / 最大档位
+export declare const AUDIO_CACHE_LIMIT_STEPS_BYTES: readonly number[]; // 128M / 256M / 512M / 1G / 1.5G / 2G
+export declare const AUDIO_CACHE_DEFAULT_BYTES: number;      // = AUDIO_CACHE_MAX_BYTES
+export declare function normalizeAudioCacheLimitBytes(value: unknown): number;
 export declare const AUDIO_CACHE_DIR: string;               // 'audio'
 export declare const STARTUP_FLAGS_MAX_BYTES: number;       // 8 × 1024
 export declare const STARTUP_FLAGS_MAX_LINES: number;       // 64
@@ -1587,6 +1593,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
 </code></pre>
 <ul class="note">
   <li>所有工程常量只在本文件声明；其它模块只 import。源码中是实际赋值，本签名只保留名称与取值。</li>
+  <li><code>AUDIO_CACHE_LIMIT_STEPS_BYTES</code> 提供设置页 6 个固定档位；<code>normalizeAudioCacheLimitBytes</code> 对合法档位原样返回，越界 / 非档位值归一到最近档位，非法值回退默认档；<code>AUDIO_CACHE_MAX_BYTES</code> 作为默认 / 最大档位。</li>
   <li><code>PROBE_MAX_SONGS</code> 使用 <code>PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX</code> 派生，当前为 1,000,000；修改页大小或页上限时自动跟随。</li>
   <li><code>PROBE_MIDS_MAX</code> / <code>PROBE_VKEY_BATCH</code> 不得大于 <code>IPC_SONG_MIDS_MAX</code>；推荐与页大小 50 对齐，使一个歌单页一次探测、一批 vkey。修改任一值时同步评估其余常量。</li>
   <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
@@ -1707,12 +1714,13 @@ export function getCachedAudioInfo(
 ): Array&lt;{ quality: Quality; filePath: string; bytes: number }&gt;;
 export function putCachedAudio(songMid: string, quality: Quality, filePath: string): Promise&lt;void&gt;;
 export function clearAudioCache(): Promise&lt;void&gt;;
+export function enforceAudioCacheLimit(): Promise&lt;void&gt;;
 export function audioCacheStats(): Promise&lt;{ bytes: number; files: number }&gt;;
 </code></pre>
 <ul class="note">
   <li><code>getCachedAudioInfo</code> 返回该歌曲已存在的全部缓存档位，供资产状态与下载前的本地转移判断；只读本地文件，不触发网络请求。</li>
   <li>目录结构为 <code>userData/cache/audio/&lt;musicid|anonymous&gt;/&lt;quality&gt;/&lt;songMid&gt;.&lt;mp3|flac&gt;</code>，同曲不同音质互不覆盖。</li>
-  <li>缓存按账号隔离；超出 <code>AUDIO_CACHE_MAX_BYTES</code> 时按文件 mtime 做 LRU 清理。统计递归扫描全部账号目录。</li>
+  <li>缓存按账号隔离；上限读取 <code>getSettings().audioCacheMaxBytes</code>，超出时按文件 mtime 做 LRU 清理。写入缓存后自动调用 <code>enforceAudioCacheLimit()</code>；设置页下调上限时也立即调用。统计递归扫描全部账号目录。</li>
   <li>缓存文件由 <a href="#c4-59">§4.59</a> 的 <code>file</code> 分支按 Range 手工切片返回 200 / 206；命中缓存时不需要重新取 vkey，也不经过上游。</li>
   <li>关闭播放缓存时不再读取或写入音频体；清理操作删除整个 <code>cache/audio</code>。</li>
 </ul>

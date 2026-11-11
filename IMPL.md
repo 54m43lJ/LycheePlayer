@@ -1676,6 +1676,30 @@
 | `BUILD.html` | §11 存储 | 增 | `settings.json` 使用 `.part` 原子替换，退出时同步写入。 |
 | `EVOLVE.md` | #2 下载与缓存系统 | 改 | 补缓存上限档位持久化与退出时原子写要求。 |
 
+实际操作（2026-11-11，分支 `doc/cache-limit-slider`）：
+
+- `CORE.html` §4.50 `shared/constants.ts`：补 `AUDIO_CACHE_LIMIT_STEPS_BYTES`（6 档）、`AUDIO_CACHE_DEFAULT_BYTES` 与 `normalizeAudioCacheLimitBytes`，并说明 `AUDIO_CACHE_MAX_BYTES` 为默认 / 最大档。
+- `CORE.html` §4.1 `types.ts`：`Settings` 增加 `audioCacheMaxBytes: number`，取值限定为 6 个档位。
+- `CORE.html` §4.6 `main/settings.ts`：默认值与 `sanitize` 补 `audioCacheMaxBytes`，非法值按最近档位归一；`saveSettings` 改为同步 `.part` + `renameSync` 原子写。
+- `CORE.html` §4.2 `ipc.ts`：`settings.set` 在缓存上限变化后调用 `enforceAudioCacheLimit()`，返回落盘后的设置。
+- `CORE.html` §4.58 `cache/audio.ts`：签名补 `enforceAudioCacheLimit()`；缓存上限改为读取设置，写入缓存与下调上限时都按 mtime LRU 清理。
+- `CORE.html` §4.48 `SettingsView.vue`：缓存区增加 6 节点上限滑杆；`input` 200ms 防抖、`change` 立即 flush、卸载兜底保存，失败回退原档位。
+- `CORE.html` §4.49 `styles/main.css`：补 `.cache-limit-row` / `.cache-slider` / `.cache-slider-nodes` 的填充、节点、焦点环与 7px 端点对齐。
+- `USER.html` §5.2.7 设置页：原型与说明补上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G）、下调后立即清理、自动保存与重启保持；Settings 字段补 `audioCacheMaxBytes`。
+- `BUILD.html` §11 存储：`settings.json` 改为 `.part` + `renameSync` 原子替换，退出时同步写入。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER / BUILD。
+
+验证：
+
+- 对照 `src/shared/constants.ts`：存在 6 档 `AUDIO_CACHE_LIMIT_STEPS_BYTES`、`AUDIO_CACHE_DEFAULT_BYTES = AUDIO_CACHE_MAX_BYTES` 与 `normalizeAudioCacheLimitBytes`。
+- 对照 `src/shared/types.ts` / `src/main/settings.ts` / `src/renderer/stores/settings.ts`：`audioCacheMaxBytes` 已进入类型、默认值、`sanitize` 与渲染层默认设置。
+- 对照 `src/main/settings.ts`：`saveSettings` 使用 `writeFileSync(temp)` + `renameSync(temp, file)`。
+- 对照 `src/main/cache/audio.ts`：清理上限读取 `getSettings().audioCacheMaxBytes`，`enforceAudioCacheLimit()` 已导出；`src/main/ipc.ts` 在缓存上限变化后调用。
+- 对照 `src/renderer/views/SettingsView.vue`：`input` 调度 200ms 防抖，`change` 调用 `saveCacheLimit()`，`onBeforeUnmount` flush 待保存值。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
+
 ### 4.19 首页改为发现页并交换侧栏“发现 / 搜索”顺序
 
 问题描述：ISSUES 要求把首页改成发现页，并把导航栏中的“发现”和“搜索”交换位置。原实现根路径 `/` 重定向到 `/search`，侧栏“浏览”组顺序也是“搜索 → 发现”，因此应用启动后落在搜索页，发现页需要手动点击。
