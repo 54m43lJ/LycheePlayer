@@ -1153,7 +1153,7 @@
 
 状态：已解决。
 
-### 4.9 歌手页改为滚动到底自动分页
+### 4.9 歌手页改为滚动到底自动分页 [已解决]
 
 问题描述：ISSUES 要求歌手页不再通过“加载更多”按钮翻页，而是在滚动到底部时自动加载下一页。原 `ArtistView.vue` 只在 `detail.hasMore` 时渲染一个按钮，用户必须手动点击；而应用的实际滚动容器是 `App.vue` 的 `<main class="main">`，不是 `window`。
 
@@ -1175,6 +1175,20 @@
 | `CORE.html` | §4.73 `ArtistView.vue` | 改 | 删除“或点击‘加载更多’”，改为监听 `.main` 滚动容器、距底部 160px 自动追加下一页，并补底部状态提示。 |
 | `USER.html` | §5.2.8 页面表 · 歌手页 / 专辑页行 | 改 | 明确歌手页滚动到底自动加载下一页，不提供“加载更多”点击操作。 |
 | `EVOLVE.md` | #4 歌手 / 专辑详情 | 改 | 分页交互补“滚动到底自动加载”，不再要求点击按钮。 |
+
+实际操作（2026-11-11，分支 `doc/artist-scroll-pagination`）：
+
+- `CORE.html` §4.73 `ArtistView.vue`：删除“或点击‘加载更多’”，改为 `pageRef.closest('.main')` 获取外层滚动容器、注册 passive `scroll` 监听，距底部小于 160px 且 `hasMore` 时自动追加下一页；补充底部 spinner / “正在加载更多” / “继续向下滚动加载更多” / “已经到底了”状态与卸载移除监听。
+- `USER.html` §5.2.8 页面表 · 歌手页 / 专辑页行：明确歌手页滚动到底自动加载下一页，不提供“加载更多”点击操作。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改动”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/views/ArtistView.vue`：`SCROLL_LOAD_THRESHOLD = 160`；`onMounted` 使用 `pageRef.value?.closest('.main')` 获取 `scrollRoot` 并以 `{ passive: true }` 注册 `scroll`，`onBeforeUnmount` 移除；`maybeLoadMore` 在距底部小于阈值且 `hasMore`、非加载中时调用 `load(false)`。
+- 模板没有“加载更多”按钮；`feed-footer` 在加载中显示 spinner，否则提示滚动加载，无更多时显示“已经到底了”。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.10 歌手歌曲排序能力验证与“最热 / 最新”切换
 

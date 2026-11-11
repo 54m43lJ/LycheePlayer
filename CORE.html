@@ -2023,7 +2023,7 @@ interface DownloadStore {
 <ul class="note">
   <li>按路由参数调用 <code>artist.get(mid, offset)</code> 加载歌手信息与歌曲；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
   <li>歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；不可播标记与最高音质沿用 <code>useAvailability</code>。</li>
-  <li>分页固定 50 首/页，滚动到底或点击“加载更多”继续；加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
+  <li>分页固定 50 首/页；根节点 <code>pageRef</code> 通过 <code>closest('.main')</code> 找到外层滚动容器，注册 <code>passive</code> 的 <code>scroll</code> 监听，距底部小于 <code>SCROLL_LOAD_THRESHOLD = 160px</code> 且 <code>hasMore=true</code>、当前没有首屏或追加加载时自动调用 <code>load(false)</code>，卸载时移除监听。页面不提供“加载更多”按钮，底部按状态显示 spinner + “正在加载更多” / “继续向下滚动加载更多”，无更多歌曲时显示“已经到底了”。加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
   <li>返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>；点击歌曲不改变路由。</li>
 </ul>
 
