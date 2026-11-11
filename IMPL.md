@@ -3424,7 +3424,7 @@
 
 状态：已解决。
 
-### 4.49 歌单写后仍保留缓存、心跳跟随页面并优先于 timeout
+### 4.49 歌单写后仍保留缓存、心跳跟随页面并优先于 timeout [已解决]
 
 问题描述：歌单内容发生变动（添加 / 删除 / 改名 / 收藏）后，再打开该歌单会进入整页 loading 转圈；心跳也应只在页面活跃时运行，不能在后台一直跑。约束目标：打开歌单无论如何都立刻显示最近缓存并触发后台更新；心跳发现变化时立即刷新，优先级高于 5 分钟 timeout；只有其它失败场景（主要是切换歌单）才进入 timeout。
 
@@ -3456,6 +3456,24 @@
 | `CORE.html` | §4.46 `PlaylistView.vue` | 改 | 已更新：心跳只在页面可见时运行，隐藏停止，恢复立即检查。 |
 | `USER.html` | §2 CONVENTIONS / §5.2.8 歌单详情 | 改 | 已更新：打开先显示缓存；心跳跟随页面；心跳变化优先于 timeout。 |
 | `EVOLVE.md` | #5 歌单 | 改 | 补“写后保留旧缓存、心跳跟随页面、心跳优先于 timeout”的约束。 |
+
+实际操作（2026-11-12，分支 `doc/playlist-heartbeat-priority`）：
+
+- `CORE.html` §4.12 `api/playlist.ts`：把内容写操作与删除歌单区分开——添加 / 删除歌曲、改名、收藏切换只标记旧缓存过期；删除歌单（`playlist.remove`）与 `NO_PERMISSION` 才调用 `invalidatePlaylistCache` 清理文件。
+- `CORE.html` §4.61 `stores/playlist.ts`：保留缓存优先、心跳变化优先于 timeout、`stop` 取消刷新的说明，并补齐只有 `playlist.remove` 或歌单不存在 / 无权限才删除持久缓存。
+- `CORE.html` §4.46 `PlaylistView.vue`：核对心跳只在页面可见时运行、隐藏停止、恢复可见立即 `poll`、卸载 / 切换调用 `playlist.stop`，内容与实现一致，无需再改。
+- `USER.html` §2 CONVENTIONS / §5.2.8 歌单详情：核对“打开先显示缓存、心跳跟随页面、心跳变化优先于 timeout”均已写入，无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/main/ipc.ts`：`playlist.remove` 成功后调用 `invalidatePlaylistCache`；`playlist.rename` / `addSongs` / `removeSongs` / `favorite.toggle` 不再清理缓存。
+- 对照 `src/renderer/stores/playlist.ts`：`load()` 有缓存时直接展示，`refresh()` 开始前清除 timeout，`poll()` 检测到变化调用 `refresh()`，`stop()` 清除定时器并取消 snapshot。
+- 对照 `src/renderer/views/PlaylistView.vue`：`visibilitychange` 隐藏时 `stopPolling()`，恢复时立即 `playlist.poll()` 并重启 interval；卸载调用 `playlist.stop()`。
+- 对照 `src/renderer/stores/playlist-edit.ts`：`refreshAfterWrite(id)` 调用 `playlist.invalidate(id)` + `playlist.poll(id)`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.50 下载页移除数字进度指示并将进度条改为 muted
 
