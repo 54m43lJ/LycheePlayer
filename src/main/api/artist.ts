@@ -1,5 +1,14 @@
-import type { ArtistDetail, ArtistSongPage, ArtistSongSort, Song } from '../../shared/types'
-import { CATALOG_PAGE_SIZE } from '../../shared/constants'
+import type {
+  ArtistAlbum,
+  ArtistAlbumKind,
+  ArtistAlbumPage,
+  ArtistAlbumSort,
+  ArtistDetail,
+  ArtistSongPage,
+  ArtistSongSort,
+  Song
+} from '../../shared/types'
+import { ARTIST_ALBUM_PAGE_SIZE, CATALOG_PAGE_SIZE } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu, upstreamRequest } from './client'
 import { rawSongToSong } from './song'
@@ -24,6 +33,20 @@ interface ArtistSongData extends ArtistSongNode {
   singerSongList?: { data?: ArtistSongNode }
 }
 
+interface ArtistAlbumRaw {
+  albumMid?: string
+  albumName?: string
+  albumTranName?: string
+  publishDate?: string
+  albumType?: string
+  totalNum?: number
+}
+
+interface ArtistAlbumData {
+  albumList?: ArtistAlbumRaw[]
+  total?: number
+}
+
 interface SingerProfileData {
   singer_list?: Array<{
     basic_info?: { singer_mid?: string; name?: string }
@@ -40,6 +63,21 @@ interface SingerProfile {
 
 function artistCover(mid: string): string {
   return mid ? `https://y.gtimg.cn/music/photo_new/T001R500x500M000${mid}.jpg` : ''
+}
+
+function artistAlbumCover(mid: string): string {
+  return mid ? `https://y.gtimg.cn/music/photo_new/T002R500x500M000${mid}.jpg` : ''
+}
+
+/** 把上游 albumType 原文归一化为筛选分类；未知类型进入 other。 */
+function albumKind(type: string): ArtistAlbumKind {
+  const value = type.trim()
+  const lower = value.toLowerCase()
+  if (lower === 'ep' || value.includes('EP')) return 'ep'
+  if (lower === 'single' || value.includes('单曲')) return 'single'
+  if (lower.includes('live') || value.includes('演唱会') || value.includes('现场')) return 'live'
+  if (lower === 'lp' || value.includes('录音室') || value.includes('专辑')) return 'lp'
+  return 'other'
 }
 
 function normalizeCover(value: string | undefined): string {
@@ -137,6 +175,55 @@ export async function getArtistSongs(
   const id = mid.trim()
   if (!id) throw new UpstreamError('UPSTREAM_CHANGED', '歌手 mid 为空')
   return fetchArtistSongs(id, offset, sort)
+}
+
+async function fetchArtistAlbums(
+  mid: string,
+  offset: number,
+  sort: ArtistAlbumSort
+): Promise<ArtistAlbumPage> {
+  const data = await musicu<ArtistAlbumData>(
+    'music.musichallAlbum.AlbumListServer',
+    'GetAlbumList',
+    {
+      singerMid: mid,
+      // 实测 order=1 返回最热，0 及其它值都退回最新。
+      order: sort === 'hot' ? 1 : 0,
+      begin: Math.max(0, Math.floor(offset)),
+      num: ARTIST_ALBUM_PAGE_SIZE
+    }
+  )
+  const list = data.albumList ?? []
+  const albums: ArtistAlbum[] = list
+    .map((album) => {
+      const albumMid = (album.albumMid ?? '').trim()
+      const albumType = (album.albumType ?? '').trim()
+      return {
+        mid: albumMid,
+        name: (album.albumName ?? '').trim(),
+        coverUrl: artistAlbumCover(albumMid),
+        publishDate: (album.publishDate ?? '').trim(),
+        albumType,
+        kind: albumKind(albumType)
+      }
+    })
+    .filter((album) => album.mid.length > 0 && album.name.length > 0)
+  const total = Number(data.total ?? 0) || offset + list.length
+  return {
+    albums,
+    total,
+    hasMore: list.length === ARTIST_ALBUM_PAGE_SIZE && offset + list.length < total
+  }
+}
+
+export async function getArtistAlbums(
+  mid: string,
+  offset = 0,
+  sort: ArtistAlbumSort = 'hot'
+): Promise<ArtistAlbumPage> {
+  const id = mid.trim()
+  if (!id) throw new UpstreamError('UPSTREAM_CHANGED', '歌手 mid 为空')
+  return fetchArtistAlbums(id, offset, sort)
 }
 
 export async function getArtist(

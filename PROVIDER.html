@@ -157,6 +157,10 @@
     <td>需要登录；正文去首尾空白后为 1–300 字；<code>AddComment</code> 的 <code>SubCode</code> 为 0 才成功。<code>VerifyUrl</code> 非空表示上游要求验证码，应用只提示到官方客户端完成验证，不自建验证码流程。参数与响应见 <a href="#p4-1">§4.1</a> / <a href="#p4-3">§4.3</a>。</td>
   </tr>
   <tr>
+    <td>歌手专辑</td>
+    <td>按 <code>singerMid</code> 分页读取；<code>order=1</code> 最热、<code>0</code> 最新；单页最多 80 张；<code>albumType</code> 是版本筛选的唯一元信息来源，不根据专辑名猜测。参数与字段见 <a href="#p4-1">§4.1</a> / <a href="#p4-3">§4.3</a>，内部映射见 <a href="CORE.html#c4-75">CORE §4.75</a>。</td>
+  </tr>
+  <tr>
     <td>VIP 状态</td>
     <td>仅用于不可播文案判断；未登录或接口失败按非 VIP 处理，缓存见 <a href="CORE.html#c4-13">CORE §4.13</a>。</td>
   </tr>
@@ -261,6 +265,7 @@
   <tr><td>歌手详情</td><td><code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg</code></td><td>按 <code>singermid</code> 获取歌手名、简介、歌曲数与专辑数；部分歌手可能只返回 <code>code -1</code> 且无歌手字段，此时使用下方的 <code>SingerInfoInter</code> 兜底。</td></tr>
   <tr><td>歌手资料兜底</td><td><code>music.musichallSinger.SingerInfoInter / GetSingerDetail</code></td><td>按 <code>singer_mids: [mid]</code> 请求，开启 <code>pic / ex_singer / wiki_singer / group_singer</code>；读取 <code>singer_list[].basic_info.name</code> / <code>ex_info.desc</code> / <code>pic.pic</code>，<code>http:</code> 头像升为 <code>https:</code>。</td></tr>
   <tr><td>歌手歌曲</td><td><code>musichall.song_list_server / GetSingerSongList</code></td><td>按 <code>singerMid</code> 分页获取歌曲；<code>order=1</code> 为最热，<code>order=0</code> 及其它值等价于最新，未知值不报错，只有这两种有效顺序；<code>musicu</code> 返回的 <code>req_0.data</code> 为扁平 <code>{ totalNum, songList }</code>，<code>singerSongList.data</code> 仅作为外层兼容形状；单页最多 100 首。</td></tr>
+  <tr><td>歌手专辑</td><td><code>music.musichallAlbum.AlbumListServer / GetAlbumList</code></td><td>按 <code>singerMid</code> 分页获取专辑；<code>order=1</code> 为最热、<code>order=0</code> 及其它值等价于最新；单页最多 80 张；<code>albumType</code> 提供录音室专辑 / EP / 演唱会 / Single 等版本信息。</td></tr>
   <tr><td>专辑详情</td><td><code>music.musichallAlbum.AlbumInfoServer / GetAlbumDetail</code></td><td>按 <code>albumMid</code> 获取专辑名、发行日期、简介与歌手。</td></tr>
   <tr><td>专辑歌曲</td><td><code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code></td><td>按 <code>albumMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
   <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。上游 <code>104009</code> 主要出现在 vkey / 播放链接请求；整单可用性探测按 50 首分批，会放大触发概率。</td></tr>
@@ -369,6 +374,10 @@
   <tr>
     <td>歌手歌曲</td>
     <td><code>singerMid</code> · <code>order</code>（1 最热 / 0 最新） · <code>begin</code> · <code>num</code>（≤100）</td>
+  </tr>
+  <tr>
+    <td>歌手专辑</td>
+    <td><code>singerMid</code> · <code>order</code>（1 最热 / 0 最新） · <code>begin</code> · <code>num</code>（≤80）</td>
   </tr>
   <tr>
     <td>专辑详情</td>
@@ -632,6 +641,21 @@ interface QqSingerProfile {
     ex_info?: { desc?: string };
     pic?: { pic?: string };
   }&gt;;
+}
+
+interface QqArtistAlbum {
+  albumMid?: string;
+  albumName?: string;
+  albumTranName?: string;
+  publishDate?: string;
+  albumType?: string;
+  totalNum?: number;
+  singerName?: string;
+}
+
+interface QqArtistAlbumData {
+  albumList?: QqArtistAlbum[];
+  total?: number;
 }
 
 interface QqArtistSongData {
@@ -981,6 +1005,10 @@ interface QqLoginPayload {
     <td>优先读取 <code>req_0.data.songList[].songInfo</code> 与扁平 <code>totalNum</code>；缺失时回退 <code>singerSongList.data</code> 包裹；<code>songInfo</code> → <code>Song</code>，<code>totalNum → total</code>；<code>hasMore</code> 按已载入数与总数比较。</td>
   </tr>
   <tr>
+    <td><code>QqArtistAlbumData</code> → <code>ArtistAlbumPage</code></td>
+    <td><code>albumList[]</code> 的 <code>albumMid</code> / <code>albumName</code> / <code>publishDate</code> / <code>albumType</code> → <code>ArtistAlbum</code>；<code>albumType</code> 归一化为 <code>lp</code> / <code>ep</code> / <code>single</code> / <code>live</code> / <code>other</code>，未知类型进入 <code>other</code>；<code>total</code> 缺失时回退已载入数。</td>
+  </tr>
+  <tr>
     <td><code>QqAlbumDetail</code> → <code>AlbumDetail</code></td>
     <td><code>basicInfo.albumName</code> / <code>publishDate</code> / <code>desc</code> → 对应字段；<code>singer[]</code> → <code>Singer[]</code>；封面由 <code>mid</code> 拼 <code>T002R500x500</code>。</td>
   </tr>
@@ -1050,7 +1078,7 @@ interface QqLoginPayload {
   <li><code>mediaMid</code>、<code>guid</code> 与原始 <code>purl</code> 只在主进程 API 层内部存在，不进入 IPC 数据模型。</li>
   <li><code>PayInfo</code> 仅用于界面角标；实际可播性以 vkey 结果为准。</li>
   <li>收藏写入的 <code>songType</code> 必须来自详情接口真实字段；<code>webCookies</code> 与签名密钥只存在于主进程，不写日志、不跨 IPC。</li>
-  <li>fixture 覆盖范围：<code>search-song.json</code> 覆盖搜索；<code>singer-detail.json</code> / <code>singer-songs.json</code> 覆盖歌手详情与歌曲；<code>album-detail.json</code> / <code>album-songs.json</code> 覆盖专辑详情与歌曲；<code>mv-detail.json</code> 覆盖 MV 详情；<code>comment-like.json</code> 覆盖评论点赞。部分覆盖：<code>recommend-anonymous.json</code> 只用于 <code>RecommendFeed</code> 入口，且缺少 <code>subtype:510</code> 的每日推荐卡，因此每日推荐映射未覆盖；雷达 / 猜你喜欢映射由测试内联数据覆盖。未覆盖：<code>mv-search.json</code> 的 <code>mv.list</code> 为空；<code>mv-url.json</code> 的 <code>freeflow_url</code> / <code>url</code> 为空。<code>recommend-shelves.json</code>、<code>comment-list.json</code>、<code>playlist-write.json</code> 当前未被回放测试引用，不计入已验证范围。</li>
+  <li>fixture 覆盖范围：<code>search-song.json</code> 覆盖搜索；<code>singer-detail.json</code> / <code>singer-songs.json</code> 覆盖歌手详情与歌曲；歌手专辑映射由测试内联数据覆盖；<code>album-detail.json</code> / <code>album-songs.json</code> 覆盖专辑详情与歌曲；<code>mv-detail.json</code> 覆盖 MV 详情；<code>comment-like.json</code> 覆盖评论点赞。部分覆盖：<code>recommend-anonymous.json</code> 只用于 <code>RecommendFeed</code> 入口，且缺少 <code>subtype:510</code> 的每日推荐卡，因此每日推荐映射未覆盖；雷达 / 猜你喜欢映射由测试内联数据覆盖。未覆盖：<code>mv-search.json</code> 的 <code>mv.list</code> 为空；<code>mv-url.json</code> 的 <code>freeflow_url</code> / <code>url</code> 为空。<code>recommend-shelves.json</code>、<code>comment-list.json</code>、<code>playlist-write.json</code> 当前未被回放测试引用，不计入已验证范围。</li>
   <li>fixture 为空只按合法空结果处理，不能作为接口已验证的依据；映射测试只锁定可回放字段，未覆盖字段以真实请求与代码中的防御分支为准。</li>
 </ul>
 

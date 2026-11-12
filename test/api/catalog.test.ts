@@ -103,6 +103,43 @@ describe('api/catalog', () => {
     expect(hosts).toEqual(['u.y.qq.com'])
   })
 
+  it('loads artist albums, passes hot / latest order and maps album types', async () => {
+    const orders: number[] = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: { order?: number } }
+      }
+      orders.push(Number(payload.req_0?.param?.order))
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            total: 4,
+            albumList: [
+              { albumMid: 'lp', albumName: 'LP', albumType: '录音室专辑', publishDate: '2020-01-01' },
+              { albumMid: 'ep', albumName: 'EP', albumType: 'EP', publishDate: '2021-01-01' },
+              { albumMid: 'live', albumName: 'Live', albumType: '演唱会', publishDate: '2022-01-01' },
+              { albumMid: 'single', albumName: 'Single', albumType: 'Single', publishDate: '2023-01-01' }
+            ]
+          }
+        }
+      })
+    })
+
+    const { getArtistAlbums } = await import('../../src/main/api/artist')
+    const hot = await getArtistAlbums('0025NhlN2yWrP4', 0, 'hot')
+    expect(orders.at(-1)).toBe(1)
+    expect(hot.total).toBe(4)
+    expect(hot.hasMore).toBe(false)
+    expect(hot.albums.map((album) => album.kind)).toEqual(['lp', 'ep', 'live', 'single'])
+    expect(hot.albums[0]?.coverUrl).toContain('T002R500x500M000lp.jpg')
+
+    await getArtistAlbums('0025NhlN2yWrP4', 0, 'latest')
+    expect(orders.at(-1)).toBe(0)
+  })
+
   it('uses detail and song-list responses for albums', async () => {
     vi.stubGlobal('fetch', async (url: string | URL) => {
       const data = new URL(String(url)).searchParams.get('data')

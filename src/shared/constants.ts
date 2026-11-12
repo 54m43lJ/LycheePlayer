@@ -102,6 +102,10 @@ export const RECOMMEND_SECTION_TITLES = {
 } as const
 /** 歌手 / 专辑歌曲单页条数；上游上限 100。 */
 export const CATALOG_PAGE_SIZE = 50
+/** 歌手专辑列表单页条数；上游上限 80。 */
+export const ARTIST_ALBUM_PAGE_SIZE = 80
+/** 歌手页展开专辑时最多补拉的页数；80 × 20 = 1600 张。 */
+export const ARTIST_ALBUM_PAGE_MAX = 20
 
 /** 下载中心进度轮询间隔。推荐值 1500 ms。 */
 export const DOWNLOAD_POLL_MS = 1500

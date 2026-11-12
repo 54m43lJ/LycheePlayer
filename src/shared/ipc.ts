@@ -1,5 +1,7 @@
 import type {
   AlbumDetail,
+  ArtistAlbumPage,
+  ArtistAlbumSort,
   ArtistDetail,
   ArtistSongPage,
   ArtistSongSort,
@@ -69,6 +71,11 @@ export interface LycheeApi {
       offset?: number,
       sort?: ArtistSongSort
     ): Promise<IpcResult<ArtistSongPage>>
+    getAlbums(
+      mid: string,
+      offset?: number,
+      sort?: ArtistAlbumSort
+    ): Promise<IpcResult<ArtistAlbumPage>>
   }
   album: {
     get(mid: string, offset?: number): Promise<IpcResult<AlbumDetail>>

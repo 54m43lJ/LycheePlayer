@@ -404,6 +404,25 @@ export interface ArtistDetail {
   hasMore: boolean;
 }
 
+export type ArtistAlbumSort = 'hot' | 'latest';
+export type ArtistAlbumKind = 'lp' | 'ep' | 'single' | 'live' | 'other';
+
+export interface ArtistAlbum {
+  mid: string;
+  name: string;
+  coverUrl: string;
+  publishDate: string;
+  /** 上游 albumType 原文。 */
+  albumType: string;
+  kind: ArtistAlbumKind;
+}
+
+export interface ArtistAlbumPage {
+  albums: ArtistAlbum[];
+  total: number;
+  hasMore: boolean;
+}
+
 export interface AlbumDetail {
   mid: string;
   name: string;
@@ -635,6 +654,7 @@ export interface FlagsFile {
   <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；其续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态。</li>
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
   <li><code>Comment</code> / <code>CommentPage</code> 是 <code>comment.get</code> 的跨 IPC 数据模型；<code>CommentPostResult</code> 是 <code>comment.post</code> 的返回模型；原始字段映射见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
+  <li><code>ArtistAlbum</code> 是歌手页专辑卡片的跨 IPC 模型，<code>kind</code> 由上游 <code>albumType</code> 归一化为 <code>lp</code> / <code>ep</code> / <code>single</code> / <code>live</code> / <code>other</code>；<code>ArtistAlbumPage</code> 为 <code>artist.getAlbums</code> 的分页返回模型。</li>
   <li><code>PlaylistDetail.songs</code> 是歌单当前已载入的歌曲；<code>playlist.get</code> 使用 <code>PlaylistPage</code> 分页返回，<code>playlist.getCached</code> / <code>playlist.saveCache</code> 使用整份 <code>PlaylistCacheEntry</code> / <code>PlaylistSnapshot</code>。</li>
   <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。<code>id</code> 是歌单标识（tid / disstid），<code>dirId</code> 是当前账号目录 ID（写入接口使用），两者不能互换；公开歌单可能没有 <code>dirId</code>。</li>
   <li><code>Lyric.format</code> 为 <code>lrc</code> / <code>qrc</code>；逐字行类型见 <a href="#c4-33">§4.33</a>。</li>
@@ -722,6 +742,11 @@ export interface FlagsFile {
       offset?: number,
       sort?: ArtistSongSort
     ): Promise&lt;IpcResult&lt;ArtistSongPage&gt;&gt;;
+    getAlbums(
+      mid: string,
+      offset?: number,
+      sort?: ArtistAlbumSort
+    ): Promise&lt;IpcResult&lt;ArtistAlbumPage&gt;&gt;;
   };
   album: {
     get(mid: string, offset?: number): Promise&lt;IpcResult&lt;AlbumDetail&gt;&gt;;
@@ -1583,7 +1608,7 @@ const emit = defineEmits&lt;{
   <li>深色与浅色 token 定义在 <code>:root</code> / <code>[data-theme]</code>；视觉契约见 <a href="USER.html#u5">USER §5</a>。</li>
   <li>主题 token 增 <code>--shadow-color</code>（深色 <code>var(--text)</code> 20%、浅色 14% 混色）与统一缩放后的 <code>--shadow-sm: 0 2px 6px</code>、<code>--shadow: 0 5px 16px</code>、<code>--shadow-lg: 0 7px 22px</code>、<code>--shadow-up: 0 -4px 12px</code>、<code>--shadow-left: -8px 0 24px</code>、<code>--shadow-right: 8px 0 24px</code>、<code>--shadow-handle: 3px 0 10px</code>。</li>
   <li>删除空状态占位封面的虚线边框；品牌、按钮、封面 / 头像、弹层、面板、Toast、模态框、抽屉与拖拽把手等全部投影改用上述 fg 阴影 token。焦点环（<code>0 0 0 Npx</code>）、输入框 inset 高光与遮罩纯背景不属于投影，保持独立。</li>
-  <li><code>.catalog-desc-block</code> 限宽 900px 并承担底部间距；块内 <code>.catalog-desc</code> 取消自身宽度与外边距；<code>.catalog-desc.clamped</code> 为 4 行 <code>-webkit-line-clamp</code>；<code>.catalog-desc-toggle</code> 使用 accent 文字、透明背景，悬停加下划线。</li>
+  <li><code>.catalog-desc-block</code> 限宽 900px 并承担底部间距；块内 <code>.catalog-desc</code> 取消自身宽度与外边距；<code>.catalog-desc.clamped</code> 为 4 行 <code>-webkit-line-clamp</code>；<code>.catalog-desc-toggle</code> 使用 accent 文字、透明背景，悬停加下划线。歌手页顶部 <code>.catalog-tabs</code> 与专辑排序 <code>.album-sort-tabs</code> 复用 <code>.tabs</code>；专辑筛选 <code>.album-filters</code> 复用 <code>.chip</code>，选中态使用 accent 软填充；专辑网格复用 <code>.card-grid</code>，卡片 <code>.album-card</code> 可点击进入专辑页。</li>
   <li>组件样式与响应式断点也在同一文件维护。</li>
   <li>布局最小阈值由 <code>--layout-min-width</code>（当前 <code>420px</code>）与 <code>--layout-min-height</code>（<code>--player-height + 170px</code>）统一声明；<code>.app-shell</code> 同时设置 <code>min-width</code> / <code>min-height</code>，<code>body</code> 使用 <code>overflow: auto</code> 提供整窗双向滚动。低于阈值时布局停止压缩，侧栏导航内部纵向滚动、账号入口固定、播放条保持第二行；内容区仍独立滚动。</li>
   <li>按钮文字不换行：<code>.btn</code> 使用 <code>white-space: nowrap</code>；歌单操作区 <code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，子按钮 <code>flex: 0 0 auto</code> 保持内容宽度，空间不足时整组换行；≤900px 媒体查询不再重复声明 <code>flex-wrap</code>。</li>
@@ -1676,6 +1701,9 @@ export declare const VIP_CACHE_MS: number;                  // 5 × 60_000 ms
 export declare const COMMENT_PAGE_SIZE: number;             // 25；上游实测上限
 export declare const COMMENT_LOAD_ALL_PAGE_MAX: number;     // 40；跳转底部最多补拉 1000 条
 export declare const COMMENT_CONTENT_MAX: number;            // 300；发表评论正文上限
+export declare const CATALOG_PAGE_SIZE: number;             // 50；歌手 / 专辑歌曲单页
+export declare const ARTIST_ALBUM_PAGE_SIZE: number;        // 80；歌手专辑单页，上游上限
+export declare const ARTIST_ALBUM_PAGE_MAX: number;         // 20；歌手页最多补拉 1600 张
 export declare const AUDIO_CACHE_MAX_BYTES: number;         // 2 GiB；默认 / 最大档位
 export declare const AUDIO_CACHE_LIMIT_STEPS_BYTES: readonly number[]; // 128M / 256M / 512M / 1G / 1.5G / 2G
 export declare const AUDIO_CACHE_DEFAULT_BYTES: number;      // = AUDIO_CACHE_MAX_BYTES
@@ -1693,6 +1721,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li><code>PROBE_MIDS_MAX</code> / <code>PROBE_VKEY_BATCH</code> 不得大于 <code>IPC_SONG_MIDS_MAX</code>；推荐与页大小 50 对齐，使一个歌单页一次探测、一批 vkey。修改任一值时同步评估其余常量。</li>
   <li><code>SONG_DETAIL_BATCH = 50</code> 为批量详情单次上限；<code>PROBE_DETAIL_CONCURRENCY = 2</code> 仅用于批量缺口的单曲兜底，不再逐首探测。</li>
   <li><code>COMMENT_PAGE_SIZE = 25</code> 为上游实测单页上限（26 起返回业务码 <code>10000</code>）；<code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 使“跳转到底部”最多补拉约 1000 条，并保持串行请求与取消机制；<code>COMMENT_CONTENT_MAX = 300</code> 同时约束输入框 <code>maxlength</code>、渲染层提交校验与主进程 IPC 参数校验。</li>
+  <li><code>CATALOG_PAGE_SIZE = 50</code> 用于歌手 / 专辑歌曲分页；<code>ARTIST_ALBUM_PAGE_SIZE = 80</code> 为上游专辑列表单页上限，<code>ARTIST_ALBUM_PAGE_MAX = 20</code> 限制歌手页一次展开专辑最多补拉 1600 张。</li>
   <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>UPSTREAM_BLOCK_MS</code> 为收到 104009 后的全局截断时长（推荐 60_000 ms），窗口内所有上游请求直接失败、下载泵暂停出队；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
   <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制推荐分区缓存；<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页每区展示的歌曲上限（30 首，界面固定 3 行滚动）。</li>
   <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，统一队列按入队顺序串行；<code>DOWNLOAD_QUEUE_MAX</code> 限制单次“下载全部”的入队数量；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
@@ -2165,8 +2194,11 @@ interface DownloadStore {
 <ul class="note">
   <li>按路由参数调用 <code>artist.get(mid, offset, sort)</code> 加载歌手信息与歌曲，<code>sort</code> 默认 <code>hot</code>；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
   <li>简介非空时渲染 <code>CatalogDescription</code>：默认折叠为 4 行（<code>-webkit-line-clamp</code>），用 <code>scrollHeight &gt; clientHeight + 1</code> 判断是否溢出，仅溢出时显示“展开 / 收起”并同步 <code>aria-expanded</code>；<code>ResizeObserver</code> 在尺寸变化时重新测量，<code>text</code> 变化时重置为折叠。短简介不显示切换按钮。</li>
+  <li>顶部提供“歌曲 / 专辑”切换，默认歌曲。切到专辑时若尚未加载，调用 <code>artist.getAlbums</code> 从偏移 0 连续补拉，直到 <code>hasMore=false</code> 或达到 <code>ARTIST_ALBUM_PAGE_MAX</code>；切换歌手时重置为歌曲页并清空专辑列表。</li>
+  <li>专辑页右侧提供“最热 / 最新”切换，默认最热；切换重载专辑并回顶。筛选条位于歌曲 / 专辑切换下方，按 <code>AlbumKind</code> 过滤（LP / EP / 单曲 / 现场 / 其他），只显示当前歌手拥有的类型，“全部”始终存在；筛选在本地列表上执行，不重新请求。</li>
+  <li>专辑卡片显示封面、名称、类型原文与发行日期，点击进入 <code>/album/:mid</code>；加载中、失败、空结果与筛选无结果分别渲染，专辑加载不触发歌曲分页。</li>
   <li>歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；不可播标记与最高音质沿用 <code>useAvailability</code>。</li>
-  <li>歌曲标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；列表区显示加载态，滚动位置回到页面顶部；失败时回退原排序并保留旧列表。滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
+  <li>歌曲视图的标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；列表区显示加载态，滚动位置回到页面顶部；失败时回退原排序并保留旧列表。滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
   <li>分页固定 50 首/页；根节点 <code>pageRef</code> 通过 <code>closest('.main')</code> 找到外层滚动容器，注册 <code>passive</code> 的 <code>scroll</code> 监听，距底部小于 <code>SCROLL_LOAD_THRESHOLD = 160px</code> 且 <code>hasMore=true</code>、当前没有首屏或追加加载时自动调用 <code>load(false)</code>，卸载时移除监听。页面不提供“加载更多”按钮，底部按状态显示 spinner + “正在加载更多” / “继续向下滚动加载更多”，无更多歌曲时显示“已经到底了”。加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
   <li>返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>；点击歌曲不改变路由。</li>
 </ul>
@@ -2192,6 +2224,11 @@ export function getArtistSongs(
   offset?: number,
   sort?: ArtistSongSort
 ): Promise&lt;ArtistSongPage&gt;;
+export function getArtistAlbums(
+  mid: string,
+  offset?: number,
+  sort?: ArtistAlbumSort
+): Promise&lt;ArtistAlbumPage&gt;;
 </code></pre>
 <ul class="note">
   <li>歌手信息使用 <code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg?singermid=&lt;mid&gt;&amp;format=json</code>：<code>getSingerInfo.Fsinger_name</code> → <code>name</code>、<code>singerBrief</code> → <code>description</code>、<code>total_song</code> / <code>total_album</code> → 计数；封面由 <code>mid</code> 拼 <code>https://y.gtimg.cn/music/photo_new/T001R500x500M000&lt;mid&gt;.jpg</code>。</li>
@@ -2199,6 +2236,8 @@ export function getArtistSongs(
   <li>歌曲总数优先取旧接口 <code>total_song</code>，缺失时用歌曲列表 <code>totalNum</code>；专辑数缺失按 0 处理，页面仅在 <code>albumCount &gt; 0</code> 时显示“N 张专辑”，避免显示错误的 0 张。</li>
   <li>歌曲使用 <code>musicu</code> 的模块 <code>musichall.song_list_server</code>、方法 <code>GetSingerSongList</code>，参数 <code>{ order, singerMid, begin: offset, num: 50 }</code>；<code>sort</code> 映射为 <code>hot → order=1</code>、<code>latest → order=0</code>。<code>musicu</code> 返回的 <code>req_0.data</code> 优先按扁平 <code>{ totalNum, songList }</code> 解析，若为 <code>{ singerSongList: { data: ... } }</code> 包裹则回退到该包裹；<code>songList[].songInfo</code> 统一经 <code>rawSongToSong</code> 映射为 <code>Song</code>。上游单页上限 100 首。</li>
   <li><code>getArtistSongs(mid, offset, sort)</code> 只请求 <code>GetSingerSongList</code> 并返回 <code>ArtistSongPage</code>，不拉取歌手详情；<code>getArtist</code> 首次进入时并行加载详情与首屏歌曲。</li>
+  <li>专辑使用 <code>music.musichallAlbum.AlbumListServer / GetAlbumList</code>，参数 <code>{ singerMid, order, begin, num: ARTIST_ALBUM_PAGE_SIZE }</code>；<code>sort</code> 映射为 <code>hot → order=1</code>、<code>latest → order=0</code>。响应 <code>albumList[]</code> 的 <code>albumMid</code> / <code>albumName</code> / <code>publishDate</code> / <code>albumType</code> 映射为 <code>ArtistAlbum</code>，封面由 <code>albumMid</code> 拼接 <code>T002R500x500</code>。</li>
+  <li><code>albumType</code> 归一化为 <code>lp</code>（录音室 / 专辑 / LP）、<code>ep</code>（EP）、<code>single</code>（Single / 单曲）、<code>live</code>（演唱会 / 现场 / Live）与 <code>other</code>；<code>total</code> 优先取上游 <code>total</code>，缺失时回退 <code>offset + albumList.length</code>。</li>
   <li><code>mid</code> 为空时直接返回空歌曲与空简介，不发起请求；详情或歌曲失败映射为 <code>UPSTREAM_CHANGED</code> / 现有网络错误，不用搜索接口或当前歌单数据兜底。</li>
 </ul>
 
@@ -2842,6 +2881,13 @@ views/DiscoverView::onBeforeUnmount()
             └── api/client::musicu('musichall.song_list_server', 'GetSingerSongList', ...)
                 └── 映射 songList[].songInfo → Song
 </code></pre>
+<pre><code>views/ArtistView::changeView('albums') / changeAlbumSort(next)
+└── window.lychee.artist.getAlbums(mid, offset, sort)
+    └── ipc::handle('artist.getAlbums')
+        └── api/artist::getArtistAlbums(mid, offset, sort)
+            └── api/client::musicu('music.musichallAlbum.AlbumListServer', 'GetAlbumList', ...)
+                └── 映射 albumList[] → ArtistAlbum[]（albumType → kind）
+</code></pre>
 <pre><code>views/AlbumView::watch(mid)
 └── window.lychee.album.get(mid, offset)
     └── ipc::handle('album.get')
@@ -2851,7 +2897,8 @@ views/DiscoverView::onBeforeUnmount()
                 └── 映射 songList[].songInfo → Song
 </code></pre>
 <ul class="note">
-  <li>两个页面共用 <code>SongTable</code> 与可用性探测；分页各 50 首，滚动到底继续加载。歌手页的歌曲来自 <code>req_0.data</code> 的扁平 <code>songList</code>（兼容 <code>singerSongList.data</code> 包裹），专辑页的歌曲同样来自 <code>req_0.data</code>。</li>
+  <li>两个页面共用 <code>SongTable</code> 与可用性探测；歌曲分页各 50 首，滚动到底继续加载。歌手页的歌曲来自 <code>req_0.data</code> 的扁平 <code>songList</code>（兼容 <code>singerSongList.data</code> 包裹），专辑页的歌曲同样来自 <code>req_0.data</code>。</li>
+  <li>歌手页专辑按 <code>ARTIST_ALBUM_PAGE_SIZE = 80</code> 分页，切换到专辑视图或切换排序时从偏移 0 连续补拉，最多 <code>ARTIST_ALBUM_PAGE_MAX = 20</code> 页；筛选只在已加载的专辑列表上执行，不触发新请求。</li>
   <li>接口未返回数据时展示合法空状态；请求失败展示页内错误与重试，不跳转搜索、不填充占位歌曲。</li>
   <li>歌手 / 专辑名称缺 <code>mid</code> 时不生成跨页链接，规则见 <a href="USER.html#u2">USER §2</a>。</li>
 </ul>

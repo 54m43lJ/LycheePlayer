@@ -1,9 +1,17 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import type { ArtistDetail, ArtistSongSort } from '@shared/types'
+import type {
+  ArtistAlbum,
+  ArtistAlbumKind,
+  ArtistAlbumSort,
+  ArtistDetail,
+  ArtistSongSort
+} from '@shared/types'
+import { ARTIST_ALBUM_PAGE_MAX } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
 import CatalogDescription from '../components/CatalogDescription.vue'
+import CoverArt from '../components/CoverArt.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
 import { describeError, unwrap } from '../api'
@@ -26,6 +34,19 @@ const SONG_SORTS: Array<{ value: ArtistSongSort; label: string }> = [
   { value: 'hot', label: '最热' },
   { value: 'latest', label: '最新' }
 ]
+const ALBUM_SORTS: Array<{ value: ArtistAlbumSort; label: string }> = [
+  { value: 'hot', label: '最热' },
+  { value: 'latest', label: '最新' }
+]
+type AlbumFilter = 'all' | ArtistAlbumKind
+const ALBUM_FILTERS: Array<{ value: AlbumFilter; label: string }> = [
+  { value: 'all', label: '全部' },
+  { value: 'lp', label: 'LP' },
+  { value: 'ep', label: 'EP' },
+  { value: 'single', label: '单曲' },
+  { value: 'live', label: '现场' },
+  { value: 'other', label: '其他' }
+]
 
 const detail = ref<ArtistDetail | null>(null)
 const loading = ref(false)
@@ -33,14 +54,33 @@ const error = ref('')
 const loadingMore = ref(false)
 const songsLoading = ref(false)
 const songSort = ref<ArtistSongSort>('hot')
+const view = ref<'songs' | 'albums'>('songs')
+const albums = ref<ArtistAlbum[]>([])
+const albumTotal = ref(0)
+const albumsLoaded = ref(false)
+const albumsLoading = ref(false)
+const albumError = ref('')
+const albumSort = ref<ArtistAlbumSort>('hot')
+const albumFilter = ref<AlbumFilter>('all')
 const pickerOpen = ref(false)
 const pickerIndex = ref(-1)
 const pageRef = ref<HTMLElement | null>(null)
 const SCROLL_LOAD_THRESHOLD = 160
 let scrollRoot: HTMLElement | null = null
 let token = 0
+let albumToken = 0
 const mid = computed(() => String(route.params.mid ?? ''))
 const songs = computed(() => detail.value?.songs ?? [])
+const filteredAlbums = computed(() =>
+  albumFilter.value === 'all'
+    ? albums.value
+    : albums.value.filter((album) => album.kind === albumFilter.value)
+)
+const albumFilterOptions = computed(() =>
+  ALBUM_FILTERS.filter(
+    (item) => item.value === 'all' || albums.value.some((album) => album.kind === item.value)
+  )
+)
 const favoriteMids = computed(() => [...playlistEdit.favorites])
 const pickerMids = computed(() => {
   const song = songs.value[pickerIndex.value]
@@ -129,7 +169,64 @@ async function reloadSongs(next: ArtistSongSort): Promise<void> {
   }
 }
 
+function resetAlbums(): void {
+  albumToken += 1
+  albums.value = []
+  albumTotal.value = 0
+  albumsLoaded.value = false
+  albumsLoading.value = false
+  albumError.value = ''
+  albumSort.value = 'hot'
+  albumFilter.value = 'all'
+}
+
+async function loadAlbums(): Promise<void> {
+  const id = mid.value
+  if (!id) return
+  const request = ++albumToken
+  albumsLoading.value = true
+  albumsLoaded.value = false
+  albumError.value = ''
+  albums.value = []
+  albumTotal.value = 0
+  albumFilter.value = 'all'
+  try {
+    let offset = 0
+    for (let page = 0; page < ARTIST_ALBUM_PAGE_MAX; page += 1) {
+      const data = unwrap(await window.lychee.artist.getAlbums(id, offset, albumSort.value))
+      if (request !== albumToken) return
+      albums.value = [...albums.value, ...data.albums]
+      albumTotal.value = data.total
+      offset += data.albums.length
+      if (detail.value && detail.value.albumCount === 0 && data.total > 0) {
+        detail.value = { ...detail.value, albumCount: data.total }
+      }
+      if (!data.hasMore || data.albums.length === 0) break
+    }
+    albumsLoaded.value = true
+  } catch (err) {
+    if (request === albumToken) albumError.value = describeError(err)
+  } finally {
+    if (request === albumToken) albumsLoading.value = false
+  }
+}
+
+function changeView(next: 'songs' | 'albums'): void {
+  if (view.value === next) return
+  view.value = next
+  scrollRoot?.scrollTo({ top: 0 })
+  if (next === 'albums' && !albumsLoaded.value && !albumsLoading.value) void loadAlbums()
+}
+
+function changeAlbumSort(next: ArtistAlbumSort): void {
+  if (albumSort.value === next) return
+  scrollRoot?.scrollTo({ top: 0 })
+  albumSort.value = next
+  void loadAlbums()
+}
+
 function maybeLoadMore(): void {
+  if (view.value !== 'songs') return
   if (loading.value || loadingMore.value || songsLoading.value || !detail.value?.hasMore) return
   const el = scrollRoot
   if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_LOAD_THRESHOLD) {
@@ -177,7 +274,15 @@ function openPicker(index: number): void {
   pickerOpen.value = true
 }
 
-watch(mid, () => void load(), { immediate: true })
+watch(
+  mid,
+  () => {
+    resetAlbums()
+    view.value = 'songs'
+    void load()
+  },
+  { immediate: true }
+)
 
 onMounted(() => {
   scrollRoot = pageRef.value?.closest<HTMLElement>('.main') ?? null
@@ -233,55 +338,136 @@ onBeforeUnmount(() => {
 
       <CatalogDescription v-if="detail.description" :text="detail.description" />
 
-      <div class="section-title">
-        <span>歌曲</span>
-        <div class="section-title-right">
-          <div class="tabs song-sort-tabs">
-            <button
-              v-for="item in SONG_SORTS"
-              :key="item.value"
-              class="tab"
-              :class="{ active: songSort === item.value }"
-              @click="changeSort(item.value)"
-            >
-              {{ item.label }}
-            </button>
+      <div class="tabs catalog-tabs">
+        <button
+          class="tab"
+          :class="{ active: view === 'songs' }"
+          @click="changeView('songs')"
+        >
+          歌曲
+        </button>
+        <button
+          class="tab"
+          :class="{ active: view === 'albums' }"
+          @click="changeView('albums')"
+        >
+          专辑
+        </button>
+      </div>
+
+      <template v-if="view === 'songs'">
+        <div class="section-title">
+          <span>歌曲</span>
+          <div class="section-title-right">
+            <div class="tabs song-sort-tabs">
+              <button
+                v-for="item in SONG_SORTS"
+                :key="item.value"
+                class="tab"
+                :class="{ active: songSort === item.value }"
+                @click="changeSort(item.value)"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+            <span class="count">{{ songs.length }} / {{ detail.total }} 首</span>
           </div>
-          <span class="count">{{ songs.length }} / {{ detail.total }} 首</span>
         </div>
-      </div>
 
-      <div v-if="songsLoading" class="loading-block">
-        <span class="spinner lg" />
-        正在加载歌曲
-      </div>
-      <SongTable
-        v-else-if="songs.length > 0"
-        :songs="songs"
-        :active-mid="player.current?.songMid"
-        :favorite-mids="favoriteMids"
-        :asset-states="download.assets"
-        :can-add-to-playlist="auth.loggedIn"
-        @play="playAt"
-        @play-next="addNextAt"
-        @toggle="player.toggle()"
-        @favorite="toggleFavorite"
-        @download="downloadAt"
-        @add-to-playlist="openPicker"
-      />
-      <div v-else class="empty">
-        <div class="empty-icon"><AppIcon name="music" :size="25" /></div>
-        <h3>暂无歌曲</h3>
-      </div>
+        <div v-if="songsLoading" class="loading-block">
+          <span class="spinner lg" />
+          正在加载歌曲
+        </div>
+        <SongTable
+          v-else-if="songs.length > 0"
+          :songs="songs"
+          :active-mid="player.current?.songMid"
+          :favorite-mids="favoriteMids"
+          :asset-states="download.assets"
+          :can-add-to-playlist="auth.loggedIn"
+          @play="playAt"
+          @play-next="addNextAt"
+          @toggle="player.toggle()"
+          @favorite="toggleFavorite"
+          @download="downloadAt"
+          @add-to-playlist="openPicker"
+        />
+        <div v-else class="empty">
+          <div class="empty-icon"><AppIcon name="music" :size="25" /></div>
+          <h3>暂无歌曲</h3>
+        </div>
 
-      <div v-if="!songsLoading && detail.hasMore" class="feed-footer">
-        <template v-if="loadingMore">
-          <span class="spinner" />
-          <span>正在加载更多</span>
-        </template>
-        <span v-else>继续向下滚动加载更多</span>
-      </div>
-      <div v-else-if="!songsLoading && songs.length > 0" class="feed-footer">已经到底了</div>
+        <div v-if="!songsLoading && detail.hasMore" class="feed-footer">
+          <template v-if="loadingMore">
+            <span class="spinner" />
+            <span>正在加载更多</span>
+          </template>
+          <span v-else>继续向下滚动加载更多</span>
+        </div>
+        <div v-else-if="!songsLoading && songs.length > 0" class="feed-footer">已经到底了</div>
+      </template>
+
+      <template v-else>
+        <div class="section-title">
+          <span>专辑</span>
+          <div class="section-title-right">
+            <div class="tabs album-sort-tabs">
+              <button
+                v-for="item in ALBUM_SORTS"
+                :key="item.value"
+                class="tab"
+                :class="{ active: albumSort === item.value }"
+                @click="changeAlbumSort(item.value)"
+              >
+                {{ item.label }}
+              </button>
+            </div>
+            <span class="count">{{ filteredAlbums.length }} / {{ albumTotal }} 张</span>
+          </div>
+        </div>
+
+        <div v-if="albumFilterOptions.length > 1" class="album-filters">
+          <button
+            v-for="item in albumFilterOptions"
+            :key="item.value"
+            class="chip"
+            :class="{ active: albumFilter === item.value }"
+            @click="albumFilter = item.value"
+          >
+            {{ item.label }}
+          </button>
+        </div>
+
+        <div v-if="albumsLoading" class="loading-block">
+          <span class="spinner lg" />
+          正在加载专辑
+        </div>
+        <div v-else-if="albumError" class="empty compact">
+          <div class="empty-icon"><AppIcon name="music" :size="22" /></div>
+          <h3>专辑加载失败</h3>
+          <p>{{ albumError }}</p>
+          <button class="btn ghost small" @click="loadAlbums()">重试</button>
+        </div>
+        <div v-else-if="filteredAlbums.length > 0" class="card-grid album-grid">
+          <button
+            v-for="album in filteredAlbums"
+            :key="album.mid"
+            class="card album-card"
+            @click="router.push(`/album/${album.mid}`)"
+          >
+            <CoverArt :src="album.coverUrl" image-class="card-cover" :icon-size="26" />
+            <div class="card-name">{{ album.name }}</div>
+            <div class="card-sub">
+              {{ album.albumType || '专辑' }}
+              <template v-if="album.publishDate"> · {{ album.publishDate }}</template>
+            </div>
+          </button>
+        </div>
+        <div v-else class="empty compact">
+          <div class="empty-icon"><AppIcon name="music" :size="22" /></div>
+          <h3>{{ albums.length === 0 ? '暂无专辑' : '没有符合筛选的专辑' }}</h3>
+        </div>
+      </template>
 
       <PlaylistPicker
         :open="pickerOpen"

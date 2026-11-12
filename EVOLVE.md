@@ -82,3 +82,37 @@
 | `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | 增加 `QqAddCommentResult` 模型、字段说明与 `CommentPostResult` 转换。 |
 | `README.md` | §2 用户交互 · 歌词 / 评论行 | 改 | 补评论底部输入框与发表按钮。 |
 | `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 与 README 同步。 |
+
+## 4. 歌手页歌曲 / 专辑切换与专辑筛选
+
+**需求**：歌手页在歌曲浏览之外增加专辑浏览，通过“歌曲 / 专辑”切换；专辑支持最热 / 最新排序，并按上游元信息提供 LP / EP / 单曲 / 现场 / 其他版本筛选，筛选条位于歌曲 / 专辑切换下方；专辑卡片可进入专辑页。
+
+**实现思路**：
+
+- 新增 `ArtistAlbumSort`、`ArtistAlbumKind`、`ArtistAlbum`、`ArtistAlbumPage` 跨 IPC 模型，以及 `CATALOG_PAGE_SIZE = 50`、`ARTIST_ALBUM_PAGE_SIZE = 80`、`ARTIST_ALBUM_PAGE_MAX = 20` 常量。
+- 主进程 `getArtistAlbums()` 调用 `music.musichallAlbum.AlbumListServer / GetAlbumList`，`sort` 映射为 `hot → order=1`、`latest → order=0`；读取 `albumMid` / `albumName` / `publishDate` / `albumType`，封面由 `albumMid` 拼接。
+- `albumType` 归一化为 `lp`（录音室 / 专辑 / LP）、`ep`（EP）、`single`（Single / 单曲）、`live`（演唱会 / 现场 / Live）和 `other`；筛选只基于该元信息，不根据专辑名猜测。
+- 新增 `artist.getAlbums` IPC 与 preload 方法；渲染层切到专辑视图或切换排序时从偏移 0 连续补拉，直到无下一页或达到页数上限，一次渲染完整列表。
+- `ArtistView` 顶部增加“歌曲 / 专辑”切换；歌曲视图保留原有滚动分页与排序，专辑视图增加最热 / 最新与版本筛选；切换歌手时重置为歌曲视图并清空专辑缓存。
+- 补充 `test/api/catalog.test.ts`，覆盖专辑排序参数、`albumType` 分类映射与分页元信息。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 4 项“歌手页可以在歌曲浏览和专辑之间切换” | 改 | 行尾追加 ` [已解决]`。 |
+| `EVOLVE.md` | 新增“歌手页歌曲 / 专辑切换与专辑筛选” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `USER.html` | §1 TERMS · 歌手页 / 专辑页（`#u1`） | 改 | 补歌曲 / 专辑切换与专辑版本筛选能力。 |
+| `USER.html` | §5.2.8 页面结构 · 歌手页 / 专辑页（`#u5-2-8`） | 改 | 补歌曲 / 专辑切换、专辑排序、筛选条位置与专辑卡片行为。 |
+| `CORE.html` | §4.1 `src/shared/types.ts`（`#c4-1`） | 改 | 增加 `ArtistAlbumSort` / `ArtistAlbumKind` / `ArtistAlbum` / `ArtistAlbumPage`。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 增加 `artist.getAlbums(mid, offset, sort)`。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 记录顶部切换、专辑排序、筛选 chip 与专辑卡片样式。 |
+| `CORE.html` | §4.50 `src/shared/constants.ts`（`#c4-50`） | 改 | 增加 `CATALOG_PAGE_SIZE`、`ARTIST_ALBUM_PAGE_SIZE = 80` 与 `ARTIST_ALBUM_PAGE_MAX = 20`。 |
+| `CORE.html` | §4.73 `ArtistView.vue`（`#c4-73`） | 改 | 记录歌曲 / 专辑切换、专辑连续补拉、排序、筛选、空状态与切歌重置。 |
+| `CORE.html` | §4.75 `src/main/api/artist.ts`（`#c4-75`） | 改 | 增加 `getArtistAlbums` 签名、`GetAlbumList` 参数与 `albumType` 归一化规则。 |
+| `CORE.html` | §5.19 歌手 / 专辑加载（`#c5-19`） | 改 | 增加 `getArtistAlbums` → `GetAlbumList` 的调用分支。 |
+| `PROVIDER.html` | §2 CONVENTIONS · 歌手专辑（`#p2`） | 增 | 新增歌手专辑分页、排序与 `albumType` 元信息约定。 |
+| `PROVIDER.html` | §4.1 消费的 HTTP 接口（`#p4-1`） | 改 | 增加歌手专辑接口与 `singerMid` / `order` / `begin` / `num` 参数。 |
+| `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | 增加 `QqArtistAlbum` / `QqArtistAlbumData` 模型与 `ArtistAlbumPage` 转换。 |
+| `README.md` | §2 用户交互 · 歌手 / 专辑行 | 改 | 补歌手页歌曲 / 专辑切换、专辑排序与版本筛选。 |
+| `ABOUT.html` | 用户交互 · 歌手 / 专辑行 | 改 | 与 README 同步。 |

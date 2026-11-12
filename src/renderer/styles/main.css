@@ -713,14 +713,38 @@ a {
   gap: 10px;
 }
 
-.song-sort-tabs {
+.song-sort-tabs,
+.album-sort-tabs {
   margin-bottom: 0;
   padding: 2px;
 }
 
-.song-sort-tabs .tab {
+.song-sort-tabs .tab,
+.album-sort-tabs .tab {
   padding: 4px 11px;
   font-size: 11px;
+}
+
+.catalog-tabs {
+  margin-bottom: 14px;
+}
+
+.album-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.album-filters .chip.active {
+  border-color: var(--accent-line);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.album-card {
+  cursor: pointer;
+  text-align: left;
 }
 
 /* ---------- Song table ---------- */

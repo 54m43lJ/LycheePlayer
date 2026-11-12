@@ -4,6 +4,8 @@ import { inflateSync } from 'node:zlib'
 import type { LycheeApi } from '../shared/ipc'
 import type {
   AlbumDetail,
+  ArtistAlbumPage,
+  ArtistAlbumSort,
   ArtistDetail,
   ArtistSongPage,
   ArtistSongSort,
@@ -78,7 +80,9 @@ const api: LycheeApi = {
     get: (mid: string, offset?: number, sort?: ArtistSongSort) =>
       invoke<ArtistDetail>('artist.get', mid, offset, sort),
     getSongs: (mid: string, offset?: number, sort?: ArtistSongSort) =>
-      invoke<ArtistSongPage>('artist.getSongs', mid, offset, sort)
+      invoke<ArtistSongPage>('artist.getSongs', mid, offset, sort),
+    getAlbums: (mid: string, offset?: number, sort?: ArtistAlbumSort) =>
+      invoke<ArtistAlbumPage>('artist.getAlbums', mid, offset, sort)
   },
   album: {
     get: (mid: string, offset?: number) => invoke<AlbumDetail>('album.get', mid, offset)

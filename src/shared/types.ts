@@ -113,6 +113,12 @@ export interface Comment {
 /** 歌手歌曲排序：上游 order=1 为最热，其余值均为最新。 */
 export type ArtistSongSort = 'hot' | 'latest'
 
+/** 歌手专辑排序：上游 order=1 为最热，其余值均为最新。 */
+export type ArtistAlbumSort = 'hot' | 'latest'
+
+/** 歌手专辑版本分类：由上游 albumType 元信息归一化。 */
+export type ArtistAlbumKind = 'lp' | 'ep' | 'single' | 'live' | 'other'
+
 export interface CommentLikeResult {
   commentId: string
   liked: boolean
@@ -200,6 +206,22 @@ export interface ArtistDetail {
 
 export interface ArtistSongPage {
   songs: Song[]
+  total: number
+  hasMore: boolean
+}
+
+export interface ArtistAlbum {
+  mid: string
+  name: string
+  coverUrl: string
+  publishDate: string
+  /** 上游 albumType 原文，例如“录音室专辑” / “EP” / “演唱会” / “Single”。 */
+  albumType: string
+  kind: ArtistAlbumKind
+}
+
+export interface ArtistAlbumPage {
+  albums: ArtistAlbum[]
   total: number
   hasMore: boolean
 }
