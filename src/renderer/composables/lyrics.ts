@@ -70,15 +70,8 @@ export function useLyrics() {
     { immediate: true }
   )
 
-  const visibleLines = computed(() =>
-    translationVisible.value
-      ? lines.value
-      : lines.value.filter((line) => !line.translation)
-  )
-  const activeIndex = computed(() =>
-    activeLyricIndex(visibleLines.value, player.positionMs)
-  )
-  const hasTranslation = computed(() => lines.value.some((line) => line.translation))
+  const activeIndex = computed(() => activeLyricIndex(lines.value, player.positionMs))
+  const hasTranslation = computed(() => lines.value.some((line) => Boolean(line.trans)))
 
   function toggleTranslation(): void {
     translationVisible.value = !translationVisible.value
@@ -91,7 +84,6 @@ export function useLyrics() {
 
   return {
     lines,
-    visibleLines,
     loading,
     error,
     activeIndex,

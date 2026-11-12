@@ -8,15 +8,8 @@ import type { LyricWord } from '../utils/lrc'
 
 const player = usePlayerStore()
 const { current } = storeToRefs(player)
-const {
-  visibleLines,
-  loading,
-  error,
-  activeIndex,
-  hasTranslation,
-  translationVisible,
-  toggleTranslation
-} = useLyrics()
+const { lines, loading, error, activeIndex, hasTranslation, translationVisible, toggleTranslation } =
+  useLyrics()
 const listRef = ref<HTMLElement | null>(null)
 const dragging = ref(false)
 const DRAG_THRESHOLD = 6
@@ -119,7 +112,7 @@ onBeforeUnmount(() => {
       <span class="spinner" />
       <span>正在加载歌词</span>
     </div>
-    <div v-else-if="visibleLines.length === 0" class="lyrics-empty">
+    <div v-else-if="lines.length === 0" class="lyrics-empty">
       <AppIcon name="lyrics" :size="26" />
       <span>{{ error || '这首歌还没有歌词' }}</span>
     </div>
@@ -134,10 +127,10 @@ onBeforeUnmount(() => {
         @pointerleave="onPointerLeave"
       >
         <button
-          v-for="(line, index) in visibleLines"
+          v-for="(line, index) in lines"
           :key="`${line.timeMs}-${index}`"
           class="lyric-line"
-          :class="{ active: index === activeIndex, translation: line.translation }"
+          :class="{ active: index === activeIndex }"
           @click="seekLine(line.timeMs)"
         >
           <template v-if="line.words">
@@ -150,6 +143,7 @@ onBeforeUnmount(() => {
             >
           </template>
           <template v-else>{{ line.text || '♪' }}</template>
+          <span v-if="line.trans && translationVisible" class="lyric-trans">{{ line.trans }}</span>
         </button>
       </div>
       <button

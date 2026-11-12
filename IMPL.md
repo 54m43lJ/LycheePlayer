@@ -184,11 +184,11 @@
 - 歌词只调用 `music.musichallSong.PlayLyricInfo / GetPlayLyricInfo`，按数字 `songID` 请求并解码 Base64 的 `lyric` / `trans`；旧接口因译文缺失已删除，不保留回退。
 - `lyric.get` IPC / preload / `useLyrics` 改为传 `songId`，从 `player.current.songId` 传入；`songMid` 只作为渲染层缓存键。
 - 判断标准改为译文文本是否存在：只要解析出非空译文行，就认为有译文并显示开关，不再要求与原文时间戳配对。
-- 译文和原文都作为独立 `LyricLine`，用 `translation: boolean` 区分，按 `timeMs` 排序；同一时间戳原文在前。
-- 译文没有时间戳时按行序跟随对应原文；原文也没有时间戳时按行序生成稳定序号，至少保证两者都能展示。
-- `activeLyricIndex` 在合并后的行里取离播放位置最近的一行，最多提前 `80ms`；原文与译文不再共享活动状态。
-- `useLyrics` 增加 `visibleLines`，译文关闭时过滤翻译行；`activeIndex` 基于可见行计算，避免高亮到被隐藏的译文。
-- 新增 `test/lyric.test.ts` 与 `test/api/lyric.test.ts`，覆盖新版接口取译文、空译文、非数字 ID、独立行排序、无时间戳译文与 QRC 就近高亮。
+- 译文按行序附加到对应原文行，写入 `LyricLine.trans`；不按时间戳匹配，时间戳不同也不影响配对，译文行数超出原文时忽略多余项。
+- 原文与译文仍在同一个 `.lyric-line` 内显示为上下两行，共享同一个活动行状态；`translationVisible` 只控制行内译文是否渲染。
+- 原文与译文都没有时间戳时按行序生成稳定序号，保证仍能展示和配对。
+- `activeLyricIndex` 在原文行之间取离播放位置最近的一行，最多提前 `80ms`；活动行内的译文随原文一起高亮。
+- 新增 `test/lyric.test.ts` 与 `test/api/lyric.test.ts`，覆盖新版接口取译文、空译文、非数字 ID、按行序配对原文 / 译文与共享活动行。
 
 **修订建议**：
 
@@ -199,11 +199,11 @@
 | `CORE.html` | §5.9 歌词与评论（`#c5-9`） | 改 | 调用链改为 `get(songId)` → `GetPlayLyricInfo`，删除旧接口回退分支。 |
 | `PROVIDER.html` | §4.1 消费的 HTTP 接口（`#p4-1`） | 改 | 只保留 `GetPlayLyricInfo` 与参数，删除旧歌词接口。 |
 | `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | 只保留 `QqPlayLyricInfoData` 与 `Lyric` 转换，删除 `QqLyricResponse` / QRC 消费说明。 |
-| `CORE.html` | §4.33 `utils/lrc.ts`（`#c4-33`） | 改 | 将 `LyricLine.trans` 改为 `translation: boolean`；增加 `withTranslations`，写明独立行排序、无时间戳回退与就近高亮。 |
-| `CORE.html` | §4.34 `composables/lyrics.ts`（`#c4-34`） | 改 | 增加 `visibleLines`，说明 `hasTranslation` 由翻译行派生、`activeIndex` 基于可见行。 |
-| `CORE.html` | §4.41 `LyricsPanel.vue`（`#c4-41`） | 改 | 渲染 `visibleLines`；译文作为独立 `.lyric-line.translation` 展示，不再嵌套 `.lyric-trans`。 |
-| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 删除 `.lyric-trans` 样式，改为 `.lyric-line.translation` 的字号、颜色与活动态。 |
+| `CORE.html` | §4.33 `utils/lrc.ts`（`#c4-33`） | 改 | `LyricLine.trans` 保存行内译文；`withTranslations` 按行序配对，说明无时间戳回退与就近活动行。 |
+| `CORE.html` | §4.34 `composables/lyrics.ts`（`#c4-34`） | 改 | `hasTranslation` 由 `line.trans` 派生；`translationVisible` 只控制行内译文渲染，不再过滤行。 |
+| `CORE.html` | §4.41 `LyricsPanel.vue`（`#c4-41`） | 改 | 原文与译文在同一个 `.lyric-line` 内紧贴显示，共享活动行高亮。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 保留 `.lyric-trans` 上下双行样式，活动行内译文使用强调色混合。 |
 | `CORE.html` | §4.64 `utils/qrc.ts`（`#c4-64`） | 不动 | 已改为复用 §4.33 的 `withTranslations`，不再维护独立的翻译合并规则。 |
-| `USER.html` | §5.2.5 歌词与评论（`#u5-2-5`） | 改 | 改为“原文与译文按时间顺序作为独立行排列并就近高亮；无译文文本时不显示开关”。 |
-| `README.md` | §2 用户交互 · 歌词 / 评论行 | 改 | 与 USER 同步，替换“上下两行共享高亮”。 |
+| `USER.html` | §5.2.5 歌词与评论（`#u5-2-5`） | 改 | 改为“原文与译文紧贴为上下两行并共享当前行高亮；无译文文本时不显示开关”。 |
+| `README.md` | §2 用户交互 · 歌词 / 评论行 | 改 | 与 USER 同步，恢复“上下两行共享高亮”。 |
 | `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 与 README 同步。 |

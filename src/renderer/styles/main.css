@@ -2036,16 +2036,17 @@ a {
   font-weight: 700;
 }
 
-.lyric-line.translation {
+.lyric-trans {
+  display: block;
+  margin-top: 0;
   color: var(--faint);
   font-size: 12px;
+  font-weight: 400;
   line-height: 1.45;
 }
 
-.lyric-line.translation.active {
-  color: var(--accent-strong);
-  font-size: 13px;
-  font-weight: 600;
+.lyric-line.active .lyric-trans {
+  color: color-mix(in srgb, var(--accent-strong) 65%, transparent);
 }
 
 .lyrics-trans-toggle {
@@ -3689,13 +3690,8 @@ a {
   font-size: 20px;
 }
 
-.lyrics-page-list .lyric-line.translation {
-  font-size: 12px;
-}
-
-.lyrics-page-list .lyric-line.translation.active {
+.lyrics-page-list .lyric-line.active .lyric-trans {
   font-size: 13px;
-  font-weight: 600;
 }
 
 .comments-toolbar {

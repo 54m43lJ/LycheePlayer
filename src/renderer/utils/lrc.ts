@@ -8,8 +8,8 @@ export interface LyricLine {
   timeMs: number
   durationMs: number | null
   text: string
-  /** 是否为翻译行；原文与译文一起按时间排序展示。 */
-  translation: boolean
+  /** 与原文同一行的译文；按行序配对，不依赖时间戳完全一致。 */
+  trans: string | null
   words: LyricWord[] | null
 }
 
@@ -56,28 +56,14 @@ function parseTranslationEntries(trans: string | null): TranslationEntry[] {
   return untimedTexts(trans).map((text) => ({ timeMs: null, text }))
 }
 
-function translationLines(entries: TranslationEntry[], originals: LyricLine[]): LyricLine[] {
-  return entries.map((entry, index) => {
-    const fallback = originals[Math.min(index, originals.length - 1)]
-    const extraOffset = fallback ? Math.max(0, index - originals.length + 1) : index
-    return {
-      timeMs: entry.timeMs ?? (fallback?.timeMs ?? 0) + extraOffset,
-      durationMs: null,
-      text: entry.text,
-      translation: true,
-      words: null as LyricWord[] | null
-    }
-  })
-}
-
-/** 原文与译文都作为独立时间行，按时间先后排序；同一时间戳原文在前。 */
-export function sortLyricLines(lines: LyricLine[]): LyricLine[] {
-  return lines.sort((a, b) => a.timeMs - b.timeMs || Number(a.translation) - Number(b.translation))
-}
-
-/** 把译文作为独立行并入原文；译文没有时间戳时按行序跟随原文，检测只看文本是否存在。 */
+/**
+ * 译文按行序附加到原文，而不是按时间戳匹配：
+ * 译文行数通常与原文一致，时间戳的小幅差异不会影响配对；超出原文行数的译文忽略。
+ */
 export function withTranslations(lines: LyricLine[], trans: string | null): LyricLine[] {
-  return sortLyricLines([...lines, ...translationLines(parseTranslationEntries(trans), lines)])
+  const texts = parseTranslationEntries(trans).map((entry) => entry.text)
+  if (texts.length === 0) return lines
+  return lines.map((line, index) => ({ ...line, trans: texts[index] ?? null }))
 }
 
 /** 合并 LRC 与翻译，按时间排序；同一时间戳原文取首条。 */
@@ -93,7 +79,7 @@ export function parseLyric(lrc: string, trans: string | null): LyricLine[] {
       timeMs: line.timeMs,
       durationMs: null,
       text: line.text,
-      translation: false,
+      trans: null,
       words: null
     }))
   // 原文也没有时间戳时按行序生成稳定序号，至少保证原文与译文能按行序展示。
@@ -104,7 +90,7 @@ export function parseLyric(lrc: string, trans: string | null): LyricLine[] {
           timeMs: index * 1000,
           durationMs: null,
           text,
-          translation: false,
+          trans: null,
           words: null
         }))
   return withTranslations(originals, trans)

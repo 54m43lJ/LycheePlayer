@@ -102,7 +102,7 @@ export function parseQrcLyric(text: string, trans: string | null): LyricLine[] {
       timeMs,
       durationMs,
       text: textValue,
-      translation: false,
+      trans: null,
       words: words.length > 0 ? words : null
     })
   }
