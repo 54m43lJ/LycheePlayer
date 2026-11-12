@@ -174,3 +174,29 @@
 |---|---|---|---|
 | `CORE.html` | §4.84 `composables/download-action.ts`（`#c4-84`） | 不动 | 模板解包约定已并入 §1.3 新增的同一小节，不再单独改。 |
 | `CORE.html` | §4.85 `DownloadDeleteDialog.vue`（`#c4-85`） | 不动 | 已说明组件读取共享状态，模板解包细节只在 §4.84 记录，避免两处重复。 |
+
+### 3.4 译文是否存在的判断被时间戳匹配绑架，译文开关不可见
+
+**问题描述**：原实现把翻译按时间戳合并进原文行，再用 `line.trans` 判断是否存在译文。只要原文与译文时间戳不完全一致、译文没有时间戳或两者格式不同，`hasTranslation` 就会为假，左下角译文开关不渲染，表现为“歌词翻译按钮不可见”。先试过“最近时间戳 + 容差”仍然依赖译文可解析出时间戳，不能覆盖无时间戳文本。
+
+**解决方法**：
+
+- 判断标准改为译文文本是否存在：只要解析出非空译文行，就认为有译文并显示开关，不再要求与原文时间戳配对。
+- 译文和原文都作为独立 `LyricLine`，用 `translation: boolean` 区分，按 `timeMs` 排序；同一时间戳原文在前。
+- 译文没有时间戳时按行序跟随对应原文；原文也没有时间戳时按行序生成稳定序号，至少保证两者都能展示。
+- `activeLyricIndex` 在合并后的行里取离播放位置最近的一行，最多提前 `80ms`；原文与译文不再共享活动状态。
+- `useLyrics` 增加 `visibleLines`，译文关闭时过滤翻译行；`activeIndex` 基于可见行计算，避免高亮到被隐藏的译文。
+- 新增 `test/lyric.test.ts`，覆盖带时间戳译文、时间差较大、无时间戳译文、双方都无时间戳、空译文与 QRC 就近高亮。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.33 `utils/lrc.ts`（`#c4-33`） | 改 | 将 `LyricLine.trans` 改为 `translation: boolean`；增加 `withTranslations`，写明独立行排序、无时间戳回退与就近高亮。 |
+| `CORE.html` | §4.34 `composables/lyrics.ts`（`#c4-34`） | 改 | 增加 `visibleLines`，说明 `hasTranslation` 由翻译行派生、`activeIndex` 基于可见行。 |
+| `CORE.html` | §4.41 `LyricsPanel.vue`（`#c4-41`） | 改 | 渲染 `visibleLines`；译文作为独立 `.lyric-line.translation` 展示，不再嵌套 `.lyric-trans`。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 删除 `.lyric-trans` 样式，改为 `.lyric-line.translation` 的字号、颜色与活动态。 |
+| `CORE.html` | §4.64 `utils/qrc.ts`（`#c4-64`） | 不动 | 已改为复用 §4.33 的 `withTranslations`，不再维护独立的翻译合并规则。 |
+| `USER.html` | §5.2.5 歌词与评论（`#u5-2-5`） | 改 | 改为“原文与译文按时间顺序作为独立行排列并就近高亮；无译文文本时不显示开关”。 |
+| `README.md` | §2 用户交互 · 歌词 / 评论行 | 改 | 与 USER 同步，替换“上下两行共享高亮”。 |
+| `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 与 README 同步。 |

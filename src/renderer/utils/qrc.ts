@@ -1,4 +1,4 @@
-import type { LyricLine, LyricWord } from './lrc'
+import { withTranslations, type LyricLine, type LyricWord } from './lrc'
 
 function decodeEntities(value: string): string {
   return value
@@ -84,22 +84,9 @@ function parseWords(body: string): LyricWord[] {
   return words
 }
 
-function parseTranslation(trans: string | null): Map<number, string> {
-  const map = new Map<number, string>()
-  if (!trans) return map
-  for (const line of trans.split(/\r?\n/)) {
-    const match = /^\[(\d{1,3}):(\d{1,2})(?:[.:](\d{1,3}))?\](.*)$/.exec(line)
-    if (!match) continue
-    const fraction = match[3] ? Number(match[3].padEnd(3, '0').slice(0, 3)) : 0
-    map.set(Number(match[1]) * 60_000 + Number(match[2]) * 1000 + fraction, match[4].trim())
-  }
-  return map
-}
-
 /** 解析 QRC 明文 XML / 行文本；逐字时间轴以字 / 词为单位。 */
 export function parseQrcLyric(text: string, trans: string | null): LyricLine[] {
   const content = extractContent(decryptQrc(text))
-  const translation = parseTranslation(trans)
   const lines: LyricLine[] = []
   for (const rawLine of content.split(/\r?\n/)) {
     const line = rawLine.trim()
@@ -115,9 +102,9 @@ export function parseQrcLyric(text: string, trans: string | null): LyricLine[] {
       timeMs,
       durationMs,
       text: textValue,
-      trans: translation.get(timeMs) ?? null,
+      translation: false,
       words: words.length > 0 ? words : null
     })
   }
-  return lines.sort((a, b) => a.timeMs - b.timeMs)
+  return withTranslations(lines.sort((a, b) => a.timeMs - b.timeMs), trans)
 }
