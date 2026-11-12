@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { RouterLink, RouterView, useRoute } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
+import DownloadDeleteDialog from './components/DownloadDeleteDialog.vue'
 import LyricsOverlay from './components/LyricsOverlay.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ToastStack from './components/ToastStack.vue'
@@ -323,6 +324,7 @@ watch(
     <LyricsOverlay v-if="ui.lyricsOpen" />
 
     <PlayerBar />
+    <DownloadDeleteDialog />
 
     <aside class="lyrics-panel queue-panel" :class="{ open: ui.queueOpen }">
       <div class="lyrics-head">

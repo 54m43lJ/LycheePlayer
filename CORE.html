@@ -102,6 +102,7 @@
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
 │       │   ├── <a href="#c4-35">toast.ts</a>                  Toast 队列
+│       │   ├── <a href="#c4-84">download-action.ts</a>         下载按钮共用行为
 │       │   ├── <a href="#c4-65">availability.ts</a>           可用性探测调度
 │       │   └── <a href="#c4-78">revealer-touch.ts</a>          Revealer 触屏手势
 │       ├── components/
@@ -117,6 +118,7 @@
 │       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
 │       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
 │       │   ├── <a href="#c4-81">ConfirmDialog.vue</a>          应用内确认框
+│       │   ├── <a href="#c4-85">DownloadDeleteDialog.vue</a>  删除下载确认框
 │       │   └── <a href="#c4-82">CatalogDescription.vue</a>     歌手 / 专辑简介折叠
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
@@ -1147,12 +1149,13 @@ export function destroyTray(): void;
 </code></pre>
 
 <h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板与 Toast；下载中心由路由页承载。
+<pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板、Toast 与删除下载确认框；下载中心由路由页承载。
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
   <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
   <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
+  <li>全局只挂载一个 <a href="#c4-85">DownloadDeleteDialog</a>，读取 <a href="#c4-84">useDownloadAction</a> 的模块级 <code>pendingDelete</code>；播放条与各歌曲表页面不再各自持有删除下载确认框。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；tooltip / <code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
@@ -1511,6 +1514,7 @@ const emit = defineEmits&lt;{
   <li>点击封面调用 <code>ui.toggleLyrics()</code> 开合歌词 / 评论弹出层，不导航；<code>title</code> 在“歌词与评论 / 关闭歌词与评论”之间切换，无当前歌曲时封面禁用。播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首失败后停止，不读取探测结果。</li>
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px surface 状态块已缓存 / 24px accent 高亮已下载），与歌曲表共用状态与图标；tooltip 只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
+  <li>下载按钮点击统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload(current, quality)</code>：已下载时打开全局删除确认，未下载时加入统一队列；播放条不复制“已下载 / 未下载”判断。</li>
   <li>播放进度条为单轨结构：<code>.progress-track</code> 背景轨上叠加 <code>.progress-buffer</code> 缓冲层与 <code>.progress-played</code> 播放层，透明 <code>.progress-range</code> 覆盖在轨道上只负责拖动与点击定位。缓冲宽度取 <code>max(cachePercent, bufferedPercent)</code>：缓存进度按当前 <code>songMid + quality</code> 匹配，已下载歌曲按 100%；HTML5 <code>audio.buffered</code> 由 <code>onBufferChange</code> 上报，切歌清空。tooltip 在已下载 / 缓存完成时显示“已下载到本机” / “缓存完成”，否则显示“缓冲 N%”；无歌曲或缓冲为 0 时只保留灰轨，不渲染 overlay。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
   <li>播放模式按钮本身即当前模式：<code>.mode-button</code> 默认透明背景与 <code>--muted</code> 图标，悬停时使用 <code>--accent</code> 34% 混合背景，图标由 <code>MODE_ICON</code> 映射，其中 <code>sequence</code> 使用专用向下长箭头图标；点击按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换（不展开菜单）。悬停 120ms / 离开 200ms 打开或关闭向上弹出的仅图标菜单，菜单只渲染 <code>otherModes</code>（当前模式之外的其余三项，保持固定顺序），不重复显示当前模式，顺序播放项同样使用 <code>sequence</code> 图标；键盘焦点可打开，Esc、外部点击与选择后关闭，选择项调用 <code>player.setMode()</code>，不弹 Toast。</li>
@@ -1556,7 +1560,7 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”。</li>
+  <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”；下载入口统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>。</li>
   <li>歌手 / 专辑卡片点击进入 <code>/artist/:mid</code> / <code>/album/:mid</code>，不再以“搜索该歌手 / 专辑的单曲”作为点击行为；MV 卡片使用真实 <code>mv.search</code> 结果进入 <code>/mv/:id</code>。</li>
 </ul>
 
@@ -1579,7 +1583,7 @@ const emit = defineEmits&lt;{
   <li>接入 <code>useAvailability</code>，按当前歌单歌曲集合触发探测；探测只更新歌单歌曲元数据，并把 <code>availability</code> / <code>loading</code> 同步给 playlist store，用于判断最终快照是否就绪。</li>
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
   <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
-  <li>下载按钮按资产状态分流：<code>downloadedQuality</code> 非空时不再入队，而是弹出 <a href="#c4-81">ConfirmDialog</a>（危险态）询问是否删除本机下载文件；确认后调用 <code>download.removeSong(songMid)</code> 并提示“已删除下载”，取消不做任何改动。未下载时保持原有 <code>download.start(songMid, requestedQuality)</code> 入队并提示“已加入下载任务”。</li>
+  <li>下载按钮统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>：已下载时由全局 <a href="#c4-85">DownloadDeleteDialog</a> 询问是否删除本机文件，未下载时加入统一队列；页面不自行判断资产状态或维护确认框。</li>
   <li>歌曲区标题显示 <code>已下载 X / Y 首</code>：<code>X</code> 按 <code>downloadedQuality</code> 统计，不把播放缓存算作已下载；有筛选时前置 <code>筛选 N ·</code>。歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。无匹配时显示空结果状态。</li>
   <li>页面根节点使用 <code>pageRef</code>，挂载时通过 <code>closest('.main')</code> 取得内容区滚动容器，注册 passive <code>scroll</code> 监听并用 <code>ResizeObserver</code> 观察内容尺寸；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击调用 <code>scrollTo({ behavior: 'smooth' })</code>。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
@@ -2208,7 +2212,7 @@ interface DownloadStore {
   <li>顶部提供“歌曲 / 专辑”切换，默认歌曲。切到专辑时若尚未加载，调用 <code>artist.getAlbums</code> 从偏移 0 连续补拉，直到 <code>hasMore=false</code> 或达到 <code>ARTIST_ALBUM_PAGE_MAX</code>；切换歌手时重置为歌曲页并清空专辑列表。</li>
   <li>专辑页右侧提供“最热 / 最新”切换，默认最热；切换重载专辑并回顶。筛选条位于歌曲 / 专辑切换下方，按 <code>AlbumKind</code> 过滤（LP / EP / 单曲 / 现场 / 其他），只显示当前歌手拥有的类型，“全部”始终存在；筛选在本地列表上执行，不重新请求。</li>
   <li>专辑卡片显示封面、名称、类型原文与发行日期，点击进入 <code>/album/:mid</code>；加载中、失败、空结果与筛选无结果分别渲染，专辑加载不触发歌曲分页。</li>
-  <li>歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；不可播标记与最高音质沿用 <code>useAvailability</code>。</li>
+  <li>歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；下载入口统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>；不可播标记与最高音质沿用 <code>useAvailability</code>。</li>
   <li>歌曲视图的标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；列表区显示加载态，滚动位置回到页面顶部；失败时回退原排序并保留旧列表。滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
   <li>分页固定 50 首/页；根节点 <code>pageRef</code> 通过 <code>closest('.main')</code> 找到外层滚动容器，注册 <code>passive</code> 的 <code>scroll</code> 监听，距底部小于 <code>SCROLL_LOAD_THRESHOLD = 160px</code> 且 <code>hasMore=true</code>、当前没有首屏或追加加载时自动调用 <code>load(false)</code>，卸载时移除监听。页面不提供“加载更多”按钮，底部按状态显示 spinner + “正在加载更多” / “继续向下滚动加载更多”，无更多歌曲时显示“已经到底了”。加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
   <li>返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>；点击歌曲不改变路由。</li>
@@ -2220,7 +2224,7 @@ interface DownloadStore {
 <ul class="note">
   <li>按路由参数调用 <code>album.get(mid, offset)</code>；展示专辑名、封面、发行日期、简介与歌手，简介为空时隐藏。</li>
   <li>简介非空时渲染 <code>CatalogDescription</code>，复用与歌手页相同的 4 行折叠、按实际高度判断溢出与展开 / 收起逻辑；短简介不显示切换按钮。</li>
-  <li>歌手行按 <code>mid</code> 链接到歌手页；歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单。</li>
+  <li>歌手行按 <code>mid</code> 链接到歌手页；歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；下载入口统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>。</li>
   <li>分页固定 50 首/页；加载中、合法空状态与失败重试各自渲染。返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
 </ul>
 
@@ -2362,6 +2366,33 @@ function toggle(): void;
 <ul class="note">
   <li>下载中心纯本地搜索的唯一匹配入口：对 <code>name</code> / <code>songMid</code> / <code>singers</code> / <code>albumName</code> / <code>filePath</code> 拼接后做小写包含匹配；空关键词直接返回 <code>true</code>。</li>
   <li>只读取任务快照，不发请求、不访问磁盘；<code>DownloadsView</code> 先按状态过滤，再调用该函数叠加关键词过滤。</li>
+</ul>
+
+<h3 id="c4-84">4.84 src/renderer/composables/download-action.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export interface DownloadDeletePrompt {
+  songMid: string;
+  name: string;
+}
+
+export function useDownloadAction(): {
+  pendingDelete: Ref&lt;DownloadDeletePrompt | null&gt;;
+  requestDownload(song: Pick&lt;Song, 'songMid' | 'name'&gt;, quality: Quality): Promise&lt;void&gt;;
+  confirmDownloadDelete(): Promise&lt;void&gt;;
+  cancelDownloadDelete(): void;
+};
+</code></pre>
+<ul class="note">
+  <li>所有下载按钮的唯一行为入口：<code>requestDownload</code> 先读 <code>download.assets[songMid].downloadedQuality</code>，已下载时只把 <code>pendingDelete</code> 置为目标歌曲，不调用入队；未下载时调用 <code>download.start(songMid, quality)</code> 并提示“已加入下载任务”。</li>
+  <li><code>confirmDownloadDelete</code> 调用 <code>download.removeSong(songMid)</code> 并提示“已删除下载”；失败走统一错误提示。取消只清空 <code>pendingDelete</code>。</li>
+  <li><code>pendingDelete</code> 为模块级单例，<code>App.vue</code> 只渲染一个 <code>DownloadDeleteDialog</code>；歌曲表页面与 <code>PlayerBar</code> 只调用 <code>requestDownload</code>，不各自维护确认状态或删除逻辑。</li>
+</ul>
+
+<h3 id="c4-85">4.85 src/renderer/components/DownloadDeleteDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits；读取 useDownloadAction() 的共享状态。
+</code></pre>
+<ul class="note">
+  <li>用 <a href="#c4-81">ConfirmDialog</a> 危险态展示“删除下载”；标题、正文、确认按钮文案固定，正文包含当前歌曲名并询问是否删除本机下载文件。</li>
+  <li>由 <code>App.vue</code> 在应用外壳中只挂载一次，打开 / 关闭由 <code>pendingDelete</code> 驱动，不依赖具体页面是否可见；确认 / 取消分别转发到共享 composable。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
@@ -2821,15 +2852,23 @@ views/DiscoverView::onBeforeUnmount()
 </ul>
 
 <h3 id="c5-16">5.16 下载</h3>
-<pre><code>components/SongTable::emit('download', index)
-└── stores/download::start(songMid, quality)
-    └── window.lychee.download.start(songMid, quality)
-        └── ipc::handle('download.start')
-            └── download/manager::startDownload(songMid, quality)
-                ├── 判断缓存达到最高可用档 → 复制缓存文件（copyCachedAudio）
-                ├── 判断已有同曲任务 → 返回现有任务
-                ├── api/song::getStreamUrls([songMid], quality)
-                └── download/manager::writePart(url, filePath)
+<pre><code>components/SongTable::emit('download', index) / components/PlayerBar::downloadCurrent()
+└── composables/download-action::requestDownload(song, quality)
+    ├── 判断 assets[songMid].downloadedQuality 非空 → pendingDelete 置位
+    │   └── components/DownloadDeleteDialog::confirm
+    │       └── stores/download::removeSong(songMid)
+    │           └── window.lychee.download.removeSong(songMid)
+    │               └── ipc::handle('download.removeSong')
+    │                   └── download/manager::removeDownloadedSong(songMid)
+    │                       └── 删除该曲 done 任务的音频、.part、封面与记录
+    └── 未下载 → stores/download::start(songMid, quality)
+        └── window.lychee.download.start(songMid, quality)
+            └── ipc::handle('download.start')
+                └── download/manager::startDownload(songMid, quality)
+                    ├── 判断缓存达到最高可用档 → 复制缓存文件（copyCachedAudio）
+                    ├── 判断已有同曲任务 → 返回现有任务
+                    ├── api/song::getStreamUrls([songMid], quality)
+                    └── download/manager::writePart(url, filePath)
 </code></pre>
 <pre><code>views/PlaylistView::downloadAll()
 └── stores/download::startMany(songMids, quality)
@@ -2846,15 +2885,6 @@ views/DiscoverView::onBeforeUnmount()
         └── ipc::handle('download.resumeAll')
             └── download/manager::resumeAllDownloads()
                 └── 只把 paused 置为 pending
-</code></pre>
-<pre><code>views/PlaylistView::downloadAt(index)
-├── 判断 assets[songMid].downloadedQuality 非空 → ConfirmDialog
-│   └── stores/download::removeSong(songMid)
-│       └── window.lychee.download.removeSong(songMid)
-│           └── ipc::handle('download.removeSong')
-│               └── download/manager::removeDownloadedSong(songMid)
-│                   └── 删除该曲 done 任务的音频、.part、封面与记录
-└── 未下载 → stores/download::start(songMid, quality)
 </code></pre>
 <ul class="note">
   <li>单曲入口与整单入口共用任务模型与索引；统一队列按入队顺序串行下载，并发固定为 1，吞吐优先让位于稳定性与顺序。</li>

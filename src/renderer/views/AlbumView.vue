@@ -8,7 +8,7 @@ import CoverArt from '../components/CoverArt.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
 import { describeError, unwrap } from '../api'
-import { useToast } from '../composables/toast'
+import { useDownloadAction } from '../composables/download-action'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
 import { usePlayerStore } from '../stores/player'
@@ -20,7 +20,7 @@ const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
-const toast = useToast()
+const { requestDownload } = useDownloadAction()
 
 const detail = ref<AlbumDetail | null>(null)
 const loading = ref(false)
@@ -91,13 +91,7 @@ async function toggleFavorite(index: number): Promise<void> {
 
 async function downloadAt(index: number): Promise<void> {
   const song = songs.value[index]
-  if (!song) return
-  try {
-    await download.start(song.songMid, player.requestedQuality)
-    toast.show('已加入下载任务')
-  } catch (err) {
-    toast.error(describeError(err))
-  }
+  if (song) await requestDownload(song, player.requestedQuality)
 }
 
 function openPicker(index: number): void {

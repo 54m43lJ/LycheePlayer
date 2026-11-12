@@ -13,6 +13,7 @@ import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
 import { useToast } from '../composables/toast'
 import { useRevealerTouch } from '../composables/revealer-touch'
+import { useDownloadAction } from '../composables/download-action'
 import { formatDuration, songCover } from '../utils/format'
 import { downloadStateIcon, resolveDownloadState } from '../utils/download-state'
 
@@ -21,6 +22,7 @@ const ui = useUiStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const toast = useToast()
+const { requestDownload } = useDownloadAction()
 const {
   current,
   status,
@@ -356,12 +358,7 @@ function openSongPicker(): void {
 
 async function downloadCurrent(): Promise<void> {
   if (!current.value) return
-  try {
-    await download.start(current.value.songMid, quality.value)
-    toast.show('已加入下载任务')
-  } catch (err) {
-    toast.error(err instanceof Error ? err.message : String(err))
-  }
+  await requestDownload(current.value, quality.value)
 }
 
 function openVolumeMenu(immediate = false): void {

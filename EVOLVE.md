@@ -150,3 +150,35 @@
 | `CORE.html` | §5.16 下载（`#c5-16`） | 改 | 增加歌单中 `downloadAt` → `removeSong` → `removeDownloadedSong` 的调用分支。 |
 | `README.md` | §2 用户交互 · 下载 / 整单下载行 | 改 | 补纯本地搜索与已下载歌曲删除确认，并同步当前统一队列语义。 |
 | `ABOUT.html` | 用户交互 · 下载 / 整单下载行 | 改 | 与 README 同步。 |
+
+## 6. 下载按钮机制抽象与共用
+
+**需求**：播放条的下载按钮没有跟上“已下载时确认删除”的行为；把下载按钮的判定、入队、删除确认与提示抽成唯一共用机制，供播放条、所有歌曲表页面与后续入口调用，避免再次出现行为漂移。
+
+**实现思路**：
+
+- 新增 `composables/download-action.ts`：`requestDownload()` 统一判断 `downloadedQuality`，已下载时只设置模块级 `pendingDelete`，未下载时调用 `download.start()` 并提示；`confirmDownloadDelete()` 统一调用 `download.removeSong()`，取消只清空状态。
+- 新增 `components/DownloadDeleteDialog.vue`，读取共享的 `pendingDelete` 并复用 `ConfirmDialog`；`App.vue` 全局只挂载一次，删除确认不再由各页面分别持有。
+- `PlayerBar`、`PlaylistView`、`SearchView`、`ArtistView`、`AlbumView` 的下载入口全部改为调用 `requestDownload()`，移除各自的入队 / 删除判断与页面级确认框。
+- 新增 `test/download-action.test.ts`，覆盖已下载确认删除、未下载入队、取消与跨调用方共享状态。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `EVOLVE.md` | 新增“下载按钮机制抽象与共用” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `USER.html` | §5.2.3 播放条（`#u5-2-3`） | 改 | 补已下载时点击下载按钮弹出删除确认，并说明与歌曲表共用同一机制。 |
+| `USER.html` | §5.2.4 歌曲列表（`#u5-2-4`） | 改 | 将删除确认从“仅歌单详情”改为所有歌曲表与播放条共用。 |
+| `USER.html` | §5.2.8 页面结构 · 歌单详情（`#u5-2-8`） | 改 | 补该行为与其他下载入口共用。 |
+| `CORE.html` | §1 文件树（`#c1`） | 改 | 增加 `composables/download-action.ts` 与 `components/DownloadDeleteDialog.vue`。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 记录全局唯一删除下载确认框及其共享状态来源。 |
+| `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | 下载按钮改为调用 `useDownloadAction` 的 `requestDownload`。 |
+| `CORE.html` | §4.44 `SearchView.vue`（`#c4-44`） | 改 | 下载入口统一走 `requestDownload`。 |
+| `CORE.html` | §4.46 `PlaylistView.vue`（`#c4-46`） | 改 | 移除页面级删除确认，统一走 `requestDownload` 与全局确认框。 |
+| `CORE.html` | §4.73 `ArtistView.vue`（`#c4-73`） | 改 | 下载入口统一走 `requestDownload`。 |
+| `CORE.html` | §4.74 `AlbumView.vue`（`#c4-74`） | 改 | 下载入口统一走 `requestDownload`。 |
+| `CORE.html` | §4.84 `composables/download-action.ts`（`#c4-84`） | 增 | 新增共用下载行为、模块级确认状态与函数签名。 |
+| `CORE.html` | §4.85 `components/DownloadDeleteDialog.vue`（`#c4-85`） | 增 | 新增全局删除下载确认组件说明。 |
+| `CORE.html` | §5.16 下载（`#c5-16`） | 改 | 调用链改为 `SongTable` / `PlayerBar` → `requestDownload` → 入队或删除分支。 |
+| `README.md` | §2 用户交互 · 下载行 | 改 | 删除确认入口从歌单扩展到任意歌曲表与播放条。 |
+| `ABOUT.html` | 用户交互 · 下载行 | 改 | 与 README 同步。 |
