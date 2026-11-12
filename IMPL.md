@@ -3552,7 +3552,7 @@
 
 状态：已解决。
 
-### 4.52 下载页整体进度条改为不占布局的顶部 overlay
+### 4.52 下载页整体进度条改为不占布局的顶部 overlay [已解决]
 
 问题描述：补充子任务：下载页整体进度条应改为不占地方的 overlay，常驻页面顶端。
 
@@ -3574,6 +3574,19 @@
 |---|---|---|---|
 | `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 顶部整体进度条为不占布局的 overlay，常驻内容区顶端；不显示数字指示。 |
 | `CORE.html` | 下载中心对应小节 | 改 | `.downloads-progress-track` 使用 fixed 定位、`left: var(--sidebar-width)`、`pointer-events: none`。 |
+
+实际操作（2026-11-12，分支 `doc/downloads-overlay-progress`）：
+
+- `CORE.html` §4.67 `DownloadsView.vue`：补充 `.downloads-progress-track` 的 fixed overlay 定位——`position: fixed`、`top: 0`、`left: var(--sidebar-width)`、`right: 0`、`z-index: 14`、`height: 4px`、`pointer-events: none`；明确不占页面布局、不拦截点击，滚动时始终停在内容区顶端。
+- `USER.html` §5.2.8 页面表 · 下载中心行：核对已包含“不占布局的 overlay，常驻内容区顶端，不显示数字指示”，无需再改。
+
+验证：
+
+- 对照 `src/renderer/styles/main.css`：`.downloads-progress-track` 为 `position: fixed`、`top: 0`、`left: var(--sidebar-width)`、`right: 0`、`z-index: 14`、`height: 4px`，并设置 `pointer-events: none`；内部 `<span>` 使用 `var(--muted)` 填充。
+- 对照 `src/renderer/views/DownloadsView.vue`：进度条位于 `.page` 之外的页面根节点下，保留 `role="progressbar"` / `aria-valuenow`，不占据文档流高度。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.53 侧栏退出按钮下方新增切换配色
 

@@ -2054,7 +2054,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 </code></pre>
 <ul class="note">
   <li>由侧栏“下载”<code>RouterLink</code> 进入；挂载时调用 <code>download.setVisible(true)</code>，卸载时调用 <code>setVisible(false)</code>，下载任务本身继续由主进程队列执行。</li>
-  <li>顶部整体进度条为 fixed overlay，不占页面布局，使用 <code>--muted</code> 填充，不显示完成数 / 总数或失败数等数字指示；不再渲染 <code>.downloads-progress-count</code>，也不保留其 900px / 560px 响应式规则。失败数量只在任务列表与“未成功”筛选中体现。进度百分比由 <a href="#c4-80">utils/download-progress.ts</a> 的 <code>downloadOverallProgress</code> 计算。标题区复用普通 <code>.page</code> 的留白与背景。</li>
+  <li>顶部整体进度条为 fixed overlay：<code>.downloads-progress-track</code> 使用 <code>position: fixed</code>、<code>top: 0</code>、<code>left: var(--sidebar-width)</code>、<code>right: 0</code>、<code>z-index: 14</code>、<code>height: 4px</code> 与 <code>pointer-events: none</code>，不占页面布局、不拦截点击，滚动时始终停在内容区顶端；使用 <code>--muted</code> 填充，不显示完成数 / 总数或失败数等数字指示；不再渲染 <code>.downloads-progress-count</code>，也不保留其 900px / 560px 响应式规则。失败数量只在任务列表与“未成功”筛选中体现。进度百分比由 <a href="#c4-80">utils/download-progress.ts</a> 的 <code>downloadOverallProgress</code> 计算。标题区复用普通 <code>.page</code> 的留白与背景。</li>
   <li><code>page-head-actions</code> 提供“清除已完成”“清空目录”“打开文件夹”：前者只清记录，后两者分别删除目录内容与记录、打开下载目录；清空目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认并展示实际路径，播放缓存不受影响。</li>
   <li>任务面板顶部左侧为“全部 / 进行中 / 已完成 / 未成功”过滤，右侧为“全部开始”继续所有暂停任务；无暂停任务或请求进行中时按钮禁用，请求中显示 spinner。过滤只影响展示，整体进度仍按全部任务计算。任务按新到旧展示，不改变主进程队列顺序。</li>
   <li>列表复用统一下载任务行，支持单任务暂停 / 继续 / 删除；删除任务使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认；空状态区分“没有任务”与“没有符合条件的任务”。</li>
