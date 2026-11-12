@@ -3628,7 +3628,7 @@
 
 状态：已解决。
 
-### 4.54 播放条收藏改为特殊 revealer，并为 revealer 增加触屏手势
+### 4.54 播放条收藏改为特殊 revealer，并为 revealer 增加触屏手势 [已解决]
 
 问题描述：ISSUES 要求把播放条收藏按钮做成特殊 revealer：按钮本身加入 / 取消我喜欢，弹出按钮为“加入歌单”，没有模式切换。同时尝试为所有 revealer 增加触屏交互：从按钮开始上下滑动时保持弹层打开并切换选项，松开确认；鼠标移出范围取消。
 
@@ -3661,6 +3661,22 @@
 | `USER.html` | §5.2.3 播放条 | 改 | 已更新：收藏为特殊 revealer，弹层仅“加入歌单”。 |
 | `CORE.html` | §4.40 `PlayerBar.vue` / §4.78 `revealer-touch.ts` | 改 | 已更新：收藏 revealer、PlaylistPicker 接入与触屏手势实现。 |
 | `EVOLVE.md` | #5 / #11 | 改 | 补收藏特殊 revealer 与 revealer 触屏手势约束；音量条仍为特殊个例。 |
+
+实际操作（2026-11-12，分支 `doc/favorite-revealer-touch`）：
+
+- `CORE.html` §4.49 `styles/main.css`：补充收藏 revealer 的 `.like-wrap` / `.like-menu` / `.like-option` 样式与向上展开动画；记录 `.mode-option.touch-active` / `.quality-menu button.touch-active` / `.like-option.touch-active` 的高亮规则，以及模式 / 音质 / 收藏 / 音量按钮统一 `touch-action: none`。
+- `CORE.html` §4.40 `PlayerBar.vue` / §4.78 `revealer-touch.ts`：核对收藏特殊 revealer、三处 `useRevealerTouch` 接入与触屏手势签名，内容与实现一致，无需再改。
+- `USER.html` §2 CONVENTIONS · Revealer / §5.2.3 播放条：核对触屏滑动、轻点保留原行为、收藏弹层仅“加入歌单”等说明均已写入，无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/PlayerBar.vue`：收藏按钮点击调用 `toggleFavorite()`，`likeWrap` 120ms / 200ms 悬停开合，弹层只有“加入歌单”项并通过 `Teleport` 打开 `PlaylistPicker`；播放模式、音质、收藏均调用 `useRevealerTouch`。
+- 对照 `src/renderer/composables/revealer-touch.ts`：仅处理 `pointerType === 'touch'`，纵向移动超过 8px 才打开并捕获指针，按 `data-revealer-option` 中点匹配高亮，松开确认、取消关闭，捕获阶段抑制后续 click。
+- 对照 `src/renderer/styles/main.css`：存在 `.like-wrap` / `.like-menu` / `.like-option`、三项 `.touch-active` 高亮规则，以及 `.mode-button` / `.quality-chip` / `.like-button` / `.volume-button` 的 `touch-action: none`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.55 音量 revealer 改按拖动距离 delta 调节
 
