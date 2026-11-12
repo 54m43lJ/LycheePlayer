@@ -34,20 +34,23 @@ interface RadioData {
   songlist?: { tracks?: unknown[] } | unknown[]
 }
 
-const cache = new Map<RecommendSection['id'], { section: RecommendSection; at: number }>()
+const cache = new Map<RecommendSection['id'], RecommendSection>()
 
 const TITLES = RECOMMEND_SECTION_TITLES
 
 function emptySection(id: RecommendSection['id']): RecommendSection {
+  const now = Date.now()
   return {
     id,
     title: TITLES[id],
     songs: [],
     playlists: [],
-    refreshedAtMs: Date.now()
+    refreshedAtMs: now,
+    expiresAtMs: id === 'daily' ? nextShanghaiMidnight(now) : now + RECOMMEND_CACHE_TTL_MS
   }
 }
 
+/** 上海自然日键；每日推荐按该键判断跨日，而不是按抓取后 24 小时。 */
 function dayKey(ms: number): string {
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Asia/Shanghai',
@@ -55,6 +58,11 @@ function dayKey(ms: number): string {
     month: '2-digit',
     day: '2-digit'
   }).format(new Date(ms))
+}
+
+/** 当前上海自然日的下一个 0 点（Unix 毫秒）。 */
+function nextShanghaiMidnight(ms: number): number {
+  return Date.parse(`${dayKey(ms)}T00:00:00+08:00`) + 24 * 60 * 60_000
 }
 
 async function loadDaily(signal?: AbortSignal): Promise<RecommendSection> {
@@ -84,10 +92,14 @@ async function loadDaily(signal?: AbortSignal): Promise<RecommendSection> {
   const section = emptySection('daily')
   if (!card?.id) return section
   const page = await fetchPlaylistPage(card.id, 0, signal)
+  const finishedAt = Date.now()
   section.title = card.title || TITLES.daily
   section.songs = page.songs.slice(0, 30)
   section.playlists = [page.meta]
-  section.refreshedAtMs = Date.now()
+  section.refreshedAtMs = finishedAt
+  // 读歌单期间若跨过 0 点，立即标记过期，避免把昨天的日推缓存到今天。
+  section.expiresAtMs =
+    dayKey(finishedAt) === today ? nextShanghaiMidnight(finishedAt) : finishedAt
   return section
 }
 
@@ -113,7 +125,13 @@ async function loadRadar(signal?: AbortSignal): Promise<RecommendSection> {
     seen.add(song.songMid)
     return true
   })
-  return { ...emptySection('radar'), songs: deduped, refreshedAtMs: Date.now() }
+  const now = Date.now()
+  return {
+    ...emptySection('radar'),
+    songs: deduped,
+    refreshedAtMs: now,
+    expiresAtMs: now + RECOMMEND_CACHE_TTL_MS
+  }
 }
 
 async function loadGuess(signal?: AbortSignal): Promise<RecommendSection> {
@@ -146,7 +164,13 @@ async function loadGuess(signal?: AbortSignal): Promise<RecommendSection> {
       seen.add(song.songMid)
       return true
     })
-  return { ...emptySection('guess'), songs, refreshedAtMs: Date.now() }
+  const now = Date.now()
+  return {
+    ...emptySection('guess'),
+    songs,
+    refreshedAtMs: now,
+    expiresAtMs: now + RECOMMEND_CACHE_TTL_MS
+  }
 }
 
 async function loadSection(
@@ -175,20 +199,22 @@ async function buildFeed(
   const sections: RecommendSection[] = []
   for (const id of ids) {
     const hit = cache.get(id)
-    if (!force && hit && Date.now() - hit.at <= RECOMMEND_CACHE_TTL_MS) {
-      sections.push(hit.section)
+    // 每日推荐按上海自然日过期，force 不能绕过仍在有效期内的当天日推。
+    const forceThisSection = force && id !== 'daily'
+    if (!forceThisSection && hit && Date.now() < hit.expiresAtMs) {
+      sections.push(hit)
       continue
     }
     try {
       const section = await loadSection(id, signal)
-      cache.set(id, { section, at: Date.now() })
+      cache.set(id, section)
       sections.push(section)
     } catch (err) {
       // 页面取消后不再吞掉中止错误，避免继续填充占位分区。
       if (signal?.aborted) throw err
       // 上游只支持全局刷新时退化为全量；这里保留其他分区的可缓存结果。
       if (err instanceof UpstreamError && err.code === 'AUTH_EXPIRED') throw err
-      sections.push(hit?.section ?? emptySection(id))
+      sections.push(hit ?? emptySection(id))
     }
   }
 

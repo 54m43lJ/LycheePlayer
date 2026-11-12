@@ -15,7 +15,8 @@ function placeholders(): RecommendSection[] {
     title: RECOMMEND_SECTION_TITLES[id],
     songs: [],
     playlists: [],
-    refreshedAtMs: 0
+    refreshedAtMs: 0,
+    expiresAtMs: 0
   }))
 }
 
@@ -87,15 +88,35 @@ export const useRecommendStore = defineStore('recommend', () => {
     const token = ++session
     for (const id of RECOMMEND_SECTION_IDS) {
       if (token !== session) return
-      await fetchSection(id, force, token)
+      // 每日推荐按自然日自动过期，手动刷新不能绕过当天缓存。
+      await fetchSection(id, force && id !== 'daily', token)
     }
   }
 
-  /** 只刷新一个分区；不再重载整页。 */
+  /** 只刷新一个分区；每日推荐只允许在占位 / 过期时重新获取，不做强制刷新。 */
   async function refreshSection(id: SectionId): Promise<void> {
     if (loading.value) return
+    const daily = feed.value.sections.find((item) => item.id === 'daily')
+    if (id === 'daily' && daily && daily.refreshedAtMs > 0 && daily.expiresAtMs > Date.now()) {
+      return
+    }
     const token = ++session
-    await fetchSection(id, true, token)
+    await fetchSection(id, id !== 'daily', token)
+  }
+
+  /** 每日推荐是否已跨过上海自然日 0 点。 */
+  function isDailyExpired(now = Date.now()): boolean {
+    const daily = feed.value.sections.find((item) => item.id === 'daily')
+    return Boolean(
+      daily && daily.refreshedAtMs > 0 && daily.expiresAtMs > 0 && now >= daily.expiresAtMs
+    )
+  }
+
+  /** 页面跨日打开时由定时器调用；过期后用普通 get 拉取当天日推。 */
+  async function refreshDailyIfExpired(): Promise<void> {
+    if (loading.value || !isDailyExpired()) return
+    const token = ++session
+    await fetchSection('daily', false, token)
   }
 
   /** 离开发现页：取消已排队请求，让进行中的请求在下一批前停止。 */
@@ -123,6 +144,8 @@ export const useRecommendStore = defineStore('recommend', () => {
     error,
     load,
     refreshSection,
+    isDailyExpired,
+    refreshDailyIfExpired,
     cancel,
     reset
   }

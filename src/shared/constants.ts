@@ -91,7 +91,7 @@ export const RECENT_PLAYLIST_LIMIT = 5
 /** 最近歌单校验节流。推荐值 5000 ms。 */
 export const RECENT_PLAYLIST_VALIDATE_MS = 5000
 
-/** 推荐分区缓存时长。推荐值 24 小时。 */
+/** 雷达 / 猜你喜欢分区缓存时长；每日推荐按上海自然日 0 点过期，不使用该 TTL。推荐值 24 小时。 */
 export const RECOMMEND_CACHE_TTL_MS = 24 * 60 * 60_000
 /** 发现页分区顺序；渲染与主进程共用。 */
 export const RECOMMEND_SECTION_IDS = ['daily', 'radar', 'guess'] as const

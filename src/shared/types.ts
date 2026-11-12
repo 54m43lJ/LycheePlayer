@@ -176,6 +176,8 @@ export interface RecommendSection {
   songs: Song[]
   playlists: PlaylistMeta[]
   refreshedAtMs: number
+  /** 内容失效时间（Unix 毫秒）；每日推荐为下一个上海自然日 0 点，其余分区为抓取后 24 小时。 */
+  expiresAtMs: number
 }
 
 export interface RecommendFeed {

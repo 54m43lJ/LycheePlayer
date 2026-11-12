@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RecommendSection, Song } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
@@ -20,6 +20,9 @@ const toast = useToast()
 
 const sections = computed(() => recommend.feed.sections)
 const nickname = computed(() => auth.profile?.nickname ?? '')
+/** 跨日检查间隔：每分钟确认一次每日推荐是否已过期。 */
+const DAILY_EXPIRY_CHECK_MS = 60_000
+let dailyCheckTimer: ReturnType<typeof setInterval> | null = null
 
 function sectionTitle(section: RecommendSection): string {
   return section.id === 'daily'
@@ -66,7 +69,19 @@ watch(
   { immediate: true }
 )
 
-onBeforeUnmount(() => recommend.cancel())
+onMounted(() => {
+  dailyCheckTimer = setInterval(() => {
+    void recommend.refreshDailyIfExpired()
+  }, DAILY_EXPIRY_CHECK_MS)
+})
+
+onBeforeUnmount(() => {
+  if (dailyCheckTimer !== null) {
+    clearInterval(dailyCheckTimer)
+    dailyCheckTimer = null
+  }
+  recommend.cancel()
+})
 </script>
 
 <template>
@@ -76,7 +91,12 @@ onBeforeUnmount(() => recommend.cancel())
         <div class="eyebrow">Discover</div>
         <h1 class="page-title">发现</h1>
       </div>
-      <button class="btn small" :disabled="recommend.loading" @click="load(true)">
+      <button
+        class="btn small"
+        title="刷新专属雷达与猜你喜欢"
+        :disabled="recommend.loading"
+        @click="load(true)"
+      >
         <AppIcon name="refresh" :size="14" />
         换一批
       </button>
@@ -95,6 +115,7 @@ onBeforeUnmount(() => recommend.cancel())
           <span class="discover-actions">
             <span v-if="!isPlaceholder(section)" class="count">{{ section.songs.length }} 首</span>
             <button
+              v-if="section.id !== 'daily'"
               class="icon-btn"
               :title="`刷新${sectionTitle(section)}`"
               :disabled="recommend.loading || recommend.loadingIds[section.id]"

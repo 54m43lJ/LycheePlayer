@@ -480,6 +480,8 @@ export interface RecommendSection {
   songs: Song[];
   playlists: PlaylistMeta[];
   refreshedAtMs: number;
+  /** 每日推荐为下一个上海自然日 0 点；其余分区为抓取后 24 小时。 */
+  expiresAtMs: number;
 }
 
 export interface RecommendFeed {
@@ -666,6 +668,7 @@ export interface FlagsFile {
   <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。<code>id</code> 是歌单标识（tid / disstid），<code>dirId</code> 是当前账号目录 ID（写入接口使用），两者不能互换；公开歌单可能没有 <code>dirId</code>。</li>
   <li><code>Lyric.format</code> 为 <code>lrc</code> / <code>qrc</code>；逐字行类型见 <a href="#c4-33">§4.33</a>。</li>
   <li><code>ProbeOptions</code> / <code>SongAvailability</code> 是 <code>song.probe</code> 的跨 IPC 模型；探测结果只更新歌单歌曲元数据。</li>
+  <li><code>RecommendSection.expiresAtMs</code> 表示内容失效时间：每日推荐为下一个上海自然日 0 点，其余分区为抓取后 24 小时；占位分区为 0。</li>
 </ul>
 
 <h3 id="c4-2">4.2 src/shared/ipc.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1712,7 +1715,7 @@ export declare const DOWNLOAD_CONCURRENCY: number;          // 1
 export declare const DOWNLOAD_QUEUE_MAX: number;            // 2000
 export declare const DOWNLOAD_INDEX_PREFIX: string;         // '.lychee-downloads-'
 export declare const CACHE_PROGRESS_THROTTLE_MS: number;    // 300 ms
-export declare const RECOMMEND_CACHE_TTL_MS: number;        // 24 小时
+export declare const RECOMMEND_CACHE_TTL_MS: number;        // 雷达 / 猜你喜欢 24 小时；日推按上海自然日
 export declare const RECOMMEND_SECTION_LIMIT: number;       // 3 行；每区 30 首
 export declare const PLAYER_STATE_THROTTLE_MS: number;      // 900 ms
 export declare const PLAY_HISTORY_MAX: number;              // 100
@@ -1755,7 +1758,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li><code>COMMENT_PAGE_SIZE = 25</code> 为上游实测单页上限（26 起返回业务码 <code>10000</code>）；<code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 使“跳转到底部”最多补拉约 1000 条，并保持串行请求与取消机制；<code>COMMENT_CONTENT_MAX = 300</code> 同时约束输入框 <code>maxlength</code>、渲染层提交校验与主进程 IPC 参数校验。</li>
   <li><code>CATALOG_PAGE_SIZE = 50</code> 用于歌手 / 专辑歌曲分页；<code>ARTIST_ALBUM_PAGE_SIZE = 80</code> 为上游专辑列表单页上限，<code>ARTIST_ALBUM_PAGE_MAX = 20</code> 限制歌手页一次展开专辑最多补拉 1600 张。</li>
   <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>UPSTREAM_BLOCK_MS</code> 为收到 104009 后的全局截断时长（推荐 60_000 ms），窗口内所有上游请求直接失败、下载泵暂停出队；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
-  <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制推荐分区缓存；<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页每区展示的歌曲上限（30 首，界面固定 3 行滚动）。</li>
+  <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制雷达 / 猜你喜欢分区缓存（24 小时）；每日推荐不使用该 TTL，按上海自然日 0 点过期。<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页每区展示的歌曲上限（30 首）；有歌单入口的分区不渲染歌曲条目，其余分区固定 3 行滚动。</li>
   <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，统一队列按入队顺序串行；<code>DOWNLOAD_QUEUE_MAX</code> 限制单次“下载全部”的入队数量；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
   <li><code>RECENT_PLAYLIST_LIMIT</code> 限制最近歌单条数；<code>RECENT_PLAYLIST_CHECK_THROTTLE_MS</code> 与单飞互斥共同限制校验频率；<code>RECENT_PLAYLIST_STORAGE_PREFIX</code> 与账号 musicid 拼接为 localStorage key；<code>SIDEBAR_DRAG_THRESHOLD_PX</code> 为抽屉开关的位移阈值。</li>
   <li>已删除 <code>PLAYLIST_CACHE_TTL_MS</code>、<code>PLAYLIST_PREFETCH_CONCURRENCY</code> 与只服务旧逐页补全的 <code>PLAYLIST_PAGE_RETRY_*</code>：缓存改为整份快照，分页串行加载且不做预取。</li>
@@ -1807,7 +1810,8 @@ export function clearRecommendCache(): void;
   <li>每日推荐：<code>music.recommend.RecommendFeed / get_recommend_feed</code>，参数 <code>{ direction: 0, page: 1, v_cache: [], v_uniq: [], s_num: 0 }</code>；在返回的 <code>v_shelf[].v_niche[].v_card[]</code> 中取唯一 <code>subtype === 510</code> 且日期为上海当天的卡片，再用 <code>music.srfDissInfo.DissInfo / CgiGetDiss</code> 读取完整歌单，固定 30 首。</li>
   <li>专属雷达：<code>music.recommend.TrackRelationServer / GetRadarSong</code>，参数 <code>{ Page, NeedNum, EntranceSongs: [], extra_info: {} }</code>；返回 <code>VecSongs[].Track</code>，按 <code>Page</code> 翻页并以 <code>HasMore</code> 判断，最多 4 页凑够 30 首。</li>
   <li>猜你喜欢：<code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>），参数 <code>{ id: 99, firstplay: 1, page, pageNo, page_num, offset, num }</code>；返回 <code>data.tracks[]</code> 扁平歌曲，按 mid 去重后最多取 20 首。</li>
-  <li>三个分区各自缓存 24 小时（<code>RECOMMEND_CACHE_TTL_MS</code>），缓存是进程内 <code>Map</code>，不落盘；<code>force</code> 绕过缓存。传 <code>sectionId</code> 时只加载并返回该分区，渲染层按分区 id 替换；省略时串行加载全部分区。</li>
+  <li>缓存是进程内 <code>Map</code>，不落盘；按 <code>RecommendSection.expiresAtMs</code> 判断失效。每日推荐使用上海自然日：下一个 0 点过期，<code>force</code> 不能绕过仍在有效期内的当天日推；雷达 / 猜你喜欢使用 <code>RECOMMEND_CACHE_TTL_MS = 24 小时</code>，<code>force</code> 可绕过。传 <code>sectionId</code> 时只加载并返回该分区，渲染层按分区 id 替换；省略时串行加载全部分区。</li>
+  <li>每日推荐按自然日而非滚动 24 小时：上游卡片 <code>time</code> 与日历封面（<code>calendar/MMDD_300.jpg</code>）都以日期为单位。读歌单期间若跨过 0 点，立即把 <code>expiresAtMs</code> 标为当前时间，避免把昨天的日推缓存到今天。</li>
   <li>单区失败时，有旧缓存则保留旧 section，没有旧缓存则返回合法空分区；空分区不抛错，由 UI 显示空状态。未登录直接返回空分区，由渲染层显示登录引导。<code>AUTH_EXPIRED</code> 继续抛出；调用方取消后抛出中止错误，不继续填充后续分区，也不吞掉中止错误。</li>
   <li><code>signal</code> 透传到每个 <code>musicu</code> 与 <code>CgiGetDiss</code> 请求。</li>
 </ul>
@@ -2066,6 +2070,8 @@ interface RecommendStore {
   readonly errors: Record&lt;RecommendSection['id'], string&gt;;
   load(force?: boolean): Promise&lt;void&gt;;
   refreshSection(sectionId: RecommendSection['id']): Promise&lt;void&gt;;
+  isDailyExpired(now?: number): boolean;
+  refreshDailyIfExpired(): Promise&lt;void&gt;;
   cancel(): void;
   reset(): void;
 }
@@ -2073,7 +2079,8 @@ interface RecommendStore {
 <ul class="note">
   <li><code>feed.sections</code> 始终按 <code>daily → radar → guess</code> 提供三块；未加载的分区用 <code>refreshedAtMs = 0</code> 的占位表示，页面先渲染骨架。</li>
   <li><code>load</code> 每次只请求一个分区，完成后立即替换该区，再继续下一区；因此页面不必等待整份 feed。单区失败只写 <code>errors[id]</code>，保留该区占位或已有内容。</li>
-  <li><code>refreshSection</code> 只请求指定分区，成功按分区 id 替换该区，不覆盖其他分区；失败只写 <code>errors[id]</code> 并保留该区原有内容。<code>cancel</code> 递增会话序号并调用主进程取消当前 token，已返回的结果不再写入 store。</li>
+  <li><code>refreshSection</code> 只请求指定分区，成功按分区 id 替换该区，不覆盖其他分区；失败只写 <code>errors[id]</code> 并保留该区原有内容。每日推荐只有在占位或已过期时才允许重新获取，未过期的当天日推不会被手动刷新。<code>cancel</code> 递增会话序号并调用主进程取消当前 token，已返回的结果不再写入 store。</li>
+  <li><code>load(force)</code> 的 <code>force</code> 只作用于雷达 / 猜你喜欢；每日推荐始终走普通 <code>get</code>，由主进程按上海自然日判断是否过期。<code>isDailyExpired</code> 比较 <code>Date.now()</code> 与日推的 <code>expiresAtMs</code>；<code>refreshDailyIfExpired</code> 在页面跨日打开时由定时器调用，重新获取成功后按分区 id 替换。</li>
 </ul>
 
 <h3 id="c4-63">4.63 src/renderer/stores/playlist-edit.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -2151,7 +2158,8 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 <pre><code>// 无 props / emits；使用 recommend store。
 </code></pre>
 <ul class="note">
-  <li>三个分区各自渲染标题与刷新入口。存在 <code>playlists</code> 的分区只渲染歌单卡片（伪歌单入口），不再渲染该区歌曲列表；每日推荐因此只保留“昵称的今日私享”卡片。没有歌单入口的分区（专属雷达 / 猜你喜欢）继续渲染固定宽度歌曲条目，每区固定高度显示 3 行，超出横向滚动。每日推荐的分区标题与歌单卡片通过 <code>dailyPlaylistName</code> 补当前账号昵称前缀，其他分区标题保持上游 / 常量值。</li>
+  <li>三个分区各自渲染标题；每日推荐不渲染单区刷新按钮，专属雷达与猜你喜欢保留刷新入口。存在 <code>playlists</code> 的分区只渲染歌单卡片（伪歌单入口），不再渲染该区歌曲列表；每日推荐因此只保留“昵称的今日私享”卡片。没有歌单入口的分区（专属雷达 / 猜你喜欢）继续渲染固定宽度歌曲条目，每区固定高度显示 3 行，超出横向滚动。每日推荐的分区标题与歌单卡片通过 <code>dailyPlaylistName</code> 补当前账号昵称前缀，其他分区标题保持上游 / 常量值。</li>
+  <li>页面挂载后启动 60 秒定时器调用 <code>recommend.refreshDailyIfExpired()</code>，跨过上海 0 点后自动重取日推；卸载时清除定时器。顶部“换一批”调用 <code>load(true)</code>，只强制刷新雷达与猜你喜欢。</li>
   <li>页面先渲染三块骨架：每日推荐只渲染歌单卡片占位，专属雷达与猜你喜欢渲染 30 条歌曲条目占位；再按 <code>daily → radar → guess</code> 逐块异步填充，未完成的分区不阻塞其他内容。</li>
   <li>条目为封面图标 + 上方歌名、下方歌手，文字溢出走跑马灯；点击歌曲单曲播放，歌手 / 专辑按 <code>mid</code> 链接。</li>
   <li>未登录显示登录引导；分区空结果显示合法空状态；失败只显示该区错误与重试，不影响其他分区。分区刷新只请求该区。</li>
@@ -2770,25 +2778,33 @@ app::requestSingleInstanceLock()
 <h3 id="c5-13">5.13 推荐加载</h3>
 <pre><code>views/DiscoverView::load(force)
 └── stores/recommend::load(force)
-    ├── stores/recommend::fetchSection('daily', force, token)
-    │   └── window.lychee.recommend.get('daily', token) / refresh('daily', token)
-    │       └── ipc::runRecommendFetch(force, 'daily', token)
-    │           └── api/recommend::fetchRecommendFeed(force, 'daily', signal)
-    │               └── api/client::musicu('music.recommend.RecommendFeed', 'get_recommend_feed', ...)
+    ├── stores/recommend::fetchSection('daily', false, token)
+    │   └── window.lychee.recommend.get('daily', token)
+    │       └── ipc::runRecommendFetch(false, 'daily', token)
+    │           └── api/recommend::fetchRecommendFeed(false, 'daily', signal)
+    │               ├── 当天缓存未过期 → 直接返回缓存
+    │               └── 已跨日 → api/client::musicu('music.recommend.RecommendFeed', 'get_recommend_feed', ...)
     │                   └── api/client::musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', ...)
     ├── stores/recommend::fetchSection('radar', force, token)
     │   └── ... api/client::musicu('music.recommend.TrackRelationServer', 'GetRadarSong', ...)
     └── stores/recommend::fetchSection('guess', force, token)
         └── ... api/client::musicu('mb_track_radio_svr', 'get_radio_track', ...)
 
+views/DiscoverView::dailyCheckTimer(60s)
+└── stores/recommend::refreshDailyIfExpired()
+    ├── stores/recommend::isDailyExpired()
+    └── stores/recommend::fetchSection('daily', false, token)
+        └── window.lychee.recommend.get('daily', token)
+
 views/DiscoverView::onBeforeUnmount()
+├── clearInterval(dailyCheckTimer)
 └── stores/recommend::cancel()
     └── window.lychee.recommend.cancel(token)
         └── ipc::runRecommendFetch → AbortController.abort()
 </code></pre>
 <ul class="note">
-  <li>三个分区按固定顺序串行请求，每完成一个就替换对应 store 分区，页面立即从骨架切换到内容。</li>
-  <li>每区缓存 24 小时；单区刷新只请求该区。每日推荐由 <code>subtype:510</code> 卡片解析出动态歌单后读取 30 首。</li>
+  <li>三个分区按固定顺序串行请求，每完成一个就替换对应 store 分区，页面立即从骨架切换到内容。每日推荐没有手动刷新路径，<code>force</code> 只作用于雷达 / 猜你喜欢。</li>
+  <li>每日推荐按上海自然日 0 点失效，而不是抓取后 24 小时；页面跨日打开时由 60 秒定时器触发重取。雷达 / 猜你喜欢缓存 24 小时，单区刷新只请求该区。每日推荐由 <code>subtype:510</code> 卡片解析出动态歌单后读取 30 首。</li>
   <li>未登录直接返回空分区并显示登录引导；请求失败只标记该区并保留可重试状态。</li>
   <li>离开页面取消进行中的请求；下载任务不在此调用链内，不受页面生命周期影响，见 <a href="#c4-60">§4.60</a>。</li>
 </ul>

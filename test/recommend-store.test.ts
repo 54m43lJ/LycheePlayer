@@ -27,7 +27,8 @@ function section(id: RecommendSection['id'], count = 1): RecommendSection {
     title: id,
     songs: Array.from({ length: count }, (_, index) => song(`${id}-${index}`)),
     playlists: [],
-    refreshedAtMs: Date.now()
+    refreshedAtMs: Date.now(),
+    expiresAtMs: Date.now() + 24 * 60 * 60_000
   }
 }
 
@@ -129,6 +130,71 @@ describe('recommend store progressive loading', () => {
     expect(refreshMock).toHaveBeenCalledTimes(1)
     expect(refreshMock.mock.calls[0][0]).toBe('radar')
     expect(store.feed.sections.find((item) => item.id === 'radar')?.songs).toHaveLength(3)
+    expect(getMock).not.toHaveBeenCalled()
+  })
+})
+
+describe('recommend store daily expiry', () => {
+  function respondById(id: string): IpcResult<RecommendFeed> {
+    return ok(feed(id as RecommendSection['id'], 1))
+  }
+
+  it('does not force daily when loading all sections with force', async () => {
+    getMock.mockImplementation((id: string) => Promise.resolve(respondById(id)))
+    refreshMock.mockImplementation((id: string) => Promise.resolve(respondById(id)))
+    const { useRecommendStore } = await import('../src/renderer/stores/recommend')
+    const store = useRecommendStore()
+
+    await store.load(true)
+
+    expect(getMock).toHaveBeenCalledWith('daily', expect.any(Number))
+    expect(refreshMock.mock.calls.map(([id]) => id)).not.toContain('daily')
+    expect(refreshMock.mock.calls.map(([id]) => id)).toEqual(['radar', 'guess'])
+  })
+
+  it('does not manually refresh a valid daily section', async () => {
+    getMock.mockImplementation((id: string) => Promise.resolve(respondById(id)))
+    const { useRecommendStore } = await import('../src/renderer/stores/recommend')
+    const store = useRecommendStore()
+    await store.load()
+    getMock.mockClear()
+    refreshMock.mockClear()
+
+    await store.refreshSection('daily')
+
+    expect(getMock).not.toHaveBeenCalled()
+    expect(refreshMock).not.toHaveBeenCalled()
+  })
+
+  it('detects an expired daily section and reloads it through get', async () => {
+    getMock.mockImplementation((id: string) => {
+      const result = respondById(id)
+      if (id === 'daily' && result.ok) {
+        result.data.sections[0].expiresAtMs = Date.now() - 1_000
+      }
+      return Promise.resolve(result)
+    })
+    const { useRecommendStore } = await import('../src/renderer/stores/recommend')
+    const store = useRecommendStore()
+    await store.load()
+    expect(store.isDailyExpired()).toBe(true)
+    getMock.mockClear()
+
+    await store.refreshDailyIfExpired()
+
+    expect(getMock).toHaveBeenCalledWith('daily', expect.any(Number))
+  })
+
+  it('keeps a daily section that has not expired', async () => {
+    getMock.mockImplementation((id: string) => Promise.resolve(respondById(id)))
+    const { useRecommendStore } = await import('../src/renderer/stores/recommend')
+    const store = useRecommendStore()
+    await store.load()
+    getMock.mockClear()
+
+    await store.refreshDailyIfExpired()
+
+    expect(store.isDailyExpired()).toBe(false)
     expect(getMock).not.toHaveBeenCalled()
   })
 })
