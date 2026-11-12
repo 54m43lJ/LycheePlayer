@@ -9,6 +9,17 @@ const cache = new Map<string, LyricLine[]>()
 const lines = ref<LyricLine[]>([])
 const loading = ref(false)
 const error = ref('')
+const TRANSLATION_STORAGE_KEY = 'lychee.lyrics.translation'
+
+function readTranslationVisible(): boolean {
+  try {
+    return localStorage.getItem(TRANSLATION_STORAGE_KEY) === 'on'
+  } catch {
+    return false
+  }
+}
+
+const translationVisible = ref(readTranslationVisible())
 let token = 0
 
 function parse(lyric: Lyric): LyricLine[] {
@@ -58,12 +69,25 @@ export function useLyrics() {
   )
 
   const activeIndex = computed(() => activeLyricIndex(lines.value, player.positionMs))
+  const hasTranslation = computed(() => lines.value.some((line) => Boolean(line.trans)))
+
+  function toggleTranslation(): void {
+    translationVisible.value = !translationVisible.value
+    try {
+      localStorage.setItem(TRANSLATION_STORAGE_KEY, translationVisible.value ? 'on' : 'off')
+    } catch {
+      // localStorage 不可用时只保留当前会话的选择。
+    }
+  }
 
   return {
     lines,
     loading,
     error,
     activeIndex,
+    hasTranslation,
+    translationVisible,
+    toggleTranslation,
     reload: () => (player.current ? load(player.current.songMid) : null)
   }
 }

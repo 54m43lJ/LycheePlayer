@@ -8,7 +8,8 @@ import type { LyricWord } from '../utils/lrc'
 
 const player = usePlayerStore()
 const { current } = storeToRefs(player)
-const { lines, loading, error, activeIndex } = useLyrics()
+const { lines, loading, error, activeIndex, hasTranslation, translationVisible, toggleTranslation } =
+  useLyrics()
 const listRef = ref<HTMLElement | null>(null)
 const dragging = ref(false)
 const DRAG_THRESHOLD = 6
@@ -28,6 +29,11 @@ async function centerActive(): Promise<void> {
   await nextTick()
   const active = listRef.value?.querySelector<HTMLElement>('.lyric-line.active')
   active?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
+
+function onToggleTranslation(): void {
+  toggleTranslation()
+  void centerActive()
 }
 
 watch(activeIndex, (index) => {
@@ -137,9 +143,20 @@ onBeforeUnmount(() => {
             >
           </template>
           <template v-else>{{ line.text || '♪' }}</template>
-          <span v-if="line.trans" class="lyric-trans">{{ line.trans }}</span>
+          <span v-if="line.trans && translationVisible" class="lyric-trans">{{ line.trans }}</span>
         </button>
       </div>
+      <button
+        v-if="hasTranslation"
+        class="lyrics-trans-toggle"
+        :class="{ on: translationVisible }"
+        :aria-pressed="translationVisible"
+        :title="translationVisible ? '隐藏译文' : '显示译文'"
+        @click="onToggleTranslation()"
+      >
+        <span>译文</span>
+        <span class="lyrics-trans-switch" aria-hidden="true" />
+      </button>
     </div>
   </section>
 </template>
