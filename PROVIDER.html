@@ -153,6 +153,10 @@
     <td>未登录时匿名发送；登录后携带 Cookie 以读取 <code>IsPraised</code>。单页条数不超过 25，应用固定 25。条数与上游参数见 <a href="#p4-1">§4.1</a>，内部签名见 <a href="CORE.html#c4-15">CORE §4.15</a>。</td>
   </tr>
   <tr>
+    <td>评论发表</td>
+    <td>需要登录；正文去首尾空白后为 1–300 字；<code>AddComment</code> 的 <code>SubCode</code> 为 0 才成功。<code>VerifyUrl</code> 非空表示上游要求验证码，应用只提示到官方客户端完成验证，不自建验证码流程。参数与响应见 <a href="#p4-1">§4.1</a> / <a href="#p4-3">§4.3</a>。</td>
+  </tr>
+  <tr>
     <td>VIP 状态</td>
     <td>仅用于不可播文案判断；未登录或接口失败按非 VIP 处理，缓存见 <a href="CORE.html#c4-13">CORE §4.13</a>。</td>
   </tr>
@@ -273,6 +277,7 @@
   <tr><td>MV 详情</td><td><code>MvService.MvInfoProServer / GetMvInfoList</code></td><td>按 <code>vidlist</code> 获取封面、简介、时长、歌手与播放数。</td></tr>
   <tr><td>MV 取流</td><td><code>gosrf.Stream.MvUrlProxy / GetMvUrls</code></td><td>按 <code>vids</code> 返回各清晰度的 <code>freeflow_url</code>。</td></tr>
   <tr><td>评论点赞</td><td><code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code></td><td><code>type</code> 3 点赞、4 取消；需要登录。</td></tr>
+  <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td><code>Content</code> · <code>BizType</code>（1） · <code>BizId</code> · <code>BizSubType</code>（2）；需要登录，正文字符串上限 300。</td></tr>
   <tr><td>会话续期</td><td><code>music.login.LoginServer / Login</code></td><td>用 <code>refresh_token</code> 换新 <code>musickey</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
   <tr><td>歌词</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回 LRC / QRC 与翻译。</td></tr>
@@ -352,6 +357,10 @@
   <tr>
     <td>评论点赞</td>
     <td><code>comment_id</code> · <code>type</code>（3 点赞 / 4 取消） · <code>uin</code></td>
+  </tr>
+  <tr>
+    <td>评论发表</td>
+    <td><code>Content</code>（≤300 字） · <code>BizType</code>（1） · <code>BizId</code>（数字歌曲 ID） · <code>BizSubType</code>（2）</td>
   </tr>
   <tr>
     <td>歌手详情</td>
@@ -475,7 +484,8 @@ interface QqLoginRequest {
   <tr><td><code>104004</code></td><td><code>UPSTREAM_NETWORK</code></td><td>vkey 获取失败；不当作下架，提示稍后重试。</td></tr>
   <tr><td><code>104013</code></td><td><code>NO_PERMISSION</code></td><td>播放设备受限；提示当前设备无法播放。</td></tr>
   <tr><td><code>104009</code></td><td><code>UPSTREAM_NETWORK</code></td><td><code>invalidq</code>：上游拒绝请求，常见于 IP / VPN / 代理出口或临时风控；两个 vkey 入口都拒绝后进入 60 秒全局截断，窗口内不再请求上游；提示检查网络 / 代理或稍后重试，不重试轰炸。</td></tr>
-  <tr><td>写操作权限拒绝</td><td><code>NO_PERMISSION</code></td><td>当前账号无权编辑该歌单或收藏该内容；提示不可编辑。</td></tr>
+  <tr><td>写操作权限拒绝</td><td><code>NO_PERMISSION</code></td><td>当前账号无权编辑该歌单、收藏该内容或发表评论；提示不可编辑 / 不可发表。</td></tr>
+  <tr><td>评论发表 <code>SubCode</code> 非 0 / <code>VerifyUrl</code> 非空</td><td><code>AUTH_EXPIRED</code> / <code>NO_PERMISSION</code> / <code>UPSTREAM_CHANGED</code></td><td><code>SubCode=1000</code> 映射为登录失效；<code>VerifyUrl</code> 非空表示需要验证码，提示到官方客户端完成验证；其余非 0 按 <code>Msg</code> 映射为上游变化。</td></tr>
   <tr><td>歌单写入 <code>retCode</code> 非 0 / <code>80105</code></td><td><code>NO_PERMISSION</code></td><td>用户名下有权限限制、歌单不可编辑或签名通道缺少网页会话；保留原状态并提示。收藏写入的 80105 仍按上表提示重新登录同步网页会话。</td></tr>
   <tr><td>MV <code>filetype</code> 返回 <code>code:1000</code> / <code>2000</code> 或 <code>freeflow_url</code> 为空</td><td><code>NO_PERMISSION</code> / <code>NO_STREAM</code></td><td>该清晰度需要更高权限或不可用；自动降档，全部档位失败后提示。</td></tr>
   <tr><td><code>20261</code> / <code>20271</code> / <code>20272</code> / <code>20274</code> / <code>20277</code> / <code>20278</code> / <code>20279</code> / <code>20450</code></td><td><code>AUTH_EXPIRED</code></td><td>登录参数、验证码、账号绑定、账号受限或封禁；提示具体原因或重新登录。</td></tr>
@@ -671,6 +681,15 @@ interface QqComment {
   ReplyCnt?: number;
   IsPraised?: number;
   IsLiked?: number;
+}
+
+interface QqAddCommentResult {
+  SubCode?: number;
+  Msg?: string;
+  AddedCmId?: string | number;
+  ParentCmId?: string | number;
+  VerifyUrl?: string;
+  Floor?: { Num?: number };
 }
 
 interface QqRecommendCard {
@@ -877,6 +896,11 @@ interface QqLoginPayload {
     <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。评论区只提供最新评论读取，不提供“最旧”排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，上游没有按点赞排序参数。</td>
   </tr>
   <tr>
+    <td><code>QqAddCommentResult</code></td>
+    <td><code>SubCode</code> · <code>Msg</code> · <code>AddedCmId</code> · <code>ParentCmId</code> · <code>VerifyUrl</code> · <code>Floor.Num</code></td>
+    <td><code>SubCode === 0</code> 才表示评论发表成功；<code>AddedCmId</code> 是新增评论 ID；<code>VerifyUrl</code> 非空表示需要验证码，应用提示到官方客户端完成验证；<code>Floor.Num</code> 为楼层号。</td>
+  </tr>
+  <tr>
     <td><code>QqVipData</code></td>
     <td><code>identity.vip</code> · <code>identity.huge_vip</code> / <code>HugeVip</code> · <code>svip</code></td>
     <td>任一权益为真即视为 VIP；接口失败按非 VIP 处理。</td>
@@ -995,6 +1019,10 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqCommentLikeResult</code> → <code>CommentLikeResult</code></td>
     <td><code>code</code> / <code>subcode</code> 均为 0 才成功；<code>type</code> 3 → <code>liked=true</code>，4 → <code>liked=false</code>。上游不返回点赞数量，<code>CommentLikeResult.likedCount</code> 为可选；前端在成功后乐观更新计数，失败时回滚。</td>
+  </tr>
+  <tr>
+    <td><code>QqAddCommentResult</code> → <code>CommentPostResult</code></td>
+    <td><code>SubCode === 0</code> 才成功；<code>AddedCmId → commentId</code>，缺失时为空字符串；<code>SubCode=1000</code> → <code>AUTH_EXPIRED</code>；<code>VerifyUrl</code> 非空 → 需要验证码的 <code>NO_PERMISSION</code>；其余非 0 按 <code>Msg</code> 映射为 <code>UPSTREAM_CHANGED</code>。</td>
   </tr>
   <tr>
     <td><code>QqLyricResponse</code> → <code>Lyric</code></td>

@@ -12,11 +12,16 @@ import type {
   SearchRequest,
   Settings
 } from '../shared/types'
-import { DOWNLOAD_QUEUE_MAX, IPC_SONG_MIDS_MAX, PROBE_MIDS_MAX } from '../shared/constants'
+import {
+  COMMENT_CONTENT_MAX,
+  DOWNLOAD_QUEUE_MAX,
+  IPC_SONG_MIDS_MAX,
+  PROBE_MIDS_MAX
+} from '../shared/constants'
 import { loginWithCookie, refreshSession } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
-import { getComments, likeComment, unlikeComment } from './api/comment'
+import { getComments, likeComment, postComment, unlikeComment } from './api/comment'
 import {
   fetchPlaylistPage,
   fetchPlaylistSnapshot,
@@ -420,6 +425,12 @@ export function registerIpc(): void {
   handle('lyric.get', async (songMid: unknown) => getLyric(stringArg(songMid, '歌曲 mid')))
   handle('comment.get', async (songId: unknown, cursor: unknown) =>
     getComments(String(songId), typeof cursor === 'string' ? cursor : '')
+  )
+  handle('comment.post', async (songId: unknown, content: unknown) =>
+    postComment(
+      stringArg(songId, '歌曲 ID'),
+      stringArg(content, '评论内容', COMMENT_CONTENT_MAX)
+    )
   )
   handle('comment.like', async (commentId: unknown) =>
     likeComment(stringArg(commentId, '评论 ID'))

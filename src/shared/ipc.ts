@@ -7,6 +7,7 @@ import type {
   AuthStatus,
   CommentLikeResult,
   CommentPage,
+  CommentPostResult,
   DownloadStorageInfo,
   DownloadTask,
   EmbedRect,
@@ -133,6 +134,7 @@ export interface LycheeApi {
   }
   comment: {
     get(songId: string, cursor?: string): Promise<IpcResult<CommentPage>>
+    post(songId: string, content: string): Promise<IpcResult<CommentPostResult>>
     like(commentId: string): Promise<IpcResult<CommentLikeResult>>
     unlike(commentId: string): Promise<IpcResult<CommentLikeResult>>
   }

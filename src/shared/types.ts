@@ -127,6 +127,11 @@ export interface CommentPage {
   nextCursor?: string
 }
 
+export interface CommentPostResult {
+  /** 上游新增评论 ID；响应未返回时为空字符串，调用方以重新拉取结果为准。 */
+  commentId: string
+}
+
 export interface SongAvailability {
   songMid: string
   playable: boolean

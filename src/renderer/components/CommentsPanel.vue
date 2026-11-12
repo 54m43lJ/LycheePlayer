@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { Comment } from '@shared/types'
-import { COMMENT_LOAD_ALL_PAGE_MAX, COMMENT_PAGE_SIZE } from '@shared/constants'
+import {
+  COMMENT_CONTENT_MAX,
+  COMMENT_LOAD_ALL_PAGE_MAX,
+  COMMENT_PAGE_SIZE
+} from '@shared/constants'
 import AppIcon from './AppIcon.vue'
 import { describeError, unwrap } from '../api'
 import { useAuthStore } from '../stores/auth'
@@ -25,6 +29,11 @@ const listRef = ref<HTMLElement | null>(null)
 const showTop = ref(false)
 const showBottom = ref(false)
 const songId = computed(() => player.current?.songId ?? '')
+const draft = ref('')
+const posting = ref(false)
+const canPost = computed(
+  () => auth.loggedIn && draft.value.trim().length > 0 && !posting.value
+)
 let token = 0
 
 function timeLabel(ms: number): string {
@@ -159,6 +168,33 @@ function avatarLetter(name: string): string {
   return name.slice(0, 1).toUpperCase() || '?'
 }
 
+async function submitComment(): Promise<void> {
+  const id = songId.value
+  const content = draft.value.trim()
+  if (!id || !content || posting.value) return
+  if (!auth.loggedIn) {
+    toast.error('请先登录')
+    return
+  }
+  if (content.length > COMMENT_CONTENT_MAX) {
+    toast.error(`评论不能超过 ${COMMENT_CONTENT_MAX} 字`)
+    return
+  }
+  posting.value = true
+  try {
+    unwrap(await window.lychee.comment.post(id, content))
+    toast.show('评论已发表')
+    if (songId.value === id) {
+      draft.value = ''
+      await load()
+    }
+  } catch (err) {
+    toast.error(describeError(err))
+  } finally {
+    posting.value = false
+  }
+}
+
 async function toggleLike(comment: Comment, event: Event): Promise<void> {
   event.stopPropagation()
   if (!auth.loggedIn) {
@@ -196,7 +232,14 @@ function onResize(): void {
   updateJumpControls()
 }
 
-watch(songId, () => void load(), { immediate: true })
+watch(
+  songId,
+  () => {
+    draft.value = ''
+    void load()
+  },
+  { immediate: true }
+)
 
 onMounted(() => window.addEventListener('resize', onResize))
 
@@ -270,6 +313,22 @@ onBeforeUnmount(() => {
         <div v-else-if="!hasMore" class="comments-more faint">已经到底了</div>
       </template>
     </div>
+
+    <form v-if="songId" class="comment-composer" @submit.prevent="submitComment()">
+      <textarea
+        v-model="draft"
+        class="comment-input"
+        :maxlength="COMMENT_CONTENT_MAX"
+        :placeholder="auth.loggedIn ? '写下你的评论…' : '登录后发表评论'"
+        :disabled="!auth.loggedIn || posting"
+        aria-label="评论内容"
+        rows="2"
+      />
+      <button class="btn primary small comment-send" type="submit" :disabled="!canPost">
+        <span v-if="posting" class="spinner" />
+        <span v-else>发表</span>
+      </button>
+    </form>
 
     <div v-if="showTop || showBottom" class="comments-jump">
       <button

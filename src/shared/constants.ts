@@ -161,6 +161,8 @@ export const VIP_CACHE_MS = 5 * 60_000
 export const COMMENT_PAGE_SIZE = 25
 /** “跳转到底部”一次最多补拉的页数；25 × 40 = 1000 条，防止热门歌曲无限拉取与渲染阻塞。 */
 export const COMMENT_LOAD_ALL_PAGE_MAX = 40
+/** 发表评论正文长度上限；上游限制 300 字。 */
+export const COMMENT_CONTENT_MAX = 300
 /** 音频缓存上限的最高档位，也是旧版本沿用的默认值（2 GiB）。 */
 export const AUDIO_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
 /** 播放缓存上限的可选档位：128M / 256M / 512M / 1G / 1.5G / 2G。 */

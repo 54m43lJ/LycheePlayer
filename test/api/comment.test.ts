@@ -143,4 +143,54 @@ describe('api/comment', () => {
     await expect(likeComment('c1')).resolves.toEqual({ commentId: 'c1', liked: true })
     await expect(unlikeComment('c1')).resolves.toEqual({ commentId: 'c1', liked: false })
   })
+
+  it('posts a song comment with AddComment and returns the new comment id', async () => {
+    const requests: Array<{ method: string; param: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { method?: string; param?: Record<string, unknown> }
+      }
+      requests.push({
+        method: payload.req_0?.method ?? '',
+        param: payload.req_0?.param ?? {}
+      })
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: { SubCode: 0, Msg: '', AddedCmId: 'new-comment' }
+        }
+      })
+    })
+
+    const { postComment } = await import('../../src/main/api/comment')
+    await expect(postComment('123', '  hello  ')).resolves.toEqual({
+      commentId: 'new-comment'
+    })
+    expect(requests[0]?.method).toBe('AddComment')
+    expect(requests[0]?.param).toMatchObject({
+      Content: 'hello',
+      BizType: 1,
+      BizId: '123',
+      BizSubType: 2
+    })
+  })
+
+  it('maps a comment verification requirement to NO_PERMISSION', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: { SubCode: 10001, Msg: 'need verify', VerifyUrl: 'https://example.test/verify' }
+        }
+      })
+    )
+
+    const { postComment } = await import('../../src/main/api/comment')
+    await expect(postComment('123', 'hello')).rejects.toMatchObject({
+      code: 'NO_PERMISSION'
+    })
+  })
 })

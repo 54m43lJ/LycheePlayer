@@ -11,6 +11,7 @@ import type {
   AuthStatus,
   CommentLikeResult,
   CommentPage,
+  CommentPostResult,
   DownloadStorageInfo,
   DownloadTask,
   FavoriteState,
@@ -153,6 +154,8 @@ const api: LycheeApi = {
   comment: {
     get: (songId: string, cursor?: string) =>
       invoke<CommentPage>('comment.get', songId, cursor),
+    post: (songId: string, content: string) =>
+      invoke<CommentPostResult>('comment.post', songId, content),
     like: (commentId: string) => invoke<CommentLikeResult>('comment.like', commentId),
     unlike: (commentId: string) => invoke<CommentLikeResult>('comment.unlike', commentId)
   },

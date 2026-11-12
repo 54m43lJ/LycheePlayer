@@ -1,9 +1,10 @@
 import type {
   Comment,
   CommentLikeResult,
-  CommentPage
+  CommentPage,
+  CommentPostResult
 } from '../../shared/types'
-import { COMMENT_PAGE_SIZE } from '../../shared/constants'
+import { COMMENT_CONTENT_MAX, COMMENT_PAGE_SIZE } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu } from './client'
 
@@ -35,6 +36,15 @@ interface CommentLikeData {
   code?: number
   msg?: string
   subcode?: number
+}
+
+interface AddCommentData {
+  SubCode?: number
+  subcode?: number
+  Msg?: string
+  msg?: string
+  AddedCmId?: string | number
+  VerifyUrl?: string
 }
 
 function normalizeAvatar(value: string | undefined): string {
@@ -130,4 +140,59 @@ export async function likeComment(commentId: string): Promise<CommentLikeResult>
 
 export async function unlikeComment(commentId: string): Promise<CommentLikeResult> {
   return updateLike(commentId, 4)
+}
+
+/** 发表歌曲评论；上游要求登录并限制正文 300 字。 */
+export async function postComment(
+  songId: string,
+  content: string
+): Promise<CommentPostResult> {
+  const id = songId.trim()
+  if (!/^\d+$/.test(id)) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '歌曲 ID 无效，无法发表评论')
+  }
+  const text = content.trim()
+  if (!text) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '评论内容不能为空')
+  }
+  if (text.length > COMMENT_CONTENT_MAX) {
+    throw new UpstreamError('UPSTREAM_CHANGED', `评论内容不能超过 ${COMMENT_CONTENT_MAX} 字`)
+  }
+  const credential = getCredential()
+  if (!credential) throw new UpstreamError('AUTH_EXPIRED', '请先登录')
+
+  // BizType 1 + BizSubType 2 对应普通歌曲；WriteServer 使用 SubCode 表示业务结果。
+  const data = await musicu<AddCommentData>(
+    'music.globalComment.CommentWriteServer',
+    'AddComment',
+    {
+      Content: text,
+      BizType: 1,
+      BizId: id,
+      BizSubType: 2
+    },
+    { credential }
+  )
+
+  const subcode = Number(data.SubCode ?? data.subcode ?? 0)
+  if (data.VerifyUrl) {
+    throw new UpstreamError(
+      'NO_PERMISSION',
+      '发表评论需要完成验证码，请先在官方客户端完成验证',
+      false,
+      subcode || undefined
+    )
+  }
+  if (subcode !== 0) {
+    if (subcode === 1000) {
+      throw new UpstreamError('AUTH_EXPIRED', '登录已失效，请重新登录', false, subcode)
+    }
+    throw new UpstreamError(
+      'UPSTREAM_CHANGED',
+      data.Msg || data.msg || `评论发表失败（上游返回 ${subcode}）`,
+      false,
+      subcode
+    )
+  }
+  return { commentId: String(data.AddedCmId ?? '') }
 }
