@@ -100,6 +100,8 @@ export const RECOMMEND_SECTION_TITLES = {
   radar: '专属雷达',
   guess: '猜你喜欢'
 } as const
+/** 猜你喜欢连续队列每批拉取的歌曲数。推荐值 5。 */
+export const GUESS_RADIO_BATCH_SIZE = 5
 /** 歌手 / 专辑歌曲单页条数；上游上限 100。 */
 export const CATALOG_PAGE_SIZE = 50
 /** 歌手专辑列表单页条数；上游上限 80。 */

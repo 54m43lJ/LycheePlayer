@@ -1,5 +1,6 @@
 import type { RecommendFeed, RecommendSection, Song } from '../../shared/types'
 import {
+  GUESS_RADIO_BATCH_SIZE,
   RECOMMEND_CACHE_TTL_MS,
   RECOMMEND_SECTION_IDS,
   RECOMMEND_SECTION_TITLES
@@ -134,21 +135,7 @@ async function loadRadar(signal?: AbortSignal): Promise<RecommendSection> {
   }
 }
 
-async function loadGuess(signal?: AbortSignal): Promise<RecommendSection> {
-  const data = await musicu<RadioData>(
-    'mb_track_radio_svr',
-    'get_radio_track',
-    {
-      id: 99,
-      firstplay: 1,
-      page: 1,
-      pageNo: 1,
-      page_num: 1,
-      offset: 0,
-      num: 30
-    },
-    { signal }
-  )
+function parseRadioSongs(data: RadioData): Song[] {
   const list = Array.isArray(data.tracks)
     ? data.tracks
     : Array.isArray(data.songlist)
@@ -157,13 +144,42 @@ async function loadGuess(signal?: AbortSignal): Promise<RecommendSection> {
         ? ((data.songlist as { tracks?: unknown[] }).tracks as unknown[])
         : []
   const seen = new Set<string>()
-  const songs = list
+  return list
     .map(rawSongToSong)
     .filter((song) => {
       if (!song.songMid || seen.has(song.songMid)) return false
       seen.add(song.songMid)
       return true
     })
+}
+
+/** 猜你喜欢连续队列：每次只取一小批，页码从 1 开始。 */
+export async function fetchGuessBatch(
+  page = 1,
+  size = GUESS_RADIO_BATCH_SIZE,
+  signal?: AbortSignal
+): Promise<Song[]> {
+  const safePage = Math.max(1, Math.floor(page))
+  const safeSize = Math.min(30, Math.max(1, Math.floor(size)))
+  const data = await musicu<RadioData>(
+    'mb_track_radio_svr',
+    'get_radio_track',
+    {
+      id: 99,
+      firstplay: 1,
+      page: safePage,
+      pageNo: safePage,
+      page_num: 1,
+      offset: (safePage - 1) * safeSize,
+      num: safeSize
+    },
+    { signal }
+  )
+  return parseRadioSongs(data).slice(0, safeSize)
+}
+
+async function loadGuess(signal?: AbortSignal): Promise<RecommendSection> {
+  const songs = await fetchGuessBatch(1, GUESS_RADIO_BATCH_SIZE, signal)
   const now = Date.now()
   return {
     ...emptySection('guess'),

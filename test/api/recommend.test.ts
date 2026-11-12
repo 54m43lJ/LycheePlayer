@@ -62,6 +62,32 @@ describe('api/recommend', () => {
     expect(guess?.songs).toHaveLength(1)
   })
 
+  it('requests the guess radio in 5-song pages', async () => {
+    let payload: {
+      req_0?: { param?: Record<string, unknown> }
+    } = {}
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      payload = JSON.parse(data ?? '{}') as typeof payload
+      return respond(musicuFixture({ tracks: [rawSong] }))
+    })
+    const { fetchGuessBatch, clearRecommendCache } = await import(
+      '../../src/main/api/recommend'
+    )
+    clearRecommendCache()
+
+    const songs = await fetchGuessBatch(3)
+
+    expect(songs).toHaveLength(1)
+    expect(payload.req_0?.param).toMatchObject({
+      firstplay: 1,
+      page: 3,
+      pageNo: 3,
+      offset: 10,
+      num: 5
+    })
+  })
+
   it('stops before any request when the page signal is already aborted', async () => {
     let calls = 0
     vi.stubGlobal('fetch', async () => {

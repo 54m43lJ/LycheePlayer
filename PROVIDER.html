@@ -275,7 +275,7 @@
   <tr><td>我的歌单</td><td><code>music.musicasset.PlaylistBaseRead / GetPlaylistByUin</code></td><td>当前账号创建 / 收藏的歌单列表。</td></tr>
   <tr><td>每日推荐</td><td><code>music.recommend.RecommendFeed / get_recommend_feed</code> → <code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>取当天的动态推荐歌单卡片（<code>subtype:510</code>），再读取完整 30 首。</td></tr>
   <tr><td>专属雷达</td><td><code>music.recommend.TrackRelationServer / GetRadarSong</code></td><td>按页获取个性化雷达推荐，返回 <code>VecSongs[].Track</code>；需要登录。</td></tr>
-  <tr><td>猜你喜欢</td><td><code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>）</td><td>连续推荐流，返回 <code>data.tracks[]</code>；需要登录。</td></tr>
+  <tr><td>猜你喜欢</td><td><code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>）</td><td>连续推荐流，返回 <code>data.tracks[]</code>；需要登录。以 <code>page</code> / <code>pageNo</code> / <code>offset</code> 分页，每批 <code>num = 5</code>，供连续队列续接。</td></tr>
   <tr><td>歌单写入</td><td><code>music.musicasset.PlaylistBaseWrite / AddPlaylist | EditPlaylist | DelPlaylist</code></td><td>创建 / 改名 / 删除当前账号自建的普通歌单；<code>AddPlaylist</code> 返回的 <code>result.dirId</code> 是目录 ID、<code>result.tid</code> 是歌单标识，两者都必须为正整数。</td></tr>
   <tr><td>歌单增删歌曲</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code></td><td>按数字 <code>songId</code> 与真实 <code>songType</code> 增删；<code>dirId</code> 是当前账号目录 ID、<code>tid</code> 是歌单标识，两者不能混用；每批最多 100 首。<code>AddSonglist</code> 通常追加到末尾；写接口只负责写入，写后刷新统一由应用侧歌单流程完成，不每次全量扫描。<code>80092</code> 表示歌曲已存在 / 不存在等业务状态，不作为请求失败。</td></tr>
   <tr><td>MV 搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code>（<code>search_type:4</code>）</td><td>返回 <code>body.mv.list[]</code> 的 MV 结果。</td></tr>
@@ -1014,7 +1014,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqRadioData</code> → <code>Song[]</code></td>
-    <td><code>tracks[]</code> 已是扁平歌曲模型，按 <code>QqSong → Song</code> 映射并按 mid 去重。</td>
+    <td><code>tracks[]</code> 已是扁平歌曲模型，按 <code>QqSong → Song</code> 映射并按 mid 去重；单批只取请求的 5 首，跨批重复由播放器按 mid 丢弃。</td>
   </tr>
   <tr>
     <td><code>QqPlaylistWriteResult</code> → <code>PlaylistMeta</code></td>

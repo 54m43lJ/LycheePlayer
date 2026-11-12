@@ -37,7 +37,7 @@ import {
   renamePlaylist
 } from './api/playlist-write'
 import { getFavoriteStates, toggleFavorite } from './api/favorite'
-import { fetchRecommendFeed, clearRecommendCache } from './api/recommend'
+import { fetchGuessBatch, fetchRecommendFeed, clearRecommendCache } from './api/recommend'
 import { getMvDetail, getMvStream, searchMv } from './api/mv'
 import { searchByType } from './api/search'
 import { getArtist, getArtistAlbums, getArtistSongs } from './api/artist'
@@ -356,6 +356,10 @@ export function registerIpc(): void {
   handle('recommend.refresh', async (sectionId: unknown, token: unknown) =>
     runRecommendFetch(true, sectionId, token)
   )
+  handle('recommend.guess', async (page: unknown) => {
+    const pageNo = Math.min(10_000, Math.max(1, Math.floor(numberArg(page, '猜你喜欢页码'))))
+    return fetchGuessBatch(pageNo)
+  })
   handle('recommend.cancel', async (token: unknown) => {
     const requestToken = numberArg(token, '刷新标识')
     const current = recommendFetches.get('feed')

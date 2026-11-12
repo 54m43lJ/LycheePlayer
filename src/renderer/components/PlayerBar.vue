@@ -262,6 +262,7 @@ async function chooseQuality(next: Settings['defaultQuality']): Promise<void> {
 }
 
 function openModeMenu(immediate = false): void {
+  if (player.modeLocked) return
   if (modeCloseTimer !== null) {
     window.clearTimeout(modeCloseTimer)
     modeCloseTimer = null
@@ -300,10 +301,12 @@ function scheduleCloseModeMenu(): void {
 
 function cyclePlayMode(): void {
   closeMenus()
+  if (player.modeLocked) return
   player.cycleMode()
 }
 
 function chooseMode(next: PlayMode): void {
+  if (player.modeLocked) return
   player.setMode(next)
   modeMenu.value = false
 }
@@ -580,6 +583,13 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => player.modeLocked,
+  (locked) => {
+    if (locked) closeMenus()
+  }
+)
 </script>
 
 <template>
@@ -637,9 +647,10 @@ watch(
         >
           <button
             class="mode-button"
-            :title="PLAY_MODE_LABEL[mode]"
+            :title="player.modeLocked ? '猜你喜欢队列仅支持顺序播放' : PLAY_MODE_LABEL[mode]"
             aria-haspopup="true"
             :aria-expanded="modeMenu"
+            :disabled="player.modeLocked"
             @click="cyclePlayMode()"
             @pointerdown="onModePointerDown"
             @pointermove="onModePointerMove"

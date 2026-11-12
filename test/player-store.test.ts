@@ -61,6 +61,7 @@ describe('player queue', () => {
     vi.stubGlobal('window', {
       lychee: {
         player: { sendState: noop, onCommand: () => noop },
+        recommend: { guess: () => Promise.resolve({ ok: true, data: [] }) },
         song: { getUrls: () => Promise.resolve({ ok: true, data: [] }) },
         settings: {
           set: (patch: Record<string, unknown>) =>
@@ -210,6 +211,78 @@ describe('player queue', () => {
     expect(player.mode).toBe('repeat-all')
     expect(player.playOrder.map((item) => item.songMid)).toEqual(['1', '2', '3'])
     expect(player.playOrder[player.index]?.songMid).toBe(currentMid)
+  })
+
+  it('starts a sequence-only guess radio queue and replenishes at the end', async () => {
+    const guess = vi.fn(() =>
+      Promise.resolve({
+        ok: true as const,
+        data: [song('6', 'f'), song('7', 'g'), song('8', 'h'), song('9', 'i'), song('10', 'j')]
+      })
+    )
+    ;(
+      window as unknown as { lychee: { recommend: { guess: typeof guess } } }
+    ).lychee.recommend = { guess }
+    ;(window as unknown as { lychee: { song: { getUrls: unknown } } }).lychee.song.getUrls = (
+      mids: string[]
+    ) =>
+      Promise.resolve({
+        ok: true,
+        data: mids.map((songMid) => ({ songMid, url: 'stream', quality: '320k' }))
+      })
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    const songs = ['1', '2', '3', '4', '5'].map((id) => song(id, id))
+    player.startRadioQueue(songs)
+    await vi.waitFor(() => expect(player.status).toBe('playing'))
+
+    expect(player.queueSource).toMatchObject({ kind: 'radio', id: 'guess' })
+    expect(player.mode).toBe('sequence')
+    expect(player.modeLocked).toBe(true)
+    player.setMode('shuffle')
+    player.setShuffle(true)
+    player.setLoopStatus('Playlist')
+    player.cycleMode()
+    expect(player.mode).toBe('sequence')
+
+    player.playAt(4)
+    await vi.waitFor(() => expect(guess).toHaveBeenCalledWith(2))
+    await vi.waitFor(() =>
+      expect(player.playOrder.map((item) => item.songMid)).toEqual([
+        '1',
+        '2',
+        '3',
+        '4',
+        '5',
+        '6',
+        '7',
+        '8',
+        '9',
+        '10'
+      ])
+    )
+    expect(player.queue.map((item) => item.songMid)).toEqual(['6', '7', '8', '9', '10'])
+  })
+
+  it('unlocks mode switching when a normal queue replaces the radio queue', async () => {
+    ;(window as unknown as { lychee: { song: { getUrls: unknown } } }).lychee.song.getUrls = (
+      mids: string[]
+    ) =>
+      Promise.resolve({
+        ok: true,
+        data: mids.map((songMid) => ({ songMid, url: 'stream', quality: '320k' }))
+      })
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    player.startRadioQueue([song('1', 'a'), song('2', 'b')])
+    await vi.waitFor(() => expect(player.status).toBe('playing'))
+    expect(player.modeLocked).toBe(true)
+
+    player.playList([song('x', 'x')])
+
+    expect(player.modeLocked).toBe(false)
+    player.cycleMode()
+    expect(player.mode).toBe('repeat-all')
   })
 
   it('stops skipping after ten consecutive NO_STREAM results', async () => {

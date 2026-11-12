@@ -16,7 +16,7 @@ import { useSettingsStore, QUALITY_PREFERENCE_OPTIONS } from './settings'
 export type PlayMode = 'sequence' | 'repeat-all' | 'repeat-one' | 'shuffle'
 
 export interface QueueSource {
-  kind: 'playlist'
+  kind: 'playlist' | 'radio'
   id: string
 }
 
@@ -53,6 +53,12 @@ export const usePlayerStore = defineStore('player', () => {
   const queueSource = ref<QueueSource | null>(null)
   const queueBuilding = ref(false)
   const playHistory = ref<Song[]>([])
+
+  /** 猜你喜欢连续队列锁定顺序播放，不能切换播放模式。 */
+  const modeLocked = computed(() => queueSource.value?.kind === 'radio')
+  let radioPage = 1
+  let radioSession = 0
+  let radioFetchingSession = 0
 
   let loadToken = 0
   let lastSentAt = 0
@@ -282,11 +288,20 @@ export const usePlayerStore = defineStore('player', () => {
     if (target < 0 || target >= playOrder.value.length) return
     index.value = target
     void loadAndPlay(playOrder.value[target])
+    if (queueSource.value?.kind === 'radio' && target === playOrder.value.length - 1) {
+      void ensureRadioBatch()
+    }
+  }
+
+  function resetRadioSession(): void {
+    radioSession += 1
+    radioFetchingSession = 0
   }
 
   /** 双击、单曲播放与“播放全部”都替换播放顺序；startIndex 成为当前歌曲。 */
   function playList(songs: Song[], startIndex = 0): void {
     if (songs.length === 0) return
+    resetRadioSession()
     noStreamStreak = 0
     const start = Math.min(Math.max(0, startIndex), songs.length - 1)
     playOrder.value = songs.slice()
@@ -301,6 +316,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 从歌单开始播放：记录队列来源，后续由视图用可用性快照补齐队列。 */
   function startPlaylistPlayback(song: Song, source: QueueSource): void {
+    resetRadioSession()
     noStreamStreak = 0
     playOrder.value = [song]
     baseOrder.value = [song]
@@ -311,9 +327,71 @@ export const usePlayerStore = defineStore('player', () => {
     void loadAndPlay(song)
   }
 
+  /** 猜你喜欢连续队列：以已有 5 首作为初始队列，播放模式固定为顺序。 */
+  function startRadioQueue(songs: Song[]): void {
+    if (songs.length === 0) return
+    resetRadioSession()
+    noStreamStreak = 0
+    mode.value = 'sequence'
+    playOrder.value = songs.slice()
+    baseOrder.value = songs.slice()
+    index.value = 0
+    playHistory.value = []
+    queueSource.value = { kind: 'radio', id: 'guess' }
+    queueBuilding.value = false
+    // 初始 5 首来自发现页 loadGuess 的第 1 页。
+    radioPage = 2
+    playAt(0)
+  }
+
+  /** 队尾预取下一批猜你喜欢；同一次队列只保留一个进行中的请求。 */
+  async function ensureRadioBatch(): Promise<void> {
+    if (queueSource.value?.kind !== 'radio') return
+    const session = radioSession
+    if (radioFetchingSession === session) return
+    radioFetchingSession = session
+    try {
+      const existing = new Set(playOrder.value.map((song) => song.songMid))
+      const additions: Song[] = []
+      // 最多翻 3 页：只在整页都是重复歌曲时继续，避免上游分页重复导致死循环。
+      for (let attempt = 0; attempt < 3; attempt += 1) {
+        const batch = unwrap(await window.lychee.recommend.guess(radioPage))
+        if (session !== radioSession || queueSource.value?.kind !== 'radio') return
+        radioPage += 1
+        if (batch.length === 0) break
+        for (const song of batch) {
+          if (!song.songMid || existing.has(song.songMid)) continue
+          existing.add(song.songMid)
+          additions.push(song)
+        }
+        if (additions.length > 0) break
+      }
+      if (session !== radioSession || queueSource.value?.kind !== 'radio') return
+      if (additions.length === 0) {
+        toast.error('猜你喜欢暂时没有更多歌曲')
+        return
+      }
+      const wasAtEnd = index.value === playOrder.value.length - 1
+      playOrder.value = [...playOrder.value, ...additions]
+      baseOrder.value = [...baseOrder.value, ...additions]
+      // 预取较慢时队尾可能已经停止，补入新歌后继续播放；加载中的 stopped 不算结束。
+      if (wasAtEnd && status.value === 'stopped' && !loading.value) playAt(index.value + 1)
+    } catch (err) {
+      if (session !== radioSession) return
+      toast.error(describeError(err))
+    } finally {
+      if (radioFetchingSession === session) radioFetchingSession = 0
+    }
+  }
+
   /** 用调用方给出的已过滤快照增量补齐队列；不做可用性检测或清理。 */
   function appendPlaylistQueue(currentSong: Song, fullSongs: Song[]): void {
-    if (!queueSource.value || currentSong.songMid !== current.value?.songMid) return
+    if (
+      queueSource.value?.kind !== 'playlist' ||
+      currentSong.songMid !== current.value?.songMid
+    ) {
+      return
+    }
     const position = fullSongs.findIndex((song) => song.songMid === currentSong.songMid)
     if (position < 0) return
     const tail = fullSongs
@@ -339,7 +417,12 @@ export const usePlayerStore = defineStore('player', () => {
     fullSongs: Song[],
     previousMids?: Set<string>
   ): void {
-    if (!queueSource.value || currentSong.songMid !== current.value?.songMid) return
+    if (
+      queueSource.value?.kind !== 'playlist' ||
+      currentSong.songMid !== current.value?.songMid
+    ) {
+      return
+    }
     const head = playOrder.value.slice(0, index.value + 1)
     const upcoming = playOrder.value.slice(index.value + 1)
     const manual = previousMids
@@ -601,7 +684,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 切换播放模式；离开随机时恢复规范顺序，进入随机时只打乱待播部分。 */
   function applyMode(next: PlayMode): void {
-    if (next === mode.value) return
+    if (modeLocked.value || next === mode.value) return
     const enteringShuffle = next === 'shuffle'
     if (enteringShuffle) baseOrder.value = playOrder.value.slice()
     const leavingShuffle = mode.value === 'shuffle'
@@ -668,8 +751,10 @@ export const usePlayerStore = defineStore('player', () => {
     queueSource,
     queueBuilding,
     playHistory,
+    modeLocked,
     playList,
     startPlaylistPlayback,
+    startRadioQueue,
     appendPlaylistQueue,
     replacePlaylistQueue,
     addNext,

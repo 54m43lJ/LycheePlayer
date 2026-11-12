@@ -345,3 +345,39 @@
 | `CORE.html` | §4.50 `src/shared/constants.ts`（`#c4-50`） | 改 | `RECOMMEND_CACHE_TTL_MS` 只用于雷达 / 猜你喜欢。 |
 | `README.md` | §2 用户交互 · 发现行 | 改 | 同步日推 0 点自动更新与无手动刷新。 |
 | `ABOUT.html` | 用户交互 · 发现行 | 改 | 与 README 同步。 |
+
+### 3.11 猜你喜欢改为连续队列
+
+**问题描述**：猜你喜欢原本按普通推荐分区渲染 30 首歌曲条目，点击只把当前分区当成静态列表播放；需求是改成“伪歌单”入口，点击后以拉取的 5 首启动连续队列，播放到队尾自动补 5 首，并在队列激活期间锁定顺序播放。
+
+**解决方法**：
+
+- `loadGuess` 只取第 1 页 5 首作为伪歌单封面与连续队列首批；新增 `fetchGuessBatch(page, size = GUESS_RADIO_BATCH_SIZE)`，通过 `page` / `pageNo` / `offset` / `num` 拉取单批。
+- 新增 `recommend.guess(page)` IPC、preload 与渲染层契约，返回 `Song[]`；主进程只负责单批读取，不维护队列状态。
+- 播放器新增 `startRadioQueue(songs)`：`queueSource` 增加 `radio` 类型，模式强制为 `sequence`，从第 2 页开始预取。
+- `playAt()` 定位到队尾时调用 `ensureRadioBatch()`：同一 radio 会话单飞、最多翻 3 页、按 `songMid` 去重后追加；预取较慢且队尾已停止时补入后自动续播。开始其他歌单 / 歌曲时递增 radio 会话并解除锁定。
+- 新增 `modeLocked`：队列激活期间 `setMode` / `cycleMode` / `setShuffle` / `setLoopStatus` 与 MPRIS 命令均不改变模式；播放条模式按钮禁用并关闭菜单。
+- 发现页猜你喜欢改为伪歌单卡片（封面取首批第一首），点击调用 `startRadioQueue()`；骨架与标题计数同步改为卡片形态。
+- 测试覆盖 5 首分页请求参数、连续队列启动与模式锁定、队尾补批、切回普通队列解锁。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §1 TERMS（`#u1`） | 改 | 增加“猜你喜欢连续队列”定义，并补充伪歌单入口行为。 |
+| `USER.html` | §5.2.3 播放条（`#u5-2-3`） | 改 | 连续队列激活时模式按钮禁用，固定顺序播放。 |
+| `USER.html` | §5.2.8 页面结构 · 发现（`#u5-2-8`） | 改 | 猜你喜欢改为伪歌单入口，点击启动连续队列。 |
+| `USER.html` | §5.2.9 播放队列（`#u5-2-9`） | 改 | 补充每批 5 首自动续接、不显示批次边界。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 增加 `recommend.guess(page)` 契约。 |
+| `CORE.html` | §4.29 `stores/player.ts`（`#c4-29`） | 改 | 增加 `QueueSource.kind = radio`、`startRadioQueue`、`ensureRadioBatch`、`modeLocked` 与模式守卫。 |
+| `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | 模式按钮在队列锁定时禁用并关闭菜单。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 增加 `.mode-button:disabled` 样式。 |
+| `CORE.html` | §4.53 `src/main/api/recommend.ts`（`#c4-53`） | 改 | 增加 `fetchGuessBatch`，猜你喜欢改为 5 首分页。 |
+| `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 改 | 猜你喜欢伪歌单卡片、骨架与启动入口。 |
+| `CORE.html` | §5.13 推荐加载（`#c5-13`） | 改 | 猜你喜欢首批 5 首的调用链。 |
+| `CORE.html` | §5.20 猜你喜欢连续队列（`#c5-20`） | 增 | 记录启动、队尾预取、停止与模式锁定的完整调用树。 |
+| `CORE.html` | §4.50 `src/shared/constants.ts`（`#c4-50`） | 改 | 增加 `GUESS_RADIO_BATCH_SIZE = 5`。 |
+| `PROVIDER.html` | §4.1 消费的 HTTP 接口（`#p4-1`） | 改 | 说明猜你喜欢按 5 首分页。 |
+| `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | 说明单批 5 首与跨批去重。 |
+| `README.md` | §2 用户交互 · 发现行 | 改 | 同步猜你喜欢连续队列。 |
+| `ABOUT.html` | 用户交互 · 发现行 | 改 | 与 README 同步。 |

@@ -32,6 +32,7 @@ import type {
   SearchRequest,
   SearchResult,
   Settings,
+  Song,
   SongAssetState,
   SongAvailability,
   UpstreamBlockedEvent,
@@ -108,6 +109,7 @@ export interface LycheeApi {
   recommend: {
     get(sectionId: string | null, token: number): Promise<IpcResult<RecommendFeed>>
     refresh(sectionId: string | null, token: number): Promise<IpcResult<RecommendFeed>>
+    guess(page: number): Promise<IpcResult<Song[]>>
     cancel(token: number): Promise<IpcResult<null>>
   }
   mv: {

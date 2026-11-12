@@ -3263,6 +3263,16 @@ button:focus-visible,
   background: color-mix(in srgb, var(--accent) 34%, transparent);
 }
 
+.mode-button:disabled {
+  color: var(--faint);
+  opacity: 0.45;
+  cursor: default;
+}
+
+.mode-button:disabled:hover {
+  background: transparent;
+}
+
 /* 展开时让弹层包住按钮：底部预留按钮高度，按钮与弹层左右 / 下边缘对齐。 */
 .mode-wrap.open .mode-button {
   position: relative;

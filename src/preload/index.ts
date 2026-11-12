@@ -34,6 +34,7 @@ import type {
   SearchRequest,
   SearchResult,
   Settings,
+  Song,
   SongAssetState,
   SongAvailability,
   UpstreamBlockedEvent,
@@ -120,6 +121,7 @@ const api: LycheeApi = {
       invoke<RecommendFeed>('recommend.get', sectionId, token),
     refresh: (sectionId: string | null, token: number) =>
       invoke<RecommendFeed>('recommend.refresh', sectionId, token),
+    guess: (page: number) => invoke<Song[]>('recommend.guess', page),
     cancel: (token: number) => invoke<null>('recommend.cancel', token)
   },
   mv: {
