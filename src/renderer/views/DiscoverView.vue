@@ -19,6 +19,8 @@ const router = useRouter()
 const toast = useToast()
 
 const sections = computed(() => recommend.feed.sections)
+const topSections = computed(() => sections.value.filter((section) => isCardSection(section)))
+const listSections = computed(() => sections.value.filter((section) => !isCardSection(section)))
 const nickname = computed(() => auth.profile?.nickname ?? '')
 /** 跨日检查间隔：每分钟确认一次每日推荐是否已过期。 */
 const DAILY_EXPIRY_CHECK_MS = 60_000
@@ -118,15 +120,68 @@ onBeforeUnmount(() => {
     </div>
 
     <template v-else>
-      <section v-for="section in sections" :key="section.id" class="discover-section">
+      <div class="discover-top">
+        <div v-for="section in topSections" :key="section.id" class="discover-top-item">
+          <DiscoverSkeleton
+            v-if="isPlaceholder(section) && !recommend.errors[section.id]"
+            :songs="0"
+            :playlists="1"
+          />
+
+          <div v-else-if="isPlaceholder(section)" class="empty compact">
+            <div class="empty-icon"><AppIcon name="compass" :size="22" /></div>
+            <h3>这个分区加载失败</h3>
+            <p>{{ recommend.errors[section.id] }}</p>
+            <button class="btn ghost small" @click="refreshSection(section.id)">重试</button>
+          </div>
+
+          <template v-else>
+            <button
+              v-if="section.id === 'daily' && section.playlists.length > 0"
+              class="card discover-playlist"
+              @click="router.push(`/playlist/${section.playlists[0].id}`)"
+            >
+              <CoverArt
+                :src="section.playlists[0].coverUrl"
+                image-class="card-cover"
+                :icon-size="26"
+              />
+              <div class="card-name">{{ playlistTitle(section.playlists[0].name) }}</div>
+              <div class="card-sub">{{ section.playlists[0].songCount }} 首歌曲</div>
+            </button>
+
+            <button
+              v-else-if="section.id === 'guess' && section.songs.length > 0"
+              class="card discover-playlist"
+              title="开始播放猜你喜欢连续推荐"
+              @click="startGuessRadio(section)"
+            >
+              <CoverArt
+                :src="songCover(section.songs[0], 300)"
+                image-class="card-cover"
+                :icon-size="26"
+              />
+              <div class="card-name">{{ sectionTitle(section) }}</div>
+              <div class="card-sub">连续推荐 · 顺序播放</div>
+            </button>
+
+            <div v-else class="empty compact">
+              <div class="empty-icon"><AppIcon name="compass" :size="22" /></div>
+              <h3>暂无内容</h3>
+              <p>上游返回了空结果，可稍后刷新。</p>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <section v-for="section in listSections" :key="section.id" class="discover-section">
         <div class="section-title">
           <span>{{ sectionTitle(section) }}</span>
           <span class="discover-actions">
-            <span v-if="!isPlaceholder(section) && section.id !== 'guess'" class="count">
+            <span v-if="!isPlaceholder(section)" class="count">
               {{ section.songs.length }} 首
             </span>
             <button
-              v-if="section.id !== 'daily'"
               class="icon-btn"
               :title="`刷新${sectionTitle(section)}`"
               :disabled="recommend.loading || recommend.loadingIds[section.id]"
@@ -140,8 +195,8 @@ onBeforeUnmount(() => {
 
         <DiscoverSkeleton
           v-if="isPlaceholder(section) && !recommend.errors[section.id]"
-          :songs="isCardSection(section) ? 0 : 30"
-          :playlists="isCardSection(section) ? 1 : 0"
+          :songs="30"
+          :playlists="0"
         />
 
         <div v-else-if="isPlaceholder(section)" class="empty compact">
@@ -177,42 +232,7 @@ onBeforeUnmount(() => {
             </article>
           </div>
 
-          <div v-if="section.playlists.length > 0" class="discover-playlists">
-            <button
-              v-for="playlist in section.playlists"
-              :key="playlist.id"
-              class="card discover-playlist"
-              @click="router.push(`/playlist/${playlist.id}`)"
-            >
-              <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="26" />
-              <div class="card-name">{{ playlistTitle(playlist.name) }}</div>
-              <div class="card-sub">{{ playlist.songCount }} 首歌曲</div>
-            </button>
-          </div>
-
-          <div
-            v-if="section.id === 'guess' && section.songs.length > 0"
-            class="discover-playlists"
-          >
-            <button
-              class="card discover-playlist"
-              title="开始播放猜你喜欢连续推荐"
-              @click="startGuessRadio(section)"
-            >
-              <CoverArt
-                :src="songCover(section.songs[0], 300)"
-                image-class="card-cover"
-                :icon-size="26"
-              />
-              <div class="card-name">{{ sectionTitle(section) }}</div>
-              <div class="card-sub">连续推荐 · 顺序播放</div>
-            </button>
-          </div>
-
-          <div
-            v-if="section.songs.length === 0 && section.playlists.length === 0"
-            class="empty compact"
-          >
+          <div v-if="section.songs.length === 0" class="empty compact">
             <div class="empty-icon"><AppIcon name="compass" :size="22" /></div>
             <h3>暂无内容</h3>
             <p>上游返回了空结果，可稍后刷新。</p>
