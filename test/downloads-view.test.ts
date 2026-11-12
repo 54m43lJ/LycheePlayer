@@ -11,6 +11,8 @@ function task(id: string): DownloadTask {
     id,
     songMid: `mid-${id}`,
     name: `Song ${id}`,
+    singers: ['Singer'],
+    albumName: 'Album',
     quality: 'flac',
     filePath: `/tmp/${id}.flac`,
     coverPath: null,

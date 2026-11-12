@@ -101,12 +101,30 @@ async function toggleFavorite(index: number): Promise<void> {
   if (song) await playlistEdit.toggleFavorite(song.songMid)
 }
 
+const pendingDownloadDelete = ref<{ songMid: string; name: string } | null>(null)
+
 async function downloadAt(index: number): Promise<void> {
   const song = filteredSongs.value[index]
   if (!song) return
+  if (download.assets[song.songMid]?.downloadedQuality) {
+    pendingDownloadDelete.value = { songMid: song.songMid, name: song.name }
+    return
+  }
   try {
     await download.start(song.songMid, player.requestedQuality)
     toast.show('已加入下载任务')
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
+
+async function confirmDownloadDelete(): Promise<void> {
+  const target = pendingDownloadDelete.value
+  pendingDownloadDelete.value = null
+  if (!target) return
+  try {
+    await download.removeSong(target.songMid)
+    toast.show('已删除下载')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -419,6 +437,16 @@ onBeforeUnmount(() => {
       danger
       @confirm="confirmRemove()"
       @cancel="removeTarget = null"
+    />
+
+    <ConfirmDialog
+      :open="pendingDownloadDelete !== null"
+      title="删除下载"
+      :message="`「${pendingDownloadDelete?.name ?? ''}」已下载到本机，是否删除下载文件？`"
+      confirm-label="删除下载"
+      danger
+      @confirm="confirmDownloadDelete()"
+      @cancel="pendingDownloadDelete = null"
     />
   </div>
 </template>

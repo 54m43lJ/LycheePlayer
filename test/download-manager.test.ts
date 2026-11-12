@@ -95,7 +95,7 @@ describe('download/manager queue', () => {
       writeFileSync(target, 'audio')
     })
 
-    const { downloadFileName, listDownloads, startDownload } = await import(
+    const { downloadFileName, listDownloads, removeDownloadedSong, startDownload } = await import(
       '../src/main/download/manager'
     )
     expect(downloadFileName('歌', [], '')).toBe('歌')
@@ -108,7 +108,13 @@ describe('download/manager queue', () => {
     })
     const task = (await listDownloads()).find((item) => item.songMid === 'm9')
     expect(task?.filePath).toBe(join(downloadDir, '晴天_Live-周杰伦、杨瑞代-叶惠美.flac'))
+    expect(task?.singers).toEqual(['周杰伦', '杨瑞代'])
+    expect(task?.albumName).toBe('叶惠美')
     expect(task && existsSync(task.filePath)).toBe(true)
+
+    await removeDownloadedSong('m9')
+    expect((await listDownloads()).find((item) => item.songMid === 'm9')).toBeUndefined()
+    expect(existsSync(join(downloadDir, '晴天_Live-周杰伦、杨瑞代-叶惠美.flac'))).toBe(false)
   })
 
   it('clears downloaded files, partials, covers and records', async () => {

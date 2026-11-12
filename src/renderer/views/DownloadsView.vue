@@ -5,6 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { useDownloadStore } from '../stores/download'
 import { useToast } from '../composables/toast'
+import { matchesDownloadKeyword } from '../utils/download-filter'
 import { downloadOverallProgress } from '../utils/download-progress'
 import { formatBytes } from '../utils/format'
 
@@ -31,10 +32,17 @@ const activeText = computed(() =>
   progress.value.active > 0 ? `${progress.value.active} 个任务进行中` : '没有进行中的任务'
 )
 const filter = ref<DownloadFilter>('all')
+// 纯本地搜索：只过滤已加载的任务快照，不发请求、不扫描下载目录。
+const searchText = ref('')
 // 任务顺序降序展示，新任务在最前；只影响显示，不改变主进程队列处理顺序。
 const orderedTasks = computed(() => [...tasks.value].reverse())
+const matchedTasks = computed(() => {
+  const keyword = searchText.value.trim()
+  if (!keyword) return orderedTasks.value
+  return orderedTasks.value.filter((task) => matchesDownloadKeyword(task, keyword))
+})
 const filteredTasks = computed(() => {
-  const list = orderedTasks.value
+  const list = matchedTasks.value
   if (filter.value === 'active') {
     return list.filter(
       (task) =>
@@ -44,6 +52,12 @@ const filteredTasks = computed(() => {
   if (filter.value === 'done') return list.filter((task) => task.status === 'done')
   if (filter.value === 'failed') return list.filter((task) => task.status === 'failed')
   return list
+})
+const emptyText = computed(() => {
+  if (searchText.value.trim()) {
+    return { title: '没有匹配的下载任务', hint: '尝试其他歌名、歌手或专辑关键词。' }
+  }
+  return { title: '没有符合条件的任务', hint: '切换过滤条件查看其他下载任务。' }
 })
 
 function percent(task: DownloadTask): number {
@@ -199,10 +213,23 @@ onBeforeUnmount(() => downloads.setVisible(false))
             </button>
           </div>
 
+          <div class="table-filter downloads-search">
+            <span class="search-icon"><AppIcon name="search" :size="16" /></span>
+            <input
+              v-model="searchText"
+              class="input"
+              type="search"
+              placeholder="搜索歌名、歌手或专辑（本地）"
+              autocomplete="off"
+              spellcheck="false"
+            />
+            <button v-if="searchText" class="btn ghost small" @click="searchText = ''">清除</button>
+          </div>
+
           <div v-if="filteredTasks.length === 0" class="empty compact">
             <div class="empty-icon"><AppIcon name="download" :size="24" /></div>
-            <h3>没有符合条件的任务</h3>
-            <p>切换过滤条件查看其他下载任务。</p>
+            <h3>{{ emptyText.title }}</h3>
+            <p>{{ emptyText.hint }}</p>
           </div>
 
           <div v-else class="downloads-list">
@@ -211,8 +238,10 @@ onBeforeUnmount(() => downloads.setVisible(false))
                 <div class="song-text">
                   <div class="song-title">{{ task.name }}</div>
                   <div class="song-artist">
+                    <template v-if="task.singers.length">{{ task.singers.join(' / ') }} · </template>
                     {{ task.quality.toUpperCase() }} · {{ sourceLabel(task) }} ·
                     {{ statusLabel(task.status) }}
+                    <template v-if="task.albumName"> · {{ task.albumName }}</template>
                     <template v-if="task.error"> · {{ task.error }}</template>
                   </div>
                 </div>

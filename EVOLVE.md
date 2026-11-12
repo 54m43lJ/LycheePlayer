@@ -116,3 +116,37 @@
 | `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | 增加 `QqArtistAlbum` / `QqArtistAlbumData` 模型与 `ArtistAlbumPage` 转换。 |
 | `README.md` | §2 用户交互 · 歌手 / 专辑行 | 改 | 补歌手页歌曲 / 专辑切换、专辑排序与版本筛选。 |
 | `ABOUT.html` | 用户交互 · 歌手 / 专辑行 | 改 | 与 README 同步。 |
+
+## 5. 下载管理：纯本地搜索与已下载歌曲删除确认
+
+**需求**：强化下载管理：下载中心支持纯本地搜索，只过滤已加载的下载任务而不请求上游；歌单中点击已下载歌曲的下载按钮时先询问是否删除本机下载文件，确认后删除文件与下载记录。
+
+**实现思路**：
+
+- `DownloadTask` 增加 `singers` / `albumName`，在出队解析歌曲信息时回填并随索引持久化；旧索引缺少字段时归一化为空数组 / 空字符串，保证向后兼容。
+- 新增 `utils/download-filter.ts` 的 `matchesDownloadKeyword()`，对歌名、`songMid`、歌手、专辑与文件路径做不区分大小写的本地包含匹配；`DownloadsView` 增加搜索框与状态过滤叠加，空结果区分“无匹配”和“无符合过滤条件”。
+- 新增 `download.removeSong(songMid)` IPC、preload 与 store 方法；主进程 `removeDownloadedSong()` 删除该曲全部 `done` 任务的音频、`.part` 与下载封面，并落盘索引。
+- `PlaylistView` 的下载按钮先读取 `download.assets[mid].downloadedQuality`：已下载时打开危险态 `ConfirmDialog`，确认后调用 `download.removeSong()` 并刷新资产；未下载时保持原入队流程。
+- 补充 `test/download-filter.test.ts`，并扩展下载任务与管理器测试，覆盖元信息回填、本地匹配和按歌曲删除文件。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 5 项“强化下载管理” | 改 | 行尾追加 ` [已解决]`。 |
+| `EVOLVE.md` | 新增“下载管理：纯本地搜索与已下载歌曲删除确认” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `USER.html` | §1 TERMS · 下载任务 / 下载中心（`#u1`） | 改 | 补下载中心纯本地搜索能力。 |
+| `USER.html` | §5.2.4 歌曲列表（`#u5-2-4`） | 改 | 补歌单详情中已下载歌曲的下载按钮改为删除确认。 |
+| `USER.html` | §5.2.8 页面结构 · 歌单详情（`#u5-2-8`） | 改 | 补已下载歌曲下载按钮的删除确认行为。 |
+| `USER.html` | §5.2.8 页面结构 · 下载中心（`#u5-2-8`） | 改 | 补工具栏下方的纯本地搜索框与过滤叠加规则。 |
+| `CORE.html` | §1 文件树（`#c1`） | 改 | 增加 `utils/download-filter.ts` 条目。 |
+| `CORE.html` | §4.1 `src/shared/types.ts`（`#c4-1`） | 改 | 增加 `DownloadTask.singers` / `albumName` 及用途说明。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 增加 `download.removeSong(songMid)`。 |
+| `CORE.html` | §4.46 `PlaylistView.vue`（`#c4-46`） | 改 | 补已下载歌曲下载按钮的确认删除分支与资产刷新。 |
+| `CORE.html` | §4.60 `src/main/download/manager.ts`（`#c4-60`） | 改 | 增加 `removeDownloadedSong` 签名，补元信息回填、旧索引归一化与删除范围。 |
+| `CORE.html` | §4.67 `DownloadsView.vue`（`#c4-67`） | 改 | 补纯本地搜索框、匹配范围、空状态与过滤叠加。 |
+| `CORE.html` | §4.71 `stores/download.ts`（`#c4-71`） | 改 | 增加 `removeSong` 签名与本地快照更新说明。 |
+| `CORE.html` | §4.83 `src/renderer/utils/download-filter.ts`（`#c4-83`） | 增 | 新增本地搜索匹配函数的签名与约定。 |
+| `CORE.html` | §5.16 下载（`#c5-16`） | 改 | 增加歌单中 `downloadAt` → `removeSong` → `removeDownloadedSong` 的调用分支。 |
+| `README.md` | §2 用户交互 · 下载 / 整单下载行 | 改 | 补纯本地搜索与已下载歌曲删除确认，并同步当前统一队列语义。 |
+| `ABOUT.html` | 用户交互 · 下载 / 整单下载行 | 改 | 与 README 同步。 |

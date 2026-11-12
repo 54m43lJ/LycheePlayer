@@ -61,6 +61,7 @@ import {
   listDownloads,
   pauseDownload,
   removeDownload,
+  removeDownloadedSong,
   resumeAllDownloads,
   resumeDownload,
   startDownload,
@@ -394,6 +395,10 @@ export function registerIpc(): void {
   handle('download.resumeAll', async () => resumeAllDownloads())
   handle('download.remove', async (id: unknown) => {
     await removeDownload(stringArg(id, '任务 ID'))
+    return null
+  })
+  handle('download.removeSong', async (mid: unknown) => {
+    await removeDownloadedSong(stringArg(mid, '歌曲 mid'))
     return null
   })
   handle('download.clearCompleted', async () => {

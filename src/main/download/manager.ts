@@ -147,6 +147,10 @@ async function loadIndex(): Promise<void> {
       if (!task || typeof task !== 'object') continue
       const normalized: DownloadTask = {
         ...task,
+        singers: Array.isArray(task.singers)
+          ? task.singers.filter((name): name is string => typeof name === 'string' && name.length > 0)
+          : [],
+        albumName: typeof task.albumName === 'string' ? task.albumName : '',
         source: task.source === 'cache' ? 'cache' : 'network'
       }
       if (normalized.status === 'done' && !existsSync(normalized.filePath)) continue
@@ -303,6 +307,8 @@ async function pump(): Promise<void> {
         const resolved = await resolveDownload(task.songMid, task.quality)
         task.quality = resolved.quality
         task.name = resolved.name
+        task.singers = resolved.singers
+        task.albumName = resolved.albumName
         const base = downloadFileName(resolved.name, resolved.singers, resolved.albumName)
         task.filePath = join(downloadDir(), `${base}.${extension(resolved.quality)}`)
         task.coverPath = resolved.albumMid
@@ -438,6 +444,9 @@ function enqueueTask(songMid: string, options: EnqueueOptions = {}): DownloadTas
     id: randomUUID(),
     songMid,
     name: songMid,
+    // 歌曲元信息在出队解析时回填，下载中心本地搜索只读取这些字段。
+    singers: [],
+    albumName: '',
     // 下载统一按最高可用档解析；实际档位在任务执行时回填。
     quality: 'flac',
     filePath: join(downloadDir(), `${safeName(songMid)}.mp3`),
@@ -524,6 +533,24 @@ export async function removeDownload(id: string): Promise<void> {
   await rm(runtime.task.filePath, { force: true })
   await rm(`${runtime.task.filePath}.part`, { force: true })
   scheduleSave()
+}
+
+/**
+ * 删除某首歌的全部已完成下载：用于歌单中再次点击已下载歌曲的下载按钮。
+ * 同时移除音频、残留分片与下载封面，避免留下孤立文件。
+ */
+export async function removeDownloadedSong(songMid: string): Promise<void> {
+  await ensureScope()
+  const matches = [...tasks.values()].filter(
+    (runtime) => runtime.task.songMid === songMid && runtime.task.status === 'done'
+  )
+  for (const runtime of matches) {
+    tasks.delete(runtime.task.id)
+    await rm(runtime.task.filePath, { force: true })
+    await rm(`${runtime.task.filePath}.part`, { force: true })
+    if (runtime.task.coverPath) await rm(runtime.task.coverPath, { force: true })
+  }
+  if (matches.length > 0) scheduleSave()
 }
 
 export async function clearCompletedDownloads(): Promise<void> {

@@ -137,6 +137,18 @@ export const useDownloadStore = defineStore('download', () => {
     if (task) void refreshAssets([task.songMid])
   }
 
+  /** 删除某首歌的全部已完成下载；歌单中再次点击已下载歌曲的下载按钮时使用。 */
+  async function removeSong(songMid: string): Promise<void> {
+    unwrap(await window.lychee.download.removeSong(songMid))
+    for (const task of tasks.value) {
+      if (task.songMid === songMid && task.status === 'done') knownStatuses.delete(task.id)
+    }
+    tasks.value = tasks.value.filter(
+      (task) => !(task.songMid === songMid && task.status === 'done')
+    )
+    await refreshAssets([songMid])
+  }
+
   async function clearCompleted(): Promise<void> {
     unwrap(await window.lychee.download.clearCompleted())
     tasks.value = tasks.value.filter((item) => item.status !== 'done')
@@ -181,6 +193,7 @@ export const useDownloadStore = defineStore('download', () => {
     resume,
     resumeAll,
     remove,
+    removeSong,
     clearCompleted,
     clearDirectory,
     reset

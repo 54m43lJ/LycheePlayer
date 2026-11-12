@@ -2688,6 +2688,10 @@ a {
   color: var(--accent-strong);
 }
 
+.downloads-search {
+  margin: 0 20px 10px;
+}
+
 .downloads-list {
   padding: 4px 20px 16px;
 }
@@ -2977,6 +2981,10 @@ a {
 
   .downloads-toolbar {
     padding: 10px 14px;
+  }
+
+  .downloads-search {
+    margin: 0 14px 10px;
   }
 
   .downloads-list {

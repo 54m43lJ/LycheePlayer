@@ -262,6 +262,10 @@ export interface DownloadTask {
   id: string
   songMid: string
   name: string
+  /** 出队解析后回填的歌手名；入队阶段为空，供下载中心纯本地搜索。 */
+  singers: string[]
+  /** 出队解析后回填的专辑名；入队阶段为空，供下载中心纯本地搜索。 */
+  albumName: string
   quality: Quality
   filePath: string
   coverPath: string | null
