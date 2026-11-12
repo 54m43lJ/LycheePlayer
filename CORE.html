@@ -1411,6 +1411,7 @@ export function activeLyricWord(line: LyricLine, positionMs: number): LyricWord 
 <ul class="note">
   <li>译文按行序附加到对应原文行，不按时间戳匹配；译文是否存在只看文本是否非空，时间戳不一致不会影响译文出现。</li>
   <li>译文没有时间戳时仍按行序配对；原文也没有时间戳时按行序生成稳定序号。原文与译文仍在同一个 <code>.lyric-line</code> 内显示为上下两行，共享活动状态。</li>
+  <li>上游用纯斜杠（如 <code>//</code>）表示无译文占位时，统一规范化为 <code>●●●</code>，不把斜杠直接展示给用户。</li>
   <li><code>activeLyricIndex</code> 在原文行之间取离播放位置最近的一行，最多提前 <code>80ms</code> 进入下一行；活动行内的译文随原文一起高亮。</li>
 </ul>
 

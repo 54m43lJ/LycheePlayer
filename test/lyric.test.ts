@@ -37,6 +37,11 @@ describe('歌词译文按行序附加', () => {
     expect(lines.some((line) => Boolean(line.trans))).toBe(false)
   })
 
+  it('纯斜杠占位显示为三个大圆点', () => {
+    const lines = parseLyric('[00:10.00]First\n[00:20.00]Second', '[00:10.00]//\n[00:20.00]第二句')
+    expect(lines.map((line) => line.trans)).toEqual(['●●●', '第二句'])
+  })
+
   it('QRC 译文附加到对应原文行并共享活动行', () => {
     const lines = parseQrcLyric('[12345,1000]Hello', '[00:12.34]你好')
     expect(lines).toHaveLength(1)

@@ -49,11 +49,19 @@ interface TranslationEntry {
   text: string
 }
 
+/** 上游用纯斜杠表示无译文占位，统一显示为三个大圆点。 */
+function normalizeTranslationText(text: string): string {
+  const value = text.trim()
+  return /^\/+$/.test(value) ? '●●●' : value
+}
+
 function parseTranslationEntries(trans: string | null): TranslationEntry[] {
   if (!trans || !trans.trim()) return []
-  const timed = parsePlain(trans).filter((entry) => entry.text.trim().length > 0)
-  if (timed.length > 0) return timed.map((entry) => ({ timeMs: entry.timeMs, text: entry.text }))
-  return untimedTexts(trans).map((text) => ({ timeMs: null, text }))
+  const timed = parsePlain(trans)
+    .map((entry) => ({ timeMs: entry.timeMs, text: normalizeTranslationText(entry.text) }))
+    .filter((entry) => entry.text.length > 0)
+  if (timed.length > 0) return timed
+  return untimedTexts(trans).map((text) => ({ timeMs: null, text: normalizeTranslationText(text) }))
 }
 
 /**
