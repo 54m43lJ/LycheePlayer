@@ -156,6 +156,15 @@ a {
   text-decoration: none;
 }
 
+/* 键盘焦点环内收 2px：滚动容器的 overflow 裁剪不会吞掉描边。 */
+a:focus-visible,
+button:focus-visible,
+[role='button']:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--accent-strong);
+  outline-offset: -2px;
+}
+
 ::-webkit-scrollbar {
   width: 10px;
   height: 10px;

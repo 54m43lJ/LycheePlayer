@@ -229,3 +229,25 @@
 | `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 补 `.mode-wrap.open .mode-button` 与 `:hover` 的颜色、背景契约。 |
 | `README.md` | §2 用户交互 · 播放行 | 不动 | 只描述当前项由按钮图标表示，不涉及 revealer 打开态，避免与 USER/CORE 重复。 |
 | `ABOUT.html` | 用户交互 · 播放行 | 不动 | 与 README 同步保持现状。 |
+
+### 3.6 滚动容器的 overflow 会裁剪向外绘制的键盘焦点环
+
+**问题描述**：默认焦点环绘制在元素边框之外。发现页的 `.discover-strip` / `.discover-playlists` 使用 `overflow-x: auto`，侧栏 `.nav` 使用 `overflow-x: hidden` + `overflow-y: auto`；当焦点环超出容器内容区时，超出部分被容器裁掉，表现为 30 首歌曲条目顶部、每日 30 首歌单卡片顶部与导航按钮左侧的描边缺失。只调整某一个容器的 padding 无法覆盖所有滚动场景，且会改变既有间距。
+
+**解决方法**：
+
+- 为 `a`、`button`、`[role="button"]` 与 `[tabindex]` 的 `:focus-visible` 增加统一焦点环：`outline: 2px solid var(--accent-strong)`，并用 `outline-offset: -2px` 向内收 2px。
+- 焦点环完全落在元素边框盒内，父级滚动容器的 `overflow` 不再影响描边；元素自身的圆角仍由 `outline` 跟随。
+- 输入框、文本域与滑杆继续使用各自已有的聚焦样式，不叠加全局焦点环。
+- 不修改 `.nav`、`.discover-strip`、`.discover-playlists` 的 padding 或滚动行为。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 补全局 `:focus-visible` 焦点环的选择器、颜色与 `outline-offset: -2px`，说明向内绘制用于避免滚动容器裁剪，输入框沿用自身聚焦样式。 |
+| `USER.html` | §2 CONVENTIONS（`#u2`） | 改 | 增加“键盘焦点”约定：Tab 遍历时显示 2px 强调色焦点环，绘制在元素内侧，滚动容器不会裁掉描边。 |
+| `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 不动 | 焦点环契约由 §4.49 统一维护；发现页只负责提供滚动容器，不重复记录样式。 |
+| `USER.html` | §5.2.8 页面结构 · 发现（`#u5-2-8`） | 不动 | 已由 §2 的共用约定覆盖，不再逐页描述键盘焦点。 |
+| `README.md` | §2 用户交互 | 不动 | 键盘焦点是通用交互细节，不作为首页能力条目重复列出。 |
+| `ABOUT.html` | 用户交互 | 不动 | 与 README 同步保持现状。 |
