@@ -3510,7 +3510,7 @@
 
 状态：已解决。
 
-### 4.51 下载页新增“全部开始”继续所有暂停任务
+### 4.51 下载页新增“全部开始”继续所有暂停任务 [已解决]
 
 问题描述：补充需求：下载页需要“全部开始”按钮，把所有暂停任务继续，并与任务筛选切换放在同一行右侧。
 
@@ -3535,6 +3535,22 @@
 | `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 筛选切换同行右侧提供“全部开始”，继续所有暂停任务。 |
 | `CORE.html` | §4.60 `download/manager.ts` | 改 | 新增 `resumeAllDownloads()`：只把 paused 置为 pending，并调度队列。 |
 | `CORE.html` | 下载中心对应小节 | 改 | 工具栏左筛选、右“全部开始”；无暂停任务时禁用。 |
+
+实际操作（2026-11-12，分支 `doc/downloads-resume-all`）：
+
+- `CORE.html` §4.60 `download/manager.ts`：补充 `resumeAllDownloads()` 只把 `paused` 置为 `pending`、清空错误并 `touchTask`，`downloading` / `done` / `failed` 不变；有任务继续时 `schedulePump()` 并返回快照；说明渲染层通过 `download.resumeAll` 一次 IPC 完成，store 用返回快照替换任务并启动轮询。
+- `CORE.html` §4.67 `DownloadsView.vue`：补充工具栏右侧“全部开始”在无暂停任务或请求进行中时禁用，请求中显示 spinner。
+- `USER.html` §5.2.8 页面表 · 下载中心行：核对已包含“工具栏左侧筛选、右侧‘全部开始’继续所有暂停任务”，无需再改。
+
+验证：
+
+- 对照 `src/main/download/manager.ts`：`resumeAllDownloads()` 只处理 `status === 'paused'`，改为 `pending` 并清空 `error`，有变化时 `schedulePump()`，返回被继续任务快照。
+- 对照 `src/main/ipc.ts` / `src/preload/index.ts` / `src/shared/ipc.ts`：存在 `download.resumeAll`，preload 暴露 `resumeAll()`。
+- 对照 `src/renderer/stores/download.ts`：`resumeAll()` 一次调用 IPC，逐个替换返回任务，有任务时启动轮询。
+- 对照 `src/renderer/views/DownloadsView.vue`：按钮位于筛选同行右侧，`pausedCount === 0` 或 `resumingAll` 时禁用，请求中显示 spinner。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.52 下载页整体进度条改为不占布局的顶部 overlay
 
