@@ -3475,7 +3475,7 @@
 
 状态：已解决。
 
-### 4.50 下载页移除数字进度指示并将进度条改为 muted
+### 4.50 下载页移除数字进度指示并将进度条改为 muted [已解决]
 
 问题描述：ISSUES 要求下载页顶部的整体进度条不再显示下方的 `(1/100)` 数字指示，并把进度填充色改为 muted。
 
@@ -3496,6 +3496,19 @@
 |---|---|---|---|
 | `USER.html` | §5.2.8 页面结构 · 下载中心行 | 改 | 顶部只保留 muted 整体进度条，不显示数字 / 失败数量指示；失败数量仍在任务列表与筛选中体现。 |
 | `CORE.html` | 下载中心对应小节 | 改 | 删除 `.downloads-progress-count` 说明；进度条填充使用 `--muted`。 |
+
+实际操作（2026-11-12，分支 `doc/downloads-progress-muted`）：
+
+- `USER.html` §5.2.8 页面表 · 下载中心行：顶部整体进度条改为 muted 填充，明确不显示数字 / 失败数量指示；失败数量仍在任务列表与“未成功”筛选中体现。
+- `CORE.html` §4.67 `DownloadsView.vue`：补充进度条使用 `--muted` 填充、不再渲染 `.downloads-progress-count`，并删除其 900px / 560px 响应式规则；失败数量只在任务列表与筛选中体现。
+
+验证：
+
+- 对照 `src/renderer/views/DownloadsView.vue`：模板只有 `.downloads-progress-track` 与内部 `<span>`，保留 `role="progressbar"` 和 `aria-valuenow`，没有 `.downloads-progress-count`。
+- 对照 `src/renderer/styles/main.css`：`.downloads-progress-track span` 的背景为 `var(--muted)`；文件中不存在 `.downloads-progress-count` 或其响应式规则。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.51 下载页新增“全部开始”继续所有暂停任务
 
