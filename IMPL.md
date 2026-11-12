@@ -208,3 +208,23 @@
 | `USER.html` | §5.2.5 歌词与评论（`#u5-2-5`） | 改 | 改为“原文与译文紧贴为上下两行并共享当前行高亮；无译文文本时不显示开关”。 |
 | `README.md` | §2 用户交互 · 歌词 / 评论行 | 改 | 与 USER 同步，恢复“上下两行共享高亮”。 |
 | `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 与 README 同步。 |
+
+### 3.5 播放模式 revealer 展开后当前模式失去高亮
+
+**问题描述**：`.mode-wrap.open` 只把按钮提升到浮层之上，没有改变按钮自身的颜色与背景。默认态是透明背景 + muted 图标，因此 revealer 一展开，当前播放模式虽然仍由按钮图标表示，却不再保持 purple-light 高亮，用户无法在菜单打开时确认当前模式。
+
+**解决方法**：
+
+- 在 `.mode-wrap.open .mode-button` 增加 `color: var(--accent-strong)` 与 `background: var(--accent-soft)`。
+- 保留默认透明背景 + muted 图标，以及 hover 的 accent 混合背景；只在 revealer 打开期间持续高亮。
+- 不修改菜单项的渲染逻辑与点击循环顺序。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.3 播放条（`#u5-2-3`） | 改 | 补“revealer 弹出期间按钮保持 purple-light 高亮当前模式”。 |
+| `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | 补 `mode-wrap.open` 期间按钮使用 `--accent-strong` / `--accent-soft`。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 补 `.mode-wrap.open .mode-button` 的颜色与背景契约。 |
+| `README.md` | §2 用户交互 · 播放行 | 不动 | 只描述当前项由按钮图标表示，不涉及 revealer 打开态，避免与 USER/CORE 重复。 |
+| `ABOUT.html` | 用户交互 · 播放行 | 不动 | 与 README 同步保持现状。 |

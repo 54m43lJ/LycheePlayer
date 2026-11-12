@@ -3258,6 +3258,8 @@ a {
 .mode-wrap.open .mode-button {
   position: relative;
   z-index: 36;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 .mode-menu {
