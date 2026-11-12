@@ -216,15 +216,16 @@
 **解决方法**：
 
 - 在 `.mode-wrap.open .mode-button` 增加 `color: var(--accent-strong)` 与 `background: var(--accent-soft)`。
-- 保留默认透明背景 + muted 图标，以及 hover 的 accent 混合背景；只在 revealer 打开期间持续高亮。
+- 增加 `.mode-wrap.open .mode-button:hover`，背景复用普通 hover 的 `--accent` 34% 混合，图标继续使用 `--accent-strong`；不另造灰紫混色。
+- 保留默认透明背景 + muted 图标，以及普通 hover 的 accent 混合背景；只在 revealer 打开期间持续高亮。
 - 不修改菜单项的渲染逻辑与点击循环顺序。
 
 **修订建议**：
 
 | 文档 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `USER.html` | §5.2.3 播放条（`#u5-2-3`） | 改 | 补“revealer 弹出期间按钮保持 purple-light 高亮当前模式”。 |
-| `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | 补 `mode-wrap.open` 期间按钮使用 `--accent-strong` / `--accent-soft`。 |
-| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 补 `.mode-wrap.open .mode-button` 的颜色与背景契约。 |
+| `USER.html` | §5.2.3 播放条（`#u5-2-3`） | 改 | 补“revealer 弹出期间保持 purple-light 高亮，悬停沿用普通 accent 34% 背景”。 |
+| `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | 补 `mode-wrap.open` 期间按钮使用 `--accent-strong` / `--accent-soft`，悬停复用普通 hover 背景。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 补 `.mode-wrap.open .mode-button` 与 `:hover` 的颜色、背景契约。 |
 | `README.md` | §2 用户交互 · 播放行 | 不动 | 只描述当前项由按钮图标表示，不涉及 revealer 打开态，避免与 USER/CORE 重复。 |
 | `ABOUT.html` | 用户交互 · 播放行 | 不动 | 与 README 同步保持现状。 |

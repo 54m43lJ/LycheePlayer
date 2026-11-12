@@ -3262,6 +3262,12 @@ a {
   background: var(--accent-soft);
 }
 
+/* 打开态仍沿用普通 hover 的 accent 34% 背景，只保留图标高亮。 */
+.mode-wrap.open .mode-button:hover {
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 34%, transparent);
+}
+
 .mode-menu {
   position: absolute;
   bottom: 0;
