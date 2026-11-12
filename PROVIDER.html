@@ -104,7 +104,7 @@
 </table>
 <ul class="note">
   <li>音质档位与请求 / 实际音质的用户语义见 <a href="USER.html#u1">USER §1</a>；内部类型 <code>Quality</code> 见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
-  <li>歌词接口固定发送 <code>g_tk=5381</code>，不使用凭证派生值。</li>
+  <li>歌词首选 <code>PlayLyricInfo</code>，走 <code>musicu</code> 通用 <code>comm</code>；回退的旧 <code>fcg_query_lyric_new.fcg</code> 固定发送 <code>g_tk=5381</code>，不使用凭证派生值。</li>
 </ul>
 
 <h2 id="p2">2. CONVENTIONS</h2>
@@ -285,7 +285,8 @@
   <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td><code>Content</code> · <code>BizType</code>（1） · <code>BizId</code> · <code>BizSubType</code>（2）；需要登录，正文字符串上限 300。</td></tr>
   <tr><td>会话续期</td><td><code>music.login.LoginServer / Login</code></td><td>用 <code>refresh_token</code> 换新 <code>musickey</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
-  <tr><td>歌词</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回 LRC / QRC 与翻译。</td></tr>
+  <tr><td>歌词（首选）</td><td><code>music.musichallSong.PlayLyricInfo / GetPlayLyricInfo</code></td><td>按数字歌曲 ID 返回 Base64 编码的 <code>lyric</code> 与 <code>trans</code>；旧接口经常只返回原文。</td></tr>
+  <tr><td>歌词（回退）</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回 LRC / QRC 与可能的翻译。</td></tr>
   <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲最新评论；应用不提供“最旧”或按点赞排序，单页固定 25 条（26 起返回业务码 <code>10000</code>）。</td></tr>
   <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号 VIP 权益，用于不可播提示。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
@@ -388,7 +389,11 @@
     <td><code>albumMid</code> · <code>order</code>（0） · <code>begin</code> · <code>num</code>（≤100）</td>
   </tr>
   <tr>
-    <td>歌词</td>
+    <td>歌词（首选）</td>
+    <td><code>songID</code>（数字） · <code>trans</code>（1） · <code>qrc</code>（0） · <code>crypt</code>（0） · <code>interval</code> · <code>ct</code>（6） · <code>cv</code>（80600）</td>
+  </tr>
+  <tr>
+    <td>歌词（回退）</td>
     <td><code>songmid</code> · <code>format</code> · <code>nobase64</code> · <code>trans</code> · <code>g_tk</code> · <code>loginUin</code> · <code>hostUin</code> · <code>inCharset</code> · <code>outCharset</code> · <code>notice</code> · <code>platform</code> · <code>needNewCode</code></td>
   </tr>
   <tr>
@@ -417,7 +422,8 @@
   <tr><td>收藏写入 <code>AddSonglist</code> / <code>DelSonglist</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td><code>u6.y.qq.com</code>；<code>ag-1</code> + zzc 签名；<code>Content-Type: text/plain</code></td></tr>
   <tr><td>歌单详情 <code>CgiGetDiss</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>我的歌单 <code>GetPlaylistByUin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
-  <tr><td>歌词 <code>fcg_query_lyric_new.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=5381</code></td></tr>
+  <tr><td>歌词 <code>PlayLyricInfo</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td><code>u.y.qq.com</code> <code>musicu</code>；Cookie 凭证</td></tr>
+  <tr><td>歌词回退 <code>fcg_query_lyric_new.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=5381</code></td></tr>
   <tr><td>歌曲评论 <code>GetNewCommentList</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>未登录匿名；登录后携带 Cookie 以读取 <code>IsPraised</code></td></tr>
   <tr><td>VIP 状态 <code>vip_login_base</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>用户资料 <code>fcg_get_profile_homepage.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=hash33(musickey, 5381)</code></td></tr>
@@ -910,6 +916,11 @@ interface QqLoginPayload {
     <td>搜索类型由 <code>search_type</code> 选择；空结果重试一次。</td>
   </tr>
   <tr>
+    <td><code>QqPlayLyricInfoData</code></td>
+    <td><code>lyric</code> · <code>trans</code> · <code>qrc</code> · <code>qrc_t</code> · <code>trans_t</code> · <code>lrc_t</code> · <code>songID</code></td>
+    <td><code>lyric</code> / <code>trans</code> 为 Base64 文本，解码后是标准 LRC；<code>qrc: 0</code> 时返回 LRC，<code>qrc: 1</code> 时 <code>lyric</code> 为新的逐字编码，应用当前不使用。<code>trans</code> 是独立译文 LRC，不保证与原文时间戳完全一致。</td>
+  </tr>
+  <tr>
     <td><code>QqLyricResponse</code></td>
     <td><code>code</code> · <code>retcode</code> · <code>lyric</code> · <code>qrc</code> · <code>trans</code></td>
     <td><code>-1901</code> 表示无歌词；<code>qrc</code> 为 QRC 密文，主进程只透传。QRC 编码链为 hex → 3DES-ECB（固定密钥 <code>!@#)(*$%123ZXC!@!@#)(NHL</code>，无自动填充）→ zlib → <code>LyricContent</code> XML；解密在 preload 完成，见 <a href="CORE.html#c4-64">CORE §4.64</a>。</td>
@@ -1051,6 +1062,10 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqAddCommentResult</code> → <code>CommentPostResult</code></td>
     <td><code>SubCode === 0</code> 才成功；<code>AddedCmId → commentId</code>，缺失时为空字符串；<code>SubCode=1000</code> → <code>AUTH_EXPIRED</code>；<code>VerifyUrl</code> 非空 → 需要验证码的 <code>NO_PERMISSION</code>；其余非 0 按 <code>Msg</code> 映射为 <code>UPSTREAM_CHANGED</code>。</td>
+  </tr>
+  <tr>
+    <td><code>QqPlayLyricInfoData</code> → <code>Lyric</code></td>
+    <td>Base64 解码 <code>lyric</code> → <code>text</code>、<code>trans</code> → <code>trans</code>；<code>format: 'lrc'</code>；<code>trans</code> 去空白后为空则 <code>null</code>。新版失败或无数字 <code>songId</code> 时才回退 <code>QqLyricResponse</code>。</td>
   </tr>
   <tr>
     <td><code>QqLyricResponse</code> → <code>Lyric</code></td>

@@ -30,7 +30,7 @@ function parse(lyric: Lyric): LyricLine[] {
 export function useLyrics() {
   const player = usePlayerStore()
 
-  async function load(songMid: string): Promise<void> {
+  async function load(songMid: string, songId: string): Promise<void> {
     const cached = cache.get(songMid)
     if (cached) {
       lines.value = cached
@@ -41,7 +41,7 @@ export function useLyrics() {
     loading.value = true
     error.value = ''
     try {
-      const lyric = unwrap(await window.lychee.lyric.get(songMid))
+      const lyric = unwrap(await window.lychee.lyric.get(songMid, songId))
       if (currentToken !== token) return
       const parsed = parse(lyric)
       cache.set(songMid, parsed)
@@ -56,14 +56,16 @@ export function useLyrics() {
   }
 
   watch(
-    () => player.current?.songMid ?? null,
-    (songMid) => {
+    () =>
+      player.current ? `${player.current.songMid}|${player.current.songId}` : null,
+    () => {
       token += 1
-      if (!songMid) {
+      const current = player.current
+      if (!current) {
         lines.value = []
         return
       }
-      void load(songMid)
+      void load(current.songMid, current.songId)
     },
     { immediate: true }
   )
@@ -96,6 +98,7 @@ export function useLyrics() {
     hasTranslation,
     translationVisible,
     toggleTranslation,
-    reload: () => (player.current ? load(player.current.songMid) : null)
+    reload: () =>
+      player.current ? load(player.current.songMid, player.current.songId) : null
   }
 }

@@ -763,7 +763,7 @@ export interface FlagsFile {
     getProfile(): Promise&lt;IpcResult&lt;UserProfile&gt;&gt;;
   };
   lyric: {
-    get(songMid: string): Promise&lt;IpcResult&lt;Lyric&gt;&gt;;
+    get(songMid: string, songId?: string): Promise&lt;IpcResult&lt;Lyric&gt;&gt;;
     decryptQrc(ciphertext: string): string;
   };
   comment: {
@@ -1010,10 +1010,12 @@ export function isVipUser(): Promise&lt;boolean&gt;;
 </ul>
 
 <h3 id="c4-14">4.14 src/main/api/lyric.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function getLyric(songMid: string): Promise&lt;Lyric&gt;;
+<pre><code>export function getLyric(songMid: string, songId?: string): Promise&lt;Lyric&gt;;
 </code></pre>
 <ul class="note">
-  <li>请求 QRC 时只透传原始密文，解密在渲染进程 <a href="#c4-64">§4.64</a>；无法取得逐字数据时返回普通 LRC。</li>
+  <li>优先调用 <code>music.musichallSong.PlayLyricInfo / GetPlayLyricInfo</code>：传数字 <code>songID</code>、<code>trans: 1</code>、<code>qrc: 0</code>，响应的 <code>lyric</code> / <code>trans</code> 均为 Base64，主进程解码后返回普通 LRC 与独立翻译文本。旧接口经常只返回原文、<code>trans</code> 为空，不能作为翻译的唯一来源。</li>
+  <li>新版接口失败或没有数字 <code>songId</code> 时回退旧接口 <code>fcg_query_lyric_new.fcg</code>，保留 QRC 透传与既有错误处理；回退路径不因新版失败而把歌词整体判为失败。</li>
+  <li>QRC 仍只透传原始密文，解密在渲染进程 <a href="#c4-64">§4.64</a>；翻译与原文分别解析为独立时间行。</li>
 </ul>
 
 <h3 id="c4-15">4.15 src/main/api/comment.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1428,6 +1430,7 @@ export function activeLyricWord(line: LyricLine, positionMs: number): LyricWord 
 <ul class="note">
   <li><code>translationVisible</code> 读取 <code>localStorage</code> 的 <code>lychee.lyrics.translation</code>，只有值为 <code>on</code> 时才显示译文，默认关闭；<code>toggleTranslation()</code> 切换并持久化，存储不可用时仅保留当前会话。</li>
   <li><code>visibleLines</code> 在译文关闭时过滤 <code>translation=true</code> 的行；<code>activeIndex</code> 基于 <code>visibleLines</code> 计算。<code>hasTranslation</code> 由解析出的翻译行派生，因此只要译文文本存在，开关就显示。</li>
+  <li><code>load(songMid, songId)</code> 同时把数字 <code>songId</code> 传给 <code>lyric.get</code>，供新版歌词接口使用；缓存键仍是 <code>songMid</code>，切歌时重新请求。</li>
 </ul>
 
 <h3 id="c4-35">4.35 src/renderer/composables/toast.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -2663,10 +2666,12 @@ app::requestSingleInstanceLock()
 └── components/LyricsOverlay::setup()
     ├── 判断无当前歌曲 → 渲染空状态，不发请求
     ├── composables/lyrics::useLyrics(current)
-    │   └── window.lychee.lyric.get(songMid)
+    │   └── window.lychee.lyric.get(songMid, songId)
     │       └── ipc::handle('lyric.get')
-    │           └── api/lyric::getLyric(songMid)
-    │               └── GET c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg
+    │           └── api/lyric::getLyric(songMid, songId)
+    │               ├── api/client::musicu('music.musichallSong.PlayLyricInfo', 'GetPlayLyricInfo', ...)
+    │               ├── 判断新版失败 / 无数字 songId → 回退 GET c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg
+    │               └── 解码 Base64 原文 / 译文 → Lyric
     ├── components/LyricsPanel::watch(player.positionMs)
     │   ├── 查找活动行并滚动居中
     │   └── 判断点击 / 拖拽 / 滚轮 → player.seek(positionMs)
