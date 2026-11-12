@@ -7,7 +7,7 @@ withDefaults(defineProps<{ songs?: number; playlists?: number }>(), {
 
 <template>
   <div class="discover-skeleton" aria-hidden="true">
-    <div class="discover-strip">
+    <div v-if="songs > 0" class="discover-strip">
       <article v-for="index in songs" :key="`song-${index}`" class="discover-item">
         <span class="discover-cover skeleton" />
         <div class="discover-text">

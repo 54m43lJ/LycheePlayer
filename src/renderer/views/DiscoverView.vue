@@ -35,6 +35,11 @@ function isPlaceholder(section: RecommendSection): boolean {
   return section.refreshedAtMs === 0
 }
 
+/** 有歌单入口的分区只保留伪歌单，不再重复渲染歌曲列表。 */
+function showsSongStrip(section: RecommendSection): boolean {
+  return section.playlists.length === 0 && section.songs.length > 0
+}
+
 async function load(force = false): Promise<void> {
   await recommend.load(force)
 }
@@ -103,6 +108,7 @@ onBeforeUnmount(() => recommend.cancel())
 
         <DiscoverSkeleton
           v-if="isPlaceholder(section) && !recommend.errors[section.id]"
+          :songs="section.id === 'daily' ? 0 : 30"
           :playlists="section.id === 'daily' ? 1 : 0"
         />
 
@@ -114,7 +120,7 @@ onBeforeUnmount(() => recommend.cancel())
         </div>
 
         <template v-else>
-          <div v-if="section.songs.length > 0" class="discover-strip">
+          <div v-if="showsSongStrip(section)" class="discover-strip">
             <article
               v-for="song in section.songs"
               :key="song.songMid"
