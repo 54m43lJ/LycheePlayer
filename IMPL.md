@@ -3678,7 +3678,7 @@
 
 状态：已解决。
 
-### 4.55 音量 revealer 改按拖动距离 delta 调节
+### 4.55 音量 revealer 改按拖动距离 delta 调节 [已解决]
 
 问题描述：音量是 revealer 的特殊个例，触屏上不能像模式 / 音质那样按选项定位；需求是拖动音量按钮时按拖动距离的 delta 改变音量，且轻点仍切换静音。
 
@@ -3703,3 +3703,19 @@
 | `USER.html` | §5.2.3 播放条 | 改 | 已更新：音量触屏拖动按 delta 调节，120px 覆盖 0–1，轻点仍静音。 |
 | `CORE.html` | §4.40 `PlayerBar.vue` / §4.78 | 改 | 已更新：音量特殊手势与 4px 阈值、delta 计算、click 抑制。 |
 | `EVOLVE.md` | #5 / #11 | 改 | 音量 revealer 的触屏例外改为“拖动距离 delta 调节”，不是无响应或绝对定位。 |
+
+实际操作（2026-11-12，分支 `doc/volume-delta-gesture`）：
+
+- `CORE.html` §4.78 `revealer-touch.ts`：补充音量条不接入该 composable——它没有可纵向排列的选项，改用独立 Pointer Events delta 手势，并链接 §4.40。
+- `CORE.html` §4.40 `PlayerBar.vue`：核对音量特殊手势已记录 4px 阈值、`(startY - clientY) / 120`、窄屏打开弹层、松开关闭与 click 抑制，无需再改。
+- `USER.html` §5.2.3 播放条：核对已包含“触屏拖动按 delta 调节，120px 覆盖 0–1，轻点仍静音”，无需再改。
+- `EVOLVE.md`：仓库中已不存在该文件，按原表“改”无法执行；对应约束已落到 CORE / USER。
+
+验证：
+
+- 对照 `src/renderer/components/PlayerBar.vue`：`VOLUME_DRAG_RANGE = 120`；`pointerdown` 记录起始 Y / 音量，移动超过 4px 才捕获指针并打开窄屏弹层，音量按 `startVolume + (startY - clientY) / 120` 夹紧到 0–1；松开 / 取消后关闭弹层并抑制随后的 click，轻点仍执行 `toggleMute()`。
+- 对照 `src/renderer/components/PlayerBar.vue`：音量手势只处理 `pointerType === 'touch'`，不调用 `useRevealerTouch`。
+- 对照 `src/renderer/styles/main.css`：`.volume-button` 设置 `touch-action: none`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。

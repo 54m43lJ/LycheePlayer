@@ -2207,6 +2207,7 @@ export function getArtistSongs(
   <li>仅处理 <code>pointerType === 'touch'</code>；纵向移动超过 8px 才进入手势，调用 <code>open()</code> 并捕获指针，因此轻点不会打断按钮原有 click。</li>
   <li>弹层内带 <code>data-revealer-option</code> 的节点按中点与手指 Y 距离匹配最近项，写入 <code>highlighted</code>；松开确认，取消手势则关闭。</li>
   <li>滑动后通过容器捕获阶段的 <code>onClickCapture()</code> 抑制紧随其后的 click，避免重复执行按钮动作。</li>
+  <li>音量条不接入本 composable：它没有可纵向排列的选项，改用独立 Pointer Events 手势，按拖动距离 delta 叠加到起始音量，见 <a href="#c4-40">§4.40</a>。</li>
 </ul>
 
 <h3 id="c4-77">4.77 src/renderer/components/PlaylistPicker.vue <a class="backlink" href="#c1">文件树</a></h3>
