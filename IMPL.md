@@ -3588,7 +3588,7 @@
 
 状态：已解决。
 
-### 4.53 侧栏退出按钮下方新增切换配色
+### 4.53 侧栏退出按钮下方新增切换配色 [已解决]
 
 问题描述：ISSUES 要求在左侧导航“退出”按钮下面增加一个切换配色按钮。
 
@@ -3612,6 +3612,21 @@
 |---|---|---|---|
 | `USER.html` | §5.2.2 侧栏与导航 | 改 | 已更新：应用组“退出”下方提供仅图标、无文字的配色切换按钮，与设置页共用 `Settings.theme`，切换不弹 Toast。 |
 | `CORE.html` | §4.23 `App.vue` | 改 | 已更新：切换配色读取并写回 `Settings.theme`，复用同一 store 与即时应用逻辑。 |
+
+实际操作（2026-11-12，分支 `doc/sidebar-theme-toggle`）：
+
+- `CORE.html` §4.23 `App.vue`：补充配色切换按钮的 tooltip / `aria-label` 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。
+- `CORE.html` §4.36 `AppIcon.vue`：补图标集说明，配色切换使用 `sun` / `moon`。
+- `USER.html` §5.2.2 侧栏与导航：核对已包含“退出下方仅图标配色按钮、浅色太阳 / 深色月亮、共用 `Settings.theme`、切换不弹 Toast”，无需再改。
+
+验证：
+
+- 对照 `src/renderer/App.vue`：`targetThemeLabel()` 返回目标模式，按钮 `title` 为 `切换到${targetThemeLabel()}模式`，`aria-label` 为“切换配色”；`toggleTheme()` 调用 `settings.update({ theme })`，失败通过 `toast.error` 提示。
+- 对照 `src/renderer/components/AppIcon.vue`：存在 `sun` / `moon` 图标定义。
+- 对照 `src/renderer/stores/settings.ts`：主题写入与 `applyTheme()` 复用同一 store；设置页与侧栏入口共用 `Settings.theme`。
+- 本次只修改文档，未改源码；`npm run typecheck` 通过；`npx vitest run` 25 个测试文件 / 107 个用例通过。
+
+状态：已解决。
 
 ### 4.54 播放条收藏改为特殊 revealer，并为 revealer 增加触屏手势
 

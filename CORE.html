@@ -1111,7 +1111,7 @@ export function destroyTray(): void;
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
   <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
   <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
-  <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；切换成功不弹 Toast。</li>
+  <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；tooltip / <code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
@@ -1389,7 +1389,7 @@ export function useToast(): {
 <pre><code>const props = withDefaults(defineProps&lt;{ name: string; size?: number }&gt;(), { size: 20 });
 </code></pre>
 <ul class="note">
-  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式由播放模式按钮本身表示；其中 <code>sequence</code> 为左侧向下长箭头 + 三条横线，<code>list</code> 专用于播放队列（左侧三点 + 三条横线）；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>，其中 <code>download-cached</code> 与普通下载图标同形（下载箭头 + 完整底线），缓存态由按钮的 24px surface 状态框表达，不使用带框或断线图标；添加到歌单使用 <code>playlist-add</code>（简单加号），下一首播放使用 <code>play-next</code>（横线 + 上箭头）；评论区跳转使用 <code>to-top</code> / <code>to-bottom</code>（箭头 + 底线）。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
+  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式由播放模式按钮本身表示；其中 <code>sequence</code> 为左侧向下长箭头 + 三条横线，<code>list</code> 专用于播放队列（左侧三点 + 三条横线）；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>，其中 <code>download-cached</code> 与普通下载图标同形（下载箭头 + 完整底线），缓存态由按钮的 24px surface 状态框表达，不使用带框或断线图标；添加到歌单使用 <code>playlist-add</code>（简单加号），下一首播放使用 <code>play-next</code>（横线 + 上箭头）；评论区跳转使用 <code>to-top</code> / <code>to-bottom</code>（箭头 + 底线），配色切换使用 <code>sun</code> / <code>moon</code>。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
 </ul>
 
 <h3 id="c4-37">4.37 src/renderer/components/CoverArt.vue <a class="backlink" href="#c1">文件树</a></h3>
