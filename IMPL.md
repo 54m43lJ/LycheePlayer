@@ -388,7 +388,7 @@
 
 **解决方法**：
 
-- 用 `topSections`（daily + guess）与 `listSections`（radar）拆分渲染；首行 `.discover-top` 使用两列等宽网格，两张卡片占满各自单元格。
+- 用 `topSections`（daily + guess）与 `listSections`（radar）拆分渲染；首行 `.discover-top` 使用 flex 横向左对齐排列，两张卡片固定原 150px 尺寸，保留封面 1:1 的比例与高度上限，不随首行宽度放大。
 - 首行两张卡片不再渲染 `section-title`、计数与单区刷新按钮；骨架也改为两个卡片占位，并取消骨架内部 `.discover-playlists` 的顶部间距与横向滚动。
 - 专属雷达继续保留标题、计数、刷新入口与 3 行歌曲条目；页面顶部“换一批”仍只刷新雷达与猜你喜欢。
 - 卡片点击行为不变：每日推荐进入歌单详情，猜你喜欢启动连续队列。

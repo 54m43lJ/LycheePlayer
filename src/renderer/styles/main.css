@@ -3397,15 +3397,16 @@ button:focus-visible,
   gap: 6px;
 }
 
-/* 每日推荐与猜你喜欢共用第一行伪歌单入口，不带分区标题。 */
+/* 每日推荐与猜你喜欢共用第一行伪歌单入口，不带分区标题；保持原卡片尺寸。 */
 .discover-top {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  display: flex;
+  justify-content: flex-start;
   gap: 12px;
   margin-bottom: 30px;
 }
 
 .discover-top-item {
+  flex: 0 0 150px;
   min-width: 0;
 }
 

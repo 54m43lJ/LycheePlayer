@@ -1672,7 +1672,7 @@ const emit = defineEmits&lt;{
   <li>≤900px 侧栏改为单列 grid + 覆盖式抽屉，不再保留 64px / 56px 常驻图标栏；抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code>，默认隐藏，打开时覆盖内容区并显示 backdrop，不压缩主内容。560px 只进一步收窄抽屉宽度。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
   <li>窄屏非触屏（<code>(max-width: 900px) and (hover: hover) and (pointer: fine)</code>）对 <code>.app-shell</code> 设置 <code>user-select: none</code>，输入框与文本域恢复 <code>user-select: text</code>；宽屏不受影响。</li>
   <li><code>.progress-stack</code> 内为单轨进度条：<code>.progress-track</code> 提供背景与圆角，<code>.progress-buffer</code> 使用独立的 <code>--buffer</code> 弱色，<code>.progress-played</code> 使用 <code>--accent</code>，透明 <code>.progress-range</code> 绝对覆盖并位于最上层。删除旧 <code>.cache-progress</code> 细线；无歌曲时轨道降低透明度且不渲染 overlay。</li>
-  <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页首行 <code>.discover-top</code> 使用两列等宽网格放置每日推荐与猜你喜欢卡片，<code>.discover-top-item</code> 设 <code>min-width: 0</code>，卡片宽度占满单元格；骨架内的 <code>.discover-playlists</code> 取消 <code>margin-top</code> / <code>padding-top</code> / <code>overflow</code>。专属雷达继续使用 flexbox 横向排列固定宽度条目、纵向 3 行、横向滚动，条目文本溢出时走跑马灯。</li>
+  <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页首行 <code>.discover-top</code> 使用 flex 横向左对齐放置每日推荐与猜你喜欢卡片，<code>.discover-top-item</code> 固定 <code>flex: 0 0 150px</code> 并设 <code>min-width: 0</code>，保持原卡片尺寸与封面 1:1 比例，不随首行宽度放大；骨架内的 <code>.discover-playlists</code> 取消 <code>margin-top</code> / <code>padding-top</code> / <code>overflow</code>。专属雷达继续使用 flexbox 横向排列固定宽度条目、纵向 3 行、横向滚动，条目文本溢出时走跑马灯。</li>
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
   <li><code>.song-title .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。</li>
   <li>下载按钮三态使用共用的 24px <code>::before</code> 状态框：<code>.cached:not(.downloaded)</code> 为 <code>var(--panel)</code> surface 背景，<code>.downloaded</code> 为 <code>var(--accent-soft)</code> 填充且覆盖缓存态；不画按钮外沿 inset 边框，不使用 <code>background-clip</code>，播放条与歌曲表尺寸一致、点击热区不变。</li>
@@ -2171,7 +2171,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 <pre><code>// 无 props / emits；使用 recommend store。
 </code></pre>
 <ul class="note">
-  <li><code>topSections</code> 固定为每日推荐与猜你喜欢，渲染在 <code>.discover-top</code> 两列网格的第一行；两张伪歌单卡片都不渲染分区标题、计数或刷新按钮。每日推荐卡片取 <code>section.playlists[0]</code>，通过 <code>dailyPlaylistName</code> 补昵称前缀并跳转歌单详情；猜你喜欢卡片取 <code>section.songs[0]</code> 作封面，点击调用 <code>player.startRadioQueue(section.songs)</code> 启动连续队列，不跳转歌单详情。</li>
+  <li><code>topSections</code> 固定为每日推荐与猜你喜欢，渲染在 <code>.discover-top</code> 的第一行，两张卡片保持原 150px 尺寸；两张伪歌单卡片都不渲染分区标题、计数或刷新按钮。每日推荐卡片取 <code>section.playlists[0]</code>，通过 <code>dailyPlaylistName</code> 补昵称前缀并跳转歌单详情；猜你喜欢卡片取 <code>section.songs[0]</code> 作封面，点击调用 <code>player.startRadioQueue(section.songs)</code> 启动连续队列，不跳转歌单详情。</li>
   <li><code>listSections</code> 为其余分区（当前仅专属雷达），保留 <code>section-title</code>、计数与单区刷新按钮，继续渲染固定宽度歌曲条目，每区固定高度显示 3 行，超出横向滚动。</li>
   <li>页面挂载后启动 60 秒定时器调用 <code>recommend.refreshDailyIfExpired()</code>，跨过上海 0 点后自动重取日推；卸载时清除定时器。顶部“换一批”调用 <code>load(true)</code>，只强制刷新雷达与猜你喜欢。</li>
   <li>页面先渲染三块骨架：首行两张歌单卡片占位，专属雷达渲染 30 条歌曲条目占位；再按 <code>daily → radar → guess</code> 逐块异步填充，未完成的分区不阻塞其他内容。</li>
