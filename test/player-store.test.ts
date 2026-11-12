@@ -148,7 +148,8 @@ describe('player queue', () => {
     expect(player.qualityPreference).toBe('auto')
   })
 
-  it('cycles play modes in the preset order', async () => {    const { usePlayerStore } = await import('../src/renderer/stores/player')
+  it('cycles play modes in the preset order', async () => {
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
     const player = usePlayerStore()
     expect(player.mode).toBe('sequence')
     player.cycleMode()
@@ -159,6 +160,56 @@ describe('player queue', () => {
     expect(player.mode).toBe('shuffle')
     player.cycleMode()
     expect(player.mode).toBe('sequence')
+  })
+
+  it('restores the playlist order when leaving shuffle with setMode', async () => {
+    ;(window as unknown as { lychee: { song: { getUrls: unknown } } }).lychee.song.getUrls = (
+      mids: string[]
+    ) =>
+      Promise.resolve({
+        ok: true,
+        data: mids.map((songMid) => ({ songMid, url: 'stream', quality: '320k' }))
+      })
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    const songs = [song('1', 'a'), song('2', 'b'), song('3', 'c'), song('4', 'd')]
+    player.playList(songs, 0)
+    await vi.waitFor(() => expect(player.status).toBe('playing'))
+
+    player.setMode('shuffle')
+    player.playNext()
+    await vi.waitFor(() => expect(player.current?.songMid).not.toBe('1'))
+    const currentMid = player.current?.songMid
+
+    player.setMode('sequence')
+    expect(player.mode).toBe('sequence')
+    expect(player.playOrder.map((item) => item.songMid)).toEqual(['1', '2', '3', '4'])
+    expect(player.playOrder[player.index]?.songMid).toBe(currentMid)
+  })
+
+  it('restores the playlist order when leaving shuffle with setShuffle', async () => {
+    ;(window as unknown as { lychee: { song: { getUrls: unknown } } }).lychee.song.getUrls = (
+      mids: string[]
+    ) =>
+      Promise.resolve({
+        ok: true,
+        data: mids.map((songMid) => ({ songMid, url: 'stream', quality: '320k' }))
+      })
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    const songs = [song('1', 'a'), song('2', 'b'), song('3', 'c')]
+    player.playList(songs, 0)
+    await vi.waitFor(() => expect(player.status).toBe('playing'))
+
+    player.setShuffle(true)
+    player.playNext()
+    await vi.waitFor(() => expect(player.current?.songMid).not.toBe('1'))
+    const currentMid = player.current?.songMid
+
+    player.setShuffle(false)
+    expect(player.mode).toBe('repeat-all')
+    expect(player.playOrder.map((item) => item.songMid)).toEqual(['1', '2', '3'])
+    expect(player.playOrder[player.index]?.songMid).toBe(currentMid)
   })
 
   it('stops skipping after ten consecutive NO_STREAM results', async () => {

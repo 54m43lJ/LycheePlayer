@@ -37,6 +37,8 @@ export const usePlayerStore = defineStore('player', () => {
   const current = ref<Song | null>(null)
   /** 完整播放顺序；current 位于 index，queue 是 index 之后的切片。 */
   const playOrder = ref<Song[]>([])
+  /** 规范顺序；随机模式只改 playOrder，退出随机时据此恢复歌单原始顺序。 */
+  const baseOrder = ref<Song[]>([])
   const index = ref(-1)
   const status = ref<'stopped' | 'playing' | 'paused'>('stopped')
   const positionMs = ref(0)
@@ -184,6 +186,23 @@ export const usePlayerStore = defineStore('player', () => {
     playOrder.value = [...playOrder.value.slice(0, start), ...tail]
   }
 
+  /** 退出随机模式：按规范顺序重排，并把 index 定位到当前曲。 */
+  function restoreNormalOrder(): void {
+    const currentSong = current.value
+    const order = baseOrder.value.slice()
+    const known = new Set(order.map((song) => song.songMid))
+    for (const song of playOrder.value) {
+      if (known.has(song.songMid)) continue
+      known.add(song.songMid)
+      order.push(song)
+    }
+    if (currentSong && !known.has(currentSong.songMid)) order.push(currentSong)
+    playOrder.value = order
+    index.value = currentSong
+      ? order.findIndex((song) => song.songMid === currentSong.songMid)
+      : -1
+  }
+
   function pushHistory(song: Song): void {
     if (playHistory.value.length > 0 && playHistory.value[playHistory.value.length - 1].songMid === song.songMid) {
       return
@@ -271,6 +290,7 @@ export const usePlayerStore = defineStore('player', () => {
     noStreamStreak = 0
     const start = Math.min(Math.max(0, startIndex), songs.length - 1)
     playOrder.value = songs.slice()
+    baseOrder.value = songs.slice()
     index.value = start
     playHistory.value = []
     queueSource.value = null
@@ -283,6 +303,7 @@ export const usePlayerStore = defineStore('player', () => {
   function startPlaylistPlayback(song: Song, source: QueueSource): void {
     noStreamStreak = 0
     playOrder.value = [song]
+    baseOrder.value = [song]
     index.value = 0
     playHistory.value = []
     queueSource.value = source
@@ -301,6 +322,11 @@ export const usePlayerStore = defineStore('player', () => {
     const queued = new Set(playOrder.value.map((song) => song.songMid))
     const additions = tail.filter((song) => !queued.has(song.songMid))
     if (additions.length > 0) {
+      const baseQueued = new Set(baseOrder.value.map((song) => song.songMid))
+      baseOrder.value = [
+        ...baseOrder.value,
+        ...additions.filter((song) => !baseQueued.has(song.songMid))
+      ]
       playOrder.value = [...playOrder.value, ...additions]
       if (mode.value === 'shuffle') shuffleUpcoming()
     }
@@ -337,7 +363,20 @@ export const usePlayerStore = defineStore('player', () => {
       merged.push(song)
     }
     playOrder.value = merged
-    if (mode.value === 'shuffle') shuffleUpcoming()
+    if (mode.value === 'shuffle') {
+      const mergedMids = new Set(merged.map((song) => song.songMid))
+      const nextBase = baseOrder.value.filter((song) => mergedMids.has(song.songMid))
+      const baseMids = new Set(nextBase.map((song) => song.songMid))
+      for (const song of merged) {
+        if (baseMids.has(song.songMid)) continue
+        baseMids.add(song.songMid)
+        nextBase.push(song)
+      }
+      baseOrder.value = nextBase
+      shuffleUpcoming()
+    } else {
+      baseOrder.value = merged.slice()
+    }
     queueBuilding.value = false
   }
 
@@ -354,19 +393,36 @@ export const usePlayerStore = defineStore('player', () => {
       if (existing < index.value) index.value -= 1
     }
     playOrder.value.splice(index.value + 1, 0, song)
+    const baseExisting = baseOrder.value.findIndex((item) => item.songMid === song.songMid)
+    if (baseExisting >= 0) baseOrder.value.splice(baseExisting, 1)
+    const baseCurrent = baseOrder.value.findIndex(
+      (item) => item.songMid === current.value?.songMid
+    )
+    if (baseCurrent >= 0) baseOrder.value.splice(baseCurrent + 1, 0, song)
+    else baseOrder.value.push(song)
   }
 
   function removeFromQueue(queueIndex: number): void {
     if (queueIndex < 0 || queueIndex >= queue.value.length) return
-    playOrder.value.splice(index.value + 1 + queueIndex, 1)
+    const [removed] = playOrder.value.splice(index.value + 1 + queueIndex, 1)
+    if (removed) {
+      baseOrder.value = baseOrder.value.filter(
+        (song) => song.songMid !== removed.songMid
+      )
+    }
   }
 
   function clearQueue(): void {
     if (index.value < 0) {
       playOrder.value = []
+      baseOrder.value = []
       return
     }
+    const pending = new Set(
+      playOrder.value.slice(index.value + 1).map((song) => song.songMid)
+    )
     playOrder.value.splice(index.value + 1)
+    baseOrder.value = baseOrder.value.filter((song) => !pending.has(song.songMid))
   }
 
   function clearPlayHistory(): void {
@@ -449,6 +505,12 @@ export const usePlayerStore = defineStore('player', () => {
         void loadAndPlay(historySong)
       } else {
         playOrder.value.splice(Math.max(0, index.value), 0, historySong)
+        const baseCurrent = baseOrder.value.findIndex(
+          (song) => song.songMid === current.value?.songMid
+        )
+        if (baseOrder.value.findIndex((song) => song.songMid === historySong.songMid) < 0) {
+          baseOrder.value.splice(Math.max(0, baseCurrent), 0, historySong)
+        }
         index.value = Math.max(0, index.value)
         void loadAndPlay(historySong)
       }
@@ -525,28 +587,31 @@ export const usePlayerStore = defineStore('player', () => {
   }
 
   function setLoopStatus(nextStatus: 'None' | 'Track' | 'Playlist'): void {
-    if (nextStatus === 'Track') mode.value = 'repeat-one'
-    else if (nextStatus === 'None') mode.value = 'sequence'
-    else if (mode.value !== 'shuffle') mode.value = 'repeat-all'
+    if (nextStatus === 'Track') applyMode('repeat-one')
+    else if (nextStatus === 'None') applyMode('sequence')
+    else if (mode.value !== 'shuffle') applyMode('repeat-all')
     sendState()
   }
 
   function setShuffle(enabled: boolean): void {
-    if (enabled) {
-      if (mode.value !== 'shuffle') {
-        mode.value = 'shuffle'
-        shuffleUpcoming()
-      }
-    } else if (mode.value === 'shuffle') {
-      mode.value = 'repeat-all'
-    }
+    if (enabled) applyMode('shuffle')
+    else if (mode.value === 'shuffle') applyMode('repeat-all')
     sendState()
   }
 
-  function setMode(next: PlayMode): void {
+  /** 切换播放模式；离开随机时恢复规范顺序，进入随机时只打乱待播部分。 */
+  function applyMode(next: PlayMode): void {
     if (next === mode.value) return
+    const enteringShuffle = next === 'shuffle'
+    if (enteringShuffle) baseOrder.value = playOrder.value.slice()
+    const leavingShuffle = mode.value === 'shuffle'
     mode.value = next
-    if (next === 'shuffle') shuffleUpcoming()
+    if (leavingShuffle && !enteringShuffle) restoreNormalOrder()
+    else if (enteringShuffle) shuffleUpcoming()
+  }
+
+  function setMode(next: PlayMode): void {
+    applyMode(next)
     sendState()
   }
 

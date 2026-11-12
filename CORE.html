@@ -1265,14 +1265,14 @@ interface PlayerStore {
 
 </code></pre>
 <ul class="note">
-  <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，播放队列面板只绑定 <code>queue</code>。<code>addNext(song)</code> 只把歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>，不切歌、不写历史；无 <code>current</code> 时直接以该歌曲开始播放。</li>
+  <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，<code>baseOrder</code> 保存不含随机重排的规范顺序（不对外暴露），播放队列面板只绑定 <code>queue</code>。<code>addNext(song)</code> 只把歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>，不切歌、不写历史；无 <code>current</code> 时直接以该歌曲开始播放。</li>
   <li><code>bufferedMs</code> 保存引擎上报的已缓冲毫秒数，切歌加载新曲前清零；播放条用它计算缓冲 overlay 百分比，并与缓存完成度取较大值。</li>
   <li><code>playNext()</code> 负责手动下一首与自动续播：确定切换到下一首（含列表循环回绕）时，先把原 <code>current</code> 追加到 <code>playHistory</code>，再调用 <code>playAt()</code>；到队尾停止或单曲循环重播不写入历史。<code>playAt()</code> 只做低层定位与加载，不写历史。</li>
   <li><code>startPlaylistPlayback</code> / <code>appendPlaylistQueue</code> / <code>replacePlaylistQueue</code> 维护 <code>queueSource</code> 与 <code>queueBuilding</code>；队列构建由 playlist store 在“歌单快照 → 队列”边界按 <code>playable !== false</code> 过滤，播放器只负责追加 / 替换，不做检测或清理。未完成快照前只允许一次临时快照；最终快照按签名比较后替换，保留手动“下一首播放”的歌曲、当前曲、进度与历史。</li>
   <li><code>onError</code> 对同一歌曲最多每 30 秒自动刷新一次播放链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”并暂停。当前曲不可播（<code>NO_STREAM</code>）时由播放条沿队列向后尝试，内部计数连续不可播次数；达到 <code>NO_STREAM_SKIP_LIMIT</code> 后停止并提示检查登录 / 风控，<code>playList</code> / <code>playNext</code> / <code>previous</code> / <code>setQuality</code> 与成功加载会清零计数。</li>
   <li><code>seek</code> 在 duration 未知时也直接设置位置；播放中 1.2 秒后若实际位置与目标相差超过 2.5 秒，会再触发一次定位（seek 看门狗），用于兜底连续 Range 定位。</li>
-  <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放按洗牌后的 <code>playOrder</code> 进行。</li>
-  <li><code>setMode(mode)</code> 供播放模式菜单直接选择，立即生效且不触发 Toast；<code>cycleMode()</code> 供播放模式按钮点击使用，按 <code>sequence → repeat-all → repeat-one → shuffle → sequence</code> 固定顺序循环。两者都走同一套队列重排与持久化逻辑。</li>
+  <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放只打乱 <code>playOrder</code> 中当前曲之后的部分，<code>baseOrder</code> 始终保持歌单原始顺序。离开随机模式时 <code>restoreNormalOrder()</code> 按 <code>baseOrder</code> 重排 <code>playOrder</code> 并把 <code>index</code> 定位到当前曲，之后按原始顺序续播；随机期间的 <code>addNext</code> / <code>removeFromQueue</code> / <code>clearQueue</code> 与歌单快照替换会同步维护 <code>baseOrder</code>，结构变化在退出随机后仍保留。</li>
+  <li><code>setMode(mode)</code> 供播放模式菜单直接选择，立即生效且不触发 Toast；<code>cycleMode()</code> 供播放模式按钮点击使用，按 <code>sequence → repeat-all → repeat-one → shuffle → sequence</code> 固定顺序循环。<code>setShuffle()</code> 与 <code>setLoopStatus()</code> 也走同一模式切换入口；进入随机时记录规范顺序并打乱待播部分，离开随机时恢复规范顺序。</li>
   <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档；<code>qualityPreference</code> 为持久化偏好（可能为 <code>auto</code>）。</li>
   <li><code>updateDefaultQuality()</code> 是设置页与播放条共用的音质偏好写入入口：先 <code>settings.update</code> 持久化 <code>defaultQuality</code>，再 <code>applySettings()</code>；有当前曲时按解析后的 <code>defaultQuality</code> 重载。无当前曲时只影响下一次播放。设置页与播放条都不得直接改写本地偏好。</li>
   <li><code>cycleQualityPreference()</code> 按 <code>QUALITY_PREFERENCE_OPTIONS</code> 的固定顺序循环（<code>auto → 128k → 320k → flac → auto</code>），供播放条 revealer 按钮点击使用。</li>
