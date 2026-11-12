@@ -3397,7 +3397,7 @@ button:focus-visible,
   gap: 6px;
 }
 
-/* 每日推荐与猜你喜欢共用第一行伪歌单入口，不带分区标题；保持原卡片尺寸。 */
+/* 猜你喜欢与每日推荐共用第一行伪歌单入口，不带分区标题；保持原卡片尺寸。 */
 .discover-top {
   display: flex;
   justify-content: flex-start;

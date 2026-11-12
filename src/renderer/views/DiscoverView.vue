@@ -19,7 +19,12 @@ const router = useRouter()
 const toast = useToast()
 
 const sections = computed(() => recommend.feed.sections)
-const topSections = computed(() => sections.value.filter((section) => isCardSection(section)))
+const topSections = computed(() => {
+  const order: RecommendSection['id'][] = ['guess', 'daily']
+  return order
+    .map((id) => sections.value.find((section) => section.id === id))
+    .filter((section): section is RecommendSection => Boolean(section))
+})
 const listSections = computed(() => sections.value.filter((section) => !isCardSection(section)))
 const nickname = computed(() => auth.profile?.nickname ?? '')
 /** 跨日检查间隔：每分钟确认一次每日推荐是否已过期。 */
@@ -49,8 +54,8 @@ function showsSongStrip(section: RecommendSection): boolean {
   return !isCardSection(section) && section.playlists.length === 0 && section.songs.length > 0
 }
 
-async function load(force = false): Promise<void> {
-  await recommend.load(force)
+async function load(): Promise<void> {
+  await recommend.load()
 }
 
 async function refreshSection(id: RecommendSection['id']): Promise<void> {
@@ -102,15 +107,6 @@ onBeforeUnmount(() => {
         <div class="eyebrow">Discover</div>
         <h1 class="page-title">发现</h1>
       </div>
-      <button
-        class="btn small"
-        title="刷新专属雷达与猜你喜欢"
-        :disabled="recommend.loading"
-        @click="load(true)"
-      >
-        <AppIcon name="refresh" :size="14" />
-        换一批
-      </button>
     </div>
 
     <div v-if="!auth.loggedIn" class="empty">
