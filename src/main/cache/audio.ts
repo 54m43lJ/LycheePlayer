@@ -1,5 +1,5 @@
 import { app } from 'electron'
-import { copyFile, link, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises'
+import { copyFile, mkdir, readdir, rm, stat, unlink } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import type { Quality } from '../../shared/types'
@@ -41,8 +41,8 @@ export function getCachedAudioInfo(songMid: string): Quality | null {
   return null
 }
 
-/** 把缓存文件复制/硬链接到下载文件；返回实际使用的源文件。 */
-export async function linkCachedAudio(
+/** 把缓存文件复制到下载文件；返回实际使用的源文件。 */
+export async function copyCachedAudio(
   songMid: string,
   quality: Quality,
   targetPath: string
@@ -50,11 +50,7 @@ export async function linkCachedAudio(
   const source = getCachedAudio(songMid, quality)
   if (!source) return null
   await mkdir(dirname(targetPath), { recursive: true })
-  try {
-    await link(source, targetPath)
-  } catch {
-    await copyFile(source, targetPath)
-  }
+  await copyFile(source, targetPath)
   return source
 }
 

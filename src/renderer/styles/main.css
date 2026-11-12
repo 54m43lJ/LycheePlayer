@@ -2260,55 +2260,6 @@ a {
 
 /* Unified narrow mode: <=900px. This is the single wide/narrow breakpoint. */
 @media (max-width: 900px) {
-  :root {
-    --player-height: 84px;
-    --sidebar-width: 64px;
-  }
-
-  .app-shell {
-    grid-template-columns: 64px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    gap: 14px;
-    padding: 14px 8px;
-  }
-
-  .brand {
-    justify-content: center;
-    padding: 2px 0;
-  }
-
-  .brand > div:not(.brand-mark) {
-    display: none;
-  }
-
-  .nav-label,
-  .sidebar-note {
-    display: none;
-  }
-
-  .nav-item {
-    justify-content: center;
-    gap: 0;
-    padding: 12px 0;
-    font-size: 0;
-  }
-
-  .sidebar-foot {
-    padding-top: 10px;
-  }
-
-  .user-pill {
-    justify-content: center;
-    padding: 8px 0;
-  }
-
-  .user-pill .user-meta,
-  .user-pill > svg {
-    display: none;
-  }
-
   .page {
     padding: 22px 20px 30px;
   }
@@ -2359,31 +2310,9 @@ a {
 
 /* Extra-narrow screens:<=560px. Two-row player, tighter spacing, single-column options. */
 @media (max-width: 560px) {
-  :root {
-    --player-height: 116px;
-    --sidebar-width: 56px;
-  }
-
-  .app-shell {
-    grid-template-columns: 56px minmax(0, 1fr);
-  }
-
-  .sidebar {
-    gap: 12px;
-    padding: 12px 6px;
-  }
-
   .brand-mark {
     width: 34px;
     height: 34px;
-  }
-
-  .nav-item {
-    padding: 10px 0;
-  }
-
-  .sidebar-foot {
-    padding-top: 8px;
   }
 
   .page {

@@ -22,7 +22,7 @@ import { getSettings } from '../settings'
 import { UpstreamError, upstreamBlockRemainingMs } from '../api/client'
 import { getDetail, resolveStreamUrls } from '../api/song'
 import { peekAvailability } from '../api/availability'
-import { getCachedAudio, getCachedAudioInfo, linkCachedAudio } from '../cache/audio'
+import { getCachedAudio, getCachedAudioInfo, copyCachedAudio } from '../cache/audio'
 import { setDownloadedAudioResolver } from './registry'
 
 interface RuntimeTask {
@@ -312,7 +312,7 @@ async function pump(): Promise<void> {
         if (cached) {
           try {
             await mkdir(dirname(task.filePath), { recursive: true })
-            await linkCachedAudio(task.songMid, resolved.quality, task.filePath)
+            await copyCachedAudio(task.songMid, resolved.quality, task.filePath)
             task.source = 'cache'
             task.status = 'done'
             task.receivedBytes = await stat(task.filePath)

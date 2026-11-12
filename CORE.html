@@ -22,6 +22,7 @@
 <pre><code>lychee-player/
 ├── diagram/                                  PlantUML 图源与导出 SVG
 ├── resources/                                应用与托盘图标
+│   ├── tray.png                             22×22 全彩 RGBA 托盘图标（无单色变体）
 │   └── flags.conf.example                    启动参数示例
 ├── scripts/
 │   ├── probe.mjs                             上游接口可达性探针
@@ -64,7 +65,7 @@
 │   │   ├── media/
 │   │   │   └── <a href="#c4-59">audio-protocol.ts</a>        本地音频协议
 │   │   ├── download/
-│   │   │   └── <a href="#c4-60">manager.ts</a>               单任务与批次下载管理
+│   │   │   └── <a href="#c4-60">manager.ts</a>               单任务下载队列与索引
 │   │   ├── integration/                      桌面集成
 │   │   │   ├── <a href="#c4-18">mpris.ts</a>                 MPRIS 服务
 │   │   │   └── <a href="#c4-19">tray.ts</a>                  系统托盘
@@ -89,11 +90,13 @@
 │       │   ├── <a href="#c4-62">recommend.ts</a>              推荐 feed
 │       │   ├── <a href="#c4-63">playlist-edit.ts</a>          歌单编辑状态
 │       │   ├── <a href="#c4-70">mv.ts</a>                        MV 播放状态
-│       │   └── <a href="#c4-71">download.ts</a>                  下载任务 / 批次与资产状态
+│       │   └── <a href="#c4-71">download.ts</a>                  下载任务、队列与资产状态
 │       ├── utils/
 │       │   ├── <a href="#c4-32">format.ts</a>                 时长、计数、封面与歌手格式化
 │       │   ├── <a href="#c4-33">lrc.ts</a>                    LRC / QRC 解析与活动行查找
 │       │   ├── queue.ts                     队列快照过滤（不可播歌曲在入队前剔除）
+│       │   ├── <a href="#c4-79">download-state.ts</a>        下载按钮三态解析
+│       │   ├── <a href="#c4-80">download-progress.ts</a>     下载中心整体进度计算
 │       │   └── <a href="#c4-64">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
@@ -106,22 +109,24 @@
 │       │   ├── <a href="#c4-38">MarqueeText.vue</a>           超宽文本跑马灯
 │       │   ├── <a href="#c4-39">SongTable.vue</a>             歌曲列表
 │       │   ├── <a href="#c4-40">PlayerBar.vue</a>             播放条
-│       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词页歌词区
-│       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         歌词页评论区
+│       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词面板（弹出层左列）
+│       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         评论面板（弹出层右列）
+│       │   ├── <a href="#c4-72">LyricsOverlay.vue</a>         歌词 / 评论弹出层
 │       │   ├── <a href="#c4-43">ToastStack.vue</a>            Toast 容器
 │       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
 │       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
-│       │   └── <a href="#c4-67">DownloadDrawer.vue</a>         下载中心抽屉
+│       │   ├── <a href="#c4-81">ConfirmDialog.vue</a>          应用内确认框
+│       │   └── <a href="#c4-82">CatalogDescription.vue</a>     歌手 / 专辑简介折叠
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
 │       │   ├── <a href="#c4-73">ArtistView.vue</a>            歌手页
 │       │   ├── <a href="#c4-74">AlbumView.vue</a>             专辑页
 │       │   ├── <a href="#c4-45">LibraryView.vue</a>           我的歌单
 │       │   ├── <a href="#c4-46">PlaylistView.vue</a>          歌单详情
-│       │   ├── <a href="#c4-72">LyricsView.vue</a>             歌词 / 评论页
 │       │   ├── <a href="#c4-47">LoginView.vue</a>             登录页
 │       │   ├── <a href="#c4-48">SettingsView.vue</a>          设置页
 │       │   ├── <a href="#c4-68">DiscoverView.vue</a>          发现页
+│       │   ├── <a href="#c4-67">DownloadsView.vue</a>         下载中心
 │       │   └── <a href="#c4-69">MvView.vue</a>                MV 播放页
 │       ├── <a href="#c4-49">styles/main.css</a>               主题 token、布局与组件样式
 │       └── index.html                        渲染进程 HTML 入口
@@ -144,6 +149,7 @@
 <ul class="note">
   <li><code>src/shared/</code> 是 IPC 类型契约的唯一来源，主进程、preload 与渲染进程均从这里导入。</li>
   <li>文件树只列源码、构建配置与资源；文档与文档样式不在其中。</li>
+  <li><code>src/main/audio/</code> 已随 mpv 方案删除，文件树不再保留该目录；<code>src/renderer/audio/</code> 只保留 <code>engine.ts</code>（HTML5 Audio 实现）。</li>
   <li>带链接的文件在 <a href="#c4">§4</a> 有对应的签名小节；其余条目为脚本、配置、资源或纯展示文件。</li>
   <li><code>build/</code> 是 <code>electron-builder.yml</code> 的 <code>buildResources</code>，提供打包图标；<code>resources/</code> 通过 <code>extraResources</code> 复制到 <code>process.resourcesPath</code>；<code>packaging/arch/lychee-player.desktop</code> 由 <code>scripts/package-arch.mjs</code> 写入 tar 顶层。</li>
   <li>测试默认在 Node 环境执行且不触网：导入链经过 Electron / 原生协议时用 <code>vi.mock('electron')</code> 提供最小 <code>app</code> / <code>safeStorage</code> / <code>protocol</code> / <code>net</code>；player 与 playlist 测试 mock <code>AudioEngine</code>、<code>localStorage</code> 和 <code>window.lychee</code>；<code>test/replay.ts</code> 用 <code>Response</code> 替换全局 <code>fetch</code>。</li>
@@ -192,7 +198,7 @@
   </tr>
   <tr>
     <td>设置持久化</td>
-    <td><code>settings.set</code> 以浅合并更新并立即写盘；加载时对未知值回退默认值。</td>
+    <td><code>settings.set</code> 以浅合并更新并立即写盘；缓存上限变化后调用 <code>enforceAudioCacheLimit()</code> 并按落盘后的设置返回；加载时对未知值回退默认值。</td>
   </tr>
   <tr>
     <td>工程常量</td>
@@ -316,11 +322,18 @@ export type PlaylistKind = 'normal' | 'favorites';
 
 export interface PlaylistMeta {
   id: string;
+  /** 当前账号下的歌单目录 ID（写入接口的 dirId）；公开歌单可能没有。 */
+  dirId?: number;
   name: string;
   coverUrl: string;
   songCount: number;
   kind: PlaylistKind;
   editable: boolean;
+}
+
+export interface PlaylistMutationResult {
+  /** 上游是否实际改变了歌单成员；80092 等业务状态返回 false。 */
+  changed: boolean;
 }
 
 export interface PlaylistDetail {
@@ -356,7 +369,7 @@ export interface Comment {
   avatarUrl: string;
   content: string;
   likedCount: number;
-  liked: boolean;
+  liked?: boolean;
   replyCount: number;
   createdAtMs: number;
 }
@@ -364,7 +377,7 @@ export interface Comment {
 export interface CommentLikeResult {
   commentId: string;
   liked: boolean;
-  likedCount: number;
+  likedCount?: number;
 }
 
 export interface CommentPage {
@@ -474,6 +487,8 @@ export interface MvStream {
   url: string | null;
 }
 
+export type DownloadSource = 'network' | 'cache';
+
 export interface DownloadTask {
   id: string;
   songMid: string;
@@ -485,19 +500,12 @@ export interface DownloadTask {
   receivedBytes: number;
   totalBytes: number;
   error: string;
-  batchId: string | null;
-  playlistId: string | null;
-  source: 'cache-transfer' | 'network';
+  source: DownloadSource;
 }
 
-export interface DownloadBatch {
-  id: string;
-  source: 'playlist' | 'single';
-  playlistId: string | null;
-  total: number;
-  done: number;
-  failed: number;
-  status: 'pending' | 'downloading' | 'paused' | 'done' | 'failed';
+/** 下载索引 JSON：只包含任务快照，不含批次。 */
+interface DownloadIndex {
+  tasks: DownloadTask[];
 }
 
 export interface SongAssetState {
@@ -521,13 +529,18 @@ export interface AudioCacheStats {
   files: number;
 }
 
+/** 主进程收到 104009 后进入全局上游截断窗口的通知。 */
+export interface UpstreamBlockedEvent {
+  untilMs: number;
+  reason: string;
+}
+
 export interface DownloadStorageInfo {
   directory: string;
   bytes: number;
   freeBytes: number;
   cacheBytes?: number;
   cacheFiles?: number;
-  batchCount?: number;
 }
 
 export interface Credential {
@@ -557,6 +570,8 @@ export interface Settings {
   audioCacheEnabled: boolean;
   /** 下载目录；缺省为 ~/Music/Lychee Player。 */
   downloadDir?: string;
+  /** 播放缓存上限；限定为 AUDIO_CACHE_LIMIT_STEPS_BYTES 的 6 个档位。 */
+  audioCacheMaxBytes: number;
 }
 
 export interface AuthStatus {
@@ -616,7 +631,7 @@ export interface FlagsFile {
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
   <li><code>Comment</code> / <code>CommentPage</code> 是 <code>comment.get</code> 的跨 IPC 数据模型；原始字段映射见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
   <li><code>PlaylistDetail.songs</code> 是歌单当前已载入的歌曲；<code>playlist.get</code> 使用 <code>PlaylistPage</code> 分页返回，<code>playlist.getCached</code> / <code>playlist.saveCache</code> 使用整份 <code>PlaylistCacheEntry</code> / <code>PlaylistSnapshot</code>。</li>
-  <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。</li>
+  <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。<code>id</code> 是歌单标识（tid / disstid），<code>dirId</code> 是当前账号目录 ID（写入接口使用），两者不能互换；公开歌单可能没有 <code>dirId</code>。</li>
   <li><code>Lyric.format</code> 为 <code>lrc</code> / <code>qrc</code>；逐字行类型见 <a href="#c4-33">§4.33</a>。</li>
   <li><code>ProbeOptions</code> / <code>SongAvailability</code> 是 <code>song.probe</code> 的跨 IPC 模型；探测结果只更新歌单歌曲元数据。</li>
 </ul>
@@ -647,22 +662,25 @@ export interface FlagsFile {
   };
   playlist: {
     get(id: string, options?: { offset?: number }): Promise&lt;IpcResult&lt;PlaylistPage&gt;&gt;;
+    getSnapshot(id: string, token: number): Promise&lt;IpcResult&lt;PlaylistSnapshot&gt;&gt;;
+    cancelSnapshot(id: string, token: number): Promise&lt;IpcResult&lt;null&gt;&gt;;
     getCached(id: string): Promise&lt;IpcResult&lt;PlaylistCacheEntry | null&gt;&gt;;
     saveCache(id: string, snapshot: PlaylistSnapshot, complete: boolean): Promise&lt;IpcResult&lt;null&gt;&gt;;
     listMine(): Promise&lt;IpcResult&lt;PlaylistMeta[]&gt;&gt;;
     create(name: string): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
     rename(id: string, name: string): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
     remove(id: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
-    addSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
-    removeSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMeta&gt;&gt;;
+    addSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMutationResult&gt;&gt;;
+    removeSongs(id: string, mids: string[]): Promise&lt;IpcResult&lt;PlaylistMutationResult&gt;&gt;;
   };
   favorite: {
     get(mids: string[]): Promise&lt;IpcResult&lt;FavoriteState[]&gt;&gt;;
     toggle(songMid: string): Promise&lt;IpcResult&lt;FavoriteState&gt;&gt;;
   };
   recommend: {
-    get(): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
-    refresh(sectionId?: RecommendSection['id']): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
+    get(sectionId: string | null, token: number): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
+    refresh(sectionId: string | null, token: number): Promise&lt;IpcResult&lt;RecommendFeed&gt;&gt;;
+    cancel(token: number): Promise&lt;IpcResult&lt;null&gt;&gt;;
   };
   mv: {
     search(keyword: string, pageNo: number): Promise&lt;IpcResult&lt;SearchResult&gt;&gt;;
@@ -670,22 +688,16 @@ export interface FlagsFile {
     getStream(mvId: string, quality: MvStream['quality']): Promise&lt;IpcResult&lt;MvStream&gt;&gt;;
   };
   download: {
-    list(): Promise&lt;IpcResult&lt;{ tasks: DownloadTask[]; batches: DownloadBatch[] }&gt;&gt;;
+    list(): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
+    assetStates(songMids: string[]): Promise&lt;IpcResult&lt;SongAssetState[]&gt;&gt;;
     start(songMid: string, quality: Quality): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
-    startBatch(options: {
-      source: 'playlist';
-      playlistId: string;
-      songMids: string[];
-    }): Promise&lt;IpcResult&lt;DownloadBatch&gt;&gt;;
+    startMany(songMids: string[], quality: Quality): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
     pause(id: string): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
     resume(id: string): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
+    resumeAll(): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
     remove(id: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
-    pauseBatch(batchId: string): Promise&lt;IpcResult&lt;DownloadBatch&gt;&gt;;
-    resumeBatch(batchId: string): Promise&lt;IpcResult&lt;DownloadBatch&gt;&gt;;
-    removeBatch(batchId: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
-    retryFailed(batchId: string): Promise&lt;IpcResult&lt;DownloadBatch&gt;&gt;;
     clearCompleted(): Promise&lt;IpcResult&lt;null&gt;&gt;;
-    assetStates(songMids: string[]): Promise&lt;IpcResult&lt;SongAssetState[]&gt;&gt;;
+    clearDirectory(): Promise&lt;IpcResult&lt;null&gt;&gt;;
     storage(): Promise&lt;IpcResult&lt;DownloadStorageInfo&gt;&gt;;
     openFolder(): Promise&lt;IpcResult&lt;null&gt;&gt;;
     chooseFolder(): Promise&lt;IpcResult&lt;string | null&gt;&gt;;
@@ -695,7 +707,16 @@ export interface FlagsFile {
     onProgress(callback: (progress: AudioCacheProgress) =&gt; void): () =&gt; void;
   };
   artist: {
-    get(mid: string, offset?: number): Promise&lt;IpcResult&lt;ArtistDetail&gt;&gt;;
+    get(
+      mid: string,
+      offset?: number,
+      sort?: ArtistSongSort
+    ): Promise&lt;IpcResult&lt;ArtistDetail&gt;&gt;;
+    getSongs(
+      mid: string,
+      offset?: number,
+      sort?: ArtistSongSort
+    ): Promise&lt;IpcResult&lt;ArtistSongPage&gt;&gt;;
   };
   album: {
     get(mid: string, offset?: number): Promise&lt;IpcResult&lt;AlbumDetail&gt;&gt;;
@@ -720,18 +741,24 @@ export interface FlagsFile {
     sendState(state: PlayerState): void;
     onCommand(callback: (command: MprisCommand) =&gt; void): () =&gt; void;
   };
+  upstream: {
+    onBlocked(callback: (event: UpstreamBlockedEvent) =&gt; void): () =&gt; void;
+  };
 }
 </code></pre>
 <table>
   <tr><th>方向</th><th>通道</th><th>载荷</th><th>说明</th></tr>
   <tr><td>main → renderer</td><td><code>player:command</code></td><td><code>MprisCommand</code></td><td>MPRIS / 托盘反向播放控制命令。</td></tr>
   <tr><td>renderer → main</td><td><code>player:state</code></td><td><code>PlayerState</code></td><td>播放器状态发布，主进程转投 MPRIS。</td></tr>
+  <tr><td>main → renderer</td><td><code>upstream:blocked</code></td><td><code>UpstreamBlockedEvent</code></td><td>收到 104009 进入全局截断窗口时通知渲染层展示 Toast；同一窗口只发送一次。</td></tr>
 </table>
 <ul class="note">
   <li>该接口经 preload 暴露为 <code>window.lychee</code>；返回取消订阅函数的方法是推送订阅。</li>
   <li><code>login.setEmbedBounds</code> 与 <code>player.sendState</code> 是单向 IPC，不返回信封。</li>
-  <li><code>flags</code> 读取 / 保存当前 flags 文件；<code>download</code> 的 <code>storage</code> / <code>openFolder</code> / <code>chooseFolder</code> / <code>clearCache</code> 服务设置页与下载抽屉；<code>start</code> 返回缓存转移或新建任务的结果，<code>list</code> 同时返回任务与批次。</li>
+  <li><code>flags</code> 读取 / 保存当前 flags 文件；<code>download</code> 的 <code>storage</code> / <code>openFolder</code> / <code>chooseFolder</code> / <code>clearCache</code> 服务设置页与下载页；<code>start</code> 返回缓存转移或新建任务的结果，<code>list</code> 只返回任务列表。</li>
   <li><code>lyric.decryptQrc</code> 是同步方法，在 preload 内用 Node crypto + zlib 完成解密；主进程只透传密文，接口细节见 <a href="#c4-64">§4.64</a>。</li>
+  <li><code>recommend.get</code> / <code>recommend.refresh</code> 在已登录时传 <code>sectionId</code> 只加载并返回该分区，<code>null</code> 才返回完整 feed；未登录直接返回完整空分区用于登录引导。<code>token</code> 用于按请求取消，<code>recommend.cancel</code> 只中止匹配 token 的请求。</li>
+  <li>批量参数上限按通道区分：<code>download.startMany</code> 的 <code>midArray</code> 上限为 <code>DOWNLOAD_QUEUE_MAX = 2000</code>；<code>song.getUrls</code>、<code>playlist.addSongs</code> / <code>removeSongs</code>、<code>favorite.get</code> 等其余 mid 数组使用 <code>IPC_SONG_MIDS_MAX = 100</code>；<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>，渲染层探测调度也按 50 分批。</li>
 </ul>
 
 <h3 id="c4-3">4.3 src/shared/xlogin.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -756,13 +783,20 @@ function showMainWindow(): void;
 <pre><code>export function registerIpc(): void;
 export function sendPlayerCommand(command: MprisCommand): void;
 
-function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;): Promise&lt;IpcResult&lt;T&gt;&gt;;
-function handle(channel: string, fn: (...args: any[]) =&gt; Promise&lt;unknown&gt;): void;
+function envelope&lt;T&gt;(fn: () =&gt; Promise&lt;T&gt;, logError?: boolean): Promise&lt;IpcResult&lt;T&gt;&gt;;
+function handle(
+  channel: string,
+  fn: (...args: any[]) =&gt; Promise&lt;unknown&gt;,
+  options?: { silent?: boolean }
+): void;
 
 </code></pre>
 <ul class="note">
   <li><code>registerIpc</code> 注册全部请求型通道、<code>app.quit</code> 与 <code>player:state</code> 上报；<code>sendPlayerCommand</code> 向所有窗口广播 <code>player:command</code>；<code>player:state</code> 同时分发到 MPRIS 与托盘。</li>
-  <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程；<code>app.quit</code> 是单向消息，直接调用 <code>app.quit()</code>，不复用 <code>handle</code>。</li>
+  <li><code>handle</code> 用 <code>envelope</code> 包裹 handler，异常不会抛回渲染进程；<code>app.quit</code> 是单向消息，直接调用 <code>app.quit()</code>，不复用 <code>handle</code>。<code>handle</code> 支持 <code>{ silent: true }</code>：异常仍以 <code>IpcResult</code> 返回给渲染层，但不写 <code>[ipc]</code> 错误日志；背景 <code>song.probe</code> 使用该模式，避免可用性探测失败刷屏。</li>
+  <li><code>download</code> 命名空间用 <code>startMany</code> 取代批次接口，不提供批次级暂停 / 继续 / 删除 / 重试；<code>download.clearDirectory</code> 删除下载目录内容与任务记录，不影响播放缓存。</li>
+  <li><code>playlist.getSnapshot</code> / <code>playlist.cancelSnapshot</code> 按歌单 ID 保存 <code>{ token, AbortController }</code>；只允许匹配 token 的取消操作中止对应请求，新请求会先中止同歌单的旧请求。取消后当前网络请求立即中止，快照不会替换内容或写缓存。</li>
+  <li><code>registerIpc</code> 注册 <code>setUpstreamBlockNotifier</code>，104009 首次进入截断窗口时通过 <code>broadcast('upstream:blocked', event)</code> 通知所有窗口；preload 暴露 <code>window.lychee.upstream.onBlocked</code>，同一窗口内只发送一次。</li>
 </ul>
 
 <h3 id="c4-6">4.6 src/main/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -771,9 +805,10 @@ export function getSettings(): Settings;
 export async function saveSettings(next: Settings): Promise&lt;void&gt;;
 </code></pre>
 <ul class="note">
-  <li>默认值：<code>defaultQuality='auto'</code>、<code>closeToTray=true</code>、<code>theme='dark'</code>、<code>audioCacheEnabled=true</code>、<code>downloadDir=~/Music/Lychee Player</code>；下载目录在模块加载阶段不调用 <code>app.getPath()</code>，由首次懒加载生成。</li>
-  <li><code>sanitize</code> 对未知值回退默认：非法音质 / 主题取默认，布尔字段只接受布尔值。</li>
-  <li>保存为浅合并后立即写盘，文件权限 <code>0600</code>。</li>
+  <li>默认值：<code>defaultQuality='auto'</code>、<code>closeToTray=true</code>、<code>theme='dark'</code>、<code>audioCacheEnabled=true</code>、<code>audioCacheMaxBytes=2 GiB</code>、<code>downloadDir=~/Music/Lychee Player</code>；下载目录在模块加载阶段不调用 <code>app.getPath()</code>，由首次懒加载生成。</li>
+  <li><code>createDefaultSettings</code> 与 <code>sanitize</code> 都不再包含 <code>audioEngine</code>；设置模型只保留 HTML5 Audio 引擎，旧字段不读取、不写回。</li>
+  <li><code>sanitize</code> 对未知值回退默认：非法音质 / 主题取默认，布尔字段只接受布尔值；<code>audioCacheMaxBytes</code> 经 <code>normalizeAudioCacheLimitBytes</code> 归一到最近档位。</li>
+  <li><code>saveSettings</code> 使用同步原子写：先写 <code>settings.json.part</code>，再 <code>renameSync</code> 覆盖正式文件，权限 <code>0600</code>；退出时保存不依赖异步 Promise，也不会留下半截 JSON。</li>
 </ul>
 
 <h3 id="c4-7">4.7 src/main/credential.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -798,6 +833,12 @@ export async function clearCredential(): Promise&lt;void&gt;;
 export function getGuid(): string;
 export function toIpcError(err: unknown): IpcError;
 export function throttleUpstream(): Promise&lt;void&gt;;
+export function setUpstreamBlockNotifier(
+  notifier: ((event: UpstreamBlockedEvent) =&gt; void) | null
+): void;
+export function upstreamBlockRemainingMs(): number;
+export function tripUpstreamBlock(reason?: string): void;
+export function assertUpstreamAvailable(): void;
 function dataErrorCode(data: unknown): number | null;
 
 export interface UpstreamRequest {
@@ -809,11 +850,17 @@ export interface UpstreamRequest {
   body?: string;
   credential?: Credential | null;
   timeoutMs?: number;
+  /** 解析前把指定字段的数字字面量转成字符串，避免超过 Number 安全范围时丢精度。 */
+  stringFields?: string[];
 }
 
 export interface MusicuOptions {
   comm?: Record&lt;string, unknown&gt; | false;
   credential?: Credential | null;
+  /** vkey 需要先尝试备用入口，104009 由调用方在两次失败后统一触发截断。 */
+  deferBlock?: boolean;
+  /** 解析前把指定字段的数字字面量转成字符串。 */
+  stringFields?: string[];
 }
 
 export function upstreamRequest&lt;T&gt;(req: UpstreamRequest): Promise&lt;T&gt;;
@@ -828,8 +875,13 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
 </code></pre>
 <ul class="note">
   <li><code>upstreamRequest</code> 负责 UA / Referer / Cookie 注入、超时、HTTP 错误与 HTTP 非 2xx 退避；<code>musicu</code> 负责组装 <code>comm</code> / <code>req_0</code> 并处理瞬时繁忙码。</li>
-  <li><code>fetchOnce</code> 在真正发出请求前调用 <code>throttleUpstream()</code>：全局令牌桶按 <code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> 补充、最多积压 <code>UPSTREAM_RATE_LIMIT_BURST</code> 个令牌；OAuth authorize 与收藏签名写入等绕过 <code>upstreamRequest</code> 的请求也显式取令牌。</li>
-  <li><code>musicu</code> 在 <code>req_0.code</code> 为 1000 时优先读取 <code>data.retcode</code>，避免把 vkey 的 <code>104009 invalidq</code> 误判成登录过期；<code>mapUpstreamCode</code> 把 104009 映射为 <code>UPSTREAM_NETWORK</code> 并保留 <code>upstreamCode</code> 供 vkey 备用入口判断。</li>
+  <li><code>UpstreamRequest.stringFields</code> 在 <code>JSON.parse</code> 前把指定字段的裸数字字面量转成字符串，避免 19 位 <code>SeqNo</code> 等超过 <code>Number.MAX_SAFE_INTEGER</code> 时丢精度；<code>MusicuOptions.stringFields</code> 透传给 <code>upstreamRequest</code>，评论请求使用 <code>['SeqNo']</code>。</li>
+  <li><code>fetchOnce</code> 在真正发出请求前调用 <code>throttleUpstream()</code>：全局令牌桶按 <code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> 补充、最多积压 <code>UPSTREAM_RATE_LIMIT_BURST</code> 个令牌；OAuth authorize 与收藏签名写入等绕过 <code>upstreamRequest</code> 的请求也显式取令牌。推荐值为 4 req/s、突发 8；限流只平滑请求，不等于取消，页面离开时仍须通过 <code>recommend.cancel</code> / <code>AbortController</code> 主动中止，见 <a href="#c2">§2</a> 页面请求生命周期。</li>
+  <li>进程级 104009 截断由 <code>tripUpstreamBlock()</code> 设置，截止时间为当前时间加 <code>UPSTREAM_BLOCK_MS</code>；<code>upstreamBlockRemainingMs()</code> 返回剩余时长，<code>assertUpstreamAvailable()</code> 在窗口内直接抛 <code>UPSTREAM_NETWORK</code>（保留 <code>upstreamCode = 104009</code>）且不重试。窗口内重复触发只延长截止时间，不重复通知渲染层。</li>
+  <li><code>fetchOnce</code> 在取令牌前后各调用一次 <code>assertUpstreamAvailable()</code>，排队期间进入截断也会在真正 fetch 前失败；<code>favorite.ts</code> 的签名写入与 <code>login.ts</code> 的 OAuth authorize 等绕过 <code>fetchOnce</code> 的请求，在取令牌后同样显式检查。</li>
+  <li><code>musicu</code> 默认在 104009 时调用 <code>tripUpstreamBlock()</code>；vkey 通过 <code>deferBlock: true</code> 暂停截断，先尝试经典入口与 <code>UrlGetVkey</code> 备用入口，只有两个入口都返回 104009 才由 <code>song.ts</code> 触发截断，备用入口成功则不进入冷却。</li>
+  <li><code>musicu</code> 通过 <code>dataErrorCode(data)</code> 读取具体错误：先取非 0 的 <code>data.retcode</code>，再取顶层负数 <code>data.code</code>（如歌单失效的 <code>-100006</code>）；当 <code>req_0.code</code> 为 <code>0</code> 或 <code>1000</code> 时优先采用该具体码，避免把 vkey 的 <code>104009 invalidq</code> 误判成登录过期。<code>mapUpstreamCode</code> 把 <code>-100006</code> 映射为 <code>NO_PERMISSION</code>（歌单不存在或已失效），把 <code>104009</code> 映射为 <code>UPSTREAM_NETWORK</code> 并保留 <code>upstreamCode</code> 供 vkey 备用入口判断。</li>
+  <li><code>mapUpstreamCode</code> 对未识别的业务码统一返回 <code>UPSTREAM_CHANGED</code> 并保留原始 <code>upstreamCode</code>（例如 80092）；写 API 与 <code>assertWrite</code> 据此把 80092 识别为“状态未变化”，而不是普通失败。</li>
   <li><code>getGuid</code> 返回进程级稳定 GUID，供 vkey 请求使用。</li>
 </ul>
 
@@ -874,6 +926,9 @@ function buildStreamUrl(purl: string): string;
   <li>vkey 请求先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>；若响应或 <code>data.retcode</code> 为 <code>104009</code>，再以相同 filename 尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
   <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>isVipUser()</code> 通用文案。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
+  <li><code>fetchTrackBatch</code> 按 <code>SONG_DETAIL_BATCH = 50</code> 分块调用 <code>music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo</code>（<code>mids</code> / <code>types</code> / <code>modify_stamp</code> / <code>ctx</code> / <code>client</code>），按 <code>mid</code> 建索引；<code>fetchTracksById</code> 先走批量详情，仅对缺失歌曲用 <code>PROBE_DETAIL_CONCURRENCY = 2</code> 单曲兜底；<code>getDetail</code> 与 <code>resolveStreams</code> 共用该入口。</li>
+  <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。播放取源优先级固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”，与 <a href="#c4-59">§4.59</a> 的 <code>handleStream</code> 顺序一致。</li>
+  <li>显示名优先 <code>title.trim()</code>，为空时回退 <code>name.trim()</code>；专辑名与歌手名同样 <code>trim()</code>，避免尾部空白把 VIP / 音质徽标推离标题。<code>title</code> 含 Explicit / Remix 等版本标签，<code>name</code> 是基础名；原始响应没有独立标签布尔字段。</li>
   <li>歌手映射：<code>singer[]</code> 成员只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空；只有 <code>name</code> 为空的成员被丢弃，不因缺少 <code>mid</code> 丢名字。列表响应缺名字时，歌曲进入可见列表后可用 <code>getDetail</code> 的 <code>track_info.singer[]</code> 补全；补全结果不改变播放队列。</li>
 </ul>
 
@@ -897,9 +952,12 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 </code></pre>
 <ul class="note">
   <li><code>fetchPlaylistPage</code> 只负责轻量首页 / 最近歌单校验；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
-  <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin</code> 递增、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；任一分页失败、空页、覆盖不足或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>。</li>
-  <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存按账号 + 歌单 ID 持久化，上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>。</li>
-  <li>歌单不存在 / 无权限时才删除缓存；添加、删除、改名、收藏等写操作只标记旧缓存为过期，不删除文件，下一次打开仍先展示旧内容。</li>
+  <li>普通歌单的 <code>editable</code> 由 <code>canEdit(data)</code> 判定：未登录返回 <code>false</code>；<code>dirinfo.owndir === 1</code> 返回 <code>true</code>；字段缺失或为 0 时回退比较当前登录 <code>musicid</code> 与 <code>dirinfo.creator.musicid</code> / <code>dirinfo.host_uin</code>，匹配才可编辑。「我喜欢」固定 <code>editable: true</code>，公开 / 他人歌单为 <code>false</code>。</li>
+  <li><code>listMine</code> 从 <code>dirId</code> / <code>dirid</code> 回填 <code>PlaylistMeta.dirId</code>，<code>CgiGetDiss</code> 从 <code>dirinfo.dirid</code> 回填；「我喜欢」固定为 <code>201</code>，公开歌单缺失时保持 <code>undefined</code>。创建歌单的 <code>id</code> / <code>dirId</code> 取值见 <a href="#c4-55">§4.55</a>。</li>
+  <li>固定收藏歌单 ID 统一引用 <code>FAVORITES_PLAYLIST_ID = 'liked'</code>（<a href="#c4-50">§4.50</a>），模块内不再保留本地 <code>FAVORITES_ID</code> 字面量；收藏分支判断与收藏歌单元数据都使用该共享常量。</li>
+  <li><code>fetchPlaylistSnapshot</code> 后台拉取整份歌单：<code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、固定 <code>song_begin = 0 / 2000 / 4000 …</code> 递增（不能按返回条数累加）、最多 <code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 页；跨页重复 <code>mid</code> 直接去重。任一分页失败、offset 小于总数时返回空页、最终条数低于 <code>PLAYLIST_FETCH_MISSING_RATIO = 0.02</code> / <code>PLAYLIST_FETCH_MISSING_MIN = 10</code> 容差或取消时整次失败，调用方保留旧内容。成功后返回实际可展示条数与上游总数 <code>sourceTotal</code>；<code>requestPage</code> 接受 <code>pageSize</code> 与 <code>AbortSignal</code>，取消会中止当前网络请求。</li>
+  <li><code>getCachedPlaylist</code> 读取整份快照，<code>savePlaylistSnapshot</code> 只在完整成功后写入；缓存快照结构保持 <code>{ meta, songs, total, sourceTotal, complete, fetchedAtMs }</code> 不变，按账号 + 歌单 ID 持久化。上限 <code>PLAYLIST_CACHE_MAX_BYTES = 64MB</code>，约 1 万首的快照可正常保留；超出后按文件 mtime 最旧优先清理。</li>
+  <li><code>fetchPlaylistSnapshot</code> / <code>fetchPlaylistPage</code> 遇到 <code>NO_PERMISSION</code>（含顶层 <code>data.code = -100006</code> 的失效歌单）时调用 <code>invalidatePlaylistCache(id)</code> 删除持久缓存；删除歌单（<code>playlist.remove</code>）同样在写入成功后清理对应缓存。添加 / 删除歌曲、改名、收藏切换等内容写操作只标记旧缓存为过期，不删除文件，下一次打开仍先展示旧内容。</li>
   <li>歌单歌曲条目复用 <a href="#c4-11">§4.11</a> 的 <code>rawSongToSong</code>；歌单响应可能只带 <code>singer[].name</code> 而没有 <code>mid</code>，此时保留名称、<code>mid</code> 留空，界面按纯文本展示。</li>
 </ul>
 
@@ -929,9 +987,9 @@ export function unlikeComment(commentId: string): Promise&lt;CommentLikeResult&g
 
 </code></pre>
 <ul class="note">
-  <li>评论读取未登录时匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>。<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
-  <li><code>latest</code> 使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。上游 <code>PageSize</code> 实测上限为 25（26 起返回业务码 10000），应用固定每页 25 条。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留“最新”读取，不提供“最旧”排序。</li>
-  <li>点赞使用 <code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code>，参数 <code>{ comment_id, type: 3 | 4, uin }</code>（3 点赞、4 取消）；需要登录，响应的 <code>data.code</code> / <code>msg</code> / <code>subcode</code> 全为 0 才算成功。成功后以读回评论的 <code>IsPraised</code> / <code>PraiseNum</code> 校正本地状态；失败抛错由渲染层回滚。</li>
+  <li>评论读取未登录时匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>。点赞状态优先取 <code>IsPraised</code>，缺失时回退 <code>IsLiked</code>（仅兼容旧字段），两者都缺失按 <code>false</code>；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
+  <li>评论读取使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。上游 <code>PageSize</code> 实测上限为 25（26 起返回业务码 10000），应用固定每页 25 条。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留最新评论游标分页，不提供“最旧”或按点赞排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，热评附加模块不进入评论列表。</li>
+  <li>点赞使用 <code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code>，参数 <code>{ comment_id, type: 3 | 4, uin }</code>（3 点赞、4 取消）；需要登录，响应的 <code>data.code</code> / <code>msg</code> / <code>subcode</code> 全为 0 才算成功。上游不返回点赞数量，<code>CommentLikeResult.likedCount</code> 为可选；返回的 <code>liked</code> 由请求 <code>type</code> 决定，前端乐观更新计数，失败时回滚。</li>
 </ul>
 
 <h3 id="c4-16">4.16 src/main/api/login.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -996,6 +1054,7 @@ export function destroyTray(): void;
   <li>播放 / 暂停点击不直接广播 <code>toggle</code>：托盘侧读取最近一次 <code>player:state</code>，解析为明确的 <code>play</code> 或 <code>pause</code> 后下发，避免渲染进程状态滞后导致第一次点击被吞；同一 200ms 窗口内的重复命令去重，但不合并用户连续操作（去重后仍下发最新一条）。</li>
   <li>菜单重建时重新绑定点击回调，避免重建丢失回调导致首次点击无效；Linux AppIndicator 可能延迟首帧，作为外部限制记录在 <a href="USER.html#u5-4">USER §5.4</a>。</li>
   <li>单击托盘图标只显示主窗口；GNOME 需要 AppIndicator 扩展，初始化失败静默降级。</li>
+  <li>托盘图标固定加载 <code>resources/tray.png</code> 的 22×22 全彩 RGBA PNG，<code>loadTrayImage()</code> 直接 <code>nativeImage.createFromPath()</code>，不在运行时缩放，避免高 DPI 下导出 44×44 <code>IconPixmap</code>；显式 <code>setTemplateImage(false)</code>，空图标输出警告并放弃创建托盘。</li>
 </ul>
 
 <h3 id="c4-20">4.20 src/main/types/mpris-service.d.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1046,18 +1105,21 @@ export function destroyTray(): void;
 </code></pre>
 
 <h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板、下载抽屉与 Toast。
+<pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板与 Toast；下载中心由路由页承载。
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
-  <li>歌词 / 评论为 <code>/lyrics</code> 路由页，由路由渲染；外壳不监听路由做面板关闭。</li>
-  <li>挂载下载抽屉；与播放队列面板互斥。</li>
-  <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；切换成功不弹 Toast。</li>
+  <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
+  <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
+  <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；tooltip / <code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
-  <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；展示行保留真实队列序号，移除操作使用真实队列下标。筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
-  <li>侧栏：宽屏固定 224px；≤900px 渲染覆盖式抽屉（<code>UiStore.sidebarOpen</code>），默认隐藏。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
-  <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），点击进入对应歌单，校验失败条目显示失效态；正在播放的歌单按 <code>player.queueSource</code> 高亮，与路由无关。</li>
+  <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
+  <li>播放队列头部 <code>.lyrics-head-actions</code> 并排放置“清空播放队列”与“关闭播放队列”两个图标按钮；清空按钮使用 <code>trash</code> 图标，队列为空时 <code>disabled</code> 并沿用 <code>.icon-btn:disabled</code> 灰化，滚动或筛选都不影响入口。列表底部不再渲染 <code>.queue-footer</code> 或文字按钮；<code>player.clearQueue()</code> 仍只清空当前曲之后的队列。</li>
+  <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
+  <li>主界面拖拽手势仅 ≤900px 启用：<code>pointerdown</code> 在宽屏直接返回；触屏 <code>pointerup</code> 若存在非折叠选区则跳过侧栏切换，长按选择文本优先；<code>pointercancel</code> 清理拖拽起点。窄屏非触屏由 §4.49 的 CSS 禁用文本选择。</li>
+  <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。</li>
+  <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
 </ul>
 
 <h3 id="c4-24">4.24 src/renderer/api.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1070,11 +1132,11 @@ export function describeError(error: unknown): string;
 </code></pre>
 
 <h3 id="c4-25">4.25 src/renderer/router/index.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>const router: Router = createRouter({ history: createWebHashHistory(), routes: [] });   // hash history；/ → /search
+<pre><code>const router: Router = createRouter({ history: createWebHashHistory(), routes: [] });   // hash history；/ → /discover
 export default router;
 </code></pre>
 <ul class="note">
-  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/artist/:mid</code>、<code>/album/:mid</code>、<code>/lyrics</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>。</li>
+  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/artist/:mid</code>、<code>/album/:mid</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>；歌词 / 评论由 <code>ui.lyricsOpen</code> 控制，不占路由。根路径 <code>/</code> 重定向到 <code>/discover</code>，启动与访问根路径都默认进入发现页。</li>
 </ul>
 
 <h3 id="c4-26">4.26 src/renderer/env.d.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1089,6 +1151,7 @@ export default router;
 <pre><code>export interface AudioEngineHandlers {
   onTimeUpdate(positionMs: number): void;
   onDurationChange(durationMs: number): void;
+  onBufferChange?(bufferedMs: number): void;
   onPlay(): void;
   onPause(): void;
   onEnded(): void;
@@ -1114,6 +1177,7 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine;
   <li>播放源支持 <code>lychee-audio://</code> 本地协议 URL；缓存命中由主进程协议提供。</li>
   <li><code>seek</code> 必须直接设置 <code>currentTime</code>；只有 <code>duration</code> 为有限正数时才 clamp，未知或 <code>Infinity</code> / <code>NaN</code> 时仍应尝试定位，异常由实现捕获忽略。这样未缓存流在 duration 未知时也能立即 seek。</li>
   <li><code>onDurationChange</code> 只上报有限且大于 0 的时长；未知时长由播放器保留歌曲元数据时长。</li>
+  <li><code>onBufferChange</code> 为可选回调；实现监听 <code>progress</code> / <code>loadedmetadata</code> / <code>canplay</code> / <code>seeked</code>，读取 <code>audio.buffered</code> 所有区间 <code>end</code> 的最大值并换算为毫秒上报；<code>emptied</code> 上报 0。</li>
 </ul>
 
 <h3 id="c4-28">4.28 src/renderer/stores/auth.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1159,6 +1223,7 @@ interface PlayerStore {
   readonly status: 'stopped' | 'playing' | 'paused';
   readonly positionMs: number;
   readonly durationMs: number;
+  readonly bufferedMs: number;
   readonly volume: number;
   readonly mode: PlayMode;
   readonly quality: Quality;
@@ -1201,12 +1266,13 @@ interface PlayerStore {
 </code></pre>
 <ul class="note">
   <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，播放队列面板只绑定 <code>queue</code>。<code>addNext(song)</code> 只把歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>，不切歌、不写历史；无 <code>current</code> 时直接以该歌曲开始播放。</li>
+  <li><code>bufferedMs</code> 保存引擎上报的已缓冲毫秒数，切歌加载新曲前清零；播放条用它计算缓冲 overlay 百分比，并与缓存完成度取较大值。</li>
   <li><code>playNext()</code> 负责手动下一首与自动续播：确定切换到下一首（含列表循环回绕）时，先把原 <code>current</code> 追加到 <code>playHistory</code>，再调用 <code>playAt()</code>；到队尾停止或单曲循环重播不写入历史。<code>playAt()</code> 只做低层定位与加载，不写历史。</li>
   <li><code>startPlaylistPlayback</code> / <code>appendPlaylistQueue</code> / <code>replacePlaylistQueue</code> 维护 <code>queueSource</code> 与 <code>queueBuilding</code>；队列构建由 playlist store 在“歌单快照 → 队列”边界按 <code>playable !== false</code> 过滤，播放器只负责追加 / 替换，不做检测或清理。未完成快照前只允许一次临时快照；最终快照按签名比较后替换，保留手动“下一首播放”的歌曲、当前曲、进度与历史。</li>
   <li><code>onError</code> 对同一歌曲最多每 30 秒自动刷新一次播放链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”并暂停。当前曲不可播（<code>NO_STREAM</code>）时由播放条沿队列向后尝试，内部计数连续不可播次数；达到 <code>NO_STREAM_SKIP_LIMIT</code> 后停止并提示检查登录 / 风控，<code>playList</code> / <code>playNext</code> / <code>previous</code> / <code>setQuality</code> 与成功加载会清零计数。</li>
   <li><code>seek</code> 在 duration 未知时也直接设置位置；播放中 1.2 秒后若实际位置与目标相差超过 2.5 秒，会再触发一次定位（seek 看门狗），用于兜底连续 Range 定位。</li>
   <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放按洗牌后的 <code>playOrder</code> 进行。</li>
-  <li><code>setMode(mode)</code> 供播放模式菜单直接选择，立即生效且不触发 Toast；<code>cycleMode()</code> 保留给键盘与兼容入口，按固定顺序循环。两者都走同一套队列重排与持久化逻辑。</li>
+  <li><code>setMode(mode)</code> 供播放模式菜单直接选择，立即生效且不触发 Toast；<code>cycleMode()</code> 供播放模式按钮点击使用，按 <code>sequence → repeat-all → repeat-one → shuffle → sequence</code> 固定顺序循环。两者都走同一套队列重排与持久化逻辑。</li>
   <li><code>quality</code> 为实际生效音质；<code>requestedQuality</code> 为本次请求档位；<code>defaultQuality</code> 为按登录态与设置解析后的默认档；<code>qualityPreference</code> 为持久化偏好（可能为 <code>auto</code>）。</li>
   <li><code>updateDefaultQuality()</code> 是设置页与播放条共用的音质偏好写入入口：先 <code>settings.update</code> 持久化 <code>defaultQuality</code>，再 <code>applySettings()</code>；有当前曲时按解析后的 <code>defaultQuality</code> 重载。无当前曲时只影响下一次播放。设置页与播放条都不得直接改写本地偏好。</li>
   <li><code>cycleQualityPreference()</code> 按 <code>QUALITY_PREFERENCE_OPTIONS</code> 的固定顺序循环（<code>auto → 128k → 320k → flac → auto</code>），供播放条 revealer 按钮点击使用。</li>
@@ -1233,7 +1299,7 @@ interface SettingsStore {
 }
 </code></pre>
 <ul class="note">
-  <li><code>QUALITY_PREFERENCE_OPTIONS</code> 固定顺序为 <code>auto → 128k → 320k → flac</code>；设置页使用 <code>label</code>，播放条与 revealer 弹层使用 <code>short</code>，两处共用同一组选项与顺序。</li>
+  <li><code>QUALITY_PREFERENCE_OPTIONS</code> 固定顺序为 <code>auto → 128k → 320k → flac</code>；<code>Settings.defaultQuality</code> 是唯一持久化偏好，设置页使用 <code>label</code>，播放条与 revealer 弹层使用 <code>short</code>，两处共用同一组选项与顺序。</li>
 </ul>
 
 <h3 id="c4-31">4.31 src/renderer/stores/ui.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1241,16 +1307,20 @@ interface SettingsStore {
 
 interface UiStore {
   readonly queueOpen: boolean;
+  readonly lyricsOpen: boolean;
   readonly sidebarOpen: boolean;
   toggleQueue(): void;
   closeQueue(): void;
+  toggleLyrics(): void;
+  closeLyrics(): void;
   openSidebar(): void;
   closeSidebar(): void;
   toggleSidebar(): void;
 }
 </code></pre>
 <ul class="note">
-  <li>只保留播放队列面板与窄屏侧栏抽屉状态；歌词 / 评论由 <code>/lyrics</code> 路由与当前歌曲驱动。</li>
+  <li>播放队列面板、窄屏侧栏抽屉与歌词 / 评论弹出层都由界面状态控制；<code>lyricsOpen</code> 与当前歌曲驱动歌词 / 评论，不占路由。</li>
+  <li>下载中心是 <code>/downloads</code> 路由页，不进入 ui store，也不参与播放队列 / 侧栏抽屉互斥。</li>
   <li><code>sidebarOpen</code> 只影响 ≤900px 的抽屉；宽屏固定侧栏忽略该状态，路由切换时自动关闭抽屉。</li>
 </ul>
 
@@ -1319,7 +1389,7 @@ export function useToast(): {
 <pre><code>const props = withDefaults(defineProps&lt;{ name: string; size?: number }&gt;(), { size: 20 });
 </code></pre>
 <ul class="note">
-  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式另叠加对勾标记；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>；添加到歌单使用 <code>playlist-add</code>（简单加号），下一首播放使用 <code>play-next</code>（横线 + 上箭头）。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
+  <li><code>name</code> 为图标集字符串；歌曲表删除使用 <code>trash</code>，窄屏更多菜单使用 <code>more</code>，播放队列移除使用 <code>close</code>，播放模式使用 <code>sequence</code> / <code>repeat-all</code> / <code>repeat-one</code> / <code>shuffle</code>，当前模式由播放模式按钮本身表示；其中 <code>sequence</code> 为左侧向下长箭头 + 三条横线，<code>list</code> 专用于播放队列（左侧三点 + 三条横线）；下载三态使用 <code>download</code> / <code>download-cached</code> / <code>download-done</code>，其中 <code>download-cached</code> 与普通下载图标同形（下载箭头 + 完整底线），缓存态由按钮的 24px surface 状态框表达，不使用带框或断线图标；添加到歌单使用 <code>playlist-add</code>（简单加号），下一首播放使用 <code>play-next</code>（横线 + 上箭头）；评论区跳转使用 <code>to-top</code> / <code>to-bottom</code>（箭头 + 底线），配色切换使用 <code>sun</code> / <code>moon</code>。图标集按界面需要扩展，未知名称回退到通用占位图标。</li>
 </ul>
 
 <h3 id="c4-37">4.37 src/renderer/components/CoverArt.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1374,38 +1444,45 @@ const emit = defineEmits&lt;{
   <li>列顺序固定为 <code># / 标题 / 专辑 / 操作 / 时长</code>，所有 <code>th</code> 与操作 / 时长单元格左对齐；操作列在时长列左侧。≤900px 隐藏专辑列。</li>
   <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由加号图标按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。</li>
   <li><code>availability</code> 提供不可播标记与最高可用音质；不可播行禁用 <code>play</code> / <code>playNext</code>。收藏与下载按钮分别发出 <code>favorite</code> / <code>download</code>；未知可用性按可播处理。</li>
-  <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态，下载图标据此切换三态：未缓存未下载 / 已缓存 / 已下载，tooltip 显示档位；同时存在时显示“已下载”。</li>
+  <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态；下载按钮三态由 <code>resolveDownloadState</code> 派生为唯一状态（已下载 / 已缓存 / 普通），class、图标与 tooltip 共用该状态。已缓存与已下载互斥，下载优先；即使资产同时带两个档位也只显示已下载，tooltip 只显示当前状态。状态框固定 24px，按钮点击热区不变。</li>
   <li>专辑列与歌手行渲染为链接：歌手 <code>mid</code> 非空链接到 <code>/artist/:mid</code>，专辑 <code>mid</code> 非空链接到 <code>/album/:mid</code>，点击不触发行播放；<code>mid</code> 为空时按纯文本展示，名称为空不渲染。标题、歌手、专辑统一使用 <code>MarqueeText</code>，仅在溢出时滚动；≤900px 隐藏专辑列。</li>
   <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：窄窗口优先省略歌名，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与 tooltip。</li>
-  <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。</li>
+  <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。操作列宽屏 160px，≤900px 收窄到 40px，五个图标按钮在单元格内横向排列。</li>
+  <li>行的 <code>dblclick</code> 只绑定在 <code>tr</code> 上；歌手 / 专辑链接与操作列按钮统一使用 <code>@click.stop</code>，把点击事件截在子元素内，不触发整行播放。</li>
   <li>操作列基础结构为收藏、下载、下一首播放（<code>play-next</code>）、添加到歌单（<code>playlist-add</code>）、从歌单删除五个图标按钮。<code>addable</code> 为真时渲染“添加到歌单”，点击发出 <code>addToPlaylist(index)</code>；删除按钮仅在 <code>removable</code> 为真时渲染，由 <code>PlaylistView</code> 按 <code>PlaylistMeta.editable</code> 且非“我喜欢”传入；点击发出 <code>remove(index)</code>，不触发行播放。</li>
+  <li><code>SongTable</code> 不弹确认框，也不调用 <code>window.confirm</code>；<code>remove</code> 只发出事件，由页面使用 <a href="#c4-81">ConfirmDialog</a> 确认后再调用删除 API。</li>
   <li><code>addable</code> 由使用歌曲表的页面按登录态传入（搜索结果、歌单详情、歌手页、专辑页）；页面监听 <code>addToPlaylist</code> 打开 <a href="#c4-77">PlaylistPicker</a>，再把选择结果交给 <code>playlist-edit.addSongs</code>。</li>
-  <li>≤900px 时五个按钮收为一个 <code>more</code> 图标按钮，弹出“图标 + 文字”菜单；菜单项顺序与宽屏一致，点击菜单不触发行播放，点击外部或按 Esc 关闭。</li>
+  <li>≤900px 时五个按钮收为一个 <code>more</code> 图标按钮，弹出“图标 + 文字”菜单；菜单项顺序与宽屏一致。<code>.song-more-wrap</code> 用 <code>@click.stop</code> 隔断行事件，选择菜单项时先关闭菜单再发出对应 emit；document 的 click 只负责点击外部关闭，Esc 同样关闭。</li>
+  <li>组件用 <code>matchMedia('(max-width: 900px)')</code> 与样式断点同步：断点变化时更新 <code>compact</code> 并立即关闭已打开菜单；document 的 click / keydown 监听与 media query 监听在卸载时清理，避免重复注册。</li>
 </ul>
 
 <h3 id="c4-40">4.40 src/renderer/components/PlayerBar.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>点击封面调用 <code>router.push('/lyrics')</code> 进入歌词 / 评论页；播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
+  <li>点击封面调用 <code>ui.toggleLyrics()</code> 开合歌词 / 评论弹出层，不导航；<code>title</code> 在“歌词与评论 / 关闭歌词与评论”之间切换，无当前歌曲时封面禁用。播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲不可播时由播放条自行验证并沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首失败后停止，不读取探测结果。</li>
-  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>assetStates</code> 的三态渲染（未缓存未下载 / 已缓存 / 已下载），tooltip 显示“已缓存 FLAC / 已下载 320K / 下载”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
-  <li>播放进度条下方增加一条细缓存进度线，订阅 <code>audioCache.onProgress</code>，按当前 <code>songMid + quality</code> 匹配；缓存完成显示满格 / 对勾，关闭播放缓存时隐藏。缓存进度不读取下载 store，与下载进度相互独立。</li>
+  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px surface 状态块已缓存 / 24px accent 高亮已下载），与歌曲表共用状态与图标；tooltip 只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
+  <li>播放进度条为单轨结构：<code>.progress-track</code> 背景轨上叠加 <code>.progress-buffer</code> 缓冲层与 <code>.progress-played</code> 播放层，透明 <code>.progress-range</code> 覆盖在轨道上只负责拖动与点击定位。缓冲宽度取 <code>max(cachePercent, bufferedPercent)</code>：缓存进度按当前 <code>songMid + quality</code> 匹配，已下载歌曲按 100%；HTML5 <code>audio.buffered</code> 由 <code>onBufferChange</code> 上报，切歌清空。tooltip 在已下载 / 缓存完成时显示“已下载到本机” / “缓存完成”，否则显示“缓冲 N%”；无歌曲或缓冲为 0 时只保留灰轨，不渲染 overlay。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
-  <li>播放模式菜单：<code>modeWrap</code> 悬停 120ms 打开、离开 200ms 关闭；点击按钮本身按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换，键盘焦点可打开弹层，Esc 与外部点击关闭。菜单向上弹出、仅图标；当前模式渲染在菜单最后一项并用同圆角、无空隙的高亮块标记，其余三项按固定顺序排列。选择调用 <code>player.setMode()</code>，不弹 Toast。</li>
-  <li>音质 revealer：按钮显示 <code>qualityPreference</code> 的短名称（<code>AUTO / 128K / 320K / FLAC</code>），点击调用 <code>player.cycleQualityPreference()</code> 按同一固定顺序循环；悬停 120ms 打开、离开 200ms 关闭，弹层只渲染除当前偏好外的其它档位，顺序与 <code>QUALITY_PREFERENCE_OPTIONS</code> 一致。选择调用 <code>player.updateDefaultQuality()</code>；弹层与播放模式 / 音量弹层互斥。</li>
+  <li>播放模式按钮本身即当前模式：<code>.mode-button</code> 常驻 <code>--accent-soft</code> 背景与 <code>--accent-strong</code> 图标，图标由 <code>MODE_ICON</code> 映射，其中 <code>sequence</code> 使用专用向下长箭头图标；点击按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换（不展开菜单）。悬停 120ms / 离开 200ms 打开或关闭向上弹出的仅图标菜单，菜单只渲染 <code>otherModes</code>（当前模式之外的其余三项，保持固定顺序），不重复显示当前模式，顺序播放项同样使用 <code>sequence</code> 图标；键盘焦点可打开，Esc、外部点击与选择后关闭，选择项调用 <code>player.setMode()</code>，不弹 Toast。</li>
+  <li>播放模式菜单用 <code>modeOpenTimer</code> / <code>modeCloseTimer</code> 分别管理 120ms 打开与 200ms 延迟关闭；Esc 走 <code>closeMenus()</code>，会清空模式、音质与音量的待执行定时器。挂载时注册 document 的 <code>click</code>（捕获阶段）与 <code>keydown</code>，<code>onBeforeUnmount</code> 清除模式打开 / 关闭定时器并移除这两个监听，避免卸载后回调操作旧 ref 或重复注册。</li>
+  <li>音质 revealer：按钮显示 <code>qualityPreference</code> 的短名称（<code>AUTO / 128K / 320K / FLAC</code>），点击调用 <code>player.cycleQualityPreference()</code> 按同一固定顺序循环；悬停 120ms 打开、离开 200ms 关闭，弹层只渲染除当前偏好外的其它档位，顺序与 <code>QUALITY_PREFERENCE_OPTIONS</code> 一致。选择调用 <code>player.updateDefaultQuality()</code>；弹层与播放模式 / 音量弹层互斥。交互与呈现遵循 <a href="USER.html#u2">USER §2</a> 的 Revealer 统一约定。</li>
   <li>收藏按钮为特殊 revealer：点击按钮调用 <code>playlist-edit.toggleFavorite()</code>；<code>likeWrap</code> 悬停 / 聚焦 120ms 打开、离开 200ms 关闭，弹层只有一个“加入歌单”图标按钮，点击后通过 <code>Teleport</code> 渲染 <code>PlaylistPicker</code> 并传入当前曲目 mid；没有模式切换。</li>
   <li><code>useRevealerTouch</code> 为播放模式、音质与收藏三个 revealer 提供触屏手势：从按钮开始纵向滑动超过 8px 才打开弹层并捕获指针，按选项中点与手指 Y 距离高亮最近项；松开确认，取消则关闭；滑动后的 click 在容器捕获阶段抑制。轻点不触发手势，保留原有 click 行为。</li>
+  <li>音量保留宽 / 窄屏分支：宽屏 <code>v-if="!compact"</code> 渲染常驻横向 <code>.volume-range-inline</code>，窄屏隐藏该滑块并仅在 <code>compact &amp;&amp; volumeOpen</code> 时渲染竖直 <code>.volume-menu</code>。音量按钮在两种布局下都只负责静音 / 恢复；窄屏悬停 120ms 打开、离开 200ms 关闭，Esc 与外部点击关闭，宽屏悬停不打开弹层。窗口跨过 900px 变宽时关闭弹层并清理音量定时器。</li>
   <li>音量条为特殊个例：触屏在音量按钮上纵向拖动超过 4px 后进入手势，按 <code>(startY - clientY) / 120</code> 的 delta 叠加到起始音量并夹紧到 0–1，不按手指绝对位置定位；拖动时在窄屏打开音量弹层，松开后关闭。轻点仍切换静音，滑动后的 click 被抑制。</li>
-  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位，歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用，进度与缓存进度为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
+  <li>空状态：无 <code>current</code> 时播放条仍然渲染；封面使用 <code>muted</code> 占位、无边框，有歌曲封面与占位共用 <code>--shadow-sm</code>；歌名 / 歌手留空，播放 / 上一首 / 下一首 / 收藏 / 下载按钮禁用并统一使用 <code>.icon-btn:disabled</code> 灰化（<code>faint</code> 色、降低透明度、禁用 hover 高亮），进度与缓冲 overlay 为 0 并隐藏；封面不响应点击，不渲染文字占位。音质按钮保持可用，切换通过 <code>updateDefaultQuality()</code> 只影响下次播放。</li>
 </ul>
 
 <h3 id="c4-41">4.41 src/renderer/components/LyricsPanel.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li><a href="#c4-72">LyricsView</a> 左列的歌词区；顶部歌曲信息与返回入口由 <code>LyricsView</code> 提供，本组件不含“歌词 / 评论”标题行。</li>
-  <li>按 <code>player.positionMs</code> 计算活动行并保持其居中；滚动容器上下边缘使用渐隐遮罩。支持滚轮、左键拖拽（松手后恢复跟随）与点击行调用 <code>player.seek()</code>；有逐字数据时按词高亮。</li>
+  <li><a href="#c4-72">LyricsOverlay</a> 左列的歌词区；顶部歌曲信息与关闭入口由 <code>LyricsOverlay</code> 提供，本组件不含“歌词 / 评论”标题行。</li>
+  <li>按 <code>player.positionMs</code> 计算活动行并保持其居中；滚动容器上下边缘使用渐隐遮罩。支持滚轮、左键拖拽（松手后恢复跟随）与点击行调用 <code>player.seek()</code>；拖拽采用 6px 阈值：<code>pointerdown</code> 只记录起点，纵向移动超过阈值后才进入 <code>dragging</code> 并调用 <code>setPointerCapture</code>。未拖动时指针从未被捕获，原生 click 命中 <code>.lyric-line</code> 触发跳转；拖拽结束用 <code>suppressClick</code> 兜底阻止误点击，<code>pointercancel</code> / <code>pointerleave</code> 清理按下状态。有逐字数据时按词高亮。</li>
+  <li>拖拽写 <code>scrollTop</code> 必须即时生效、与指针位移 1:1；<code>.lyrics-list</code> 使用 <code>scroll-behavior: auto</code>，自动回中仍由 <code>scrollIntoView({ block: 'center', behavior: 'smooth' })</code> 显式平滑。触屏（<code>pointerType === 'touch'</code>）不进入自定义拖拽，交给原生滚动与惯性；鼠标 / 触控笔才走自定义拖拽。</li>
+  <li><code>activeIndex</code> 监听在 <code>pressing</code> 期间也跳过自动回中，避免按住但尚未越过 6px 阈值时被回中动画抢走滚动位置。</li>
   <li>加载中、无歌词与加载失败分别渲染 spinner / 空状态 / 错误重试；无当前歌曲时不渲染歌词内容。</li>
 </ul>
 
@@ -1413,9 +1490,10 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li><a href="#c4-72">LyricsView</a> 右列的评论区；监听当前歌曲与路由激活状态，存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
+  <li><a href="#c4-72">LyricsOverlay</a> 右列的评论区；监听当前歌曲，存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
   <li>顶部只显示“评论”标题、总数与刷新入口，不再提供“最新 / 最旧”排序切换。刷新只重载评论，不触发歌词重载。</li>
-  <li>分页每页 25 条，滚动到底且 <code>hasMore=true</code> 时按游标追加下一页。右下角按滚动位置显示独立圆形“跳转到顶部 / 底部”按钮：顶部按钮在 <code>scrollTop &gt; 120</code> 时出现；底部按钮在仍有下一页或未滚到底时出现。点击“跳转到顶部”平滑回顶；点击“跳转到底部”先串行补拉剩余评论（最多 <code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 页 / 约 1000 条），再直接滚到底部。补拉期间按钮显示 spinner；组件卸载、切歌或刷新时通过 token 立即取消后续页。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
+  <li>分页每页 25 条，滚动到底且 <code>hasMore=true</code> 时按游标追加下一页；组件使用 <code>cursor</code> 状态保存 <code>nextCursor</code>，不保留 <code>pageNo</code>。右下角按滚动位置显示独立圆形“跳转到顶部 / 底部”按钮：顶部按钮在 <code>scrollTop &gt; 120</code> 时出现；底部按钮在仍有下一页或未滚到底时出现。点击“跳转到顶部”平滑回顶；点击“跳转到底部”先串行补拉剩余评论（最多 <code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 页 / 约 1000 条），再直接滚到底部。补拉期间按钮显示 spinner；组件卸载、切歌或刷新时通过 token 立即取消后续页。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
+  <li>追加下一页前用现有评论的 <code>id</code> 集合去重，只插入未出现过的评论；顺序完全沿用上游“最新”顺序，不按 <code>createdAtMs</code> 本地重排，刷新与翻页重叠不会产生重复行。</li>
   <li>评论行两行布局：第一行头像 + 昵称 + 正文（完整展示，不截断），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
 </ul>
 
@@ -1437,7 +1515,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>登录后加载“我的歌单”，支持刷新与退出登录；未登录显示空状态。</li>
   <li>监听 <code>playlist-edit.favoriteVersion</code>，收藏成功后重新拉取歌单列表，更新“我喜欢”卡片数量；歌单卡片提供改名 / 删除 / 新建菜单。</li>
-  <li>新建 / 改名 / 删除歌单走 <code>playlist-edit</code> 的真实写入：创建与改名复用 <code>PlaylistEditDialog</code>，删除需确认；成功后刷新“我的歌单”卡片并清除对应缓存，失败保留原状态并提示。</li>
+  <li>新建 / 改名 / 删除歌单走 <code>playlist-edit</code> 的真实写入：创建与改名复用 <code>PlaylistEditDialog</code>，删除使用 <a href="#c4-81">ConfirmDialog</a> 的危险态按钮确认；成功后刷新“我的歌单”卡片并清除对应缓存，失败保留原状态并提示。</li>
 </ul>
 
 <h3 id="c4-46">4.46 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1449,9 +1527,13 @@ const emit = defineEmits&lt;{
   <li>心跳由 <code>playlist.poll(id)</code> 用 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 检查首页；发现名称、封面、首屏顺序或数量显著变化时立即后台刷新，并取消待执行的 5 分钟 timeout。</li>
   <li>接入 <code>useAvailability</code>，按当前歌单歌曲集合触发探测；探测只更新歌单歌曲元数据，并把 <code>availability</code> / <code>loading</code> 同步给 playlist store，用于判断最终快照是否就绪。</li>
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
-  <li>处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的确认框；确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后触发静默刷新，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
-  <li>歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。显示筛选数与已下载数量，无匹配时显示空结果状态。</li>
-  <li>歌单头的“下载全部”按钮与“播放全部”并列，仅登录且存在可播歌曲时可用；点击调用 <code>download.startBatch({ source: 'playlist', playlistId, songMids })</code>，按歌单顺序建任务。按钮读取批次汇总显示完成 / 总数 / 失败，全部完成显示“已全部下载”，部分失败提示到下载中心重试；调用 <code>download.assetStates</code> 填充歌曲表下载图标。</li>
+  <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
+  <li>歌曲区标题显示 <code>已下载 X / Y 首</code>：<code>X</code> 按 <code>downloadedQuality</code> 统计，不把播放缓存算作已下载；有筛选时前置 <code>筛选 N ·</code>。歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。无匹配时显示空结果状态。</li>
+  <li>页面根节点使用 <code>pageRef</code>，挂载时通过 <code>closest('.main')</code> 取得内容区滚动容器，注册 passive <code>scroll</code> 监听并用 <code>ResizeObserver</code> 观察内容尺寸；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击调用 <code>scrollTo({ behavior: 'smooth' })</code>。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
+  <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
+  <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
+  <li>歌单头操作按钮文字始终单行：<code>.btn</code> 使用 <code>white-space: nowrap</code>，<code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，按钮自身 <code>flex: 0 0 auto</code>；空间不足时“播放全部 / 下载全部 / 返回”整组换行，不压缩按钮或在按钮内折行。</li>
+  <li>歌单头的“下载全部”按钮与“播放全部”并列，仅登录且存在可播歌曲时可用；点击调用 <code>download.startMany(songMids, quality)</code>，按歌单顺序去重入队，成功后提示“已加入下载队列”。不再创建批次或读取批次汇总；调用 <code>download.assetStates</code> 填充歌曲表下载图标。</li>
 </ul>
 
 <h3 id="c4-47">4.47 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1467,10 +1549,11 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>设置项即时写盘；播放中切换默认音质会立即重载当前曲目。</li>
+  <li>音质选项复用 <code>stores/settings.ts</code> 的 <code>QUALITY_PREFERENCE_OPTIONS</code>，选择调用 <code>player.updateDefaultQuality()</code>，与播放条共用 <code>Settings.defaultQuality</code> 并即时联动；组件内不维护本地选项常量。</li>
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
-  <li>缓存区提供开关、当前占用与清理；下载区提供目录、容量与剩余空间提示。</li>
+  <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
-  <li>账号区展示登录态、到期时间、续期与退出登录；窗口区另提供“退出应用”，调用 <code>window.lychee.system.quit()</code>。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>账号区展示登录态、到期时间、续期与退出登录；窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
 </ul>
 
 <h3 id="c4-49">4.49 src/renderer/styles/main.css <a class="backlink" href="#c1">文件树</a></h3>
@@ -1478,18 +1561,33 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>深色与浅色 token 定义在 <code>:root</code> / <code>[data-theme]</code>；视觉契约见 <a href="USER.html#u5">USER §5</a>。</li>
+  <li>主题 token 增 <code>--shadow-color</code>（深色 <code>var(--text)</code> 20%、浅色 14% 混色）与统一缩放后的 <code>--shadow-sm: 0 2px 6px</code>、<code>--shadow: 0 5px 16px</code>、<code>--shadow-lg: 0 7px 22px</code>、<code>--shadow-up: 0 -4px 12px</code>、<code>--shadow-left: -8px 0 24px</code>、<code>--shadow-right: 8px 0 24px</code>、<code>--shadow-handle: 3px 0 10px</code>。</li>
+  <li>删除空状态占位封面的虚线边框；品牌、按钮、封面 / 头像、弹层、面板、Toast、模态框、抽屉与拖拽把手等全部投影改用上述 fg 阴影 token。焦点环（<code>0 0 0 Npx</code>）、输入框 inset 高光与遮罩纯背景不属于投影，保持独立。</li>
+  <li><code>.catalog-desc-block</code> 限宽 900px 并承担底部间距；块内 <code>.catalog-desc</code> 取消自身宽度与外边距；<code>.catalog-desc.clamped</code> 为 4 行 <code>-webkit-line-clamp</code>；<code>.catalog-desc-toggle</code> 使用 accent 文字、透明背景，悬停加下划线。</li>
   <li>组件样式与响应式断点也在同一文件维护。</li>
   <li>布局最小阈值由 <code>--layout-min-width</code>（当前 <code>420px</code>）与 <code>--layout-min-height</code>（<code>--player-height + 170px</code>）统一声明；<code>.app-shell</code> 同时设置 <code>min-width</code> / <code>min-height</code>，<code>body</code> 使用 <code>overflow: auto</code> 提供整窗双向滚动。低于阈值时布局停止压缩，侧栏导航内部纵向滚动、账号入口固定、播放条保持第二行；内容区仍独立滚动。</li>
+  <li>按钮文字不换行：<code>.btn</code> 使用 <code>white-space: nowrap</code>；歌单操作区 <code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，子按钮 <code>flex: 0 0 auto</code> 保持内容宽度，空间不足时整组换行；≤900px 媒体查询不再重复声明 <code>flex-wrap</code>。</li>
+  <li>危险操作使用 <code>.btn.danger</code>：透明边框、<code>--danger</code> 背景与 <code>--on-accent</code> 文字，悬停使用 danger 与 text 的混色。确认框 <code>.confirm-dialog</code> 复用 <code>.dialog-backdrop</code> / <code>.dialog</code>，限宽 440px；<code>.confirm-message</code> 使用 <code>white-space: pre-line</code> 保留说明换行。</li>
   <li>歌曲表使用 <code>table-layout: fixed</code> 与 <code>width: 100%</code>；<code>.page</code> 不设最大宽度，铺满内容区。操作单元格禁止改为 flex；内部容器负责按钮排列，行边框只挂在 <code>tr</code>。</li>
   <li>歌单底部 <code>.feed-footer</code> 使用 flex，<code>.spinner</code> 为 <code>inline-block</code> 且 <code>flex: none</code>；播放队列行网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，不包含专辑列，最后一列只容纳图标按钮。</li>
   <li>歌曲表操作列四个图标按钮在 <code>.song-action-inner</code> 内等距排列；≤900px 隐藏图标按钮、只显示 <code>more</code> 触发按钮。操作菜单为绝对定位浮层，项内“图标 + 文字”横排，点击外部或 Esc 关闭。</li>
-  <li>播放模式菜单向上定位（<code>bottom: 100%</code>），当前模式项与菜单同圆角、与底部无空隙：高亮块由 <code>--accent-soft</code> 背景 + <code>--accent-strong</code> 文字构成，菜单项为纯图标按钮并保留 tooltip。</li>
-  <li>歌词 / 评论页：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。评论列表使用两行网格，正文完整展示、不使用行数截断；<code>.comments-toolbar</code> 不画下边框，右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，滚动区底部留出按钮空间。</li>
+  <li>播放模式为包含式 revealer：<code>.mode-button</code> 使用 32px 方形、9px 圆角、<code>--accent-soft</code> 背景与 <code>--accent-strong</code> 图标；<code>.mode-wrap.open</code> 时按钮提升到 <code>z-index</code> 浮层之上。菜单 <code>.mode-menu</code> 使用 <code>bottom: 0</code>、<code>width: 100%</code>、<code>padding-bottom: 32px</code> 包住按钮，<code>--panel</code> 背景、9px 圆角与向上阴影，并通过 <code>mode-reveal</code> 的 <code>scaleY</code> 向上展开；菜单只列纯图标 <code>.mode-option</code>，不再有 <code>.mode-option.current</code>。</li>
+  <li>音质 revealer 与播放模式共用向上展开的包含式布局：<code>.quality-chip</code> 高 24px、最小宽度 52px、6px 圆角、<code>--accent-soft</code> 背景与 <code>--accent-strong</code> 文字，无边框，本身表示当前偏好；<code>.quality-wrap.open</code> 提升按钮层级，<code>.quality-menu</code> 使用 <code>bottom: 0</code>、<code>width: 100%</code>、<code>padding-bottom: 30px</code>、<code>--panel</code> 背景与向上阴影，并复用 <code>mode-reveal</code> 动画；选项悬停 / 触屏高亮使用 <code>--subtle-bg</code> / <code>--accent-soft</code>。呈现约定见 <a href="USER.html#u2">USER §2</a>。</li>
+  <li><code>.icon-btn:disabled</code> 使用 <code>--faint</code> 颜色与 0.45 透明度，悬停不再改变颜色或背景；播放条空状态下播放 / 上一首 / 下一首 / 收藏 / 下载按钮统一灰化，音质按钮不受影响。</li>
+  <li>窄屏音量弹层复用模式 revealer：<code>.volume-menu</code> 使用 <code>bottom: 0</code>、<code>width: 100%</code>、<code>padding-bottom: 34px</code>、9px 圆角、<code>--panel</code> 背景且无边框，<code>.volume-wrap.open</code> 时按钮以 <code>z-index</code> 浮在其底部；<code>.volume-slider</code> 高 96px，<code>.volume-track</code> 为 4px 圆角条并上下各留 10px，<code>.volume-fill</code> 用强调色填充，范围输入旋转成 34×76px 热区并用负 margin 归中。宽屏使用 <code>.volume-range-inline</code>，宽度 <code>clamp(56px, 6vw, 84px)</code>。删除旧 <code>.volume-popover</code> / <code>.vertical-range</code> 的 padding、边框与百分比文案。</li>
+  <li>收藏 revealer 使用 <code>.like-wrap</code> / <code>.like-menu</code> / <code>.like-option</code>：弹层与按钮同宽、底部预留按钮高度并复用模式 revealer 的向上展开动画；<code>.mode-option.touch-active</code> / <code>.quality-menu button.touch-active</code> / <code>.like-option.touch-active</code> 使用 <code>--accent-soft</code> 背景与 <code>--accent-strong</code> 文字。播放模式、音质、收藏与音量按钮统一设置 <code>touch-action: none</code>。</li>
+  <li><code>.lyrics-overlay</code> 固定在内容区：<code>position: fixed</code>、<code>top: 0</code>、<code>left: var(--sidebar-width)</code>、<code>right: 0</code>、<code>bottom: var(--player-height)</code>，<code>z-index: 25</code>，背景 <code>var(--bg)</code>；位于侧栏右侧、播放条下方（播放条 <code>z-index: 30</code>），窄屏侧栏宽度为 0 时铺满窗口。歌词 / 评论页面样式沿用原 <code>.lyrics-page*</code>。</li>
+  <li>歌词 / 评论弹出层：<code>.lyrics-page</code> 铺满内容区，左右两列各 50%，中间 1px 分隔线；歌词滚动容器上下用渐变遮罩，活动行放大并使用 <code>--accent-strong</code>。<code>.lyrics-list</code> 使用 <code>scroll-behavior: auto</code>，拖拽写 <code>scrollTop</code> 即时生效；自动回中单独用 <code>scrollIntoView({ behavior: 'smooth' })</code>。<code>.lyrics-page-list</code> 水平 padding 为 0，<code>.lyric-line</code> 水平居中、左右 padding 与左边框均为 0，高亮背景条铺满整行，不显示左侧强调边。评论列表使用两行网格，<code>.comment-text</code> 不使用 <code>-webkit-line-clamp</code> / <code>overflow: hidden</code>，正文完整换行展示；<code>.comments-toolbar</code> 不画下边框，<code>.comments-title</code> 提供“评论”标题样式；右下角 <code>.comments-jump</code> 放置独立圆形 <code>.comments-jump-btn</code>，<code>.comments-scroll</code> 底部 padding 72px，避免最后一条评论被按钮遮挡。歌单页的 <code>.page-jump-btn</code> 与 <code>.comments-jump-btn</code> 共用尺寸、边框、圆形与阴影，<code>.page-jump</code> 固定在内容区右下角并使用 <code>bottom: calc(var(--player-height) + 18px)</code> 避开播放条。</li>
+  <li>播放队列头部按钮组 <code>.lyrics-head-actions</code> 使用 flex 水平排列、固定不收缩并与标题区两端对齐；清空 / 关闭按钮复用 <code>.icon-btn</code>，空队列时按 <code>.icon-btn:disabled</code> 灰化。列表底部不再保留 <code>.queue-footer</code> 或文字按钮样式。</li>
   <li>歌单与队列筛选框共用样式：单行输入、内嵌清除按钮，位于表格 / 面板顶部；空结果沿用列表空状态。</li>
-  <li>≤900px 侧栏抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code> 平移，左侧阴影表现 revealer；打开时主内容按抽屉宽度右移。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
-  <li>播放进度条下方叠加一条 2px 缓存进度线，位于播放进度与时间之间；使用独立的 accent 弱色，完成态显示满格 / 对勾，关闭缓存时整条隐藏；不改变播放进度线样式。</li>
+  <li>≤900px 侧栏改为单列 grid + 覆盖式抽屉，不再保留 64px / 56px 常驻图标栏；抽屉使用 <code>position: fixed</code> + <code>transform: translateX()</code>，默认隐藏，打开时覆盖内容区并显示 backdrop，不压缩主内容。560px 只进一步收窄抽屉宽度。拖拽阈值与吸附常量见 <a href="#c4-50">§4.50</a>；<code>prefers-reduced-motion: reduce</code> 时禁用过渡动画。</li>
+  <li>窄屏非触屏（<code>(max-width: 900px) and (hover: hover) and (pointer: fine)</code>）对 <code>.app-shell</code> 设置 <code>user-select: none</code>，输入框与文本域恢复 <code>user-select: text</code>；宽屏不受影响。</li>
+  <li><code>.progress-stack</code> 内为单轨进度条：<code>.progress-track</code> 提供背景与圆角，<code>.progress-buffer</code> 使用独立的 <code>--buffer</code> 弱色，<code>.progress-played</code> 使用 <code>--accent</code>，透明 <code>.progress-range</code> 绝对覆盖并位于最上层。删除旧 <code>.cache-progress</code> 细线；无歌曲时轨道降低透明度且不渲染 overlay。</li>
   <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页每个分区使用 flexbox 横向排列固定宽度条目、纵向 3 行滚动，条目文本溢出时走跑马灯。</li>
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
+  <li><code>.song-title .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。</li>
+  <li>下载按钮三态使用共用的 24px <code>::before</code> 状态框：<code>.cached:not(.downloaded)</code> 为 <code>var(--panel)</code> surface 背景，<code>.downloaded</code> 为 <code>var(--accent-soft)</code> 填充且覆盖缓存态；不画按钮外沿 inset 边框，不使用 <code>background-clip</code>，播放条与歌曲表尺寸一致、点击热区不变。</li>
+  <li>播放缓存上限滑杆使用 <code>.cache-limit-row</code> / <code>.cache-slider</code> / <code>.cache-slider-nodes</code>：accent 填充轨道、滑块、已选节点与焦点环，未到节点保持弱色；轨道两端各留 7px 与滑块半径对齐，节点绝对定位，首尾标签不挤出面板。</li>
 </ul>
 
 <h3 id="c4-50">4.50 src/shared/constants.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1501,23 +1599,29 @@ export declare const UPSTREAM_QUOTA_BACKOFF_MS: number;     // 600 ms
 export declare const MUSICU_BUSY_BACKOFF_MS: number;        // 500 ms
 export declare const UPSTREAM_RATE_LIMIT_PER_SECOND: number; // 4
 export declare const UPSTREAM_RATE_LIMIT_BURST: number;      // 8
+export declare const UPSTREAM_BLOCK_MS: number;             // 60_000 ms；104009 全局截断时长
 export declare const SEARCH_EMPTY_RETRY_MS: number;         // 350 ms
 export declare const SEARCH_EMPTY_RETRY_COUNT: number;      // 1
 export declare const SEARCH_PAGE_NO_MAX: number;            // 100
 export declare const SEARCH_PAGE_SIZE_DEFAULT: number;      // 20
 export declare const SEARCH_PAGE_SIZE_MAX: number;          // 50
-export declare const PLAYLIST_PAGE_SIZE: number;            // 50
-export declare const PLAYLIST_PAGE_MAX: number;             // 20_000
+export declare const PLAYLIST_PAGE_SIZE: number;            // 50；轻量校验 / 轮询首页
+export declare const PLAYLIST_FETCH_PAGE_SIZE: number;     // 2000；完整快照单次拉取
+export declare const PLAYLIST_FETCH_PAGE_MAX: number;      // 10；约 2 万首
+export declare const PLAYLIST_FETCH_MISSING_RATIO: number; // 0.02；缺失容差
+export declare const PLAYLIST_FETCH_MISSING_MIN: number;   // 10；缺失容差下限
+export declare const PLAYLIST_PAGE_MAX: number;            // 20_000
 export declare const PLAYLIST_POLL_INTERVAL_MS: number;     // 15_000 ms
-export declare const PLAYLIST_CACHE_MAX_BYTES: number;      // 16 × 1024 × 1024
-export declare const PLAYLIST_PAGE_RETRY_ATTEMPTS: number;  // 3
-export declare const PLAYLIST_PAGE_RETRY_BACKOFF_MS: number; // 500 ms
+export declare const PLAYLIST_REFRESH_RETRY_MS: number;     // 5 × 60_000 ms
+export declare const FAVORITES_PLAYLIST_ID: string;         // 'liked'
+export declare const PLAYLIST_CACHE_MAX_BYTES: number;      // 64 × 1024 × 1024
 export declare const RECENT_PLAYLIST_LIMIT: number;          // 5
 export declare const RECENT_PLAYLIST_CHECK_THROTTLE_MS: number; // 5000 ms
 export declare const RECENT_PLAYLIST_STORAGE_PREFIX: string; // 'lychee:recent-playlists:'
 export declare const SIDEBAR_DRAG_THRESHOLD_PX: number;      // 48 px
 export declare const PROBE_MIDS_MAX: number;                // 50；≤ IPC_SONG_MIDS_MAX
-export declare const PROBE_DETAIL_CONCURRENCY: number;      // 2
+export declare const SONG_DETAIL_BATCH: number;             // 50；批量详情单次上限
+export declare const PROBE_DETAIL_CONCURRENCY: number;      // 2；仅用于批量缺口的单曲兜底
 export declare const PROBE_VKEY_BATCH: number;              // 50；≤ IPC_SONG_MIDS_MAX
 export declare const PROBE_CACHE_TTL_MS: number;            // 10 × 60_000 ms
 export declare const PROBE_MAX_SONGS: number;               // = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX
@@ -1526,7 +1630,7 @@ export declare const PROBE_IDLE_FALLBACK_MS: number;        // 300 ms
 export declare const PROBE_EMPTY_BATCH_LIMIT: number;       // 2
 export declare const DOWNLOAD_POLL_MS: number;              // 1500 ms
 export declare const DOWNLOAD_CONCURRENCY: number;          // 1
-export declare const DOWNLOAD_BATCH_MAX: number;            // 5000
+export declare const DOWNLOAD_QUEUE_MAX: number;            // 2000
 export declare const DOWNLOAD_INDEX_PREFIX: string;         // '.lychee-downloads-'
 export declare const CACHE_PROGRESS_THROTTLE_MS: number;    // 300 ms
 export declare const RECOMMEND_CACHE_TTL_MS: number;        // 24 小时
@@ -1549,7 +1653,10 @@ export declare const FAVORITE_STATUS_CACHE_MS: number;      // 30_000 ms
 export declare const VIP_CACHE_MS: number;                  // 5 × 60_000 ms
 export declare const COMMENT_PAGE_SIZE: number;             // 25；上游实测上限
 export declare const COMMENT_LOAD_ALL_PAGE_MAX: number;     // 40；跳转底部最多补拉 1000 条
-export declare const AUDIO_CACHE_MAX_BYTES: number;         // 2 GiB
+export declare const AUDIO_CACHE_MAX_BYTES: number;         // 2 GiB；默认 / 最大档位
+export declare const AUDIO_CACHE_LIMIT_STEPS_BYTES: readonly number[]; // 128M / 256M / 512M / 1G / 1.5G / 2G
+export declare const AUDIO_CACHE_DEFAULT_BYTES: number;      // = AUDIO_CACHE_MAX_BYTES
+export declare function normalizeAudioCacheLimitBytes(value: unknown): number;
 export declare const AUDIO_CACHE_DIR: string;               // 'audio'
 export declare const STARTUP_FLAGS_MAX_BYTES: number;       // 8 × 1024
 export declare const STARTUP_FLAGS_MAX_LINES: number;       // 64
@@ -1558,13 +1665,17 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
 </code></pre>
 <ul class="note">
   <li>所有工程常量只在本文件声明；其它模块只 import。源码中是实际赋值，本签名只保留名称与取值。</li>
+  <li><code>AUDIO_CACHE_LIMIT_STEPS_BYTES</code> 提供设置页 6 个固定档位；<code>normalizeAudioCacheLimitBytes</code> 对合法档位原样返回，越界 / 非档位值归一到最近档位，非法值回退默认档；<code>AUDIO_CACHE_MAX_BYTES</code> 作为默认 / 最大档位。</li>
   <li><code>PROBE_MAX_SONGS</code> 使用 <code>PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX</code> 派生，当前为 1,000,000；修改页大小或页上限时自动跟随。</li>
   <li><code>PROBE_MIDS_MAX</code> / <code>PROBE_VKEY_BATCH</code> 不得大于 <code>IPC_SONG_MIDS_MAX</code>；推荐与页大小 50 对齐，使一个歌单页一次探测、一批 vkey。修改任一值时同步评估其余常量。</li>
-  <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
+  <li><code>SONG_DETAIL_BATCH = 50</code> 为批量详情单次上限；<code>PROBE_DETAIL_CONCURRENCY = 2</code> 仅用于批量缺口的单曲兜底，不再逐首探测。</li>
+  <li><code>COMMENT_PAGE_SIZE = 25</code> 为上游实测单页上限（26 起返回业务码 <code>10000</code>）；<code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 使“跳转到底部”最多补拉约 1000 条，并保持串行请求与取消机制。</li>
+  <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>UPSTREAM_BLOCK_MS</code> 为收到 104009 后的全局截断时长（推荐 60_000 ms），窗口内所有上游请求直接失败、下载泵暂停出队；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限；<code>PROBE_EMPTY_BATCH_LIMIT</code> 控制连续整批不可播时停止探测的阈值。</li>
   <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制推荐分区缓存；<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页每区展示的歌曲上限（30 首，界面固定 3 行滚动）。</li>
-  <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，批次内按歌单顺序串行；<code>DOWNLOAD_BATCH_MAX</code> 限制单批次任务数；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
+  <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，统一队列按入队顺序串行；<code>DOWNLOAD_QUEUE_MAX</code> 限制单次“下载全部”的入队数量；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
   <li><code>RECENT_PLAYLIST_LIMIT</code> 限制最近歌单条数；<code>RECENT_PLAYLIST_CHECK_THROTTLE_MS</code> 与单飞互斥共同限制校验频率；<code>RECENT_PLAYLIST_STORAGE_PREFIX</code> 与账号 musicid 拼接为 localStorage key；<code>SIDEBAR_DRAG_THRESHOLD_PX</code> 为抽屉开关的位移阈值。</li>
-  <li>已删除 <code>PLAYLIST_CACHE_TTL_MS</code> 与 <code>PLAYLIST_PREFETCH_CONCURRENCY</code>：缓存改为整份快照，分页串行加载且不做预取。</li>
+  <li>已删除 <code>PLAYLIST_CACHE_TTL_MS</code>、<code>PLAYLIST_PREFETCH_CONCURRENCY</code> 与只服务旧逐页补全的 <code>PLAYLIST_PAGE_RETRY_*</code>：缓存改为整份快照，分页串行加载且不做预取。</li>
+  <li><code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、<code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 控制整份快照拉取；<code>PLAYLIST_FETCH_MISSING_RATIO = 0.02</code> / <code>PLAYLIST_FETCH_MISSING_MIN = 10</code> 允许上游静默省略少量不可用曲目；<code>PLAYLIST_REFRESH_RETRY_MS = 5 × 60_000</code> 为失败后的自动重试间隔。<code>PLAYLIST_PAGE_SIZE = 50</code> 只用于最近歌单校验与轮询首页。</li>
 </ul>
 
 <h3 id="c4-51">4.51 src/main/startup-flags.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1588,10 +1699,13 @@ export function writeFlagsFile(content: string): Promise&lt;void&gt;;
   mids: string[],
   options?: ProbeOptions
 ): Promise&lt;SongAvailability[]&gt;;
+export function peekAvailability(mids: string[]): Map&lt;string, SongAvailability&gt;;
 export function clearAvailabilityCache(musicid?: string): void;
 </code></pre>
 <ul class="note">
   <li>探测结果只更新歌单歌曲元数据；不修改播放队列、不改变当前播放。</li>
+  <li><code>peekAvailability</code> 只读现有可用性缓存，不探测、不写缓存；只返回已探测且未过期的条目。未探测过的歌曲不会出现在结果中，调用方按 <code>maxQuality: null</code> / 未知状态处理。</li>
+  <li><code>download.assetStates</code> 用 <code>peekAvailability</code> 补 <code>maxQuality</code>；列表页由 <code>useAvailability</code> 按需探测，因此资产查询不会额外打上游。</li>
   <li><code>song.probe</code> 单次上限为 <code>PROBE_MIDS_MAX = 50</code>，与一个 50 首歌单页对齐；渲染层按 50 分批，探测内部固定按 <code>flac</code> 逐档解析最高可用音质。</li>
   <li><code>PROBE_MAX_SONGS</code> 与页大小/页上限共用 <a href="#c4-50">§4.50</a> 的派生常量；缓存按账号隔离，退出登录时清空。</li>
   <li>登录成功后主进程清空可用性缓存，避免沿用旧会话留下的“不可播”结果；探测请求与其他上游请求共享全局限速。</li>
@@ -1609,8 +1723,9 @@ export function clearRecommendCache(): void;
   <li>每日推荐：<code>music.recommend.RecommendFeed / get_recommend_feed</code>，参数 <code>{ direction: 0, page: 1, v_cache: [], v_uniq: [], s_num: 0 }</code>；在返回的 <code>v_shelf[].v_niche[].v_card[]</code> 中取唯一 <code>subtype === 510</code> 且日期为上海当天的卡片，再用 <code>music.srfDissInfo.DissInfo / CgiGetDiss</code> 读取完整歌单，固定 30 首。</li>
   <li>专属雷达：<code>music.recommend.TrackRelationServer / GetRadarSong</code>，参数 <code>{ Page, NeedNum, EntranceSongs: [], extra_info: {} }</code>；返回 <code>VecSongs[].Track</code>，按 <code>Page</code> 翻页并以 <code>HasMore</code> 判断，最多 4 页凑够 30 首。</li>
   <li>猜你喜欢：<code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>），参数 <code>{ id: 99, firstplay: 1, page, pageNo, page_num, offset, num }</code>；返回 <code>data.tracks[]</code> 扁平歌曲，按 mid 去重后最多取 20 首。</li>
-  <li>三个分区各自缓存 24 小时（<code>RECOMMEND_CACHE_TTL_MS</code>）；<code>sectionId</code> 只刷新指定分区，省略时刷新全部；未登录直接返回空分区，由渲染层显示登录引导。</li>
-  <li><code>signal</code> 透传到每个 <code>musicu</code> 与 <code>CgiGetDiss</code> 请求；调用方取消后不再吞掉中止错误，也不继续填充后续分区。</li>
+  <li>三个分区各自缓存 24 小时（<code>RECOMMEND_CACHE_TTL_MS</code>），缓存是进程内 <code>Map</code>，不落盘；<code>force</code> 绕过缓存。传 <code>sectionId</code> 时只加载并返回该分区，渲染层按分区 id 替换；省略时串行加载全部分区。</li>
+  <li>单区失败时，有旧缓存则保留旧 section，没有旧缓存则返回合法空分区；空分区不抛错，由 UI 显示空状态。未登录直接返回空分区，由渲染层显示登录引导。<code>AUTH_EXPIRED</code> 继续抛出；调用方取消后抛出中止错误，不继续填充后续分区，也不吞掉中止错误。</li>
+  <li><code>signal</code> 透传到每个 <code>musicu</code> 与 <code>CgiGetDiss</code> 请求。</li>
 </ul>
 
 <h3 id="c4-54">4.54 src/main/api/favorite.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1634,10 +1749,12 @@ export function addSongs(id: string, mids: string[]): Promise&lt;PlaylistMutatio
 export function removeSongs(id: string, mids: string[]): Promise&lt;PlaylistMutationResult&gt;;
 </code></pre>
 <ul class="note">
-  <li>创建：<code>music.musicasset.PlaylistBaseWrite / AddPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirName, dirDesc: '', dirPicUrl: '', taglist: '' }</code>；要求 <code>data.retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数，名称最多 20 个 JS 字符。</li>
-  <li>改名：<code>PlaylistBaseWrite / EditPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirId, dirNewName, dirShow: 1, mask: 1 }</code>；<code>retCode === 0</code> 后必须读回 <code>dirinfo.title</code> 确认，不能只看返回码。</li>
-  <li>删除：<code>PlaylistBaseWrite / DelPlaylist</code>，参数 <code>{ bFmtUtf8: true, dirId, dirName }</code>；只允许当前账号自建、非 <code>201</code> 的普通歌单，删除后从歌单列表读回确认已消失。</li>
-  <li>增删歌曲：<code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>，参数 <code>{ dirId, tid, bFmtUtf8: true, v_songInfo: [{ songId, songType }] }</code>；<code>dirId</code> 是当前账号目录 ID，<code>tid</code> 是歌单标识，不能混用；<code>songId</code> 必须为数字 ID 且 <code>songType</code> 取歌曲详情真实值，每批最多 100 首。<code>dirId:201</code> 的收藏写入走签名加密通道，见 <a href="#c4-54">§4.54</a>。</li>
+  <li>创建：<code>music.musicasset.PlaylistBaseWrite / AddPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirName }</code>；要求 <code>data.retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数；返回 <code>id = String(result.tid)</code>（歌单标识）、<code>dirId = result.dirId</code>（目录 ID），两者不能互换；名称最多 20 个 JS 字符。</li>
+  <li>改名：先用 <code>fetchPlaylistPage</code> 读取当前 <code>dirId</code>，再调用 <code>PlaylistBaseWrite / EditPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirNewName, dirShow: 1, mask: 1 }</code>；成功后返回 <code>readMeta</code> 得到的最新 <code>PlaylistMeta</code>。</li>
+  <li>删除：先用 <code>readMeta</code> 读取当前 <code>dirId</code>，再调用 <code>PlaylistBaseWrite / DelPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirName }</code>；只允许当前账号自建、非 <code>201</code> 的普通歌单；删除成功后由主进程清理该歌单缓存，列表刷新由渲染层重新加载。</li>
+  <li>增删歌曲：<code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>，参数 <code>{ dirId, tid, bFmtUtf8: 1, v_songInfo: [{ songId, songType }] }</code>；<code>dirId</code> 是当前账号目录 ID，<code>tid</code> 是歌单标识，不能混用；<code>songId</code> 必须为数字 ID 且 <code>songType</code> 取歌曲详情真实值，每批最多 100 首。<code>dirId:201</code> 的收藏写入走签名加密通道，见 <a href="#c4-54">§4.54</a>。</li>
+  <li>写入前不做整单成员预扫描或重复检查：<code>addSongs</code> / <code>removeSongs</code> 只读取一次歌单元数据、批量获取歌曲身份并提交写入；重复 / 不存在由 <code>80092</code> 与写后统一刷新确认，耗时不再随歌单长度线性增长。</li>
+  <li><code>removeSongs</code> 的归属前置校验由详情接口的 <code>editable</code> 提供；写入前先 <code>readMeta</code> 取 <code>dirId</code>，再用 <code>fetchTrackIdentities</code> 取得数字 <code>songId</code> 与真实 <code>songType</code>，提交 <code>DelSonglist</code>；不读回成员，<code>80092</code> 视为 <code>changed:false</code>，写后刷新由 <code>stores/playlist-edit</code> 统一负责。</li>
   <li><strong>写后刷新职责：</strong>增删歌曲只负责写入并返回 <code>PlaylistMutationResult { changed }</code>；<code>80092</code> 视为状态未变化并返回 <code>changed:false</code>。写后歌单内容 / 计数刷新统一由 <code>stores/playlist-edit</code> 调用现有 <code>playlist.invalidate(id)</code> + <code>playlist.poll(id)</code> 完成；不得在写 API 内单独实现整单扫描、尾部读回或其他刷新流程。</li>
   <li>业务码 <code>1000</code> 映射 <code>AUTH_EXPIRED</code>，<code>80105</code> / 权限不足映射 <code>NO_PERMISSION</code>，结构缺失映射 <code>UPSTREAM_CHANGED</code>；不新增错误码。</li>
 </ul>
@@ -1648,10 +1765,10 @@ export function getMvDetail(mvId: string): Promise&lt;MvDetail&gt;;
 export function getMvStream(mvId: string, quality: MvStream['quality']): Promise&lt;MvStream&gt;;
 </code></pre>
 <ul class="note">
-  <li>搜索复用 <code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code> 并传 <code>search_type: 4</code>；结果取 <code>body.mv.list[]</code> 的 <code>v_id</code> / <code>mv_name</code> / <code>mv_pic_url</code> / <code>singer_list</code> / <code>duration</code> / <code>publish_date</code>，映射为 <code>SearchResult.mvs</code>。</li>
+  <li>搜索复用 <code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code> 并传 <code>search_type: 4</code>；结果取 <code>body.mv.list[]</code> 的 <code>v_id</code> / <code>mv_name</code> / <code>mv_pic_url</code> / <code>singer_list</code> / <code>duration</code> / <code>publish_date</code>，映射为 <code>SearchResult.mvs</code>。MV 搜索与歌曲搜索共用页码与每页条数，搜索结果只合并 <code>mvs</code>，不重置歌曲分页。</li>
   <li>详情：<code>MvService.MvInfoProServer / GetMvInfoList</code>，参数 <code>{ vidlist: [mvId] }</code>；取 <code>mvlist[0]</code> 的 <code>cover_pic</code> / <code>desc</code> / <code>duration</code> / <code>singers</code> / <code>pubdate</code> / <code>playcnt</code>。</li>
   <li>取流：<code>gosrf.Stream.MvUrlProxy / GetMvUrls</code>，参数 <code>{ vids: [mvId], from: 'h5.playsong' }</code>；<code>data[mvId].mp4[]</code> 的 <code>filetype</code> 10 / 20 / 30 对应 <code>sd</code> / <code>hd</code> / <code>fhd</code>，可播地址取条目的 <code>freeflow_url</code>；<code>filetype</code> 0 / 40 / 50 无地址时按档位降级。</li>
-  <li>默认请求 <code>fhd</code>，不可用时按 <code>fhd → hd → sd</code> 降档；全部不可用映射 <code>NO_PERMISSION</code> / <code>NO_STREAM</code>，结构缺失映射 <code>UPSTREAM_CHANGED</code>。MV 播放与音频播放互不影响。</li>
+  <li>默认请求 <code>fhd</code>，不可用时按 <code>fhd → hd → sd</code> 降档。成功时 <code>MvStream.quality</code> 返回实际采用的档位，而不是请求档；全部失败时返回请求档并令 <code>url: null</code>，表示从请求档起向下所有档位都不可用，调用方应展示重试 / 错误，不得把请求档当作已取到。结构缺失映射 <code>UPSTREAM_CHANGED</code>。MV 播放与音频播放互不影响。</li>
 </ul>
 
 <h3 id="c4-57">4.57 src/main/cache/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1674,12 +1791,13 @@ export function getCachedAudioInfo(
 ): Array&lt;{ quality: Quality; filePath: string; bytes: number }&gt;;
 export function putCachedAudio(songMid: string, quality: Quality, filePath: string): Promise&lt;void&gt;;
 export function clearAudioCache(): Promise&lt;void&gt;;
+export function enforceAudioCacheLimit(): Promise&lt;void&gt;;
 export function audioCacheStats(): Promise&lt;{ bytes: number; files: number }&gt;;
 </code></pre>
 <ul class="note">
   <li><code>getCachedAudioInfo</code> 返回该歌曲已存在的全部缓存档位，供资产状态与下载前的本地转移判断；只读本地文件，不触发网络请求。</li>
   <li>目录结构为 <code>userData/cache/audio/&lt;musicid|anonymous&gt;/&lt;quality&gt;/&lt;songMid&gt;.&lt;mp3|flac&gt;</code>，同曲不同音质互不覆盖。</li>
-  <li>缓存按账号隔离；超出 <code>AUDIO_CACHE_MAX_BYTES</code> 时按文件 mtime 做 LRU 清理。统计递归扫描全部账号目录。</li>
+  <li>缓存按账号隔离；上限读取 <code>getSettings().audioCacheMaxBytes</code>，超出时按文件 mtime 做 LRU 清理。写入缓存后自动调用 <code>enforceAudioCacheLimit()</code>；设置页下调上限时也立即调用。统计递归扫描全部账号目录。</li>
   <li>缓存文件由 <a href="#c4-59">§4.59</a> 的 <code>file</code> 分支按 Range 手工切片返回 200 / 206；命中缓存时不需要重新取 vkey，也不经过上游。</li>
   <li>关闭播放缓存时不再读取或写入音频体；清理操作删除整个 <code>cache/audio</code>。</li>
 </ul>
@@ -1687,16 +1805,18 @@ export function audioCacheStats(): Promise&lt;{ bytes: number; files: number }&g
 <h3 id="c4-59">4.59 src/main/media/audio-protocol.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function registerAudioProtocol(): void;
 export function audioProtocolUrl(filePath: string): string;
-export function audioStreamUrl(url: string, songMid: string, quality: Quality): string;
+export function audioStreamUrl(url: string, songMid: string, quality: Quality, filePath?: string): string;
 export function clearAudioTemp(): Promise&lt;void&gt;;
 export function readAudioFile(path: string): Promise&lt;Buffer&gt;;
 </code></pre>
 <ul class="note">
   <li>模块加载阶段调用 <code>protocol.registerSchemesAsPrivileged()</code> 注册 <code>lychee-audio</code>（<code>standard</code> / <code>secure</code> / <code>supportFetchAPI</code> / <code>stream</code> / <code>bypassCSP</code>）；<code>app.whenReady()</code> 后由 <code>registerAudioProtocol()</code> 调用 <code>protocol.handle()</code>。</li>
   <li>URL 只有两种：缓存文件 <code>lychee-audio://file/&lt;base64url(path)&gt;</code>；未缓存流 <code>lychee-audio://stream/&lt;uuid&gt;</code>。stream token 在主进程内映射上游 URL、<code>songMid</code> 与 <code>quality</code>，渲染进程永远拿不到上游链接。</li>
+  <li><code>audioStreamUrl</code> 可携带本地下载文件 <code>filePath</code>；<code>handleStream</code> 固定按“本机下载文件 &gt; 播放缓存 &gt; 网络”取源，命中本地文件时直接响应并立即上报 <code>complete: true</code> 的缓存进度，未命中才回源上游。代码注释锁定该顺序，与 <a href="#c4-11">§4.11</a> 的 <code>getStreamUrls</code> 一致。</li>
   <li>token 只保存在进程内 Map，无持久化、无主动过期；应用重启后 token 失效，但缓存文件仍可通过 <code>file</code> 分支读取。</li>
   <li>渲染层取消读取时，协议处理必须同时 abort 上游 <code>net.fetch</code>：只 cancel body 可能把未读完的连接留在 socket 池，后续音频流复用该连接时会一直等到上游超时（约 10 秒）才报错重试。</li>
-  <li>完整响应落盘时按 <code>CACHE_PROGRESS_THROTTLE_MS</code> 节流推送 <code>AudioCacheProgress</code>（歌曲、音质、已写字节、总字节、完成标记）；局部 206 不推进完成度。缓存命中 <code>file</code> 分支直接视为 100%。</li>
+  <li>取消路径先调用 <code>abortUpstream()</code>，随后必须用 <code>reader.cancel(reason).catch(() =&gt; undefined)</code> 等待并吞掉取消 Promise。abort 或对端关闭后 <code>reader.cancel()</code> 会以 <code>net::ERR_CONNECTION_CLOSED</code> / <code>ERR_CONTENT_LENGTH_MISMATCH</code> 拒绝，不能使用 <code>void</code> 丢弃，否则会产生进程级未处理 Promise；只吞取消路径的关闭类拒绝，正常读取错误仍照常处理。</li>
+  <li>完整响应落盘时按 <code>CACHE_PROGRESS_THROTTLE_MS = 300</code> 节流推送 <code>AudioCacheProgress</code>（歌曲、音质、已写字节、总字节、完成标记）；局部 206 不推进完成度。缓存命中 <code>file</code> 分支直接视为 100%。</li>
 </ul>
 <table>
   <tr><th>URL 分支</th><th>条件</th><th>响应状态</th><th>必带响应头</th><th>是否缓存</th><th>回退 / 说明</th></tr>
@@ -1763,35 +1883,41 @@ export function readAudioFile(path: string): Promise&lt;Buffer&gt;;
 </ul>
 
 <h3 id="c4-60">4.60 src/main/download/manager.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function listDownloads(): Promise&lt;{ tasks: DownloadTask[]; batches: DownloadBatch[] }&gt;;
+<pre><code>interface RuntimeTask {
+  task: DownloadTask;
+  controller: AbortController | null;
+}
+
+export function flushDownloads(): void;
+export function downloadFileName(name: string, singers: string[], albumName: string): string;
+export function listDownloads(): Promise&lt;DownloadTask[]&gt;;
+export function assetStates(songMids: string[]): Promise&lt;SongAssetState[]&gt;;
+export function findDownloadedAudio(
+  songMid: string,
+  quality: Quality
+): Promise&lt;{ filePath: string; quality: Quality } | null&gt;;
 export function startDownload(songMid: string, quality: Quality): Promise&lt;DownloadTask&gt;;
-export function startBatch(options: {
-  source: 'playlist';
-  playlistId: string;
-  songMids: string[];
-}): Promise&lt;DownloadBatch&gt;;
+export function startDownloads(songMids: string[], quality: Quality): Promise&lt;DownloadTask[]&gt;;
 export function pauseDownload(id: string): Promise&lt;DownloadTask&gt;;
 export function resumeDownload(id: string): Promise&lt;DownloadTask&gt;;
 export function resumeAllDownloads(): Promise&lt;DownloadTask[]&gt;;
 export function removeDownload(id: string): Promise&lt;void&gt;;
-export function pauseBatch(batchId: string): Promise&lt;DownloadBatch&gt;;
-export function resumeBatch(batchId: string): Promise&lt;DownloadBatch&gt;;
-export function removeBatch(batchId: string): Promise&lt;void&gt;;
-export function retryFailed(batchId: string): Promise&lt;DownloadBatch&gt;;
 export function clearCompletedDownloads(): Promise&lt;void&gt;;
-export function getAssetStates(songMids: string[]): Promise&lt;SongAssetState[]&gt;;
+export function clearDownloadDirectory(): Promise&lt;void&gt;;
 export function writePart(url: string, filePath: string): Promise&lt;void&gt;;
 export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
 </code></pre>
 <ul class="note">
-  <li>任务状态机：<code>pending → downloading → done</code>；暂停把 <code>downloading</code> 置为 <code>paused</code> 并保留 <code>.part</code>；继续使用 <code>Range: bytes=&lt;已有字节&gt;-</code> 追加；失败置 <code>failed</code>，只允许用户手动继续。任务带 <code>batchId</code> / <code>playlistId</code> / <code>source</code>，单任务与批次共用状态机。</li>
-  <li><code>resumeAllDownloads</code> 只把 <code>paused</code> 任务重置为 <code>pending</code> 并清空错误，不动 <code>downloading</code> / <code>done</code> / <code>failed</code>；有任务被继续时调度队列。</li>
-  <li><code>startDownload</code> 先查缓存：缓存档位达到该曲最高可用档时走本地转移（优先硬链接，失败回退复制），<code>source = 'cache-transfer'</code>；否则按最高可用档新建网络下载。已有同曲任务时直接返回现有任务，不重复创建；转移失败回退为普通下载，不新增用户可见错误码。</li>
-  <li><code>startBatch</code> 一次整单下载建一个批次，按歌单顺序为可播歌曲建任务并按 <code>DOWNLOAD_CONCURRENCY = 1</code> 串行执行；已下载同档跳过。批次控制：<code>pauseBatch</code> 暂停批次内活动任务，<code>resumeBatch</code> 继续暂停任务，<code>removeBatch</code> 确认后删除批次记录与文件，<code>retryFailed</code> 只重试失败项。</li>
-  <li>下载索引按账号隔离并放在 <code>downloadDir</code> 下：<code>.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>，记录完成与暂停任务；启动时加载当前账号索引并校验文件存在。未完成任务不自动续传，暂停任务可手动继续，失败任务只在当前会话保留；切换账号只切换索引视图，不移动磁盘文件；修改 <code>downloadDir</code> 后新目录使用新索引，旧内容不自动迁移。</li>
-  <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；封面下载为同名 <code>.jpg</code>，失败不阻塞任务完成。文件名为 <code>&lt;歌手&gt; - &lt;歌名&gt;.&lt;mp3|flac&gt;</code>，非法字符替换为 <code>_</code>；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
-  <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> / <code>removeBatch</code> 才删除最终文件与 <code>.part</code>。删除下载不影响缓存；清空缓存不影响已下载文件；<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
-  <li><code>getAssetStates</code> 聚合每首歌的 <code>cachedQuality</code> / <code>downloadedQuality</code> / <code>maxQuality</code> / 当前任务状态；下载完成、缓存写入完成、清理缓存、删除下载后刷新相关歌曲状态。<code>writePart</code> 是保留的简单写文件入口，不经过任务状态机。</li>
+  <li>任务状态机：<code>pending → downloading → done</code>；暂停把 <code>downloading</code> 置为 <code>paused</code> 并保留 <code>.part</code>；继续使用 <code>Range: bytes=&lt;已有字节&gt;-</code> 追加；失败置 <code>failed</code>，只允许用户手动继续。任务只带 <code>source: 'network' | 'cache'</code>，没有批次字段。</li>
+  <li><code>startDownload</code> / <code>startDownloads</code> 共用 <code>enqueueTask</code>；整单入口按给定顺序去重、截到 <code>DOWNLOAD_QUEUE_MAX</code> 后逐首入队，已有同曲任务直接复用；该上限只作用于整单入队，<code>song.getUrls</code> 等单曲 IPC 仍受 <code>IPC_SONG_MIDS_MAX = 100</code> 限制，<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>。<code>pump</code> 按 <code>DOWNLOAD_CONCURRENCY = 1</code> 出队，歌曲名、歌手、专辑与音质在出队时解析。</li>
+  <li>缓存转下载统一复制文件（<code>copyCachedAudio</code>），不使用硬链接；复制失败会把来源改回 <code>network</code> 并继续正常下载。播放取源固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”。</li>
+  <li>下载索引只有 <code>{ tasks: DownloadTask[] }</code>，按账号隔离并放在 <code>downloadDir</code> 下：<code>.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>。只持久化 <code>done</code> / <code>paused</code> 任务；启动时 <code>downloading</code> / <code>pending</code> 统一转为 <code>paused</code>，已丢失文件的 <code>done</code> 任务会被丢弃。</li>
+  <li><code>loadedScope</code> 保护未加载下载模块的退出：从未加载时 <code>flushDownloads</code> / <code>saveIndex</code> 直接返回，避免写出空索引覆盖旧记录；切换账号前先清掉旧定时器并把旧账号索引落盘；退出时使用同步 <code>writeFileSync</code> + <code>renameSync</code> 写 <code>.part</code> 后原子替换。</li>
+  <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；文件名由 <code>downloadFileName</code> 按“歌名-歌手-专辑”生成，多个歌手用顿号连接，缺失片段跳过，非法字符替换为 <code>_</code>，全空回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队占位路径仍使用 <code>safeName(songMid)</code>，最终路径在出队时生成；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。</li>
+  <li><code>resumeAllDownloads()</code> 一次遍历任务，只把 <code>paused</code> 置为 <code>pending</code>、清空错误并 <code>touchTask</code>；<code>downloading</code> / <code>done</code> / <code>failed</code> 不受影响。有任务被继续时调用 <code>schedulePump()</code>，返回被继续任务的快照。渲染层通过 <code>download.resumeAll</code> 一次 IPC 完成，不逐条调用 <code>resume</code>；store 用返回快照替换任务并在有任务时启动轮询。</li>
+  <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> 删除最终文件与 <code>.part</code>；<code>clearDownloadDirectory</code> 先中止活动下载、清空记录，再删除下载目录内容，并拒绝文件系统根目录、用户主目录及其上级目录；该操作不影响播放缓存。</li>
+  <li><code>assetStates</code> 只读取可用性缓存（<code>peekAvailability</code>）与缓存 / 下载信息，不主动探测上游；未探测过的歌曲 <code>maxQuality</code> 为 <code>null</code>。<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
+  <li>104009 全局截断窗口内 <code>pump</code> 在出队前检查 <code>upstreamBlockRemainingMs()</code>，窗口内不再取下一个任务，并按剩余时长 + 1 秒安排恢复；正在解析的任务收到 104009 时保持 <code>pending</code>、清空错误并安排恢复，不标记 <code>failed</code>。</li>
   <li>下载任务不受页面请求生命周期约束：任务由主进程队列持有，页面只订阅进度；离开页面不取消下载。这是页面请求取消约定的明确例外。</li>
 </ul>
 
@@ -1804,18 +1930,21 @@ interface PlaylistStore {
   readonly availabilityLoading: boolean;
   readonly requestedId: string;
   load(id: string, options?: { force?: boolean }): Promise&lt;void&gt;;
+  stop(id?: string): void;
   retry(): Promise&lt;void&gt;;
+  refresh(id: string): Promise&lt;void&gt;;
   poll(id: string): Promise&lt;void&gt;;
   invalidate(id: string): void;
   reset(): void;
   beginQueueBuild(): void;
   setProbeState(state: Record&lt;string, SongAvailability&gt;, loading: boolean): void;
-  applyRemoval(id: string, mids: string[]): void;
+  removeMembers(id: string, mids: string[]): void;
   readonly recent: RecentPlaylist[];
   visit(meta: PlaylistMeta): void;
   loadRecent(): void;
   validateRecent(): Promise&lt;void&gt;;
   removeRecent(id: string): void;
+  clearRecent(): void;
 }
 
 export interface PlaylistFeed {
@@ -1830,14 +1959,16 @@ export interface PlaylistFeed {
 </code></pre>
 <ul class="note">
   <li>打开歌单先读取整份缓存并立即展示（<code>complete=false</code> 显示为 <code>partial</code>），同时调用 <code>refresh</code> 在后台拉取完整快照；只有 <code>getSnapshot</code> 成功才一次性替换 <code>feed</code>。失败保留缓存、标记 <code>stale</code>，并安排 <code>PLAYLIST_REFRESH_RETRY_MS</code> 定时重试。</li>
+  <li><code>persistCache()</code> 只在整个 feed 为 <code>complete</code> 且非 <code>stale</code> 时写缓存；传给 IPC 前用 <code>{ ...meta }</code> 与 <code>plainSong()</code> 逐层展开 <code>singers</code> / <code>album</code> / <code>pay</code>，只提交纯对象快照。Electron IPC 使用结构化克隆，直接传 Vue 响应式 Proxy 会抛 <code>DataCloneError</code>，导致缓存从未落盘。写入串行化，期间再次成功刷新则合并为一次待写，避免旧快照覆盖新快照；写缓存失败不阻塞展示。</li>
+  <li>浏览分页完全本地：<code>feed.songs</code> 就是完整快照，滚动 / 筛选不再请求上游分页；只有打开、心跳变化、手动重试等触发的 <code>refresh</code> 会重新拉取整份快照。</li>
   <li><code>refresh</code> 开始前清除 timeout；<code>poll</code> 心跳发现名称、封面、首屏顺序或数量显著变化时立即调用 <code>refresh</code>，因此心跳变化优先于 5 分钟 timeout。无变化且内容完整时保留 timeout，不做额外刷新。</li>
   <li>心跳由 <code>PlaylistView</code> 只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时启动；隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时。离开页面调用 <code>stop</code>：清除 timeout、递增刷新序号并调用 <code>playlist.cancelSnapshot</code>。</li>
-  <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale；写操作不再删除缓存文件，心跳或下次打开时静默刷新覆盖。只有歌单不存在 / 无权限时才删除持久缓存。</li>
+  <li><code>invalidate(id)</code> 只把已打开的对应 feed 标记为 stale；写操作不再删除缓存文件，心跳或下次打开时静默刷新覆盖。只有删除歌单（<code>playlist.remove</code>）或歌单不存在 / 无权限时才删除持久缓存。<code>stores/playlist-edit</code> 的 <code>refreshAfterWrite(id)</code> 在写后立即调用 <code>invalidate(id)</code> + <code>poll(id)</code>，复用同一刷新流程。</li>
   <li>队列快照：<code>beginQueueBuild()</code> 标记来源；<code>setProbeState()</code> 在每次探测结果变化后尝试推进。最终快照要求 <code>complete &amp;&amp; !stale</code> 且所有歌曲元数据已就绪；之前只生成一次临时快照（优先整份缓存，其次当前已载入页）。最终快照与临时快照签名相同则保留现有队列（含手动插入歌曲），不同则 <code>replacePlaylistQueue</code> 替换。</li>
-  <li><code>applyRemoval(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code> 与 <code>meta.songCount</code>，并把剩余歌曲写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后调用，删除失败时由调用方恢复原数组。</li>
+  <li><code>removeMembers(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code>、<code>sourceTotal</code> 与 <code>meta.songCount</code>，并写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后先调用它做乐观移除，写入失败时由调用方恢复原数组。</li>
   <li><code>recent</code> 按当前账号持久化到 <code>localStorage</code>（key 前缀见 <a href="#c4-50">§4.50</a>），最多 <code>RECENT_PLAYLIST_LIMIT</code> 条。<code>visit(meta)</code> 在进入歌单页时更新 <code>visitedAtMs</code> 并置顶，超出时淘汰最旧一条；<code>removeRecent</code> 移除条目，不补位。</li>
-  <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数；<code>NO_PERMISSION</code> / 歌单不存在时移除条目，其他失败标记 <code>stale</code> 并保留。</li>
-  <li>当前播放歌单高亮读取 <code>player.queueSource</code>：<code>{ kind: 'playlist', id }</code> 命中即高亮，播放与暂停状态一致；手动队列不高亮。</li>
+  <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数。<code>NO_PERMISSION</code> / <code>AUTH_EXPIRED</code> / <code>UPSTREAM_CHANGED</code> / 歌单不存在时移除条目且不补位；网络 / 超时等其余失败保留条目并标记 <code>stale</code>，展示缓存元数据。</li>
+  <li>最近歌单的展示态由视图组合：当前 <code>playlist</code> 路由打开的歌单与正在播放的 <code>queueSource</code> 歌单都高亮；“正在播放”图标仍只由 <code>queueSource</code> 决定。store 本身不读取路由，也不改变 <code>recent</code> 的排序、校验与 <code>visit</code> 逻辑。</li>
 </ul>
 
 <h3 id="c4-62">4.62 src/renderer/stores/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1857,7 +1988,7 @@ interface RecommendStore {
 <ul class="note">
   <li><code>feed.sections</code> 始终按 <code>daily → radar → guess</code> 提供三块；未加载的分区用 <code>refreshedAtMs = 0</code> 的占位表示，页面先渲染骨架。</li>
   <li><code>load</code> 每次只请求一个分区，完成后立即替换该区，再继续下一区；因此页面不必等待整份 feed。单区失败只写 <code>errors[id]</code>，保留该区占位或已有内容。</li>
-  <li><code>refreshSection</code> 只请求指定分区；<code>cancel</code> 递增会话序号并调用主进程取消当前 token，已返回的结果不再写入 store。</li>
+  <li><code>refreshSection</code> 只请求指定分区，成功按分区 id 替换该区，不覆盖其他分区；失败只写 <code>errors[id]</code> 并保留该区原有内容。<code>cancel</code> 递增会话序号并调用主进程取消当前 token，已返回的结果不再写入 store。</li>
 </ul>
 
 <h3 id="c4-63">4.63 src/renderer/stores/playlist-edit.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1871,8 +2002,8 @@ interface PlaylistEditStore {
   create(name: string): Promise&lt;void&gt;;
   rename(id: string, name: string): Promise&lt;void&gt;;
   remove(id: string): Promise&lt;void&gt;;
-  addSongs(id: string, mids: string[]): Promise&lt;void&gt;;
-  removeSongs(id: string, mids: string[]): Promise&lt;void&gt;;
+  addSongs(id: string, mids: string[]): Promise&lt;boolean&gt;;
+  removeSongs(id: string, mids: string[]): Promise&lt;boolean&gt;;
   loadFavorites(mids: string[]): Promise&lt;void&gt;;
   toggleFavorite(songMid: string): Promise&lt;void&gt;;
 }
@@ -1881,8 +2012,9 @@ interface PlaylistEditStore {
   <li><code>loadFavorites</code> 按 <code>IPC_SONG_MIDS_MAX = 100</code> 分批读取收藏状态；读取失败保留当前集合。</li>
   <li><code>toggleFavorite</code> 先乐观更新 <code>favorites</code>；成功后按返回状态校正，递增 <code>favoriteVersion</code>，调用 <code>playlist.invalidate('liked')</code>，若当前正打开“我喜欢”则立即 <code>poll('liked')</code>；失败回滚并提示。</li>
   <li><code>LibraryView</code> 监听 <code>favoriteVersion</code> 重新拉取“我的歌单”卡片；歌单写入失败时保留原状态并提示。</li>
-  <li><code>removeSongs</code> 调用 <code>playlist.removeSongs</code> 并从响应刷新成员；失败抛错，由 <code>PlaylistView</code> 恢复行与计数。</li>
-  <li><code>create</code> / <code>rename</code> / <code>remove</code> 成功后刷新“我的歌单”并清除对应缓存；<code>addSongs</code> 按目标歌单去重，重复歌曲不重复提交，成功后更新目标歌单缓存与轮询。所有写入共用 <code>AUTH_EXPIRED</code> / <code>NO_PERMISSION</code> / <code>UPSTREAM_CHANGED</code> 映射，失败保留原状态。</li>
+  <li><code>addSongs</code> / <code>removeSongs</code> 调用 IPC 后统一执行 <code>refreshAfterWrite(id)</code>：先 <code>playlist.invalidate(id)</code>，再 <code>void playlist.poll(id)</code>。当前打开该歌单时立即走已有分页加载流程；未打开时只失效缓存，下次进入再加载。返回 <code>changed</code>，并提示“已添加到歌单 / 已从歌单移除”或“已在歌单中 / 歌曲不在歌单中”。</li>
+  <li>写 API 不读回成员，添加 / 删除后的最终内容与计数以统一刷新结果为准；<code>PlaylistView</code> 的乐观移除在刷新前保留，失败时恢复行与计数。<code>PlaylistPicker</code> 先用完整缓存做本地重复预检，命中直接提示“已在歌单中”，未命中再调用 <code>addSongs</code>；<code>createAndAdd</code> 复用同一入口。</li>
+  <li><code>create</code> / <code>rename</code> / <code>remove</code> 成功后刷新“我的歌单”并清除对应缓存；所有写入共用 <code>AUTH_EXPIRED</code> / <code>NO_PERMISSION</code> / <code>UPSTREAM_CHANGED</code> 映射，失败保留原状态。</li>
 </ul>
 
 <h3 id="c4-64">4.64 src/renderer/utils/qrc.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1905,7 +2037,8 @@ export function parseQrcLyric(text: string, trans: string | null): LyricLine[];
 <ul class="note">
   <li>监听歌曲 mid 集合，使用 <code>requestIdleCallback</code>（超时 <code>PROBE_IDLE_TIMEOUT_MS</code>）或 <code>PROBE_IDLE_FALLBACK_MS</code> 调度；按 <code>PROBE_MIDS_MAX = 50</code> 分批调用 <code>song.probe</code>。</li>
   <li><code>covered</code> 记录已探测的 mid：歌单追加新页时只探测新增歌曲，不因集合变化重复探测已覆盖部分；探测未完成时再次调度只置 <code>rerun</code>，由当前循环续跑，避免并发探测。</li>
-  <li>连续 <code>PROBE_EMPTY_BATCH_LIMIT</code> 个整批（每批 50 首）都不可播，或探测返回 <code>QUOTA_LIMITED</code> / <code>AUTH_EXPIRED</code> 时暂停本轮探测，避免鉴权 / 风控异常时继续轰炸上游；登录账号变化时清空已探测集合、结果与暂停状态并重新调度。新一批探测会递增 generation，旧响应不会覆盖新结果；其他读取失败静默保留未知状态。<code>refresh()</code> 强制重探。</li>
+  <li>连续 <code>PROBE_EMPTY_BATCH_LIMIT</code> 个整批（每批 50 首）都不可播，或探测返回 <code>QUOTA_LIMITED</code> / <code>AUTH_EXPIRED</code> / <code>UPSTREAM_NETWORK</code>（含 104009）时暂停本轮探测，停止后续批次与 <code>rerun</code>，避免鉴权 / 风控 / 网络异常时继续轰炸上游；登录账号变化时清空已探测集合、结果与暂停状态并重新调度。新一批探测会递增 generation，旧响应不会覆盖新结果；其他读取失败静默保留未知状态。<code>refresh()</code> 强制重探。</li>
+  <li>注册 <code>onScopeDispose</code>：组件卸载时递增 <code>generation</code> 并取消待执行的 idle / timeout，已发出的请求结果因 token 不匹配不再写入状态，避免离开歌单页后探测继续在后台执行。</li>
 </ul>
 
 <h3 id="c4-66">4.66 src/renderer/components/PlaylistEditDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1917,9 +2050,16 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
   <li>提交后由调用方执行 <code>playlist-edit.create</code> / <code>rename</code>，成功关闭对话框；失败保留输入并提示。</li>
 </ul>
 
-<h3 id="c4-67">4.67 src/renderer/components/DownloadDrawer.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits；绑定 download IPC 与下载设置。
+<h3 id="c4-67">4.67 src/renderer/views/DownloadsView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。路由 /downloads 的下载中心页面。
 </code></pre>
+<ul class="note">
+  <li>由侧栏“下载”<code>RouterLink</code> 进入；挂载时调用 <code>download.setVisible(true)</code>，卸载时调用 <code>setVisible(false)</code>，下载任务本身继续由主进程队列执行。</li>
+  <li>顶部整体进度条为 fixed overlay：<code>.downloads-progress-track</code> 使用 <code>position: fixed</code>、<code>top: 0</code>、<code>left: var(--sidebar-width)</code>、<code>right: 0</code>、<code>z-index: 14</code>、<code>height: 4px</code> 与 <code>pointer-events: none</code>，不占页面布局、不拦截点击，滚动时始终停在内容区顶端；使用 <code>--muted</code> 填充，不显示完成数 / 总数或失败数等数字指示；不再渲染 <code>.downloads-progress-count</code>，也不保留其 900px / 560px 响应式规则。失败数量只在任务列表与“未成功”筛选中体现。进度百分比由 <a href="#c4-80">utils/download-progress.ts</a> 的 <code>downloadOverallProgress</code> 计算。标题区复用普通 <code>.page</code> 的留白与背景。</li>
+  <li><code>page-head-actions</code> 提供“清除已完成”“清空目录”“打开文件夹”：前者只清记录，后两者分别删除目录内容与记录、打开下载目录；清空目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认并展示实际路径，播放缓存不受影响。</li>
+  <li>任务面板顶部左侧为“全部 / 进行中 / 已完成 / 未成功”过滤，右侧为“全部开始”继续所有暂停任务；无暂停任务或请求进行中时按钮禁用，请求中显示 spinner。过滤只影响展示，整体进度仍按全部任务计算。任务按新到旧展示，不改变主进程队列顺序。</li>
+  <li>列表复用统一下载任务行，支持单任务暂停 / 继续 / 删除；删除任务使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认；空状态区分“没有任务”与“没有符合条件的任务”。</li>
+</ul>
 
 <h3 id="c4-68">4.68 src/renderer/views/DiscoverView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits；使用 recommend store。
@@ -1936,7 +2076,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 <pre><code>// 无 props / emits；路由参数 mvId。
 </code></pre>
 <ul class="note">
-  <li>加载详情与取流，默认最高清晰度 <code>fhd</code>，打开后自动播放；请求档位不可用时按 <code>fhd → hd → sd</code> 自动降档并同步清晰度按钮。</li>
+  <li>加载详情与取流，默认最高清晰度 <code>fhd</code>，打开后自动播放；请求档位不可用时按 <code>fhd → hd → sd</code> 自动降档。清晰度按钮跟随 <code>stream.quality</code> 的实际档位高亮，不跟随请求档；<code>url: null</code> 时展示失败重试，不把请求档当作已取到。</li>
   <li>视频使用原生 <code>&lt;video controls&gt;</code>，提供清晰度切换、全屏与失败重试；退出全屏恢复普通页面布局并保持播放位置与播放状态，不实现离开页面后的续播。</li>
   <li>MV 播放与音频播放互不影响；MV 页面不修改播放条状态。</li>
 </ul>
@@ -1954,7 +2094,7 @@ interface MvStore {
 }
 </code></pre>
 <ul class="note">
-  <li>默认 <code>quality = 'fhd'</code>；<code>load</code> 先取详情再取流，取流失败按 <code>fhd → hd → sd</code> 降档，全部失败保留详情并提示。</li>
+  <li>默认 <code>quality = 'fhd'</code>；<code>load</code> 先取详情再取流，取流失败按 <code>fhd → hd → sd</code> 降档，全部失败保留详情并提示。成功或失败后 <code>quality</code> 都写回 <code>MvStream.quality</code>；成功时为实际档，失败时为请求档。</li>
   <li>请求带自增序号，避免切换 MV 后旧响应覆盖新状态；MV 状态与播放器 store 完全独立。</li>
 </ul>
 
@@ -1963,44 +2103,48 @@ interface MvStore {
 
 interface DownloadStore {
   readonly tasks: DownloadTask[];
-  readonly batches: DownloadBatch[];
   readonly assets: Record&lt;string, SongAssetState&gt;;
-  readonly open: boolean;
+  readonly storage: DownloadStorageInfo | null;
+  readonly visible: boolean;
   load(): Promise&lt;void&gt;;
+  setVisible(next: boolean): void;
   refreshAssets(songMids: string[]): Promise&lt;void&gt;;
   start(songMid: string, quality: Quality): Promise&lt;void&gt;;
-  startBatch(playlistId: string, songMids: string[]): Promise&lt;void&gt;;
+  startMany(songMids: string[], quality: Quality): Promise&lt;DownloadTask[]&gt;;
   pause(id: string): Promise&lt;void&gt;;
   resume(id: string): Promise&lt;void&gt;;
+  resumeAll(): Promise&lt;void&gt;;
   remove(id: string): Promise&lt;void&gt;;
-  pauseBatch(batchId: string): Promise&lt;void&gt;;
-  resumeBatch(batchId: string): Promise&lt;void&gt;;
-  removeBatch(batchId: string): Promise&lt;void&gt;;
-  retryFailed(batchId: string): Promise&lt;void&gt;;
+  clearCompleted(): Promise&lt;void&gt;;
+  clearDirectory(): Promise&lt;void&gt;;
+  reset(): void;
 }
 </code></pre>
 <ul class="note">
-  <li><code>load</code> 读取任务与批次列表；<code>refreshAssets</code> 按歌曲批量查询 <code>download.assetStates</code>，下载完成、缓存写入、清理缓存、删除下载后刷新相关歌曲。</li>
-  <li><code>start</code> 直接消费主进程的缓存转移决策结果（<code>source</code>），不在渲染层重复判断；<code>startBatch</code> 建批次后刷新批次汇总与歌曲资产状态。</li>
-  <li>批次操作与单任务操作共用同一状态表；删除批次需确认，<code>clearCompleted</code> 只清记录。资产状态按账号索引呈现，切换账号时重新加载。</li>
+  <li><code>load</code> 读取任务列表；目录用量只在下载页可见时刷新；资产状态只刷新状态发生变化的任务，避免大批量下载时每轮全量查询。页面不可见时若有活动任务仍轮询任务状态以更新歌曲表图标，全部结束后停止；<code>remove</code> 刷新该曲资产，<code>clearDirectory</code> / <code>reset</code> 清空资产与状态记录。</li>
+  <li><code>start</code> 复用 <code>startMany</code>；<code>startMany</code> 不自动打开下载页，有活动任务时启动轮询以更新歌曲表图标。任务按数组倒序展示，不改变主进程队列顺序。</li>
+  <li>没有批次状态或批次控制；<code>clearCompleted</code> 只清记录，<code>clearDirectory</code> 清空下载目录内容与记录，<code>reset</code> 在页面可见时立即重新加载。</li>
 </ul>
 
-<h3 id="c4-72">4.72 src/renderer/views/LyricsView.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。路由 /lyrics 的页面容器：顶部歌曲信息与返回，左歌词、右评论。
+<h3 id="c4-72">4.72 src/renderer/components/LyricsOverlay.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。ui.lyricsOpen 为真时由 App.vue 渲染的歌词 / 评论弹出层：顶部歌曲信息与关闭，左歌词、右评论。
 </code></pre>
 <ul class="note">
   <li>绑定 <code>player.current</code>：顶部展示歌名、歌手与专辑，歌手 / 专辑按 <code>mid</code> 决定链接或纯文本；无当前歌曲时展示空状态且不发起歌词 / 评论请求。</li>
-  <li>返回按钮优先 <code>router.back()</code>，无历史时 <code>router.push('/search')</code>。</li>
+  <li>左上角关闭按钮调用 <code>ui.closeLyrics()</code>，不执行 <code>router.back()</code>；再次点击播放条封面、Esc、路由变化与侧栏导航同样关闭弹出层。</li>
   <li>布局为左右两列各 50%，中间保留分隔线；组合 <a href="#c4-41">LyricsPanel</a> 与 <a href="#c4-42">CommentsPanel</a>，不渲染独立标题行。</li>
+  <li>由 <a href="#c4-23">App.vue</a> 在内容区之后按 <code>ui.lyricsOpen</code> 渲染，覆盖内容区但不覆盖侧栏与播放条；<code>/lyrics</code> 不再存在。</li>
 </ul>
 
 <h3 id="c4-73">4.73 src/renderer/views/ArtistView.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。路由 /artist/:mid 的歌手页。
 </code></pre>
 <ul class="note">
-  <li>按路由参数调用 <code>artist.get(mid, offset)</code> 加载歌手信息与歌曲；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
+  <li>按路由参数调用 <code>artist.get(mid, offset, sort)</code> 加载歌手信息与歌曲，<code>sort</code> 默认 <code>hot</code>；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
+  <li>简介非空时渲染 <code>CatalogDescription</code>：默认折叠为 4 行（<code>-webkit-line-clamp</code>），用 <code>scrollHeight &gt; clientHeight + 1</code> 判断是否溢出，仅溢出时显示“展开 / 收起”并同步 <code>aria-expanded</code>；<code>ResizeObserver</code> 在尺寸变化时重新测量，<code>text</code> 变化时重置为折叠。短简介不显示切换按钮。</li>
   <li>歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单；不可播标记与最高音质沿用 <code>useAvailability</code>。</li>
-  <li>分页固定 50 首/页，滚动到底或点击“加载更多”继续；加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
+  <li>歌曲标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；列表区显示加载态，滚动位置回到页面顶部；失败时回退原排序并保留旧列表。滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
+  <li>分页固定 50 首/页；根节点 <code>pageRef</code> 通过 <code>closest('.main')</code> 找到外层滚动容器，注册 <code>passive</code> 的 <code>scroll</code> 监听，距底部小于 <code>SCROLL_LOAD_THRESHOLD = 160px</code> 且 <code>hasMore=true</code>、当前没有首屏或追加加载时自动调用 <code>load(false)</code>，卸载时移除监听。页面不提供“加载更多”按钮，底部按状态显示 spinner + “正在加载更多” / “继续向下滚动加载更多”，无更多歌曲时显示“已经到底了”。加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
   <li>返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>；点击歌曲不改变路由。</li>
 </ul>
 
@@ -2009,16 +2153,29 @@ interface DownloadStore {
 </code></pre>
 <ul class="note">
   <li>按路由参数调用 <code>album.get(mid, offset)</code>；展示专辑名、封面、发行日期、简介与歌手，简介为空时隐藏。</li>
+  <li>简介非空时渲染 <code>CatalogDescription</code>，复用与歌手页相同的 4 行折叠、按实际高度判断溢出与展开 / 收起逻辑；短简介不显示切换按钮。</li>
   <li>歌手行按 <code>mid</code> 链接到歌手页；歌曲列表复用 <code>SongTable</code>，支持播放、下一首播放、收藏、下载与加入歌单。</li>
   <li>分页固定 50 首/页；加载中、合法空状态与失败重试各自渲染。返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
 </ul>
 
 <h3 id="c4-75">4.75 src/main/api/artist.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function getArtist(mid: string, offset: number): Promise&lt;ArtistDetail&gt;;
+<pre><code>export function getArtist(
+  mid: string,
+  offset: number,
+  sort?: ArtistSongSort
+): Promise&lt;ArtistDetail&gt;;
+export function getArtistSongs(
+  mid: string,
+  offset?: number,
+  sort?: ArtistSongSort
+): Promise&lt;ArtistSongPage&gt;;
 </code></pre>
 <ul class="note">
   <li>歌手信息使用 <code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg?singermid=&lt;mid&gt;&amp;format=json</code>：<code>getSingerInfo.Fsinger_name</code> → <code>name</code>、<code>singerBrief</code> → <code>description</code>、<code>total_song</code> / <code>total_album</code> → 计数；封面由 <code>mid</code> 拼 <code>https://y.gtimg.cn/music/photo_new/T001R500x500M000&lt;mid&gt;.jpg</code>。</li>
-  <li>歌曲使用 <code>musicu</code> 顶层节点 <code>singerSongList</code>：模块 <code>musichall.song_list_server</code>，方法 <code>GetSingerSongList</code>，参数 <code>{ order: 1, singerMid, begin: offset, num: 50 }</code>；返回 <code>totalNum</code> 与 <code>songList[].songInfo</code>，映射为 <code>Song</code>。上游单页上限 100 首。</li>
+  <li>旧详情接口缺少 <code>getSingerInfo</code> 或请求失败时，<code>fetchArtistInfo</code> 返回 <code>null</code> 而不抛错；<code>getArtist</code> 改用 <code>fetchSingerProfile</code> 调用 <code>music.musichallSinger.SingerInfoInter / GetSingerDetail</code>（<code>singer_mids: [mid]</code>，开启 <code>pic / ex_singer / wiki_singer / group_singer</code>），从 <code>singer_list[].basic_info.name</code> / <code>ex_info.desc</code> / <code>pic.pic</code> 读取名称、简介与头像，并把 <code>http:</code> 头像升为 <code>https:</code>。新接口也失败时，名称回退到歌曲列表中同 <code>mid</code> 的歌手名，头像保留 <code>T001R500x500M000&lt;mid&gt;.jpg</code>。</li>
+  <li>歌曲总数优先取旧接口 <code>total_song</code>，缺失时用歌曲列表 <code>totalNum</code>；专辑数缺失按 0 处理，页面仅在 <code>albumCount &gt; 0</code> 时显示“N 张专辑”，避免显示错误的 0 张。</li>
+  <li>歌曲使用 <code>musicu</code> 的模块 <code>musichall.song_list_server</code>、方法 <code>GetSingerSongList</code>，参数 <code>{ order, singerMid, begin: offset, num: 50 }</code>；<code>sort</code> 映射为 <code>hot → order=1</code>、<code>latest → order=0</code>。<code>musicu</code> 返回的 <code>req_0.data</code> 优先按扁平 <code>{ totalNum, songList }</code> 解析，若为 <code>{ singerSongList: { data: ... } }</code> 包裹则回退到该包裹；<code>songList[].songInfo</code> 统一经 <code>rawSongToSong</code> 映射为 <code>Song</code>。上游单页上限 100 首。</li>
+  <li><code>getArtistSongs(mid, offset, sort)</code> 只请求 <code>GetSingerSongList</code> 并返回 <code>ArtistSongPage</code>，不拉取歌手详情；<code>getArtist</code> 首次进入时并行加载详情与首屏歌曲。</li>
   <li><code>mid</code> 为空时直接返回空歌曲与空简介，不发起请求；详情或歌曲失败映射为 <code>UPSTREAM_CHANGED</code> / 现有网络错误，不用搜索接口或当前歌单数据兜底。</li>
 </ul>
 
@@ -2050,16 +2207,80 @@ interface DownloadStore {
   <li>仅处理 <code>pointerType === 'touch'</code>；纵向移动超过 8px 才进入手势，调用 <code>open()</code> 并捕获指针，因此轻点不会打断按钮原有 click。</li>
   <li>弹层内带 <code>data-revealer-option</code> 的节点按中点与手指 Y 距离匹配最近项，写入 <code>highlighted</code>；松开确认，取消手势则关闭。</li>
   <li>滑动后通过容器捕获阶段的 <code>onClickCapture()</code> 抑制紧随其后的 click，避免重复执行按钮动作。</li>
+  <li>音量条不接入本 composable：它没有可纵向排列的选项，改用独立 Pointer Events 手势，按拖动距离 delta 叠加到起始音量，见 <a href="#c4-40">§4.40</a>。</li>
 </ul>
 
 <h3 id="c4-77">4.77 src/renderer/components/PlaylistPicker.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>const props = defineProps&lt;{ open: boolean; song: Song | null }&gt;();
-const emit = defineEmits&lt;{ close: []; picked: [playlistId: string] }&gt;();
+<pre><code>const props = defineProps&lt;{ open: boolean; songMids: string[]; songName?: string }&gt;();
+const emit = defineEmits&lt;{ close: []; added: [id: string] }&gt;();
 </code></pre>
 <ul class="note">
   <li>列出当前账号可编辑的普通歌单（排除“我喜欢”），提供“新建歌单”；空列表、加载中与错误分别渲染。</li>
-  <li>选择歌单后发出 <code>picked(playlistId)</code>，由调用方执行 <code>playlist-edit.addSongs</code>；歌曲已在目标歌单时不重复提交并 Toast“已在歌单中”。</li>
+  <li>选择歌单后直接调用 <code>playlist-edit.addSongs</code>；完整缓存命中时由本地重复预检直接提示“已在歌单中”，未命中再提交写入。成功发出 <code>added</code> / <code>close</code>，失败提示；<code>createAndAdd</code> 复用同一入口。</li>
   <li>新建歌单复用 <code>PlaylistEditDialog</code>，创建成功后直接加入当前歌曲；<code>open</code> 关闭时清空临时状态。</li>
+</ul>
+
+<h3 id="c4-79">4.79 src/renderer/utils/download-state.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export type DownloadState = 'downloaded' | 'cached' | 'none';
+export function resolveDownloadState(asset: SongAssetState | null | undefined): DownloadState;
+export function downloadStateIcon(
+  state: DownloadState
+): 'download-done' | 'download-cached' | 'download';
+</code></pre>
+<ul class="note">
+  <li>下载按钮状态的唯一来源：按 <code>downloaded → cached → none</code> 返回单一状态；即使资产同时带 <code>downloadedQuality</code> 与 <code>cachedQuality</code>，也只返回已下载。</li>
+  <li><code>SongTable</code> / <code>PlayerBar</code> 的 class、图标与 tooltip 都从该状态派生，不各自判断两个档位。</li>
+</ul>
+
+<h3 id="c4-80">4.80 src/renderer/utils/download-progress.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export interface DownloadOverallProgress {
+  total: number;
+  done: number;
+  failed: number;
+  active: number;
+  percent: number;
+}
+
+export function downloadOverallProgress(
+  tasks: Array&lt;Pick&lt;DownloadTask, 'status'&gt;&gt;
+): DownloadOverallProgress;
+</code></pre>
+<ul class="note">
+  <li>按任务状态统计：<code>done</code> / <code>failed</code> 分别计数，其余（<code>pending</code> / <code>downloading</code> / <code>paused</code>）计入 <code>active</code>；<code>total</code> 为任务总数。</li>
+  <li><code>percent</code> 固定按 <code>Math.round(done / total * 100)</code> 计算，失败任务不计入完成，空列表返回 0；下载页顶部 overlay 只消费该结果，不在组件内重复计算。</li>
+</ul>
+
+<h3 id="c4-81">4.81 src/renderer/components/ConfirmDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>const props = withDefaults(
+  defineProps&lt;{
+    open: boolean;
+    title: string;
+    message: string;
+    confirmLabel?: string;
+    danger?: boolean;
+    busy?: boolean;
+  }&gt;(),
+  { confirmLabel: '确定', danger: false, busy: false }
+);
+const emit = defineEmits&lt;{ confirm: []; cancel: [] }&gt;();
+</code></pre>
+<ul class="note">
+  <li>复用 <code>.dialog-backdrop</code> / <code>.dialog</code> 视觉，<code>.confirm-dialog</code> 限宽 440px；<code>.confirm-message</code> 使用 <code>white-space: pre-line</code>，说明文本保留换行。</li>
+  <li>打开后默认聚焦“取消”；<code>Esc</code>、点击遮罩、点击关闭按钮或取消按钮都发出 <code>cancel</code>，避免破坏性操作被回车误确认。确认按钮可传 <code>danger</code> 使用红色危险态，<code>busy</code> 时禁用。</li>
+  <li>所有删除 / 清空确认统一使用该组件，渲染层不再调用原生 <code>window.confirm</code>。</li>
+</ul>
+
+<h3 id="c4-82">4.82 src/renderer/components/CatalogDescription.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>const props = defineProps&lt;{ text: string }&gt;();
+
+function measure(): void;
+function toggle(): void;
+</code></pre>
+<ul class="note">
+  <li>接收 <code>text</code>，渲染 <code>.catalog-desc-block</code> 与 <code>.catalog-desc</code>；折叠态加 <code>.clamped</code>（4 行 <code>-webkit-line-clamp</code>），展开态恢复正常高度。</li>
+  <li><code>measure()</code> 仅在折叠态用 <code>scrollHeight &gt; clientHeight + 1</code> 判断是否溢出；只有溢出时才渲染“展开 / 收起”按钮，并同步 <code>aria-expanded</code>。</li>
+  <li><code>ResizeObserver</code> 监听简介元素，窗口宽度或换行变化时重新测量；<code>text</code> 变化时重置为折叠并重新测量。组件卸载时断开 observer。</li>
+  <li>歌手页与专辑页共用该组件，页面只在简介非空时渲染；短简介不显示切换按钮。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
@@ -2314,8 +2535,8 @@ app::requestSingleInstanceLock()
 </ul>
 
 <h3 id="c5-9">5.9 歌词与评论</h3>
-<pre><code>router::push('/lyrics')
-└── views/LyricsView::onMounted()
+<pre><code>App.vue::render(&lt;LyricsOverlay v-if="ui.lyricsOpen"&gt;)
+└── components/LyricsOverlay::setup()
     ├── 判断无当前歌曲 → 渲染空状态，不发请求
     ├── composables/lyrics::useLyrics(current)
     │   └── window.lychee.lyric.get(songMid)
@@ -2325,13 +2546,13 @@ app::requestSingleInstanceLock()
     ├── components/LyricsPanel::watch(player.positionMs)
     │   ├── 查找活动行并滚动居中
     │   └── 判断点击 / 拖拽 / 滚轮 → player.seek(positionMs)
-    └── components/CommentsPanel::watch([player.current, route])
-        ├── window.lychee.comment.get(songId, sort, pageNo)
+    └── components/CommentsPanel::watch(player.current)
+        ├── window.lychee.comment.get(songId, cursor)
         │   └── ipc::handle('comment.get')
-        │       └── api/comment::getComments(songId, sort, pageNo)
-        │           └── api/client::musicu('music.globalComment.CommentRead', 'GetNewCommentList', ...)
-        ├── 判断上游不支持排序 → 本地按 createdAtMs 重排
-        ├── 判断滚动到底 && hasMore → 加载下一页
+        │       └── api/comment::getComments(songId, cursor)
+        │           └── api/client::musicu('music.globalComment.CommentRead', 'GetNewCommentList', ..., stringFields: ['SeqNo'])
+        ├── 判断滚动到底 && hasMore && cursor → 加载下一页
+        ├── 判断点击“跳转到底部” → 串行 loadMore 直到无下一页 / COMMENT_LOAD_ALL_PAGE_MAX
         └── components/CommentsPanel::onLike(comment)
             ├── 乐观更新 liked / likedCount
             ├── window.lychee.comment.like(commentId)
@@ -2341,10 +2562,10 @@ app::requestSingleInstanceLock()
             └── 失败 → 回滚 liked / likedCount
 </code></pre>
 <ul class="note">
-  <li>播放条封面调用 <code>router.push('/lyrics')</code> 进入页面；离开页面不改变播放状态，返回优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
+  <li>播放条封面调用 <code>ui.toggleLyrics()</code> 开合弹出层，不导航；<code>ui.closeLyrics()</code> 由关闭按钮、Esc、路由变化与侧栏导航触发，关闭不改变播放状态。</li>
   <li>歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>；歌词请求可返回 QRC，解密与逐字解析见 <a href="#c4-64">§4.64</a>，无 QRC 时回退 LRC 整行高亮。</li>
   <li>评论默认只读取最新评论、固定每页 25 条，未登录匿名、登录后携带 Cookie 读取点赞状态；右上刷新只重载评论。评论读取与分页见 <a href="#c4-15">§4.15</a>，接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
-  <li>点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a> / <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。歌词 / 评论随路由加载与卸载。</li>
+  <li>点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a> / <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。歌词 / 评论随 <code>ui.lyricsOpen</code> 与当前歌曲加载 / 卸载。</li>
 </ul>
 
 <h3 id="c5-10">5.10 歌单加载与整份缓存</h3>
@@ -2456,18 +2677,19 @@ views/DiscoverView::onBeforeUnmount()
     └── window.lychee.playlist.addSongs(playlistId, mids)
         └── ipc::handle('playlist.addSongs')
             └── api/playlist-write::addSongs(id, mids)
-                ├── api/song::fetchTrack(mid)
+                ├── api/playlist-write::fetchTrackIdentities([mid])
+                │   └── api/client::musicu('music.trackInfo.UniformRuleCtrl', 'CgiGetTrackInfo', ...)
                 └── api/client::musicu('music.musicasset.PlaylistDetailWrite', 'AddSonglist', ...)
 </code></pre>
 <pre><code>components/SongTable::emit('remove', index)
 └── views/PlaylistView::confirmRemove(song)
     ├── 确认歌曲名与歌单名
+    ├── stores/playlist::removeMembers(id, [songMid])          // 本地乐观移除并更新计数
     ├── stores/playlist-edit::removeSongs(id, [mid])
     │   └── window.lychee.playlist.removeSongs(id, [mid])
     │       └── ipc::handle('playlist.removeSongs')
     │           └── api/playlist-write::removeSongs(id, mids)
-    │               └── 写后读回成员可见性
-    ├── 成功 → stores/playlist::applyRemoval(id, [mid])
+    │               └── 写入后由 stores/playlist-edit::refreshAfterWrite 统一刷新
     └── 失败 → 恢复行与歌曲数并提示
 </code></pre>
 <pre><code>components/SongTable::emit('favorite', index)
@@ -2514,30 +2736,31 @@ views/DiscoverView::onBeforeUnmount()
     └── window.lychee.download.start(songMid, quality)
         └── ipc::handle('download.start')
             └── download/manager::startDownload(songMid, quality)
-                ├── 判断缓存达到最高可用档 → 本地转移（硬链接，失败回退复制）
+                ├── 判断缓存达到最高可用档 → 复制缓存文件（copyCachedAudio）
                 ├── 判断已有同曲任务 → 返回现有任务
                 ├── api/song::getStreamUrls([songMid], quality)
                 └── download/manager::writePart(url, filePath)
 </code></pre>
 <pre><code>views/PlaylistView::downloadAll()
-└── stores/download::startBatch(playlistId, songMids)
-    └── window.lychee.download.startBatch(...)
-        └── ipc::handle('download.startBatch')
-            └── download/manager::startBatch(...)
-                ├── 按歌单顺序建任务（空档跳过）
-                └── download/manager::startDownload(...)          // DOWNLOAD_CONCURRENCY = 1
+└── stores/download::startMany(songMids, quality)
+    └── window.lychee.download.startMany(...)
+        └── ipc::handle('download.startMany')
+            └── download/manager::startDownloads(...)
+                ├── 去重并截到 DOWNLOAD_QUEUE_MAX
+                ├── download/manager::enqueueTask(...)              // 逐首入队，已有同曲任务复用
+                └── download/manager::pump()                        // DOWNLOAD_CONCURRENCY = 1
 </code></pre>
-<pre><code>components/DownloadDrawer::onPauseBatch(batchId)
-└── stores/download::pauseBatch(batchId)
-    └── window.lychee.download.pauseBatch(batchId)
-        └── ipc::handle('download.pauseBatch')
-            └── download/manager::pauseBatch(batchId)
-                └── download/manager::pauseDownload(id)           // 批次内全部活动任务
+<pre><code>views/DownloadsView::resumeAll()
+└── stores/download::resumeAll()
+    └── window.lychee.download.resumeAll()
+        └── ipc::handle('download.resumeAll')
+            └── download/manager::resumeAllDownloads()
+                └── 只把 paused 置为 pending
 </code></pre>
 <ul class="note">
-  <li>单曲入口与整单入口共用任务模型与索引；批次内按歌单顺序串行下载，并发固定为 1，吞吐优先让位于稳定性与顺序。</li>
-  <li>继续 / 删除 / 重试与暂停同构：<code>resumeBatch</code> 继续已暂停任务，<code>removeBatch</code> 确认后删除批次记录与文件，<code>retryFailed</code> 只重试失败项。单任务控制保持可用。</li>
-  <li>渲染层只消费批次汇总与资产状态；缓存转移的决策在主进程完成，失败自动回退为网络下载，不新增错误码。</li>
+  <li>单曲入口与整单入口共用任务模型与索引；统一队列按入队顺序串行下载，并发固定为 1，吞吐优先让位于稳定性与顺序。</li>
+  <li>没有批次控制；暂停 / 继续 / 删除 / 清空已完成都作用于单个任务或全部任务。<code>clearCompleted</code> 只清记录，<code>clearDirectory</code> 删除下载目录内容与记录。</li>
+  <li>渲染层只消费任务列表与资产状态；缓存转移的决策在主进程完成，失败自动回退为网络下载，不新增错误码。</li>
 </ul>
 
 <h3 id="c5-17">5.17 最近歌单恢复与校验</h3>
@@ -2552,23 +2775,25 @@ views/DiscoverView::onBeforeUnmount()
     │   └── ipc::handle('playlist.get')
     │       └── api/playlist::fetchPlaylistPage(id, 0)
     │           └── api/client::musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', ...)
-    ├── 判断删除 / NO_PERMISSION → stores/playlist::removeRecent(id)
     ├── 判断成功 → 更新名称 / 封面 / 歌曲数并持久化
-    └── 判断失败 → 标记 stale，保留条目
+    ├── 判断 NO_PERMISSION / AUTH_EXPIRED / UPSTREAM_CHANGED → stores/playlist::removeRecent(id)  // 不补位
+    └── 判断其余失败 → 标记 stale，保留条目并展示缓存元数据
 </code></pre>
 <ul class="note">
-  <li>最近列表按账号隔离，最多 5 条；进入歌单页时 <code>visit(meta)</code> 更新并置顶，超出淘汰最旧一条。已删除或无权限的歌单移除后不从后续条目补位。</li>
+  <li>最近列表按账号隔离，最多 5 条；进入歌单页时 <code>visit(meta)</code> 更新并置顶，超出淘汰最旧一条。已删除、无权限、登录失效或上游结构变化时移除，且不从后续条目补位；网络等临时失败保留并标记 <code>stale</code>。</li>
   <li>校验只读取歌单元数据；优先整份缓存，缓存缺失才请求第一页。节流与单飞避免展开侧栏时重复请求。</li>
   <li>当前正在播放的歌单由播放器 <code>queueSource</code> 驱动高亮，播放 / 暂停都高亮，与当前路由无关。</li>
 </ul>
 
 <h3 id="c5-18">5.18 音频缓存进度</h3>
-<pre><code>media/audio-protocol::writeCache(chunk)
-├── 判断完整响应 → 写盘
-├── 判断 CACHE_PROGRESS_THROTTLE_MS 节流
-└── webContents.send('audioCache:progress', progress)
-    └── components/PlayerBar::onProgress()
-        └── 按当前 songMid + quality 更新缓存进度线
+<pre><code>media/audio-protocol::handleStream(request)
+├── 判断 source.filePath / 缓存命中 → fileResponse，上报 complete = true
+├── 判断上游完整响应（200，或 206 的 Content-Range 覆盖 0-(total-1)/total）
+│   ├── 写缓存
+│   └── webContents.send('audioCache:progress', progress)          // 300ms 节流
+│       └── components/PlayerBar::onProgress()
+│           └── 按当前 songMid + quality 更新缓冲 overlay（与 audio.buffered 取较大值）
+└── 判断局部 206 → 只透传，不写缓存、不推进完成度
 </code></pre>
 <ul class="note">
   <li>只有完整响应落盘才推进进度，局部 206 不上报完成度；缓存命中 <code>file</code> 分支直接视为 100%，关闭播放缓存时不上报。</li>
@@ -2594,7 +2819,7 @@ views/DiscoverView::onBeforeUnmount()
                 └── 映射 songList[].songInfo → Song
 </code></pre>
 <ul class="note">
-  <li>两个页面共用 <code>SongTable</code> 与可用性探测；分页各 50 首，滚动到底继续加载。歌手页的歌曲来自 <code>singerSongList</code> 顶层节点，专辑页的歌曲来自 <code>req_0.data</code>。</li>
+  <li>两个页面共用 <code>SongTable</code> 与可用性探测；分页各 50 首，滚动到底继续加载。歌手页的歌曲来自 <code>req_0.data</code> 的扁平 <code>songList</code>（兼容 <code>singerSongList.data</code> 包裹），专辑页的歌曲同样来自 <code>req_0.data</code>。</li>
   <li>接口未返回数据时展示合法空状态；请求失败展示页内错误与重试，不跳转搜索、不填充占位歌曲。</li>
   <li>歌手 / 专辑名称缺 <code>mid</code> 时不生成跨页链接，规则见 <a href="USER.html#u2">USER §2</a>。</li>
 </ul>

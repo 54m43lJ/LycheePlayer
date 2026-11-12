@@ -10,7 +10,7 @@ Documents per project, in HTML — the development docs split by boundary:
 | 4 | [PROVIDER](#provider) | lower — underlying data sources / dependencies (system services, IPC, hardware, daemons, network endpoints, …); present when applicable | protocols · conventions · APIs · workflows | whole-system view → [USER](#user) · internal handling → [CORE](#core) |
 | 5 | [BUILD](#build) | written after development | how to use & build on the project | — |
 
-`README.md` — the project front page, maintained separately; development work draws on this document set alone.
+`README.md` is not part of the project documentation; it serves only as the front page for a general audience.
 
 | Principle | Rule |
 |-----------|------|

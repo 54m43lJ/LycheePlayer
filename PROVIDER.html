@@ -126,7 +126,7 @@
   </tr>
   <tr>
     <td>收藏写入</td>
-    <td>201 目录的 <code>AddSonglist</code> / <code>DelSonglist</code> 必须走 <code>u6.y.qq.com/cgi-bin/musics.fcg</code> 的 zzc 签名 + AES-128-GCM <code>ag-1</code> 通道；旧 <code>fcg_music_add2songdir.fcg</code> 在最小 Cookie 下返回 <code>403 invalid request / no permit</code>，不再使用。写后必须读回状态与成员可见性。</td>
+    <td>201 目录的 <code>AddSonglist</code> / <code>DelSonglist</code> 必须走 <code>u6.y.qq.com/cgi-bin/musics.fcg</code> 的 zzc 签名 + AES-128-GCM <code>ag-1</code> 通道；旧 <code>fcg_music_add2songdir.fcg</code> 在最小 Cookie 下返回 <code>403 invalid request / no permit</code>，不再使用。写接口只负责写入；写后状态与成员刷新由 CORE 的统一歌单刷新流程负责（见 <a href="CORE.html#c4-55">CORE §4.55</a> / <a href="CORE.html#c4-61">§4.61</a>），不在写接口内做整单读回。</td>
   </tr>
   <tr>
     <td>播放链接拼装</td>
@@ -150,7 +150,7 @@
   </tr>
   <tr>
     <td>评论读取</td>
-    <td>固定匿名发送，不携带凭证；单页条数不超过 25，应用固定 20。条数与上游参数见 <a href="#p4-1">§4.1</a>，内部签名见 <a href="CORE.html#c4-15">CORE §4.15</a>。</td>
+    <td>未登录时匿名发送；登录后携带 Cookie 以读取 <code>IsPraised</code>。单页条数不超过 25，应用固定 25。条数与上游参数见 <a href="#p4-1">§4.1</a>，内部签名见 <a href="CORE.html#c4-15">CORE §4.15</a>。</td>
   </tr>
   <tr>
     <td>VIP 状态</td>
@@ -199,7 +199,7 @@
   <li>先通过 <code>get_song_detail_yqq</code> 获取 <code>media_mid</code>，再按请求音质拼出 vkey 的 <code>filename</code>。</li>
   <li>vkey 请求使用进程级稳定 <code>guid</code>、歌曲 <code>songmid</code> 数组、对应 <code>filename</code> 数组与账号 <code>uin</code>。</li>
   <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。<code>result</code> 同时返回授权结果码，应用会保留每个档位最后一次结果，用于全批量失败时区分权限、链路与下架。</li>
-  <li>经典入口为 <code>vkey.GetVkeyServer / CgiGetVkey</code>；该入口返回 <code>104009</code>（<code>invalidq</code>）时，应用会再尝试当前维护的 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。两个入口都返回 <code>104009</code> 时按网络 / VPN / 代理出口问题处理，不再当作接口结构变化或单曲下架。</li>
+  <li>经典入口为 <code>vkey.GetVkeyServer / CgiGetVkey</code>；该入口返回 <code>104009</code>（<code>invalidq</code>）时，应用会再尝试当前维护的 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。两个入口都返回 <code>104009</code> 时按网络 / VPN / 代理出口问题处理，不再当作接口结构变化或单曲下架，并进入 60 秒全局截断窗口；窗口内应用不再向上游发起任何请求。</li>
   <li>音频流端点与 vkey / purl 契约不变；应用侧加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</li>
   <li>上游音频流必须兼容 Range：应用会把浏览器的 <code>Range</code> 原样转发，并优先使用上游返回的 <code>206</code> / <code>Content-Range</code> / <code>Accept-Ranges</code>。若上游忽略 Range 返回 200，代理按完整响应处理并缓存；局部 206 不缓存。</li>
   <li>vkey 失效或流中断时，播放器对同一歌曲最多每 30 秒自动重新取一次链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”。<code>PROVIDER</code> 不再承诺“不会自动重新获取链接”。</li>
@@ -242,7 +242,6 @@
 </table>
 <ul class="note">
   <li><code>comm</code> 至少包含 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>、<code>authst</code>、<code>platform</code>、<code>g_tk</code>、<code>g_tk_new_20200303</code>；Cookie 与 key 均由主进程凭证生成，不进入渲染进程。</li>
-  <li>推荐、歌单创建 / 改名 / 删除与 MV 接口仍未完成 fixture 验证。</li>
 </ul>
 
 <h2 id="p4">4. INTERFACES</h2>
@@ -253,21 +252,23 @@
   <tr><th>接口</th><th>方法 / 路径</th><th>用途</th></tr>
   <tr><td>内容 RPC</td><td><code>https://u.y.qq.com/cgi-bin/musicu.fcg</code>（内容请求 GET；登录换证 / 续期 POST）</td><td>统一 <code>musicu</code> 请求入口；搜索、歌曲详情、vkey、歌单、资料、评论、VIP 状态、登录与续期。</td></tr>
   <tr><td>搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code></td><td>按单曲 / 歌手 / 专辑 / 歌单搜索。单曲结果携带完整 <code>singer[{ mid, name }]</code>；fixture <code>test/fixtures/search-song.json</code> 验证两项字段均存在。</td></tr>
-  <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code>、歌曲展示字段与真实 <code>songType</code>；<code>track_info.singer[]</code> 与搜索同结构，可能出现 <code>name</code> 有值而 <code>mid</code> 为空的条目。</td></tr>
-  <tr><td>歌手详情</td><td><code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg</code></td><td>按 <code>singermid</code> 获取歌手名、简介、歌曲数与专辑数。</td></tr>
-  <tr><td>歌手歌曲</td><td><code>musichall.song_list_server / GetSingerSongList</code>（顶层节点 <code>singerSongList</code>）</td><td>按 <code>singerMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
+  <tr><td>歌曲详情</td><td><code>music.pf_song_detail_svr / get_song_detail_yqq</code></td><td>获取 <code>media_mid</code>、歌曲展示字段与真实 <code>songType</code>；<code>track_info.singer[]</code> 与搜索同结构，可能出现 <code>name</code> 有值而 <code>mid</code> 为空的条目。批量详情缺失个别歌曲时作为单曲兜底。</td></tr>
+  <tr><td>批量歌曲详情</td><td><code>music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo</code></td><td>一次最多 50 首：等长数组 <code>mids</code> / <code>types</code> / <code>modify_stamp</code>，附 <code>ctx: 0</code> / <code>client: 1</code>；响应 <code>tracks[]</code> 字段与 <code>get_song_detail_yqq</code> 的 <code>track_info</code> 一致，按 <code>mid</code> 建索引，响应顺序不影响结果。</td></tr>
+  <tr><td>歌手详情</td><td><code>GET https://c.y.qq.com/v8/fcg-bin/fcg_v8_singer_detail_cp.fcg</code></td><td>按 <code>singermid</code> 获取歌手名、简介、歌曲数与专辑数；部分歌手可能只返回 <code>code -1</code> 且无歌手字段，此时使用下方的 <code>SingerInfoInter</code> 兜底。</td></tr>
+  <tr><td>歌手资料兜底</td><td><code>music.musichallSinger.SingerInfoInter / GetSingerDetail</code></td><td>按 <code>singer_mids: [mid]</code> 请求，开启 <code>pic / ex_singer / wiki_singer / group_singer</code>；读取 <code>singer_list[].basic_info.name</code> / <code>ex_info.desc</code> / <code>pic.pic</code>，<code>http:</code> 头像升为 <code>https:</code>。</td></tr>
+  <tr><td>歌手歌曲</td><td><code>musichall.song_list_server / GetSingerSongList</code></td><td>按 <code>singerMid</code> 分页获取歌曲；<code>order=1</code> 为最热，<code>order=0</code> 及其它值等价于最新，未知值不报错，只有这两种有效顺序；<code>musicu</code> 返回的 <code>req_0.data</code> 为扁平 <code>{ totalNum, songList }</code>，<code>singerSongList.data</code> 仅作为外层兼容形状；单页最多 100 首。</td></tr>
   <tr><td>专辑详情</td><td><code>music.musichallAlbum.AlbumInfoServer / GetAlbumDetail</code></td><td>按 <code>albumMid</code> 获取专辑名、发行日期、简介与歌手。</td></tr>
   <tr><td>专辑歌曲</td><td><code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code></td><td>按 <code>albumMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
-  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。</td></tr>
+  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。上游 <code>104009</code> 主要出现在 vkey / 播放链接请求；整单可用性探测按 50 首分批，会放大触发概率。</td></tr>
   <tr><td>收藏状态</td><td><code>music.musicasset.SongFavRead / IsSongFanByMid</code></td><td>按 <code>v_songMid</code> 批量读取 <code>m_fan</code> 红心状态。</td></tr>
   <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-4">§3.4</a>。</td></tr>
-  <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表。</td></tr>
+  <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表；<code>song_num</code> 单次可返回约 1 万首，大歌单会静默省略少量不可用曲目，分页须用固定 <code>song_begin</code> 递增。歌单不存在 / 已失效时 <code>req_0.code</code> 仍为 <code>0</code>，失效码位于顶层 <code>data.code = -100006</code>，且 <code>dirinfo</code> 为空壳、<code>songlist</code> 为空；不能只看 <code>retcode</code>。</td></tr>
   <tr><td>我的歌单</td><td><code>music.musicasset.PlaylistBaseRead / GetPlaylistByUin</code></td><td>当前账号创建 / 收藏的歌单列表。</td></tr>
   <tr><td>每日推荐</td><td><code>music.recommend.RecommendFeed / get_recommend_feed</code> → <code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>取当天的动态推荐歌单卡片（<code>subtype:510</code>），再读取完整 30 首。</td></tr>
   <tr><td>专属雷达</td><td><code>music.recommend.TrackRelationServer / GetRadarSong</code></td><td>按页获取个性化雷达推荐，返回 <code>VecSongs[].Track</code>；需要登录。</td></tr>
   <tr><td>猜你喜欢</td><td><code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>）</td><td>连续推荐流，返回 <code>data.tracks[]</code>；需要登录。</td></tr>
-  <tr><td>歌单写入</td><td><code>music.musicasset.PlaylistBaseWrite / AddPlaylist | EditPlaylist | DelPlaylist</code></td><td>创建 / 改名 / 删除当前账号自建的普通歌单；固定 201 之外的目录。</td></tr>
-  <tr><td>歌单增删歌曲</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code></td><td>按数字 <code>songId</code> 与真实 <code>songType</code> 增删；每批最多 100 首。</td></tr>
+  <tr><td>歌单写入</td><td><code>music.musicasset.PlaylistBaseWrite / AddPlaylist | EditPlaylist | DelPlaylist</code></td><td>创建 / 改名 / 删除当前账号自建的普通歌单；<code>AddPlaylist</code> 返回的 <code>result.dirId</code> 是目录 ID、<code>result.tid</code> 是歌单标识，两者都必须为正整数。</td></tr>
+  <tr><td>歌单增删歌曲</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code></td><td>按数字 <code>songId</code> 与真实 <code>songType</code> 增删；<code>dirId</code> 是当前账号目录 ID、<code>tid</code> 是歌单标识，两者不能混用；每批最多 100 首。<code>AddSonglist</code> 通常追加到末尾；写接口只负责写入，写后刷新统一由应用侧歌单流程完成，不每次全量扫描。<code>80092</code> 表示歌曲已存在 / 不存在等业务状态，不作为请求失败。</td></tr>
   <tr><td>MV 搜索</td><td><code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code>（<code>search_type:4</code>）</td><td>返回 <code>body.mv.list[]</code> 的 MV 结果。</td></tr>
   <tr><td>MV 详情</td><td><code>MvService.MvInfoProServer / GetMvInfoList</code></td><td>按 <code>vidlist</code> 获取封面、简介、时长、歌手与播放数。</td></tr>
   <tr><td>MV 取流</td><td><code>gosrf.Stream.MvUrlProxy / GetMvUrls</code></td><td>按 <code>vids</code> 返回各清晰度的 <code>freeflow_url</code>。</td></tr>
@@ -275,7 +276,7 @@
   <tr><td>会话续期</td><td><code>music.login.LoginServer / Login</code></td><td>用 <code>refresh_token</code> 换新 <code>musickey</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
   <tr><td>歌词</td><td><code>GET https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg</code></td><td>返回 LRC / QRC 与翻译。</td></tr>
-  <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲最新评论；应用不提供“最旧”或按点赞排序，单页固定 25 条。</td></tr>
+  <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲最新评论；应用不提供“最旧”或按点赞排序，单页固定 25 条（26 起返回业务码 <code>10000</code>）。</td></tr>
   <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号 VIP 权益，用于不可播提示。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方扫码组件。</td></tr>
@@ -338,7 +339,7 @@
   </tr>
   <tr>
     <td>歌单增删歌曲</td>
-    <td><code>dirId</code> · <code>tid</code> · <code>bFmtUtf8</code> · <code>dirName</code> · <code>v_songInfo</code>（<code>songId</code> · <code>songType</code>）</td>
+    <td><code>dirId</code>（目录 ID） · <code>tid</code>（歌单标识） · <code>bFmtUtf8</code> · <code>v_songInfo</code>（<code>songId</code> · <code>songType</code>）</td>
   </tr>
   <tr>
     <td>MV 搜索</td>
@@ -358,7 +359,7 @@
   </tr>
   <tr>
     <td>歌手歌曲</td>
-    <td><code>singerMid</code> · <code>order</code>（1） · <code>begin</code> · <code>num</code>（≤100）</td>
+    <td><code>singerMid</code> · <code>order</code>（1 最热 / 0 最新） · <code>begin</code> · <code>num</code>（≤100）</td>
   </tr>
   <tr>
     <td>专辑详情</td>
@@ -399,7 +400,7 @@
   <tr><td>歌单详情 <code>CgiGetDiss</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>我的歌单 <code>GetPlaylistByUin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>歌词 <code>fcg_query_lyric_new.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=5381</code></td></tr>
-  <tr><td>歌曲评论 <code>GetNewCommentList</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>匿名；不携带 Cookie</td></tr>
+  <tr><td>歌曲评论 <code>GetNewCommentList</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>未登录匿名；登录后携带 Cookie 以读取 <code>IsPraised</code></td></tr>
   <tr><td>VIP 状态 <code>vip_login_base</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>用户资料 <code>fcg_get_profile_homepage.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=hash33(musickey, 5381)</code></td></tr>
   <tr><td>QQ 登录换证 <code>QQLogin</code></td><td>iPhone iOS 13</td><td><code>https://y.qq.com/</code></td><td>JSON；不携带凭证</td></tr>
@@ -414,7 +415,7 @@
   <li>普通内容 CGI 不需要额外签名；收藏写入必须使用 <a href="#p3-4">§3.4</a> 的 zzc 签名 + <code>ag-1</code> 加密通道；<code>g_tk</code> 还用于 OAuth 授权、歌词与用户资料请求。</li>
   <li>歌曲评论单页实测上限 25 条（26 起返回业务码 <code>10000</code>），因此应用固定使用 25 条。未登录时匿名发送，登录后携带 Cookie 以读取 <code>IsPraised</code>。评论区只读取最新评论，通过 <code>LastCommentSeqNo</code> 游标翻页，不提供“最旧”排序。</li>
   <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。上游单次最多返回 100 首，应用固定 50 首/页。</li>
-  <li>推荐、歌单写入与 MV 的方法 / 参数已按真实请求固定；内部调用路径与错误处理见 <a href="CORE.html#c4-53">CORE §4.53</a> / <a href="CORE.html#c4-55">§4.55</a> / <a href="CORE.html#c4-56">§4.56</a>。</li>
+  <li>推荐、歌单写入与 MV 的方法 / 参数已按真实请求固定；内部调用路径与错误处理见 <a href="CORE.html#c4-53">CORE §4.53</a> / <a href="CORE.html#c4-55">§4.55</a> / <a href="CORE.html#c4-56">§4.56</a>。fixture 只覆盖部分映射，具体覆盖范围与未覆盖字段见 <a href="#p4-3">§4.3</a>；接口真实可用性以实际请求结果为准。</li>
 </ul>
 
 <h3 id="p4-2">4.2 消息与错误</h3>
@@ -473,7 +474,7 @@ interface QqLoginRequest {
   <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>无权限（未登录、账号等级不足或播放授权异常）；播放链接流程继续回退，全部档位失败后按登录态、VIP 与数字专辑标记生成文案。</td></tr>
   <tr><td><code>104004</code></td><td><code>UPSTREAM_NETWORK</code></td><td>vkey 获取失败；不当作下架，提示稍后重试。</td></tr>
   <tr><td><code>104013</code></td><td><code>NO_PERMISSION</code></td><td>播放设备受限；提示当前设备无法播放。</td></tr>
-  <tr><td><code>104009</code></td><td><code>UPSTREAM_NETWORK</code></td><td><code>invalidq</code>：上游拒绝请求，常见于 IP / VPN / 代理出口或临时风控；提示检查网络 / 代理或稍后重试，不重试轰炸。</td></tr>
+  <tr><td><code>104009</code></td><td><code>UPSTREAM_NETWORK</code></td><td><code>invalidq</code>：上游拒绝请求，常见于 IP / VPN / 代理出口或临时风控；两个 vkey 入口都拒绝后进入 60 秒全局截断，窗口内不再请求上游；提示检查网络 / 代理或稍后重试，不重试轰炸。</td></tr>
   <tr><td>写操作权限拒绝</td><td><code>NO_PERMISSION</code></td><td>当前账号无权编辑该歌单或收藏该内容；提示不可编辑。</td></tr>
   <tr><td>歌单写入 <code>retCode</code> 非 0 / <code>80105</code></td><td><code>NO_PERMISSION</code></td><td>用户名下有权限限制、歌单不可编辑或签名通道缺少网页会话；保留原状态并提示。收藏写入的 80105 仍按上表提示重新登录同步网页会话。</td></tr>
   <tr><td>MV <code>filetype</code> 返回 <code>code:1000</code> / <code>2000</code> 或 <code>freeflow_url</code> 为空</td><td><code>NO_PERMISSION</code> / <code>NO_STREAM</code></td><td>该清晰度需要更高权限或不可用；自动降档，全部档位失败后提示。</td></tr>
@@ -486,15 +487,20 @@ interface QqLoginRequest {
 <ul class="note">
   <li>内部错误码与界面文案的对应关系见 <a href="USER.html#u5-3">USER §5.3</a>；类型定义见 <a href="CORE.html#c4-1">CORE §4.1</a>。</li>
   <li>登录业务码携带的具体文案来自 <code>mapUpstreamCode</code>；是否直接展示给用户由界面错误策略决定。</li>
-  <li>写操作的成功判定必须同时检查外层 <code>code</code>、目标业务块 <code>code</code> 与 <code>data.retCode</code>（或 <code>subcode</code>），并读回目标状态；只检查 <code>retCode</code> 会把失败误报为成功。</li>
+  <li>写操作的成功判定必须同时检查外层 <code>code</code>、目标业务块 <code>code</code> 与 <code>data.retCode</code>（或 <code>subcode</code>）；收藏写入还要读回目标状态。普通歌单增删歌曲不在写 API 内读回成员，写后刷新由渲染层的统一歌单刷新流程确认。只检查 <code>retCode</code> 会把失败误报为成功。</li>
 </ul>
 
 <h3 id="p4-3">4.3 数据模型与转换</h3>
 <pre><code>interface QqSong {
   id?: number | string;
   mid?: string;
+  // name 为基础名，可能带尾部空白；title 为官方展示标题，含 Explicit / Remix 等版本标签。
+  // 原始响应没有独立的 explicit / remix 布尔字段；version / tag 为数值，语义不稳定。
   name?: string;
   title?: string;
+  subtitle?: string;
+  version?: number;
+  tag?: number;
   interval?: number;
   singer?: Array&lt;{ mid?: string; name?: string }&gt;;
   album?: { mid?: string; name?: string };
@@ -527,17 +533,41 @@ interface QqTrackIdentity {
   };
 }
 
+// CgiGetTrackInfo 批量详情：tracks[] 的字段与单曲响应的 track_info 一致。
+interface QqTrackBatch {
+  tracks?: Array&lt;{
+    id?: number | string;
+    mid?: string;
+    type?: number;
+    name?: string;
+    title?: string;
+    singer?: Array&lt;{ mid?: string; name?: string }&gt;;
+    album?: { mid?: string; name?: string };
+    file?: {
+      media_mid?: string;
+      size_128mp3?: number;
+      size_320mp3?: number;
+      size_flac?: number;
+    };
+  }&gt;;
+}
+
 interface QqSongInfoParam {
   songId: number;
   songType: number;
 }
 
 interface QqPlaylistData {
+  code?: number; // -100006：歌单不存在或已失效；req_0.code 仍为 0
   dirinfo?: {
     id?: string | number;
     title?: string;
     picurl?: string;
     songnum?: number;
+    dirid?: string | number;
+    owndir?: string | number;
+    host_uin?: string | number;
+    creator?: { musicid?: string | number };
   };
   songlist?: QqSong[];
 }
@@ -585,7 +615,20 @@ interface QqArtistInfo {
   total_mv?: number;
 }
 
+// 旧 fcg_v8_singer_detail_cp.fcg 对部分歌手只返回 { code: -1 }，此时用 SingerInfoInter 兜底。
+interface QqSingerProfile {
+  singer_list?: Array&lt;{
+    basic_info?: { singer_mid?: string; name?: string };
+    ex_info?: { desc?: string };
+    pic?: { pic?: string };
+  }&gt;;
+}
+
 interface QqArtistSongData {
+  // 请求参数 order：1 = 最热；0 及其它值 = 最新（未知值不报错，仅两种有效顺序）。
+  totalNum?: number;
+  songList?: Array&lt;{ songInfo?: QqSong }&gt;;
+  // 兼容外层包裹；其 data 与上面的扁平字段同构。
   singerSongList?: {
     data?: {
       totalNum?: number;
@@ -626,6 +669,8 @@ interface QqComment {
   PubTime?: number;
   PraiseNum?: number;
   ReplyCnt?: number;
+  IsPraised?: number;
+  IsLiked?: number;
 }
 
 interface QqRecommendCard {
@@ -716,10 +761,16 @@ interface QqCommentLikeResult {
 }
 
 interface QqCommentList {
+  // 上游没有按点赞排序参数；GetHotCommentList 返回业务码 10000。
+  // WithHot=1 的 CommentList2 是仅首屏的热评附加模块，不是可分页评论列表，应用不读取。
   CommentList?: {
     Comments?: QqComment[];
     Total?: number;
     HasMore?: number;
+  };
+  CommentList2?: {
+    Comments?: QqComment[];
+    Total?: number;
   };
 }
 
@@ -783,7 +834,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqVkeyData</code></td>
     <td><code>midurlinfo[].songmid</code> · <code>purl</code> · <code>result</code></td>
-    <td><code>purl</code> 为空表示该档位无链接；<code>result</code> 用于区分 104003 / 104004 / 104013，全部档位失败时决定内部错误码与文案。响应级 <code>retcode</code> / <code>msg</code> 也会被读取：<code>104009</code> 触发备用入口并最终按网络 / 代理问题处理。vkey 请求按应用批量 50 分块。</td>
+    <td><code>purl</code> 为空表示该档位无链接；<code>result</code> 用于区分 104003 / 104004 / 104013，全部档位失败时决定内部错误码与文案。响应级 <code>retcode</code> / <code>msg</code> 也会被读取：<code>104009</code> 触发备用入口，两个入口都返回 <code>104009</code> 后进入 60 秒全局截断并按网络 / 代理问题处理。vkey 请求按应用批量 50 分块。</td>
   </tr>
   <tr>
     <td><code>QqFavoriteData</code></td>
@@ -802,8 +853,8 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqPlaylistData</code></td>
-    <td><code>dirinfo.id</code> / <code>title</code> / <code>picurl</code> / <code>songnum</code> · <code>songlist[]</code></td>
-    <td><code>songlist[]</code> 是单页结果；单次最多返回 100 首，应用固定 50 首/页；总数以 <code>dirinfo.songnum</code> 为准。<code>songnum</code> 与 <code>songlist</code> 成员可能短暂不一致：写入后总数可能先变化，列表成员稍后才可见；总数增加或状态读回 true 都不能单独作为收藏成功依据。</td>
+    <td><code>code</code> · <code>dirinfo.id</code> / <code>title</code> / <code>picurl</code> / <code>songnum</code> / <code>dirid</code> / <code>owndir</code> / <code>host_uin</code> / <code>creator.musicid</code> · <code>songlist[]</code></td>
+    <td><code>songlist[]</code> 是单页结果；轻量校验固定 50 首/页，完整快照使用固定 <code>song_begin</code> 递增、每页 2000 首，单次实测可返回约 1 万首。大歌单会静默省略少量不可用曲目，应用允许 2% / 至少 10 首的缺失容差；不能按返回条数累加 offset。总数以 <code>dirinfo.songnum</code> 为准。<code>songnum</code> 与 <code>songlist</code> 成员可能短暂不一致：写入后总数可能先变化，列表成员稍后才可见；总数增加或状态读回 true 都不能单独作为收藏成功依据。<code>owndir === 1</code> 表示当前账号拥有该歌单；字段缺失或为 0 时应用回退比较当前账号与 <code>creator.musicid</code> / <code>host_uin</code>，任一匹配才视为可编辑。失效歌单的 <code>req_0.code</code> 为 <code>0</code>、顶层 <code>code = -100006</code>，<code>dirinfo</code> 为空壳且 <code>songlist[]</code> 为空；应用把该负数码映射为 <code>NO_PERMISSION</code> 并清理持久缓存。</td>
   </tr>
   <tr>
     <td><code>QqMineData</code></td>
@@ -822,8 +873,8 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code></td>
-    <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
-    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>PubTime</code> 映射为 <code>createdAtMs</code>；点赞通过读取方法选择，模型不新增字段。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。评论区只提供最新评论读取，不提供“最旧”排序。</td>
+    <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> / <code>IsPraised</code> / <code>IsLiked</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
+    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。评论区只提供最新评论读取，不提供“最旧”排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，上游没有按点赞排序参数。</td>
   </tr>
   <tr>
     <td><code>QqVipData</code></td>
@@ -903,7 +954,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqArtistSongData</code> → <code>ArtistDetail.songs</code></td>
-    <td><code>singerSongList.data.songList[].songInfo</code> → <code>Song</code>；<code>totalNum → total</code>；<code>hasMore</code> 按已载入数与总数比较。</td>
+    <td>优先读取 <code>req_0.data.songList[].songInfo</code> 与扁平 <code>totalNum</code>；缺失时回退 <code>singerSongList.data</code> 包裹；<code>songInfo</code> → <code>Song</code>，<code>totalNum → total</code>；<code>hasMore</code> 按已载入数与总数比较。</td>
   </tr>
   <tr>
     <td><code>QqAlbumDetail</code> → <code>AlbumDetail</code></td>
@@ -927,7 +978,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqPlaylistWriteResult</code> → <code>PlaylistMeta</code></td>
-    <td><code>retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数才成功；<code>dirName</code> 回填名称，<code>editable=true</code>。</td>
+    <td><code>retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数才成功；<code>id = String(result.tid)</code> 是歌单标识，<code>dirId = result.dirId</code> 是目录 ID；<code>dirName</code> 回填名称，<code>editable=true</code>。</td>
   </tr>
   <tr>
     <td><code>QqMvSearchData</code> → <code>MvSummary[]</code></td>
@@ -943,7 +994,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentLikeResult</code> → <code>CommentLikeResult</code></td>
-    <td><code>code</code> / <code>subcode</code> 均为 0 才成功；<code>type</code> 3 → <code>liked=true</code>，4 → <code>liked=false</code>；点赞数由读回评论校正。</td>
+    <td><code>code</code> / <code>subcode</code> 均为 0 才成功；<code>type</code> 3 → <code>liked=true</code>，4 → <code>liked=false</code>。上游不返回点赞数量，<code>CommentLikeResult.likedCount</code> 为可选；前端在成功后乐观更新计数，失败时回滚。</td>
   </tr>
   <tr>
     <td><code>QqLyricResponse</code> → <code>Lyric</code></td>
@@ -951,7 +1002,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code> → <code>CommentPage</code></td>
-    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。</td>
+    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code> → <code>UserProfile</code></td>
@@ -971,6 +1022,8 @@ interface QqLoginPayload {
   <li><code>mediaMid</code>、<code>guid</code> 与原始 <code>purl</code> 只在主进程 API 层内部存在，不进入 IPC 数据模型。</li>
   <li><code>PayInfo</code> 仅用于界面角标；实际可播性以 vkey 结果为准。</li>
   <li>收藏写入的 <code>songType</code> 必须来自详情接口真实字段；<code>webCookies</code> 与签名密钥只存在于主进程，不写日志、不跨 IPC。</li>
+  <li>fixture 覆盖范围：<code>search-song.json</code> 覆盖搜索；<code>singer-detail.json</code> / <code>singer-songs.json</code> 覆盖歌手详情与歌曲；<code>album-detail.json</code> / <code>album-songs.json</code> 覆盖专辑详情与歌曲；<code>mv-detail.json</code> 覆盖 MV 详情；<code>comment-like.json</code> 覆盖评论点赞。部分覆盖：<code>recommend-anonymous.json</code> 只用于 <code>RecommendFeed</code> 入口，且缺少 <code>subtype:510</code> 的每日推荐卡，因此每日推荐映射未覆盖；雷达 / 猜你喜欢映射由测试内联数据覆盖。未覆盖：<code>mv-search.json</code> 的 <code>mv.list</code> 为空；<code>mv-url.json</code> 的 <code>freeflow_url</code> / <code>url</code> 为空。<code>recommend-shelves.json</code>、<code>comment-list.json</code>、<code>playlist-write.json</code> 当前未被回放测试引用，不计入已验证范围。</li>
+  <li>fixture 为空只按合法空结果处理，不能作为接口已验证的依据；映射测试只锁定可回放字段，未覆盖字段以真实请求与代码中的防御分支为准。</li>
 </ul>
 
 <h3 id="p4-4">4.4 MPRIS</h3>
