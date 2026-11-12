@@ -31,6 +31,15 @@ export function singerNames(song: Song): string {
     .join(' / ')
 }
 
+const APP_TITLE = 'Lychee Player'
+
+/** 窗口 / 任务栏标题：当前歌曲优先，无歌曲时回退应用名。 */
+export function appTitle(song: Song | null): string {
+  if (!song) return APP_TITLE
+  const singers = singerNames(song)
+  return `${song.name}${singers ? ` - ${singers}` : ''} · ${APP_TITLE}`
+}
+
 export function playlistSubtitle(playlist: PlaylistMeta): string {
   return `${playlist.songCount} 首歌曲`
 }

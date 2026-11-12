@@ -1153,6 +1153,7 @@ export function destroyTray(): void;
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
+  <li>监听 <code>player.current</code> 并立即执行一次，把 <code>appTitle(current)</code> 写入 <code>document.title</code>；Electron 默认将页面标题同步到窗口 / 任务栏，切歌即时更新，无歌曲时回退应用名。</li>
   <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
   <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
   <li>全局只挂载一个 <a href="#c4-85">DownloadDeleteDialog</a>，读取 <a href="#c4-84">useDownloadAction</a> 的模块级 <code>pendingDelete</code>；播放条与各歌曲表页面不再各自持有删除下载确认框。</li>
@@ -1375,10 +1376,12 @@ export function formatCount(count: number): string;
 export function albumCover(mid: string, size?: number): string;
 export function songCover(song: Song | null, size?: number): string;
 export function singerNames(song: Song): string;
+export function appTitle(song: Song | null): string;
 export function playlistSubtitle(playlist: PlaylistMeta): string;
 </code></pre>
 <ul class="note">
   <li><code>singerNames</code> 逐项取 <code>name</code>：空名称成员跳过，全部为空时返回空字符串（界面不渲染歌手文本，也不显示“未知歌手”）；有名称但 <code>mid</code> 为空的成员照常输出名字。多歌手分隔符固定为“ / ”，不做其他归一化。</li>
+  <li><code>appTitle</code> 返回窗口 / 任务栏标题：有当前歌曲时为 <code>歌名 - 歌手 · Lychee Player</code>，歌手为空时省略中段；无歌曲时回退 <code>Lychee Player</code>。应用名常量只在本文件维护。</li>
   <li>链接渲染不进入本函数：调用方按 <code>mid</code> 是否为空决定纯文本或歌手页链接，规则见 <a href="USER.html#u2">USER §2</a>。</li>
 </ul>
 

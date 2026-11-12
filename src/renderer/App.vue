@@ -16,7 +16,7 @@ import { useRecommendStore } from './stores/recommend'
 import { useSettingsStore } from './stores/settings'
 import { useUiStore } from './stores/ui'
 import { useToast } from './composables/toast'
-import { singerNames, songCover } from './utils/format'
+import { appTitle, singerNames, songCover } from './utils/format'
 import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
 
 const route = useRoute()
@@ -173,6 +173,15 @@ watch(
   (songMid) => {
     if (songMid) void playlistEdit.loadFavorites([songMid])
   }
+)
+
+// 窗口标题跟随当前歌曲；Electron 默认把 document.title 同步到窗口 / 任务栏。
+watch(
+  () => player.current,
+  (current) => {
+    document.title = appTitle(current)
+  },
+  { immediate: true }
 )
 
 watch(

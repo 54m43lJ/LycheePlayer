@@ -182,3 +182,26 @@
 | `CORE.html` | §5.16 下载（`#c5-16`） | 改 | 调用链改为 `SongTable` / `PlayerBar` → `requestDownload` → 入队或删除分支。 |
 | `README.md` | §2 用户交互 · 下载行 | 改 | 删除确认入口从歌单扩展到任意歌曲表与播放条。 |
 | `ABOUT.html` | 用户交互 · 下载行 | 改 | 与 README 同步。 |
+
+## 7. 应用标题跟随当前歌曲
+
+**需求**：应用窗口 / 任务栏标题显示当前正在播放的歌曲与歌手，切歌时即时更新；没有当前歌曲时回退为应用名，页面导航不改变标题。
+
+**实现思路**：
+
+- 在 `utils/format.ts` 增加 `appTitle(song)`：有歌曲时返回 `歌名 - 歌手 · Lychee Player`，歌手为空时省略歌手段；传入 `null` 时返回 `Lychee Player`。应用名常量只在该文件维护。
+- `App.vue` 增加对 `player.current` 的 `watch(..., { immediate: true })`，把 `appTitle(current)` 写入 `document.title`；Electron 默认将页面标题同步到窗口与任务栏。
+- 复用现有 `singerNames()` 处理空歌手名与多歌手分隔，不新增 IPC 或主进程窗口标题逻辑。
+- 扩展 `test/format.test.ts`，覆盖无歌曲回退、歌名 + 歌手与空歌手三种标题。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 6 项“应用标题显示当前在播放的歌曲” | 改 | 行尾追加 ` [已解决]`。 |
+| `EVOLVE.md` | 新增“应用标题跟随当前歌曲” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `USER.html` | §5.2.1 窗口与布局（`#u5-2-1`） | 改 | 增加“窗口标题”契约：歌曲 / 歌手格式、无歌曲回退与切歌即时更新。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 补 `player.current` 监听与 `document.title` 同步说明。 |
+| `CORE.html` | §4.32 `utils/format.ts`（`#c4-32`） | 改 | 增加 `appTitle(song)` 签名与标题格式、回退规则。 |
+| `README.md` | §2 用户交互 · 窗口标题行 | 增 | 增加窗口 / 任务栏标题跟随当前歌曲的能力说明。 |
+| `ABOUT.html` | 用户交互 · 窗口标题行 | 增 | 与 README 同步。 |

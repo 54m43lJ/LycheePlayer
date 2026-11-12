@@ -375,6 +375,7 @@
 <table>
   <tr><th>项目</th><th>契约</th></tr>
   <tr><td>默认窗口</td><td>1280×820；不设置 <code>BrowserWindow.minWidth</code> / <code>minHeight</code>；无系统菜单栏。</td></tr>
+  <tr><td>窗口标题</td><td>跟随当前歌曲：有歌曲时为“歌名 - 歌手 · Lychee Player”，歌手为空时省略歌手段；无当前歌曲时为“Lychee Player”。切换歌曲即时更新窗口 / 任务栏标题，不因页面导航变化。</td></tr>
   <tr><td>主网格</td><td>宽屏两列：侧栏 + 内容区；底部播放条通栏；内容区独立滚动，播放条常驻贴底。≤900px 时侧栏脱离网格成为覆盖式抽屉，内容区占满宽度。布局最小阈值统一为 <code>--layout-min-width: 420px</code> 与 <code>--layout-min-height: var(--player-height) + 170px</code>。</td></tr>
   <tr><td>低于阈值</td><td>布局停止压缩，<code>body</code> 出现整窗纵向 / 横向滚动条；侧栏、账号入口与播放条仍可到达；导航先内部纵向滚动，内容区保持独立滚动。</td></tr>
   <tr><td>侧栏宽度</td><td>224px；≤900px 改为同宽 224px 的覆盖式抽屉，默认隐藏。</td></tr>
