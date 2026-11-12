@@ -434,12 +434,7 @@ export function registerIpc(): void {
 
   // ---------- account / metadata ----------
   handle('user.getProfile', async () => getProfile())
-  handle('lyric.get', async (songMid: unknown, songId: unknown) =>
-    getLyric(
-      stringArg(songMid, '歌曲 mid'),
-      typeof songId === 'string' && /^\d+$/.test(songId) ? songId : ''
-    )
-  )
+  handle('lyric.get', async (songId: unknown) => getLyric(stringArg(songId, '歌曲 ID')))
   handle('comment.get', async (songId: unknown, cursor: unknown) =>
     getComments(String(songId), typeof cursor === 'string' ? cursor : '')
   )

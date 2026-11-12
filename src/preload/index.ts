@@ -153,7 +153,7 @@ const api: LycheeApi = {
     getProfile: () => invoke<UserProfile>('user.getProfile')
   },
   lyric: {
-    get: (songMid: string, songId = '') => invoke<Lyric>('lyric.get', songMid, songId),
+    get: (songId: string) => invoke<Lyric>('lyric.get', songId),
     decryptQrc
   },
   comment: {

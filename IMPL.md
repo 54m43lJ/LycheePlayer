@@ -181,24 +181,24 @@
 
 **解决方法**：
 
-- 歌词优先调用 `music.musichallSong.PlayLyricInfo / GetPlayLyricInfo`，按数字 `songID` 请求并解码 Base64 的 `lyric` / `trans`；旧接口只作为失败或无 `songId` 时的回退。
-- `lyric.get` IPC / preload / `useLyrics` 增加 `songId` 参数，从 `player.current.songId` 传入；不再只靠 `songMid` 请求。
+- 歌词只调用 `music.musichallSong.PlayLyricInfo / GetPlayLyricInfo`，按数字 `songID` 请求并解码 Base64 的 `lyric` / `trans`；旧接口因译文缺失已删除，不保留回退。
+- `lyric.get` IPC / preload / `useLyrics` 改为传 `songId`，从 `player.current.songId` 传入；`songMid` 只作为渲染层缓存键。
 - 判断标准改为译文文本是否存在：只要解析出非空译文行，就认为有译文并显示开关，不再要求与原文时间戳配对。
 - 译文和原文都作为独立 `LyricLine`，用 `translation: boolean` 区分，按 `timeMs` 排序；同一时间戳原文在前。
 - 译文没有时间戳时按行序跟随对应原文；原文也没有时间戳时按行序生成稳定序号，至少保证两者都能展示。
 - `activeLyricIndex` 在合并后的行里取离播放位置最近的一行，最多提前 `80ms`；原文与译文不再共享活动状态。
 - `useLyrics` 增加 `visibleLines`，译文关闭时过滤翻译行；`activeIndex` 基于可见行计算，避免高亮到被隐藏的译文。
-- 新增 `test/lyric.test.ts` 与 `test/api/lyric.test.ts`，覆盖新版接口取译文、失败回退旧接口、无 `songId` 回退、独立行排序、无时间戳译文与 QRC 就近高亮。
+- 新增 `test/lyric.test.ts` 与 `test/api/lyric.test.ts`，覆盖新版接口取译文、空译文、非数字 ID、独立行排序、无时间戳译文与 QRC 就近高亮。
 
 **修订建议**：
 
 | 文档 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | `lyric.get` 增加可选 `songId`，用于新版歌词接口。 |
-| `CORE.html` | §4.14 `src/main/api/lyric.ts`（`#c4-14`） | 改 | 首选 `PlayLyricInfo / GetPlayLyricInfo`，说明 Base64 解码、`songID` 参数与旧接口回退。 |
-| `CORE.html` | §5.9 歌词与评论（`#c5-9`） | 改 | 调用链改为 `get(songMid, songId)`，补 `GetPlayLyricInfo` 与回退分支。 |
-| `PROVIDER.html` | §4.1 消费的 HTTP 接口（`#p4-1`） | 改 | 增加 `GetPlayLyricInfo` 首选接口与参数，旧歌词接口标为回退。 |
-| `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | 增加 `QqPlayLyricInfoData` 模型与 `Lyric` 转换，旧 `QqLyricResponse` 保留为回退。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | `lyric.get` 改为只接收 `songId`。 |
+| `CORE.html` | §4.14 `src/main/api/lyric.ts`（`#c4-14`） | 改 | 只使用 `PlayLyricInfo / GetPlayLyricInfo`，说明 Base64 解码、`songID` 参数与非数字 ID 处理。 |
+| `CORE.html` | §5.9 歌词与评论（`#c5-9`） | 改 | 调用链改为 `get(songId)` → `GetPlayLyricInfo`，删除旧接口回退分支。 |
+| `PROVIDER.html` | §4.1 消费的 HTTP 接口（`#p4-1`） | 改 | 只保留 `GetPlayLyricInfo` 与参数，删除旧歌词接口。 |
+| `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | 只保留 `QqPlayLyricInfoData` 与 `Lyric` 转换，删除 `QqLyricResponse` / QRC 消费说明。 |
 | `CORE.html` | §4.33 `utils/lrc.ts`（`#c4-33`） | 改 | 将 `LyricLine.trans` 改为 `translation: boolean`；增加 `withTranslations`，写明独立行排序、无时间戳回退与就近高亮。 |
 | `CORE.html` | §4.34 `composables/lyrics.ts`（`#c4-34`） | 改 | 增加 `visibleLines`，说明 `hasTranslation` 由翻译行派生、`activeIndex` 基于可见行。 |
 | `CORE.html` | §4.41 `LyricsPanel.vue`（`#c4-41`） | 改 | 渲染 `visibleLines`；译文作为独立 `.lyric-line.translation` 展示，不再嵌套 `.lyric-trans`。 |

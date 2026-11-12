@@ -136,7 +136,7 @@ export interface LycheeApi {
     getProfile(): Promise<IpcResult<UserProfile>>
   }
   lyric: {
-    get(songMid: string, songId?: string): Promise<IpcResult<Lyric>>
+    get(songId: string): Promise<IpcResult<Lyric>>
     /** 在 preload（渲染进程）内完成 QRC 3DES + zlib 解密；原始密文仍由主进程透传。 */
     decryptQrc(ciphertext: string): string
   }

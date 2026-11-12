@@ -41,7 +41,7 @@ export function useLyrics() {
     loading.value = true
     error.value = ''
     try {
-      const lyric = unwrap(await window.lychee.lyric.get(songMid, songId))
+      const lyric = unwrap(await window.lychee.lyric.get(songId))
       if (currentToken !== token) return
       const parsed = parse(lyric)
       cache.set(songMid, parsed)

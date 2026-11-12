@@ -1,34 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { musicuMock, upstreamRequestMock } = vi.hoisted(() => ({
-  musicuMock: vi.fn(),
-  upstreamRequestMock: vi.fn()
+const { musicuMock } = vi.hoisted(() => ({ musicuMock: vi.fn() }))
+
+vi.mock('../../src/main/api/client', () => ({
+  musicu: musicuMock
 }))
-
-vi.mock('../../src/main/api/client', () => {
-  class UpstreamError extends Error {
-    readonly code: string
-    readonly retryable: boolean
-    readonly upstreamCode?: number
-
-    constructor(code: string, message: string, retryable = false, upstreamCode?: number) {
-      super(message)
-      this.name = 'UpstreamError'
-      this.code = code
-      this.retryable = retryable
-      this.upstreamCode = upstreamCode
-    }
-  }
-  return {
-    UpstreamError,
-    musicu: musicuMock,
-    upstreamRequest: upstreamRequestMock
-  }
-})
 
 beforeEach(() => {
   musicuMock.mockReset()
-  upstreamRequestMock.mockReset()
 })
 
 function encode(value: string): string {
@@ -36,14 +15,14 @@ function encode(value: string): string {
 }
 
 describe('歌词接口', () => {
-  it('优先使用 PlayLyricInfo，并同时拿到原文与译文', async () => {
+  it('通过 PlayLyricInfo 同时返回原文与译文', async () => {
     musicuMock.mockResolvedValue({
       lyric: encode('[00:12.34]Hello'),
       trans: encode('[00:12.34]你好')
     })
     const { getLyric } = await import('../../src/main/api/lyric')
 
-    const lyric = await getLyric('002OTO4x3lXP2C', '5010383')
+    const lyric = await getLyric('5010383')
 
     expect(musicuMock).toHaveBeenCalledWith(
       'music.musichallSong.PlayLyricInfo',
@@ -53,38 +32,23 @@ describe('歌词接口', () => {
     expect(lyric.format).toBe('lrc')
     expect(lyric.text).toContain('Hello')
     expect(lyric.trans).toContain('你好')
-    expect(upstreamRequestMock).not.toHaveBeenCalled()
   })
 
-  it('新版接口失败时回退旧接口', async () => {
-    musicuMock.mockRejectedValue(new Error('new endpoint failed'))
-    upstreamRequestMock.mockResolvedValue({
-      code: 0,
-      retcode: 0,
-      lyric: '[00:12.34]Hello',
-      trans: '[00:12.34]你好'
-    })
+  it('译文为空时返回 null', async () => {
+    musicuMock.mockResolvedValue({ lyric: encode('[00:12.34]Hello'), trans: '' })
     const { getLyric } = await import('../../src/main/api/lyric')
 
-    const lyric = await getLyric('002OTO4x3lXP2C', '5010383')
+    const lyric = await getLyric('5010383')
 
-    expect(upstreamRequestMock).toHaveBeenCalledTimes(1)
-    expect(lyric.text).toContain('Hello')
-    expect(lyric.trans).toContain('你好')
+    expect(lyric.trans).toBeNull()
   })
 
-  it('没有数字 songId 时直接走旧接口', async () => {
-    upstreamRequestMock.mockResolvedValue({
-      code: 0,
-      retcode: 0,
-      lyric: '[00:12.34]Hello',
-      trans: null
-    })
+  it('非数字歌曲 ID 不请求上游', async () => {
     const { getLyric } = await import('../../src/main/api/lyric')
 
-    const lyric = await getLyric('002OTO4x3lXP2C')
+    const lyric = await getLyric('not-a-number')
 
     expect(musicuMock).not.toHaveBeenCalled()
-    expect(lyric.trans).toBeNull()
+    expect(lyric).toEqual({ format: 'lrc', text: '', trans: null })
   })
 })
