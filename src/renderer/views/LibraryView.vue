@@ -10,7 +10,7 @@ import { describeError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
-import { playlistSubtitle } from '../utils/format'
+import { dailyPlaylistName, playlistSubtitle } from '../utils/format'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -181,7 +181,11 @@ watch(
           >
             <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="30" />
             <div class="card-name">
-              {{ playlist.kind === 'favorites' ? '我喜欢' : playlist.name }}
+              {{
+                playlist.kind === 'favorites'
+                  ? '我喜欢'
+                  : dailyPlaylistName(playlist.name, auth.profile?.nickname ?? '')
+              }}
             </div>
             <div class="card-sub">{{ playlistSubtitle(playlist) }}</div>
             <div v-if="playlist.editable && playlist.kind !== 'favorites'" class="card-actions">

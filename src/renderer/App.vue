@@ -16,7 +16,7 @@ import { useRecommendStore } from './stores/recommend'
 import { useSettingsStore } from './stores/settings'
 import { useUiStore } from './stores/ui'
 import { useToast } from './composables/toast'
-import { appTitle, singerNames, songCover } from './utils/format'
+import { appTitle, dailyPlaylistName, singerNames, songCover } from './utils/format'
 import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
 
 const route = useRoute()
@@ -81,6 +81,10 @@ async function toggleTheme(): Promise<void> {
 function onSidebarNavigate(): void {
   ui.closeLyrics()
   ui.closeSidebar()
+}
+
+function recentPlaylistName(name: string): string {
+  return dailyPlaylistName(name, auth.profile?.nickname ?? '')
 }
 
 function openSidebar(): void {
@@ -270,7 +274,7 @@ watch(
             @click="onSidebarNavigate"
           >
             <CoverArt :src="item.coverUrl" image-class="recent-cover" :icon-size="12" />
-            <span class="nav-recent-name">{{ item.name }}</span>
+            <span class="nav-recent-name">{{ recentPlaylistName(item.name) }}</span>
             <span v-if="item.id === currentPlaylistId" class="nav-recent-playing" title="正在播放">
               <AppIcon name="volume" :size="13" />
             </span>

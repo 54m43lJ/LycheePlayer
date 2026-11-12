@@ -16,7 +16,7 @@ import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { usePlaylistStore } from '../stores/playlist'
 import { PLAYLIST_POLL_INTERVAL_MS } from '@shared/constants'
-import { singerNames } from '../utils/format'
+import { dailyPlaylistName, singerNames } from '../utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -31,6 +31,9 @@ const { requestDownload } = useDownloadAction()
 const id = computed(() => String(route.params.id ?? ''))
 const feed = computed(() => playlist.feed)
 const meta = computed(() => feed.value?.meta ?? null)
+const displayName = computed(() =>
+  dailyPlaylistName(meta.value?.name ?? '', auth.profile?.nickname ?? '')
+)
 const songs = computed(() => feed.value?.songs ?? [])
 const { availability, loading: availabilityLoading } = useAvailability(songs)
 watch(
@@ -296,7 +299,7 @@ onBeforeUnmount(() => {
         <CoverArt :src="meta.coverUrl" image-class="playlist-cover" :icon-size="44" />
         <div class="playlist-info">
           <div class="eyebrow">Playlist</div>
-          <h1>{{ meta.kind === 'favorites' ? '我喜欢' : meta.name }}</h1>
+          <h1>{{ meta.kind === 'favorites' ? '我喜欢' : displayName }}</h1>
           <div class="playlist-meta">
             <span>{{ meta.songCount }} 首歌曲</span>
             <span>歌单 ID {{ meta.id }}</span>
@@ -410,7 +413,7 @@ onBeforeUnmount(() => {
     <ConfirmDialog
       :open="removeTarget !== null"
       title="从歌单删除"
-      :message="`确定从歌单「${meta?.name ?? ''}」删除「${removeTarget?.name ?? ''}」？`"
+      :message="`确定从歌单「${displayName}」删除「${removeTarget?.name ?? ''}」？`"
       confirm-label="删除"
       danger
       @confirm="confirmRemove()"

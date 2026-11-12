@@ -44,6 +44,15 @@ export function playlistSubtitle(playlist: PlaylistMeta): string {
   return `${playlist.songCount} 首歌曲`
 }
 
+const DAILY_PLAYLIST_SUFFIX = '的今日私享'
+
+/** 上游日推歌单名只返回“的今日私享”，展示时补上当前账号昵称。 */
+export function dailyPlaylistName(name: string, nickname: string): string {
+  const prefix = nickname.trim()
+  if (!prefix || !name.startsWith(DAILY_PLAYLIST_SUFFIX)) return name
+  return `${prefix}${name}`
+}
+
 export function formatBytes(bytes: number): string {
   if (!Number.isFinite(bytes) || bytes <= 0) return '0 B'
   const units = ['B', 'KB', 'MB', 'GB', 'TB']

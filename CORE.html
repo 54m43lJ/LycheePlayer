@@ -1167,7 +1167,7 @@ export function destroyTray(): void;
   <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
   <li>主界面拖拽手势仅 ≤900px 启用：<code>pointerdown</code> 在宽屏直接返回；触屏 <code>pointerup</code> 若存在非折叠选区则跳过侧栏切换，长按选择文本优先；<code>pointercancel</code> 清理拖拽起点。窄屏非触屏由 §4.49 的 CSS 禁用文本选择。</li>
   <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。</li>
-  <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
+  <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），每日推荐歌单名通过 <code>dailyPlaylistName</code> 补昵称前缀后显示，点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
 </ul>
 
 <h3 id="c4-24">4.24 src/renderer/api.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1380,10 +1380,12 @@ export function songCover(song: Song | null, size?: number): string;
 export function singerNames(song: Song): string;
 export function appTitle(song: Song | null): string;
 export function playlistSubtitle(playlist: PlaylistMeta): string;
+export function dailyPlaylistName(name: string, nickname: string): string;
 </code></pre>
 <ul class="note">
   <li><code>singerNames</code> 逐项取 <code>name</code>：空名称成员跳过，全部为空时返回空字符串（界面不渲染歌手文本，也不显示“未知歌手”）；有名称但 <code>mid</code> 为空的成员照常输出名字。多歌手分隔符固定为“ / ”，不做其他归一化。</li>
   <li><code>appTitle</code> 返回窗口 / 任务栏标题：有当前歌曲时为 <code>歌名 - 歌手 · Lychee Player</code>，歌手为空时省略中段；无歌曲时回退 <code>Lychee Player</code>。应用名常量只在本文件维护。</li>
+  <li><code>dailyPlaylistName</code> 只修正上游日推歌单名：名称以“的今日私享”开头且昵称非空时返回“昵称 + 名称”；昵称为空、普通歌单名或已带昵称的名称原样返回。只供展示层调用，不改写 <code>PlaylistMeta</code> 或持久化缓存。</li>
   <li>链接渲染不进入本函数：调用方按 <code>mid</code> 是否为空决定纯文本或歌手页链接，规则见 <a href="USER.html#u2">USER §2</a>。</li>
 </ul>
 
@@ -1586,6 +1588,7 @@ const emit = defineEmits&lt;{
   <li>登录后加载“我的歌单”，支持刷新与退出登录；未登录显示空状态。</li>
   <li>监听 <code>playlist-edit.favoriteVersion</code>，收藏成功后重新拉取歌单列表，更新“我喜欢”卡片数量；歌单卡片提供改名 / 删除 / 新建菜单。</li>
   <li>新建 / 改名 / 删除歌单走 <code>playlist-edit</code> 的真实写入：创建与改名复用 <code>PlaylistEditDialog</code>，删除使用 <a href="#c4-81">ConfirmDialog</a> 的危险态按钮确认；成功后刷新“我的歌单”卡片并清除对应缓存，失败保留原状态并提示。</li>
+  <li>歌单卡片名称通过 <code>dailyPlaylistName</code> 展示，每日推荐歌单同样补当前昵称前缀；其余歌单名保持原值。</li>
 </ul>
 
 <h3 id="c4-46">4.46 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1593,6 +1596,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>按路由参数加载歌单详情；打开页面无论内容是否变化都先展示该歌单最近一次缓存，同时触发后台静默刷新，不进入整页 loading。刷新成功一次性替换，失败保留缓存且不提示。</li>
+  <li>歌单头标题与删除确认中的歌单名通过 <code>dailyPlaylistName</code> 展示；每日推荐歌单显示为“昵称的今日私享”，其余歌单名保持原值，不改写缓存元数据。</li>
   <li>心跳只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时存在：隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时；切换歌单或卸载时清除 interval 并调用 <code>playlist.stop(id)</code>。</li>
   <li>心跳由 <code>playlist.poll(id)</code> 用 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 检查首页；发现名称、封面、首屏顺序或数量显著变化时立即后台刷新，并取消待执行的 5 分钟 timeout。</li>
   <li>接入 <code>useAvailability</code>，按当前歌单歌曲集合触发探测；探测只更新歌单歌曲元数据，并把 <code>availability</code> / <code>loading</code> 同步给 playlist store，用于判断最终快照是否就绪。</li>
@@ -1635,6 +1639,7 @@ const emit = defineEmits&lt;{
   <li>主题 token 增 <code>--shadow-color</code>（深色 <code>var(--text)</code> 20%、浅色 14% 混色）与统一缩放后的 <code>--shadow-sm: 0 2px 6px</code>、<code>--shadow: 0 5px 16px</code>、<code>--shadow-lg: 0 7px 22px</code>、<code>--shadow-up: 0 -4px 12px</code>、<code>--shadow-left: -8px 0 24px</code>、<code>--shadow-right: 8px 0 24px</code>、<code>--shadow-handle: 3px 0 10px</code>。</li>
   <li>删除空状态占位封面的虚线边框；品牌、按钮、封面 / 头像、弹层、面板、Toast、模态框、抽屉与拖拽把手等全部投影改用上述 fg 阴影 token。焦点环（<code>0 0 0 Npx</code>）、输入框 inset 高光与遮罩纯背景不属于投影，保持独立。</li>
   <li>键盘焦点环由 <code>a</code> / <code>button</code> / <code>[role="button"]</code> / <code>[tabindex]</code> 的 <code>:focus-visible</code> 统一提供：<code>outline: 2px solid var(--accent-strong)</code> 与 <code>outline-offset: -2px</code> 向内绘制，避免 <code>.nav</code>、<code>.discover-strip</code>、<code>.discover-playlists</code> 等滚动容器的 <code>overflow</code> 裁剪描边；输入框、文本域与滑杆继续使用各自的聚焦样式。</li>
+  <li><code>.discover-playlists</code> 使用 <code>margin-top: 6px</code> + <code>padding-top: 4px</code>，为 <code>.card:hover</code> 的 <code>translateY(-2px)</code> 上浮预留空间，卡片顶部边框与背景不被 <code>overflow-x: auto</code> 裁剪；与上方内容的整体间距仍为 10px。</li>
   <li><code>.catalog-desc-block</code> 限宽 900px 并承担底部间距；块内 <code>.catalog-desc</code> 取消自身宽度与外边距；<code>.catalog-desc.clamped</code> 为 4 行 <code>-webkit-line-clamp</code>；<code>.catalog-desc-toggle</code> 使用 accent 文字、透明背景，悬停加下划线。歌手页顶部 <code>.catalog-tabs</code> 与专辑排序 <code>.album-sort-tabs</code> 复用 <code>.tabs</code>；专辑筛选 <code>.album-filters</code> 复用 <code>.chip</code>，选中态使用 accent 软填充；专辑网格复用 <code>.card-grid</code>，卡片 <code>.album-card</code> 可点击进入专辑页。</li>
   <li>组件样式与响应式断点也在同一文件维护。</li>
   <li>布局最小阈值由 <code>--layout-min-width</code>（当前 <code>420px</code>）与 <code>--layout-min-height</code>（<code>--player-height + 170px</code>）统一声明；<code>.app-shell</code> 同时设置 <code>min-width</code> / <code>min-height</code>，<code>body</code> 使用 <code>overflow: auto</code> 提供整窗双向滚动。低于阈值时布局停止压缩，侧栏导航内部纵向滚动、账号入口固定、播放条保持第二行；内容区仍独立滚动。</li>
@@ -2146,7 +2151,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 <pre><code>// 无 props / emits；使用 recommend store。
 </code></pre>
 <ul class="note">
-  <li>三个分区（每日推荐 / 专属雷达 / 猜你喜欢）各自渲染标题、刷新入口与固定宽度歌曲条目；每区固定高度显示 3 行，超出纵向滚动。</li>
+  <li>三个分区（每日推荐 / 专属雷达 / 猜你喜欢）各自渲染标题、刷新入口与固定宽度歌曲条目；每区固定高度显示 3 行，超出纵向滚动。每日推荐的分区标题与歌单卡片通过 <code>dailyPlaylistName</code> 补当前账号昵称前缀，其他分区标题保持上游 / 常量值。</li>
   <li>页面先渲染三块骨架（封面 / 两行文字 / 歌单卡片占位），再按 <code>daily → radar → guess</code> 逐块异步填充；未完成的分区不阻塞其他内容。</li>
   <li>条目为封面图标 + 上方歌名、下方歌手，文字溢出走跑马灯；点击歌曲单曲播放，歌手 / 专辑按 <code>mid</code> 链接。</li>
   <li>未登录显示登录引导；分区空结果显示合法空状态；失败只显示该区错误与重试，不影响其他分区。分区刷新只请求该区。</li>

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { Song } from '../src/shared/types'
-import { appTitle, singerNames } from '../src/renderer/utils/format'
+import { appTitle, dailyPlaylistName, singerNames } from '../src/renderer/utils/format'
 
 function song(singers: Song['singers'], name = 'Song'): Song {
   return {
@@ -49,5 +49,23 @@ describe('appTitle', () => {
 
   it('歌手为空时只显示歌名', () => {
     expect(appTitle(song([], '晴天'))).toBe('晴天 · Lychee Player')
+  })
+})
+
+describe('dailyPlaylistName', () => {
+  it('为上游日推歌单名补上昵称前缀', () => {
+    expect(dailyPlaylistName('的今日私享', '张三')).toBe('张三的今日私享')
+  })
+
+  it('昵称为空时保持原名', () => {
+    expect(dailyPlaylistName('的今日私享', '  ')).toBe('的今日私享')
+  })
+
+  it('普通歌单名不加前缀', () => {
+    expect(dailyPlaylistName('华语流行', '张三')).toBe('华语流行')
+  })
+
+  it('已带昵称的歌单名不重复添加', () => {
+    expect(dailyPlaylistName('张三的今日私享', '张三')).toBe('张三的今日私享')
   })
 })

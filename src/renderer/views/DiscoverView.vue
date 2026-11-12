@@ -10,7 +10,7 @@ import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { usePlayerStore } from '../stores/player'
 import { useRecommendStore } from '../stores/recommend'
-import { singerNames, songCover } from '../utils/format'
+import { dailyPlaylistName, singerNames, songCover } from '../utils/format'
 
 const auth = useAuthStore()
 const recommend = useRecommendStore()
@@ -19,6 +19,17 @@ const router = useRouter()
 const toast = useToast()
 
 const sections = computed(() => recommend.feed.sections)
+const nickname = computed(() => auth.profile?.nickname ?? '')
+
+function sectionTitle(section: RecommendSection): string {
+  return section.id === 'daily'
+    ? dailyPlaylistName(section.title, nickname.value)
+    : section.title
+}
+
+function playlistTitle(name: string): string {
+  return dailyPlaylistName(name, nickname.value)
+}
 
 function isPlaceholder(section: RecommendSection): boolean {
   return section.refreshedAtMs === 0
@@ -75,12 +86,12 @@ onBeforeUnmount(() => recommend.cancel())
     <template v-else>
       <section v-for="section in sections" :key="section.id" class="discover-section">
         <div class="section-title">
-          <span>{{ section.title }}</span>
+          <span>{{ sectionTitle(section) }}</span>
           <span class="discover-actions">
             <span v-if="!isPlaceholder(section)" class="count">{{ section.songs.length }} 首</span>
             <button
               class="icon-btn"
-              :title="`刷新${section.title}`"
+              :title="`刷新${sectionTitle(section)}`"
               :disabled="recommend.loading || recommend.loadingIds[section.id]"
               @click="refreshSection(section.id)"
             >
@@ -136,7 +147,7 @@ onBeforeUnmount(() => recommend.cancel())
               @click="router.push(`/playlist/${playlist.id}`)"
             >
               <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="26" />
-              <div class="card-name">{{ playlist.name }}</div>
+              <div class="card-name">{{ playlistTitle(playlist.name) }}</div>
               <div class="card-sub">{{ playlist.songCount }} 首歌曲</div>
             </button>
           </div>

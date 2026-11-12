@@ -3450,7 +3450,9 @@ button:focus-visible,
 .discover-playlists {
   display: flex;
   gap: 12px;
-  margin-top: 10px;
+  /* 预留卡片 hover 上移的 2px，避免顶部边框被滚动容器裁掉。 */
+  margin-top: 6px;
+  padding-top: 4px;
   overflow-x: auto;
 }
 

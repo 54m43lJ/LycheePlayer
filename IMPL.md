@@ -232,14 +232,14 @@
 
 ### 3.6 滚动容器的 overflow 会裁剪向外绘制的键盘焦点环
 
-**问题描述**：默认焦点环绘制在元素边框之外。发现页的 `.discover-strip` / `.discover-playlists` 使用 `overflow-x: auto`，侧栏 `.nav` 使用 `overflow-x: hidden` + `overflow-y: auto`；当焦点环超出容器内容区时，超出部分被容器裁掉，表现为 30 首歌曲条目顶部、每日 30 首歌单卡片顶部与导航按钮左侧的描边缺失。只调整某一个容器的 padding 无法覆盖所有滚动场景，且会改变既有间距。
+**问题描述**：默认焦点环绘制在元素边框之外。发现页的 `.discover-strip` / `.discover-playlists` 使用 `overflow-x: auto`，侧栏 `.nav` 使用 `overflow-x: hidden` + `overflow-y: auto`；当焦点环超出容器内容区时，超出部分被容器裁掉，表现为 30 首歌曲条目顶部、每日 30 首歌单卡片顶部与导航按钮左侧的描边缺失。焦点环可能出现在任意可聚焦元素上，逐个调整容器 padding 无法覆盖所有滚动场景，且会改变既有间距。
 
 **解决方法**：
 
 - 为 `a`、`button`、`[role="button"]` 与 `[tabindex]` 的 `:focus-visible` 增加统一焦点环：`outline: 2px solid var(--accent-strong)`，并用 `outline-offset: -2px` 向内收 2px。
 - 焦点环完全落在元素边框盒内，父级滚动容器的 `overflow` 不再影响描边；元素自身的圆角仍由 `outline` 跟随。
 - 输入框、文本域与滑杆继续使用各自已有的聚焦样式，不叠加全局焦点环。
-- 不修改 `.nav`、`.discover-strip`、`.discover-playlists` 的 padding 或滚动行为。
+- 不取消滚动容器的 `overflow`，滚动行为保持不变；`overflow` 只影响向外绘制的描边，焦点环内收后不再受其影响。
 
 **修订建议**：
 
@@ -251,3 +251,43 @@
 | `USER.html` | §5.2.8 页面结构 · 发现（`#u5-2-8`） | 不动 | 已由 §2 的共用约定覆盖，不再逐页描述键盘焦点。 |
 | `README.md` | §2 用户交互 | 不动 | 键盘焦点是通用交互细节，不作为首页能力条目重复列出。 |
 | `ABOUT.html` | 用户交互 | 不动 | 与 README 同步保持现状。 |
+
+### 3.7 发现页歌单卡片 hover 上移后被滚动容器裁掉顶边
+
+**问题描述**：`.card:hover` 使用 `transform: translateY(-2px)` 制造上浮反馈，卡片本身不参与布局重排。`.discover-playlists` 用 `overflow-x: auto` 提供横向滚动，且顶部没有内边距；卡片上移 2px 后，顶部 1px 边框与上浮后的背景落到滚动容器裁剪区之外，表现为悬停时顶边消失。3.6 的焦点环内收只能解决键盘描边，无法覆盖 hover 位移。
+
+**解决方法**：
+
+- 在 `.discover-playlists` 预留顶部空间：`padding-top: 4px`，同时把 `margin-top` 从 `10px` 收到 `6px`，卡片与上方内容的整体间距仍为 10px。
+- 4px 内边距大于 2px 的上移距离，hover 后卡片顶边仍留 2px 余量；容器继续使用 `overflow-x: auto`。
+- 不取消 `.card:hover` 的上浮效果，也不改卡片边框颜色与阴影。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 补 `.discover-playlists` 的 `margin-top: 6px` 与 `padding-top: 4px`，说明为 `.card:hover` 的 `translateY(-2px)` 预留空间。 |
+| `USER.html` | §5.2.8 页面结构 · 发现（`#u5-2-8`） | 不动 | 悬停上浮属于样式细节，由 §4.49 记录；页面结构描述不重复。 |
+| `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 不动 | 组件结构不变，只由样式文件提供裁剪余量。 |
+
+### 3.8 上游日推歌单名缺少账号昵称前缀
+
+**问题描述**：每日推荐取到的动态歌单 `PlaylistMeta.name` 是上游原值“的今日私享”，前面缺少“某某”的昵称；发现页分区标题、歌单卡片、歌单详情、最近歌单与我的歌单卡片都会直接显示这个原值。上游没有在歌单元数据里提供昵称，昵称由登录资料接口（`user.getProfile`）单独返回，因此不能只改上游映射。
+
+**解决方法**：
+
+- 在 `utils/format.ts` 增加 `dailyPlaylistName(name, nickname)`：仅当名称以“的今日私享”开头且昵称非空时，拼成“昵称 + 名称”；昵称为空、普通歌单名、已经带昵称的名称都原样返回。
+- 只在展示层调用：发现页分区标题与歌单卡片、歌单详情标题与删除确认、最近歌单、我的歌单卡片；不修改主进程缓存和 `PlaylistMeta`，避免把昵称写进持久化歌单数据。
+- 昵称取 `auth.profile.nickname`；资料未加载时先显示原名，加载后由 Vue 响应式更新。
+- 增加 `test/format.test.ts` 用例，覆盖补前缀、空昵称、普通歌单名与已带昵称四种情况。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §2 CONVENTIONS（`#u2`） | 改 | 增加“日推歌单名称”约定：显示为“当前账号昵称 + 的今日私享”，昵称未加载时先显示原名。 |
+| `CORE.html` | §4.32 `utils/format.ts`（`#c4-32`） | 改 | 增加 `dailyPlaylistName(name, nickname)` 签名与规则。 |
+| `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 改 | 分区标题与歌单卡片统一走 `dailyPlaylistName`。 |
+| `CORE.html` | §4.46 `PlaylistView.vue`（`#c4-46`） | 改 | 歌单头标题与删除确认使用同一展示名。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） / §4.45 `LibraryView.vue`（`#c4-45`） | 改 | 最近歌单与我的歌单卡片也使用同一展示名。 |
+| `USER.html` | §5.2.8 页面结构（`#u5-2-8`） | 不动 | 已由 §2 共用约定覆盖，不逐页重复。 |
