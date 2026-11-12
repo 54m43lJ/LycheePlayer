@@ -3150,8 +3150,8 @@ a {
   width: 32px;
   height: 32px;
   border-radius: 9px;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
+  color: var(--muted);
+  background: transparent;
   transition:
     color 0.16s ease,
     background 0.16s ease;
