@@ -52,13 +52,23 @@ function normalizeAvatar(value: string | undefined): string {
   return value.startsWith('http://') ? `https://${value.slice(7)}` : value
 }
 
+/**
+ * 上游评论正文的换行格式不统一：部分记录直接返回真实换行，
+ * 另一些记录返回字面量 “\n” / “\r\n” / “\r”。统一归一化为真实换行，
+ * 交给评论区的 white-space: pre-wrap 渲染；不解析 HTML。
+ */
+function normalizeCommentContent(value: string | undefined): string {
+  if (!value) return ''
+  return value.replace(/\r\n?/g, '\n').replace(/\\r\\n|\\n|\\r/g, '\n')
+}
+
 function toComment(raw: RawComment): Comment {
   const seconds = Number(raw.PubTime ?? 0)
   return {
     id: String(raw.CmId ?? ''),
     nickname: raw.Nick ?? '',
     avatarUrl: normalizeAvatar(raw.Avatar),
-    content: raw.Content ?? '',
+    content: normalizeCommentContent(raw.Content),
     likedCount: Number(raw.PraiseNum ?? 0),
     replyCount: Number(raw.ReplyCnt ?? 0),
     createdAtMs: seconds > 0 ? (seconds > 1_000_000_000_000 ? seconds : seconds * 1000) : 0,

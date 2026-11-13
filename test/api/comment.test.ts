@@ -57,6 +57,38 @@ describe('api/comment', () => {
     expect(latest.comments.map((comment) => comment.id)).toEqual(['b', 'a'])
   })
 
+  it('normalizes both real and literal escaped newlines in comment content', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: 'A', Content: '第一行\\n第二行', PubTime: 100 },
+                { CmId: 'b', Nick: 'B', Content: '第一行\\r\\n第二行', PubTime: 90 },
+                { CmId: 'c', Nick: 'C', Content: '第一行\\r第二行', PubTime: 80 },
+                { CmId: 'd', Nick: 'D', Content: '真实\r\n换行', PubTime: 70 }
+              ],
+              Total: 4,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    )
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', '')
+    expect(page.comments.map((comment) => comment.content)).toEqual([
+      '第一行\n第二行',
+      '第一行\n第二行',
+      '第一行\n第二行',
+      '真实\n换行'
+    ])
+  })
+
   it('maps IsPraised / IsLiked to liked and reads comments with the login cookie', async () => {
     let cookie = ''
     let uin = 0

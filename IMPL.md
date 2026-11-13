@@ -403,3 +403,24 @@
 | `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 增加 `.discover-top` 左对齐 flex、固定卡片尺寸与骨架间距覆盖。 |
 | `README.md` | §2 用户交互 · 发现行 | 改 | 同步首行两个伪歌单卡片与移除整体换一批。 |
 | `ABOUT.html` | 用户交互 · 发现行 | 改 | 与 README 同步。 |
+
+### 3.13 评论正文混用真实换行与字面量 `\n`
+
+**问题描述**：部分多行评论能正常换行，另一些直接显示字面量 `\n`。检查后确认不是渲染层转义问题：评论区使用 Vue 文本插值并按纯文本渲染，CSS 的 `white-space: pre-wrap` 会把真实换行显示出来；但上游 `Content` 字段不统一，有的记录返回真实换行，有的返回字面量 `\n` / `\r\n` / `\r` 两个字符，后者自然只会显示为反斜杠加 n。同一首歌的不同评论、甚至不同页之间都可能混用两种格式。
+
+**解决方法**：
+
+- 在 `src/main/api/comment.ts` 新增 `normalizeCommentContent()`：先把真实 `\r\n` / `\r` 统一为 `\n`，再把字面量 `\r\n` / `\n` / `\r` 统一替换为真实换行，最后写入 `Comment.content`。
+- 渲染层继续保持纯文本插值与 `white-space: pre-wrap`，不引入 HTML / Markdown 解析，避免上游内容被当作标签执行。
+- 扩展 `test/api/comment.test.ts`，覆盖字面量 `\n`、字面量 `\r\n`、字面量 `\r` 与真实 CRLF 四种输入，统一映射为真实换行。
+- 明确这是上游数据格式不统一，不是渲染逃逸逻辑错误；评论区只需在数据映射边界做归一化。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 1 项“评论里的 `\n` 字样” | 改 | 行尾追加 ` [已解决]`。 |
+| `USER.html` | §5.2.5 歌词与评论（`#u5-2-5`） | 改 | 说明真实换行与字面量 `\n` / `\r\n` / `\r` 都统一显示为换行，正文不解析 HTML。 |
+| `CORE.html` | §4.15 `src/main/api/comment.ts`（`#c4-15`） | 改 | 记录 `normalizeCommentContent()` 的归一化规则与渲染层 `white-space: pre-wrap` 约束。 |
+| `PROVIDER.html` | §2 CONVENTIONS · 评论正文换行（`#p2`） | 增 | 说明上游 `Content` 混用真实换行与字面量转义，应用在映射时统一为真实换行。 |
+| `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | 在 `QqCommentList` 字段说明中补充 `Content` 换行归一化。 |
