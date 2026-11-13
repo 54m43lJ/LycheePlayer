@@ -1175,7 +1175,7 @@ export function destroyTray(): void;
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
   <li>播放队列头部 <code>.lyrics-head-actions</code> 并排放置“清空播放队列”与“关闭播放队列”两个图标按钮；清空按钮使用 <code>trash</code> 图标，队列为空时 <code>disabled</code> 并沿用 <code>.icon-btn:disabled</code> 灰化，滚动或筛选都不影响入口。列表底部不再渲染 <code>.queue-footer</code> 或文字按钮；<code>player.clearQueue()</code> 仍只清空当前曲之后的队列。</li>
   <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
-  <li>主界面拖拽手势仅 ≤900px 启用：<code>pointerdown</code> 在宽屏直接返回；触屏 <code>pointerup</code> 若存在非折叠选区则跳过侧栏切换，长按选择文本优先；<code>pointercancel</code> 清理拖拽起点。窄屏非触屏由 §4.49 的 CSS 禁用文本选择。</li>
+  <li>主界面拖拽手势仅 ≤900px 启用：<code>pointerdown</code> 在宽屏直接返回；触屏 <code>pointerup</code> 若存在非折叠选区则跳过侧栏切换，长按选择文本优先；<code>pointercancel</code> 清理拖拽起点。窄屏非触屏由 §4.49 的 CSS 禁用文本选择。<code>ui.lyricsOpen</code> 为真时 <code>onPointerDown</code> / <code>onPointerUp</code> 提前返回并清空拖拽起点，横向手势完全交给 <a href="#c4-72">LyricsOverlay</a> 的分页处理，避免同时唤起侧栏；左边缘 revealer 是按钮，仍可通过点击打开侧栏。</li>
   <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单 / 播放历史”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。“播放历史”位于最近歌单子条目之后，使用 <code>history</code> 图标并链接到 <code>/history</code>。</li>
   <li>挂载时在 <code>auth.refresh()</code> 之后调用 <code>history.load()</code> 读取当前账号的本机历史；监听 <code>auth.musicid</code>，登录 / 退出 / 切换账号时重新加载对应作用域的记录，不跨账号复用内存中的列表。</li>
   <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），每日推荐歌单名通过 <code>dailyPlaylistName</code> 补昵称前缀后显示，点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
@@ -2254,6 +2254,7 @@ interface DownloadStore {
   <li>左上角关闭按钮调用 <code>ui.closeLyrics()</code>，不执行 <code>router.back()</code>；再次点击播放条封面、Esc、路由变化与侧栏导航同样关闭弹出层。</li>
   <li>宽屏布局为左右两列各 50%，中间保留分隔线；组合 <a href="#c4-41">LyricsPanel</a> 与 <a href="#c4-42">CommentsPanel</a>，不渲染独立标题行。</li>
   <li>窄屏分页由组件内 <code>activePage: 'lyrics' | 'comments'</code> 驱动，默认歌词；<code>narrow</code> 读取 <code>matchMedia('(max-width: 900px)')</code> 并在窗口尺寸变化时更新。轨道用 <code>translateX(calc(-100% + dragOffset))</code> 平移到评论页，底部两个 <code>role="tab"</code> 胶囊按钮表示当前页，点击直接切换。非当前页同时设置 <code>inert</code> 与 <code>aria-hidden</code>，避免键盘或读屏访问屏幕外内容。</li>
+  <li>弹出层打开期间横向手势独占：<code>App.vue</code> 的窄屏侧栏拖拽在 <code>ui.lyricsOpen</code> 时直接跳过，分页无需让出左侧区域，也不会误唤起抽屉；左边缘 revealer 点击仍保留。</li>
   <li>横向拖动支持触屏、鼠标与触控笔：主指针按下（鼠标仅左键）后记录起点，起点在输入框、按钮、链接或 <code>[role="button"]</code> 上时忽略。方向仲裁由 <a href="#c4-88">utils/swipe::resolveSwipeIntent</a> 完成：纵向位移先超过 10px 且不弱于横向时放弃本次切页，交给原生滚动或歌词纵向拖拽；横向超过 10px 且明确大于纵向时锁定横向并捕获指针，此后只按横向位移计算，完全忽略后续纵向位移。松手位移超过 <code>max(40, min(100, 宽度 × 0.15))</code> 才切页；纵向手势保持原生滚动。拖动时 <code>dragging</code> 类关闭过渡，松手 / 取消 / 离开时复位偏移；拖动结束用 <code>suppressClick</code> 吞掉随后 click，避免误触歌词定位或链接。</li>
   <li>由 <a href="#c4-23">App.vue</a> 在内容区之后按 <code>ui.lyricsOpen</code> 渲染，覆盖内容区但不覆盖侧栏与播放条；<code>/lyrics</code> 不再存在。</li>
 </ul>
@@ -2793,7 +2794,7 @@ app::requestSingleInstanceLock()
   <li>歌词加载由 <code>useLyrics</code> 监听当前歌曲，规则见 <a href="#c4-34">§4.34</a>；歌词请求可返回 QRC，解密与逐字解析见 <a href="#c4-64">§4.64</a>，无 QRC 时回退 LRC 整行高亮。</li>
   <li>评论默认只读取最新评论、固定每页 25 条，未登录匿名、登录后携带 Cookie 读取点赞状态；右上刷新只重载评论。评论读取与分页见 <a href="#c4-15">§4.15</a>，接口协议见 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。</li>
   <li>点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a> / <a href="PROVIDER.html#p4-2">PROVIDER §4.2</a>。发表评论成功后重新拉取最新列表，失败保留草稿；协议见 <a href="#c4-15">§4.15</a> / <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a>。歌词 / 评论随 <code>ui.lyricsOpen</code> 与当前歌曲加载 / 卸载。</li>
-  <li>≤900px 的左右滑动只切换 <code>LyricsOverlay</code> 内部的显示页，不卸载歌词或评论面板、不重置滚动位置，也不触发新的歌词 / 评论请求；两个胶囊指示点与滑动共用同一 <code>activePage</code> 状态。</li>
+  <li>≤900px 的左右滑动只切换 <code>LyricsOverlay</code> 内部的显示页，不卸载歌词或评论面板、不重置滚动位置，也不触发新的歌词 / 评论请求；两个胶囊指示点与滑动共用同一 <code>activePage</code> 状态。弹出层打开时侧栏拖拽被跳过，因此分页手势与抽屉唤起不会重叠。</li>
 </ul>
 
 <h3 id="c5-10">5.10 歌单加载与整份缓存</h3>
