@@ -9,7 +9,6 @@ import { useHistoryStore } from '../stores/history'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { singerNames } from '../utils/format'
-import { PLAY_HISTORY_LIMIT } from '@shared/constants'
 
 const history = useHistoryStore()
 const player = usePlayerStore()
@@ -132,7 +131,7 @@ onMounted(() => {
     <div v-else class="empty">
       <div class="empty-icon"><AppIcon name="history" :size="26" /></div>
       <h3>还没有播放历史</h3>
-      <p>歌曲开始播放后会自动记录在这里，最多保留最近 {{ PLAY_HISTORY_LIMIT }} 首。</p>
+      <p>播放歌曲后会显示在这里。</p>
     </div>
 
     <ConfirmDialog

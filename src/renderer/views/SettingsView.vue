@@ -344,7 +344,7 @@ onBeforeUnmount(() => {
           <div class="panel-body">
             <div class="setting-row">
               <div>
-                <div class="setting-name">播放缓存（不影响已下载）</div>
+                <div class="setting-name">播放缓存</div>
                 <div class="setting-desc">
                   {{ storage ? `${formatBytes(storage.cacheBytes ?? 0)} · ${storage.cacheFiles ?? 0} 个文件` : '统计中' }}
                 </div>

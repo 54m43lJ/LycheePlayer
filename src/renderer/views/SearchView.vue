@@ -273,7 +273,6 @@ function changePage(delta: number): void {
           >
             <div class="avatar-circle">{{ singer.name.slice(0, 1) }}</div>
             <div class="card-name">{{ singer.name }}</div>
-            <div class="card-sub">查看歌手信息与歌曲</div>
           </button>
         </div>
         <div v-else class="empty">
@@ -288,7 +287,6 @@ function changePage(delta: number): void {
           <button v-for="album in albums" :key="album.mid" class="card" @click="openAlbum(album.mid)">
             <CoverArt :src="albumCover(album.mid)" image-class="card-cover" :icon-size="30" />
             <div class="card-name">{{ album.name }}</div>
-            <div class="card-sub">查看专辑信息与歌曲</div>
           </button>
         </div>
         <div v-else class="empty">

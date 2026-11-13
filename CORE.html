@@ -1600,7 +1600,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。在线搜索框不显示占位文字，用 <code>aria-label="搜索歌曲、歌手、专辑或歌单"</code> 保留无障碍名称。歌曲表提供单曲播放与“下一首播放”；下载入口统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>。</li>
-  <li>歌手 / 专辑卡片点击进入 <code>/artist/:mid</code> / <code>/album/:mid</code>，不再以“搜索该歌手 / 专辑的单曲”作为点击行为；MV 卡片使用真实 <code>mv.search</code> 结果进入 <code>/mv/:id</code>。</li>
+  <li>歌手 / 专辑卡片点击进入 <code>/artist/:mid</code> / <code>/album/:mid</code>，不再以“搜索该歌手 / 专辑的单曲”作为点击行为；MV 卡片使用真实 <code>mv.search</code> 结果进入 <code>/mv/:id</code>。歌手 / 专辑卡片只显示名称，不用副标题解释点击行为。</li>
   <li>歌单结果卡片外层改为 <code>div[role="button"]</code>，卡片中心叠放 <a href="#c4-89">CardPlayButton</a>；播放按钮 <code>@click.stop</code> 调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a>，直接播放整个歌单而不进入详情，卡片其余区域仍跳转 <code>/playlist/:id</code>。</li>
 </ul>
 
@@ -1654,7 +1654,7 @@ const emit = defineEmits&lt;{
   <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
   <li>账号区展示登录态、到期时间、续期与退出登录；窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
-  <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。</li>
+  <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。“播放缓存”标题也不再附加“不影响已下载”等括号说明。</li>
 </ul>
 
 <h3 id="c4-49">4.49 src/renderer/styles/main.css <a class="backlink" href="#c1">文件树</a></h3>
@@ -2491,7 +2491,7 @@ interface HistoryStore {
 </code></pre>
 <ul class="note">
   <li>页头只显示标题与“播放全部”“清空历史”，不显示记录数或容量说明；记录为空时“播放全部”和“清空历史”都禁用。清空使用应用内 <a href="#c4-81">ConfirmDialog</a> 危险态，确认后调用 <code>history.clear()</code>。</li>
-  <li>搜索只过滤 <code>history.entries</code>，按歌名 / 歌手 / 专辑做不区分大小写的本地匹配，不发上游请求；输入框不显示占位文字，用 <code>aria-label="搜索播放历史"</code> 保留无障碍名称。无关键词时保留全部记录，结果为空时区分“还没有播放历史”和“没有匹配的播放历史”。</li>
+  <li>搜索只过滤 <code>history.entries</code>，按歌名 / 歌手 / 专辑做不区分大小写的本地匹配，不发上游请求；输入框不显示占位文字，用 <code>aria-label="搜索播放历史"</code> 保留无障碍名称。无关键词时保留全部记录，结果为空时区分“还没有播放历史”和“没有匹配的播放历史”；空状态只提示“播放歌曲后会显示在这里”，不说明容量或保留策略。</li>
   <li>列表复用 <a href="#c4-39">SongTable</a>，支持播放、下一首播放、收藏与共用下载入口；双击 / 单曲播放以当前过滤结果为新的播放顺序并替换队列。页面挂载时加载一次收藏状态，歌曲记录顺序不因收藏状态变化而改变。</li>
   <li>播放历史只记录本机播放，不读取账号云端历史，也不提供跨设备同步。</li>
 </ul>
