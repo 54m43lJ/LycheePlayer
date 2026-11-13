@@ -3,10 +3,12 @@ import { ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { PlaylistMeta } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
+import CardPlayButton from '../components/CardPlayButton.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
 import PlaylistEditDialog from '../components/PlaylistEditDialog.vue'
 import { describeError, unwrap } from '../api'
+import { usePlaylistPlay } from '../composables/playlist-play'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
@@ -16,6 +18,7 @@ const router = useRouter()
 const auth = useAuthStore()
 const edit = usePlaylistEditStore()
 const toast = useToast()
+const { playingId, playPlaylist } = usePlaylistPlay()
 
 const playlists = ref<PlaylistMeta[]>([])
 const loading = ref(false)
@@ -179,7 +182,13 @@ watch(
             @click="router.push(`/playlist/${playlist.id}`)"
             @keydown.enter="router.push(`/playlist/${playlist.id}`)"
           >
-            <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="30" />
+            <div class="card-cover-wrap">
+              <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="30" />
+              <CardPlayButton
+                :loading="playingId === playlist.id"
+                @play="playPlaylist(playlist)"
+              />
+            </div>
             <div class="card-name">
               {{
                 playlist.kind === 'favorites'

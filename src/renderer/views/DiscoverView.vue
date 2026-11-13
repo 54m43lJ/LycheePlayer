@@ -3,9 +3,11 @@ import { computed, onBeforeUnmount, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { RecommendSection, Song } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
+import CardPlayButton from '../components/CardPlayButton.vue'
 import CoverArt from '../components/CoverArt.vue'
 import DiscoverSkeleton from '../components/DiscoverSkeleton.vue'
 import MarqueeText from '../components/MarqueeText.vue'
+import { usePlaylistPlay } from '../composables/playlist-play'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { usePlayerStore } from '../stores/player'
@@ -17,6 +19,7 @@ const recommend = useRecommendStore()
 const player = usePlayerStore()
 const router = useRouter()
 const toast = useToast()
+const { playingId, playPlaylist } = usePlaylistPlay()
 
 const sections = computed(() => recommend.feed.sections)
 const topSections = computed(() => {
@@ -132,34 +135,52 @@ onBeforeUnmount(() => {
           </div>
 
           <template v-else>
-            <button
+            <div
               v-if="section.id === 'daily' && section.playlists.length > 0"
               class="card discover-playlist"
+              role="button"
+              tabindex="0"
               @click="router.push(`/playlist/${section.playlists[0].id}`)"
+              @keydown.enter="router.push(`/playlist/${section.playlists[0].id}`)"
             >
-              <CoverArt
-                :src="section.playlists[0].coverUrl"
-                image-class="card-cover"
-                :icon-size="26"
-              />
+              <div class="card-cover-wrap">
+                <CoverArt
+                  :src="section.playlists[0].coverUrl"
+                  image-class="card-cover"
+                  :icon-size="26"
+                />
+                <CardPlayButton
+                  :loading="playingId === section.playlists[0].id"
+                  @play="playPlaylist(section.playlists[0])"
+                />
+              </div>
               <div class="card-name">{{ playlistTitle(section.playlists[0].name) }}</div>
               <div class="card-sub">{{ section.playlists[0].songCount }} 首歌曲</div>
-            </button>
+            </div>
 
-            <button
+            <div
               v-else-if="section.id === 'guess' && section.songs.length > 0"
               class="card discover-playlist"
+              role="button"
+              tabindex="0"
               title="开始播放猜你喜欢连续推荐"
               @click="startGuessRadio(section)"
+              @keydown.enter="startGuessRadio(section)"
             >
-              <CoverArt
-                :src="songCover(section.songs[0], 300)"
-                image-class="card-cover"
-                :icon-size="26"
-              />
+              <div class="card-cover-wrap">
+                <CoverArt
+                  :src="songCover(section.songs[0], 300)"
+                  image-class="card-cover"
+                  :icon-size="26"
+                />
+                <CardPlayButton
+                  label="开始播放猜你喜欢"
+                  @play="startGuessRadio(section)"
+                />
+              </div>
               <div class="card-name">{{ sectionTitle(section) }}</div>
               <div class="card-sub">连续推荐 · 顺序播放</div>
-            </button>
+            </div>
 
             <div v-else class="empty compact">
               <div class="empty-icon"><AppIcon name="compass" :size="22" /></div>

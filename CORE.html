@@ -105,11 +105,13 @@
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
 │       │   ├── <a href="#c4-35">toast.ts</a>                  Toast 队列
 │       │   ├── <a href="#c4-84">download-action.ts</a>         下载按钮共用行为
+│       │   ├── <a href="#c4-90">playlist-play.ts</a>           歌单卡片直接播放行为
 │       │   ├── <a href="#c4-65">availability.ts</a>           可用性探测调度
 │       │   └── <a href="#c4-78">revealer-touch.ts</a>          Revealer 触屏手势
 │       ├── components/
 │       │   ├── <a href="#c4-36">AppIcon.vue</a>               图标集
 │       │   ├── <a href="#c4-37">CoverArt.vue</a>              封面与占位
+│       │   ├── <a href="#c4-89">CardPlayButton.vue</a>        歌单卡片居中播放按钮
 │       │   ├── <a href="#c4-38">MarqueeText.vue</a>           超宽文本跑马灯
 │       │   ├── <a href="#c4-39">SongTable.vue</a>             歌曲列表
 │       │   ├── <a href="#c4-40">PlayerBar.vue</a>             播放条
@@ -144,6 +146,7 @@
 │   ├── player-store.test.ts                  播放顺序、队列补齐与快照保留
 │   ├── history-store.test.ts                 播放历史去重、上限与账号隔离
 │   ├── swipe.test.ts                         横向拖动与纵向手势仲裁
+│   ├── playlist-play.test.ts                 歌单卡片缓存 / 首页起播
 │   ├── playlist-store.test.ts                分页恢复、整份缓存与队列快照时机
 │   ├── queue-snapshot.test.ts                队列快照过滤
 │   ├── startup-flags.test.ts                 启动参数优先级
@@ -1595,6 +1598,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”；下载入口统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>。</li>
   <li>歌手 / 专辑卡片点击进入 <code>/artist/:mid</code> / <code>/album/:mid</code>，不再以“搜索该歌手 / 专辑的单曲”作为点击行为；MV 卡片使用真实 <code>mv.search</code> 结果进入 <code>/mv/:id</code>。</li>
+  <li>歌单结果卡片外层改为 <code>div[role="button"]</code>，卡片中心叠放 <a href="#c4-89">CardPlayButton</a>；播放按钮 <code>@click.stop</code> 调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a>，直接播放整个歌单而不进入详情，卡片其余区域仍跳转 <code>/playlist/:id</code>。</li>
 </ul>
 
 <h3 id="c4-45">4.45 src/renderer/views/LibraryView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1605,6 +1609,7 @@ const emit = defineEmits&lt;{
   <li>监听 <code>playlist-edit.favoriteVersion</code>，收藏成功后重新拉取歌单列表，更新“我喜欢”卡片数量；歌单卡片提供改名 / 删除 / 新建菜单。</li>
   <li>新建 / 改名 / 删除歌单走 <code>playlist-edit</code> 的真实写入：创建与改名复用 <code>PlaylistEditDialog</code>，删除使用 <a href="#c4-81">ConfirmDialog</a> 的危险态按钮确认；成功后刷新“我的歌单”卡片并清除对应缓存，失败保留原状态并提示。</li>
   <li>歌单卡片名称通过 <code>dailyPlaylistName</code> 展示，每日推荐歌单同样补当前昵称前缀；其余歌单名保持原值。</li>
+  <li>每张歌单卡片封面中心叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示；点击调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a> 直接播放整个歌单，不进入详情。播放按钮的 click / keydown 阻止冒泡，避免同时触发卡片跳转；加载期间显示 spinner 并禁用。</li>
 </ul>
 
 <h3 id="c4-46">4.46 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1655,6 +1660,7 @@ const emit = defineEmits&lt;{
   <li>主题 token 增 <code>--shadow-color</code>（深色 <code>var(--text)</code> 20%、浅色 14% 混色）与统一缩放后的 <code>--shadow-sm: 0 2px 6px</code>、<code>--shadow: 0 5px 16px</code>、<code>--shadow-lg: 0 7px 22px</code>、<code>--shadow-up: 0 -4px 12px</code>、<code>--shadow-left: -8px 0 24px</code>、<code>--shadow-right: 8px 0 24px</code>、<code>--shadow-handle: 3px 0 10px</code>。</li>
   <li>删除空状态占位封面的虚线边框；品牌、按钮、封面 / 头像、弹层、面板、Toast、模态框、抽屉与拖拽把手等全部投影改用上述 fg 阴影 token。焦点环（<code>0 0 0 Npx</code>）、输入框 inset 高光与遮罩纯背景不属于投影，保持独立。</li>
   <li>键盘焦点环由 <code>a</code> / <code>button</code> / <code>[role="button"]</code> / <code>[tabindex]</code> 的 <code>:focus-visible</code> 统一提供：<code>outline: 2px solid var(--accent-strong)</code> 与 <code>outline-offset: -2px</code> 向内绘制，避免 <code>.nav</code>、<code>.discover-strip</code>、<code>.discover-playlists</code> 等滚动容器的 <code>overflow</code> 裁剪描边；输入框、文本域与滑杆继续使用各自的聚焦样式。</li>
+  <li>歌单卡片封面使用 <code>.card-cover-wrap</code> 定位，<code>.card-play</code> 绝对居中为 44px 圆形按钮，默认 <code>opacity: 0</code> + <code>pointer-events: none</code>，卡片 <code>:hover</code> 或 <code>:focus-within</code> 时显示并恢复点击；加载态 spinner 使用 <code>--on-accent</code> 描边。触摸设备不 hover 时按钮不拦截首次卡片点击，键盘聚焦仍可显示。</li>
   <li><code>.discover-playlists</code> 使用 <code>margin-top: 6px</code> + <code>padding-top: 4px</code>，为 <code>.card:hover</code> 的 <code>translateY(-2px)</code> 上浮预留空间，卡片顶部边框与背景不被 <code>overflow-x: auto</code> 裁剪；与上方内容的整体间距仍为 10px。</li>
   <li><code>.catalog-desc-block</code> 限宽 900px 并承担底部间距；块内 <code>.catalog-desc</code> 取消自身宽度与外边距；<code>.catalog-desc.clamped</code> 为 4 行 <code>-webkit-line-clamp</code>；<code>.catalog-desc-toggle</code> 使用 accent 文字、透明背景，悬停加下划线。歌手页顶部 <code>.catalog-tabs</code> 与专辑排序 <code>.album-sort-tabs</code> 复用 <code>.tabs</code>；专辑筛选 <code>.album-filters</code> 复用 <code>.chip</code>，选中态使用 accent 软填充；专辑网格复用 <code>.card-grid</code>，卡片 <code>.album-card</code> 可点击进入专辑页。</li>
   <li>组件样式与响应式断点也在同一文件维护。</li>
@@ -2182,6 +2188,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 </code></pre>
 <ul class="note">
   <li><code>topSections</code> 固定为猜你喜欢与每日推荐（按此顺序，猜你喜欢在左），渲染在 <code>.discover-top</code> 的第一行，两张卡片保持原 150px 尺寸；两张伪歌单卡片都不渲染分区标题、计数或刷新按钮。每日推荐卡片取 <code>section.playlists[0]</code>，通过 <code>dailyPlaylistName</code> 补昵称前缀并跳转歌单详情；猜你喜欢卡片取 <code>section.songs[0]</code> 作封面，点击调用 <code>player.startRadioQueue(section.songs)</code> 启动连续队列，不跳转歌单详情。</li>
+  <li>两张卡片封面中心均叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示。每日推荐卡片调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a> 直接播放整单；猜你喜欢卡片直接调用 <code>startRadioQueue(section.songs)</code>，复用连续队列的锁定顺序逻辑。播放按钮阻止冒泡，不触发卡片本身的跳转 / 起播行为。</li>
   <li><code>listSections</code> 为其余分区（当前仅专属雷达），保留 <code>section-title</code>、计数与单区刷新按钮，继续渲染固定宽度歌曲条目，每区固定高度显示 3 行，超出横向滚动。</li>
   <li>页面挂载后启动 60 秒定时器调用 <code>recommend.refreshDailyIfExpired()</code>，跨过上海 0 点后自动重取日推；卸载时清除定时器。页面不再提供整体“换一批”入口，专属雷达保留自己的单区刷新按钮，日推由自然日过期自动更新。</li>
   <li>页面先渲染三块骨架：首行两张歌单卡片占位，专属雷达渲染 30 条歌曲条目占位；再按 <code>daily → radar → guess</code> 逐块异步填充，未完成的分区不阻塞其他内容。</li>
@@ -2500,6 +2507,31 @@ export function resolveSwipeIntent(
   <li><code>vertical</code>：纵向位移超过阈值且不弱于横向，调用方应放弃本次切页，把后续手势留给纵向滚动 / 歌词拖拽；<code>horizontal</code>：横向位移超过阈值且明确大于纵向，调用方锁定横向后只取 <code>dx</code>；<code>pending</code>：两者都未越阈值，继续等待。</li>
   <li>锁定横向后不再调用本函数，后续纵向位移不参与分页；阈值与 <a href="#c4-72">LyricsOverlay</a> 的拖动判定共用，测试见 <code>test/swipe.test.ts</code>。</li>
   <li><code>SWIPE_CLICK_SUPPRESS_MS = 350</code>：拖动结束后在该时间窗内抑制 click，覆盖歌词行 seek 与评论内链接等延迟合成的 click；<code>LyricsOverlay</code> 的轨道捕获与 <a href="#c4-41">LyricsPanel</a> 的 seek 入口共用该窗口。</li>
+</ul>
+
+<h3 id="c4-89">4.89 src/renderer/components/CardPlayButton.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>interface Props {
+  loading?: boolean; // 默认 false
+  label?: string; // 默认“播放整个歌单”
+}
+
+emits: { play: [] };
+</code></pre>
+<ul class="note">
+  <li>歌单卡片封面上的居中圆形播放按钮，复用 <code>AppIcon</code> 的 <code>play</code> 图标与全局 <code>.spinner</code>；<code>title</code> / <code>aria-label</code> 在加载时显示“正在加载歌单”。</li>
+  <li>点击与 keydown 都阻止冒泡，避免触发外层歌单卡片的跳转；加载中设置 <code>disabled</code>，防止重复点击。样式由 <code>.card-play</code> 与卡片 <code>:hover</code> / <code>:focus-within</code> 控制，见 <a href="#c4-49">§4.49</a>。</li>
+</ul>
+
+<h3 id="c4-90">4.90 src/renderer/composables/playlist-play.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function usePlaylistPlay(): {
+  playingId: Ref&lt;string | null&gt;;
+  playPlaylist(target: Pick&lt;PlaylistMeta, 'id' | 'name'&gt;): Promise&lt;void&gt;;
+};
+</code></pre>
+<ul class="note">
+  <li>所有歌单卡片共用的直接播放入口：优先读取整份缓存，命中则用缓存歌曲立即起播；缓存缺失时读取第一页，避免等待完整快照。</li>
+  <li>起播调用 <code>player.startPlaylistPlayback(first, { kind: 'playlist', id })</code>，先用已读取的缓存 / 第一页调用 <code>player.appendPlaylistQueue(first, songs)</code> 补齐待播队列，再以 <code>playlist.beginQueueBuild()</code> 建立队列来源，并在后台 <code>playlist.load(id)</code>；完整快照就绪后由 store 的队列构建流程去重并替换为整单，失败时保留已起播歌曲。</li>
+  <li><code>playingId</code> 为模块级单例，同一时间只允许一个歌单进入加载流程，卡片按 id 显示 spinner；空歌单提示“这个歌单里还没有可播放的歌曲”，上游 / 缓存错误统一 Toast。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
@@ -3147,6 +3179,29 @@ views/HistoryView::startAt(index)
   <li>写入时机绑定“实际开始播放”而不是点击或选中：取流失败、加载被后续请求取代、暂停后继续都不会新增记录。</li>
   <li>播放历史按账号作用域隔离；启动、退出登录与切换账号时重新加载对应 key，未登录使用 <code>anonymous</code> 作用域，不跨账号复用内存列表。</li>
   <li>搜索、清空与播放全部都只作用于本机列表；清空不触发上游请求，也不影响下载、缓存与 <a href="#c4-29">播放器的上一首历史</a>。</li>
+</ul>
+
+<h3 id="c5-22">5.22 歌单卡片直接播放</h3>
+<pre><code>views/LibraryView / SearchView / DiscoverView::CardPlayButton@play
+└── composables/playlist-play::playPlaylist(target)
+    ├── 判断 playingId !== null → 忽略重复点击
+    ├── window.lychee.playlist.getCached(target.id)
+    │   └── ipc::handle('playlist.getCached')
+    │       └── api/playlist::getCachedPlaylist(target.id)
+    ├── 判断缓存为空 → window.lychee.playlist.get(target.id, { offset: 0 })
+    │   └── ipc::handle('playlist.get')
+    │       └── api/playlist::fetchPlaylistPage(target.id, 0)
+    ├── 判断无歌曲 → Toast“这个歌单里还没有可播放的歌曲”
+    ├── stores/player::startPlaylistPlayback(first, { kind: 'playlist', id })
+    ├── stores/playlist::beginQueueBuild()
+    └── stores/playlist::load(target.id)                    // 后台完整快照
+        └── 快照就绪 → stores/playlist::maybeFinalizeQueue()
+            └── stores/player::appendPlaylistQueue(current, fullSongs)
+</code></pre>
+<ul class="note">
+  <li>起播不等待完整快照：缓存命中时直接用缓存歌曲，否则用第一页 50 首；完整歌单在后台加载完成后替换为整单队列，当前曲与播放进度保持不变。</li>
+  <li>进度只在上游 / 缓存读取阶段显示 spinner，后台刷新不阻塞卡片操作；同一时刻只允许一个歌单进入加载流程，避免连续点击互相覆盖队列。</li>
+  <li>每日推荐卡片的播放按钮走同一入口；猜你喜欢是连续队列伪歌单，仍直接调用 <code>startRadioQueue(section.songs)</code>，不读取歌单接口。</li>
 </ul>
 
 </body>

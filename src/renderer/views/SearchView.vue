@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { SearchRequest, SearchResult } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
+import CardPlayButton from '../components/CardPlayButton.vue'
 import CoverArt from '../components/CoverArt.vue'
 import SongTable from '../components/SongTable.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import { describeError, unwrap } from '../api'
 import { useDownloadAction } from '../composables/download-action'
+import { usePlaylistPlay } from '../composables/playlist-play'
 import { useToast } from '../composables/toast'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
@@ -25,6 +27,7 @@ const download = useDownloadStore()
 const auth = useAuthStore()
 const toast = useToast()
 const { requestDownload } = useDownloadAction()
+const { playingId, playPlaylist } = usePlaylistPlay()
 
 const TABS: Array<{ value: SearchType; label: string }> = [
   { value: 'song', label: '单曲' },
@@ -297,16 +300,25 @@ function changePage(delta: number): void {
       <div v-else>
         <div class="section-title"><span>歌单</span><span class="count">{{ playlists.length }} 个</span></div>
         <div v-if="playlists.length > 0" class="card-grid">
-          <button
+          <div
             v-for="playlist in playlists"
             :key="playlist.id"
             class="card"
+            role="button"
+            tabindex="0"
             @click="openPlaylist(playlist.id)"
+            @keydown.enter="openPlaylist(playlist.id)"
           >
-            <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="30" />
+            <div class="card-cover-wrap">
+              <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="30" />
+              <CardPlayButton
+                :loading="playingId === playlist.id"
+                @play="playPlaylist(playlist)"
+              />
+            </div>
             <div class="card-name">{{ playlist.name }}</div>
             <div class="card-sub">{{ playlistSubtitle(playlist) }}</div>
-          </button>
+          </div>
         </div>
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="list" :size="25" /></div>

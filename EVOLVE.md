@@ -279,3 +279,36 @@
 | `CORE.html` | §5.9 歌词与评论（`#c5-9`） | 改 | 说明窄屏滑动只切换显示页，不卸载面板、不重置滚动、不触发新请求；弹出层打开时侧栏拖拽跳过。 |
 | `README.md` | §2 用户交互 · 歌词 / 评论行 | 改 | 补窄屏左右滑动分页（触屏 / 鼠标 / 触控笔）、单页显示与两个胶囊指示点，并同步弹出层入口表述。 |
 | `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 与 README 同步。 |
+
+## 10. 歌单卡片悬停播放
+
+**需求**：所有歌单卡片在悬停时显示居中的播放按钮，点击后直接播放整个歌单，无需先进入歌单详情；猜你喜欢伪歌单则直接启动连续推荐队列。
+
+**实现思路**：
+
+- 新增 `components/CardPlayButton.vue`：封面中心的圆形播放按钮，支持 `loading` 与自定义文案，点击 / keydown 阻止冒泡；加载中显示 spinner 并禁用，避免重复触发。
+- 新增 `composables/playlist-play.ts`：`playPlaylist()` 优先读取整份缓存，命中则立即用缓存歌曲起播；缓存缺失时读取第一页，避免等待完整快照。起播后先用已读取的歌曲调用 `appendPlaylistQueue()` 补齐待播队列，再调用 `playlist.beginQueueBuild()`，并在后台 `playlist.load(id)`，由既有队列构建流程去重并替换为整单队列。`playingId` 为模块级单例，同一时间只允许一个歌单进入加载流程。
+- “我的歌单”、搜索结果歌单卡片、发现页每日推荐卡片统一接入该入口；猜你喜欢卡片直接调用 `startRadioQueue(section.songs)`，不读取歌单接口。搜索页与发现页的卡片外层由 `button` 改为 `div[role="button"]`，避免嵌套按钮并保留整卡跳转。
+- `styles/main.css` 新增 `.card-cover-wrap` 定位，`.card-play` 改为封面中心 44px 圆形按钮：默认透明且 `pointer-events: none`，卡片 `:hover` / `:focus-within` 时显示；触摸设备首次点击仍只触发整卡行为。
+- 新增 `test/playlist-play.test.ts`，覆盖缓存优先、无缓存回退第一页与空歌单不入队。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 3 项“所有歌单悬停中心播放按钮” | 改 | 行尾追加 ` [已解决]`。 |
+| `EVOLVE.md` | 新增“歌单卡片悬停播放” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `USER.html` | §1 TERMS · 歌单卡片播放 | 增 | 定义悬停中心按钮、直接播放整单、缓存 / 第一页起播与猜你喜欢差异。 |
+| `USER.html` | §5.2.8 页面结构 · 搜索（`#u5-2-8`） | 改 | 歌单结果卡片悬停显示中心播放按钮，点击播放整单，其余区域进入详情。 |
+| `USER.html` | §5.2.8 页面结构 · 我的歌单（`#u5-2-8`） | 改 | 歌单卡片悬停显示中心播放按钮，直接播放整单。 |
+| `USER.html` | §5.2.8 页面结构 · 发现（`#u5-2-8`） | 改 | 两张首行卡片均显示播放按钮；每日推荐播放整单，猜你喜欢启动连续队列。 |
+| `CORE.html` | §1 文件树（`#c1`） | 改 | 增加 `CardPlayButton.vue`、`playlist-play.ts` 与 `playlist-play.test.ts`。 |
+| `CORE.html` | §4.44 `SearchView.vue`（`#c4-44`） | 改 | 歌单结果卡片改为 `div[role="button"]` 并接入共用播放按钮。 |
+| `CORE.html` | §4.45 `LibraryView.vue`（`#c4-45`） | 改 | 我的歌单卡片接入共用播放按钮与加载态。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 记录 `.card-cover-wrap` 与 `.card-play` 的居中、悬停 / 聚焦显示、触摸点击穿透与 spinner 样式。 |
+| `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 改 | 首行两张卡片接入播放按钮；每日推荐播放整单，猜你喜欢启动连续队列。 |
+| `CORE.html` | §4.89 `CardPlayButton.vue`（`#c4-89`） | 增 | 新增居中播放按钮的 props / emits、阻止冒泡与加载禁用行为。 |
+| `CORE.html` | §4.90 `playlist-play.ts`（`#c4-90`） | 增 | 新增缓存 / 首页起播、队列构建、后台完整快照与共享 `playingId` 说明。 |
+| `CORE.html` | §5.22 歌单卡片直接播放（`#c5-22`） | 增 | 增加 `CardPlayButton` → `playPlaylist` → 缓存 / 首页 → `startPlaylistPlayback` → `load` 调用链。 |
+| `README.md` | §2 用户交互 · 歌单卡片播放行 | 增 | 增加悬停中心播放、整单直接播放与猜你喜欢差异说明。 |
+| `ABOUT.html` | 用户交互 · 歌单卡片播放行 | 增 | 与 README 同步。 |
