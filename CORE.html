@@ -2255,7 +2255,7 @@ interface DownloadStore {
   <li>宽屏布局为左右两列各 50%，中间保留分隔线；组合 <a href="#c4-41">LyricsPanel</a> 与 <a href="#c4-42">CommentsPanel</a>，不渲染独立标题行。</li>
   <li>窄屏分页由组件内 <code>activePage: 'lyrics' | 'comments'</code> 驱动，默认歌词；<code>narrow</code> 读取 <code>matchMedia('(max-width: 900px)')</code> 并在窗口尺寸变化时更新。轨道用 <code>translateX(calc(-100% + dragOffset))</code> 平移到评论页，底部两个 <code>role="tab"</code> 胶囊按钮表示当前页，点击直接切换。非当前页同时设置 <code>inert</code> 与 <code>aria-hidden</code>，避免键盘或读屏访问屏幕外内容。</li>
   <li>弹出层打开期间横向手势独占：<code>App.vue</code> 的窄屏侧栏拖拽在 <code>ui.lyricsOpen</code> 时直接跳过，分页无需让出左侧区域，也不会误唤起抽屉；左边缘 revealer 点击仍保留。</li>
-  <li>横向拖动支持触屏、鼠标与触控笔：主指针按下（鼠标仅左键）后记录起点，起点在输入框、按钮、链接或 <code>[role="button"]</code> 上时忽略。方向仲裁由 <a href="#c4-88">utils/swipe::resolveSwipeIntent</a> 完成：纵向位移先超过 10px 且不弱于横向时放弃本次切页，交给原生滚动或歌词纵向拖拽；横向超过 10px 且明确大于纵向时锁定横向并捕获指针，此后只按横向位移计算，完全忽略后续纵向位移。松手位移超过 <code>max(40, min(100, 宽度 × 0.15))</code> 才切页；纵向手势保持原生滚动。拖动时 <code>dragging</code> 类关闭过渡，松手 / 取消 / 离开时复位偏移；拖动结束用 <code>suppressClick</code> 吞掉随后 click，避免误触歌词定位或链接。</li>
+  <li>横向拖动支持触屏、鼠标与触控笔：主指针按下（鼠标仅左键）后记录起点，起点在输入框、链接、非歌词行按钮、<code>[role="button"]</code> 或 <code>.range</code> 上时忽略。歌词行本身是用于点击 seek 的 <code>button</code>，但允许作为分页起点；拖动结束后用 <code>SWIPE_CLICK_SUPPRESS_MS</code> 时间窗吞掉随后的 click，未发生横向拖动时点击仍正常定位。</li>方向仲裁由 <a href="#c4-88">utils/swipe::resolveSwipeIntent</a> 完成：纵向位移先超过 10px 且不弱于横向时放弃本次切页，交给原生滚动或歌词纵向拖拽；横向超过 10px 且明确大于纵向时锁定横向并捕获指针，此后只按横向位移计算，完全忽略后续纵向位移。松手位移超过 <code>max(40, min(100, 宽度 × 0.15))</code> 才切页；纵向手势保持原生滚动。拖动时 <code>dragging</code> 类关闭过渡，松手 / 取消 / 离开时复位偏移；拖动结束用 <code>suppressClick</code> 吞掉随后 click，避免误触歌词定位或链接。</li>
   <li>由 <a href="#c4-23">App.vue</a> 在内容区之后按 <code>ui.lyricsOpen</code> 渲染，覆盖内容区但不覆盖侧栏与播放条；<code>/lyrics</code> 不再存在。</li>
 </ul>
 
@@ -2485,6 +2485,7 @@ interface HistoryStore {
 
 <h3 id="c4-88">4.88 src/renderer/utils/swipe.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export const SWIPE_START_THRESHOLD: number; // 10 px
+export const SWIPE_CLICK_SUPPRESS_MS: number; // 350 ms
 
 export type SwipeIntent = 'pending' | 'horizontal' | 'vertical';
 
@@ -2498,6 +2499,7 @@ export function resolveSwipeIntent(
   <li>用于歌词 / 评论窄屏分页的方向仲裁；位移均相对按下点计算，不读取指针类型。</li>
   <li><code>vertical</code>：纵向位移超过阈值且不弱于横向，调用方应放弃本次切页，把后续手势留给纵向滚动 / 歌词拖拽；<code>horizontal</code>：横向位移超过阈值且明确大于纵向，调用方锁定横向后只取 <code>dx</code>；<code>pending</code>：两者都未越阈值，继续等待。</li>
   <li>锁定横向后不再调用本函数，后续纵向位移不参与分页；阈值与 <a href="#c4-72">LyricsOverlay</a> 的拖动判定共用，测试见 <code>test/swipe.test.ts</code>。</li>
+  <li><code>SWIPE_CLICK_SUPPRESS_MS = 350</code>：拖动结束后在该时间窗内抑制 click，覆盖歌词行 seek 与评论内链接等延迟合成的 click；<code>LyricsOverlay</code> 的轨道捕获与 <a href="#c4-41">LyricsPanel</a> 的 seek 入口共用该窗口。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>

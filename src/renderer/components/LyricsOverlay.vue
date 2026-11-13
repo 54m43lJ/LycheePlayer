@@ -8,7 +8,7 @@ import LyricsPanel from './LyricsPanel.vue'
 import { usePlayerStore } from '../stores/player'
 import { useUiStore } from '../stores/ui'
 import { singerNames, songCover } from '../utils/format'
-import { resolveSwipeIntent } from '../utils/swipe'
+import { resolveSwipeIntent, SWIPE_CLICK_SUPPRESS_MS } from '../utils/swipe'
 
 type OverlayPage = 'lyrics' | 'comments'
 
@@ -25,7 +25,7 @@ const dragging = ref(false)
 let pointerId: number | null = null
 let startX = 0
 let startY = 0
-let suppressClick = false
+let suppressClickUntil = 0
 
 const trackStyle = computed(() => {
   if (!narrow.value) return undefined
@@ -57,7 +57,10 @@ function onPointerDown(event: PointerEvent): void {
   if (!narrow.value || pointerId !== null) return
   if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
   const target = event.target as HTMLElement | null
-  if (target?.closest('input, textarea, button, a, [role="button"], .range')) return
+  // 歌词行本身是 button（点击 seek），但允许作为横向分页起点；拖动结束后由 click 抑制兜底。
+  if (target?.closest('input, textarea, button:not(.lyric-line), a, [role="button"], .range')) {
+    return
+  }
   pointerId = event.pointerId
   startX = event.clientX
   startY = event.clientY
@@ -95,11 +98,8 @@ function finishSwipe(event: PointerEvent, cancelled: boolean): void {
   dragOffset.value = 0
   if (wasDragging) {
     trackRef.value?.releasePointerCapture?.(event.pointerId)
-    // 拖动结束后吞掉随之而来的 click，避免误触歌词定位或链接。
-    suppressClick = true
-    window.setTimeout(() => {
-      suppressClick = false
-    }, 0)
+    // 拖动结束后吞掉随之而来的 click，避免误触歌词定位或链接；时间窗覆盖延迟合成的 click。
+    suppressClickUntil = Date.now() + SWIPE_CLICK_SUPPRESS_MS
   }
   if (cancelled || !wasDragging) return
   const threshold = Math.max(40, Math.min(100, trackWidth() * 0.15))
@@ -108,7 +108,7 @@ function finishSwipe(event: PointerEvent, cancelled: boolean): void {
 }
 
 function onClickCapture(event: Event): void {
-  if (!suppressClick) return
+  if (Date.now() >= suppressClickUntil) return
   event.preventDefault()
   event.stopPropagation()
 }

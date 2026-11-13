@@ -5,6 +5,7 @@ import AppIcon from './AppIcon.vue'
 import { useLyrics } from '../composables/lyrics'
 import { usePlayerStore } from '../stores/player'
 import type { LyricWord } from '../utils/lrc'
+import { resolveSwipeIntent, SWIPE_CLICK_SUPPRESS_MS } from '../utils/swipe'
 
 const player = usePlayerStore()
 const { current } = storeToRefs(player)
@@ -14,11 +15,12 @@ const listRef = ref<HTMLElement | null>(null)
 const dragging = ref(false)
 const DRAG_THRESHOLD = 6
 let pressing = false
+let pressPointerId: number | null = null
 let dragStartX = 0
 let dragStartY = 0
 let dragStartScroll = 0
 let moved = 0
-let suppressClick = false
+let suppressClickUntil = 0
 
 const hasSong = computed(() => Boolean(current.value))
 
@@ -48,14 +50,17 @@ watch(
 )
 
 function onPointerDown(event: PointerEvent): void {
-  // 触屏交给原生滚动，保留惯性；自定义拖拽只处理鼠标 / 触控笔。
-  if (event.button !== 0 || event.pointerType === 'touch' || !listRef.value) return
-  pressing = true
-  dragging.value = false
-  moved = 0
+  if (event.button !== 0 || !listRef.value) return
+  // 所有指针类型都记录起点，用于在 pointerup 时判断本次手势是否横向拖动了分页。
+  pressPointerId = event.pointerId
   dragStartX = event.clientX
   dragStartY = event.clientY
   dragStartScroll = listRef.value.scrollTop
+  // 触屏交给原生滚动，保留惯性；自定义纵向拖拽只处理鼠标 / 触控笔。
+  if (event.pointerType === 'touch') return
+  pressing = true
+  dragging.value = false
+  moved = 0
 }
 
 function onPointerMove(event: PointerEvent): void {
@@ -80,44 +85,65 @@ function onPointerUp(event: PointerEvent): void {
   const wasDragging = dragging.value
   dragging.value = false
   if (!wasDragging) return
-  suppressClick = moved > DRAG_THRESHOLD
+  if (moved > DRAG_THRESHOLD) suppressNextClick()
   listRef.value?.releasePointerCapture(event.pointerId)
-  window.setTimeout(() => {
-    suppressClick = false
-  }, 0)
 }
 
 function onPointerCancel(): void {
   pressing = false
   dragging.value = false
+  pressPointerId = null
 }
 
 function onPointerLeave(): void {
   if (!dragging.value) pressing = false
 }
 
-/** 横向分页捕获指针后，pointerup 不再经过歌词列表，需要在窗口级清理按下态。 */
-function onWindowPointerUp(): void {
+function suppressNextClick(): void {
+  suppressClickUntil = Date.now() + SWIPE_CLICK_SUPPRESS_MS
+}
+
+/**
+ * 横向分页捕获指针后，pointerup 不再经过歌词列表；在窗口级判断本次手势是否横向拖动，
+ * 并清理歌词列表的按下态。
+ */
+function onWindowPointerEnd(event: PointerEvent, cancelled: boolean): void {
+  const pointer = pressPointerId
+  pressPointerId = null
+  if (!cancelled && pointer !== null && pointer === event.pointerId) {
+    const dx = event.clientX - dragStartX
+    const dy = event.clientY - dragStartY
+    if (resolveSwipeIntent(dx, dy) === 'horizontal') suppressNextClick()
+  }
   if (!pressing) return
   pressing = false
   dragging.value = false
 }
 
+function onWindowPointerUp(event: PointerEvent): void {
+  onWindowPointerEnd(event, false)
+}
+
+function onWindowPointerCancel(event: PointerEvent): void {
+  onWindowPointerEnd(event, true)
+}
+
 function seekLine(timeMs: number): void {
-  if (suppressClick) return
+  if (Date.now() < suppressClickUntil) return
   player.seek(timeMs)
 }
 
 onMounted(() => {
   window.addEventListener('pointerup', onWindowPointerUp)
-  window.addEventListener('pointercancel', onWindowPointerUp)
+  window.addEventListener('pointercancel', onWindowPointerCancel)
 })
 
 onBeforeUnmount(() => {
   pressing = false
   dragging.value = false
+  pressPointerId = null
   window.removeEventListener('pointerup', onWindowPointerUp)
-  window.removeEventListener('pointercancel', onWindowPointerUp)
+  window.removeEventListener('pointercancel', onWindowPointerCancel)
 })
 </script>
 

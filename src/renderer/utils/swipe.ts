@@ -1,6 +1,9 @@
 /** 横向拖动开始判定与纵向手势仲裁共用的位移阈值。 */
 export const SWIPE_START_THRESHOLD = 10
 
+/** 拖动结束后抑制紧随 click 的时间窗口，覆盖延迟合成的 click。推荐值 350 ms。 */
+export const SWIPE_CLICK_SUPPRESS_MS = 350
+
 export type SwipeIntent = 'pending' | 'horizontal' | 'vertical'
 
 /**
