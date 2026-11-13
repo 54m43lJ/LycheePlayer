@@ -3673,6 +3673,14 @@ button:focus-visible,
 }
 
 .lyrics-page-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.lyrics-page-track {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1fr);
   flex: 1;
@@ -3681,6 +3689,47 @@ button:focus-visible,
 
 .lyrics-page-divider {
   background: var(--border);
+}
+
+.lyrics-page-dots {
+  display: none;
+}
+
+.lyrics-page-dot {
+  position: relative;
+  width: 30px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.lyrics-page-dot::before {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border-strong);
+  transform: translate(-50%, -50%);
+  transition: background 0.18s ease;
+}
+
+.lyrics-page-dot:hover::before {
+  background: var(--muted);
+}
+
+.lyrics-page-dot.active::before {
+  background: var(--accent);
+}
+
+.lyrics-page-dot:focus-visible {
+  outline: 2px solid var(--accent-line);
+  outline-offset: 1px;
+  border-radius: 999px;
 }
 
 .lyrics-page-side {
@@ -4182,9 +4231,21 @@ button:focus-visible,
     background: var(--accent);
   }
 
-  .lyrics-page-body {
-    grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  .lyrics-page-track {
+    display: flex;
+    width: 100%;
+    touch-action: pan-y;
+    transition: transform 0.24s ease;
+    will-change: transform;
+  }
+
+  .lyrics-page-track.dragging {
+    transition: none;
+  }
+
+  .lyrics-page-track > .lyrics-page-side {
+    flex: 0 0 100%;
+    width: 100%;
   }
 
   .lyrics-page-divider {
@@ -4192,7 +4253,16 @@ button:focus-visible,
   }
 
   .comments-side {
-    border-top: 1px solid var(--border);
+    border-top: 0;
+  }
+
+  .lyrics-page-dots {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 7px 0 11px;
   }
 
   .catalog-hero {
@@ -4264,5 +4334,12 @@ button:focus-visible,
   .app-shell input,
   .app-shell textarea {
     user-select: text;
+  }
+}
+
+/* 窄屏分页轨道在减少动态效果时直接切页。 */
+@media (prefers-reduced-motion: reduce) {
+  .lyrics-page-track {
+    transition: none;
   }
 }
