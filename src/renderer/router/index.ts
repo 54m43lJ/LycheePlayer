@@ -45,6 +45,11 @@ const router = createRouter({
       component: () => import('../views/DownloadsView.vue')
     },
     {
+      path: '/history',
+      name: 'history',
+      component: () => import('../views/HistoryView.vue')
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue')

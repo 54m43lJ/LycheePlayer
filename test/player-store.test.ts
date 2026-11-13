@@ -285,6 +285,37 @@ describe('player queue', () => {
     expect(player.mode).toBe('repeat-all')
   })
 
+  it('records play history after the song actually starts', async () => {
+    ;(window as unknown as { lychee: { song: { getUrls: unknown } } }).lychee.song.getUrls = (
+      mids: string[]
+    ) =>
+      Promise.resolve({
+        ok: true,
+        data: mids.map((songMid) => ({ songMid, url: 'stream', quality: '320k' }))
+      })
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const { useHistoryStore } = await import('../src/renderer/stores/history')
+    const player = usePlayerStore()
+    const history = useHistoryStore()
+
+    player.playList([song('1', 'a')], 0)
+    await vi.waitFor(() => expect(player.status).toBe('playing'))
+
+    expect(history.entries.map((entry) => entry.song.songMid)).toEqual(['1'])
+  })
+
+  it('does not record play history when no playable url is returned', async () => {
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const { useHistoryStore } = await import('../src/renderer/stores/history')
+    const player = usePlayerStore()
+    const history = useHistoryStore()
+
+    player.playList([song('1', 'a')], 0)
+    await vi.waitFor(() => expect(player.status).toBe('stopped'))
+
+    expect(history.entries).toEqual([])
+  })
+
   it('stops skipping after ten consecutive NO_STREAM results', async () => {
     const getUrls = vi.fn(() =>
       Promise.resolve({

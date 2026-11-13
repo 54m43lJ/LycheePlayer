@@ -124,8 +124,12 @@ export const DOWNLOAD_INDEX_SAVE_MS = 800
 
 /** 播放状态推送节流窗口。推荐值 900 ms。 */
 export const PLAYER_STATE_THROTTLE_MS = 900
-/** 播放历史容量上限。推荐值 100。 */
+/** 上一首回退历史容量上限。推荐值 100。 */
 export const PLAY_HISTORY_MAX = 100
+/** 用户可见的播放历史容量上限。推荐值 1000。 */
+export const PLAY_HISTORY_LIMIT = 1000
+/** 播放历史 localStorage key 前缀；与账号 musicid（未登录为 anonymous）拼接。 */
+export const PLAY_HISTORY_STORAGE_PREFIX = 'lychee:play-history:'
 /** Toast 自动消失时间。推荐值 3600 ms。 */
 export const TOAST_DURATION_MS = 3600
 /** 判断“回到开头”而非上一首的播放位置。推荐值 3000 ms。 */

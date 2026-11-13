@@ -87,6 +87,7 @@
 │       │   ├── <a href="#c4-30">settings.ts</a>               设置与主题
 │       │   ├── <a href="#c4-31">ui.ts</a>                     播放队列与侧栏等 UI 状态
 │       │   ├── <a href="#c4-61">playlist.ts</a>               歌单 feed 与最近歌单
+│       │   ├── <a href="#c4-86">history.ts</a>                本机播放历史
 │       │   ├── <a href="#c4-62">recommend.ts</a>              推荐 feed
 │       │   ├── <a href="#c4-63">playlist-edit.ts</a>          歌单编辑状态
 │       │   ├── <a href="#c4-70">mv.ts</a>                        MV 播放状态
@@ -130,6 +131,7 @@
 │       │   ├── <a href="#c4-48">SettingsView.vue</a>          设置页
 │       │   ├── <a href="#c4-68">DiscoverView.vue</a>          发现页
 │       │   ├── <a href="#c4-67">DownloadsView.vue</a>         下载中心
+│       │   ├── <a href="#c4-87">HistoryView.vue</a>          播放历史
 │       │   └── <a href="#c4-69">MvView.vue</a>                MV 播放页
 │       ├── <a href="#c4-49">styles/main.css</a>               主题 token、布局与组件样式
 │       └── index.html                        渲染进程 HTML 入口
@@ -139,6 +141,7 @@
 │   │   └── search.test.ts                    搜索映射与空关键词
 │   ├── fixtures/                             脱敏上游响应
 │   ├── player-store.test.ts                  播放顺序、队列补齐与快照保留
+│   ├── history-store.test.ts                 播放历史去重、上限与账号隔离
 │   ├── playlist-store.test.ts                分页恢复、整份缓存与队列快照时机
 │   ├── queue-snapshot.test.ts                队列快照过滤
 │   ├── startup-flags.test.ts                 启动参数优先级
@@ -1171,7 +1174,8 @@ export function destroyTray(): void;
   <li>播放队列头部 <code>.lyrics-head-actions</code> 并排放置“清空播放队列”与“关闭播放队列”两个图标按钮；清空按钮使用 <code>trash</code> 图标，队列为空时 <code>disabled</code> 并沿用 <code>.icon-btn:disabled</code> 灰化，滚动或筛选都不影响入口。列表底部不再渲染 <code>.queue-footer</code> 或文字按钮；<code>player.clearQueue()</code> 仍只清空当前曲之后的队列。</li>
   <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
   <li>主界面拖拽手势仅 ≤900px 启用：<code>pointerdown</code> 在宽屏直接返回；触屏 <code>pointerup</code> 若存在非折叠选区则跳过侧栏切换，长按选择文本优先；<code>pointercancel</code> 清理拖拽起点。窄屏非触屏由 §4.49 的 CSS 禁用文本选择。</li>
-  <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。</li>
+  <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单 / 播放历史”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。“播放历史”位于最近歌单子条目之后，使用 <code>history</code> 图标并链接到 <code>/history</code>。</li>
+  <li>挂载时在 <code>auth.refresh()</code> 之后调用 <code>history.load()</code> 读取当前账号的本机历史；监听 <code>auth.musicid</code>，登录 / 退出 / 切换账号时重新加载对应作用域的记录，不跨账号复用内存中的列表。</li>
   <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），每日推荐歌单名通过 <code>dailyPlaylistName</code> 补昵称前缀后显示，点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
 </ul>
 
@@ -1189,7 +1193,7 @@ export function describeError(error: unknown): string;
 export default router;
 </code></pre>
 <ul class="note">
-  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/artist/:mid</code>、<code>/album/:mid</code>、<code>/mv/:id</code>、<code>/login</code>、<code>/settings</code>；歌词 / 评论由 <code>ui.lyricsOpen</code> 控制，不占路由。根路径 <code>/</code> 重定向到 <code>/discover</code>，启动与访问根路径都默认进入发现页。</li>
+  <li>页面与跳转关系见 <a href="USER.html#u3-4">USER §3.4</a>；路由表包含 <code>/search</code>、<code>/discover</code>、<code>/library</code>、<code>/playlist/:id</code>、<code>/artist/:mid</code>、<code>/album/:mid</code>、<code>/mv/:id</code>、<code>/downloads</code>、<code>/history</code>、<code>/login</code>、<code>/settings</code>；歌词 / 评论由 <code>ui.lyricsOpen</code> 控制，不占路由。根路径 <code>/</code> 重定向到 <code>/discover</code>，启动与访问根路径都默认进入发现页。</li>
 </ul>
 
 <h3 id="c4-26">4.26 src/renderer/env.d.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1323,6 +1327,7 @@ interface PlayerStore {
   <li><code>queue</code> 是 <code>playOrder</code> 中当前歌曲之后的切片，不含当前歌曲；<code>playOrder</code> 与 <code>index</code> 是内部完整顺序和游标，<code>baseOrder</code> 保存不含随机重排的规范顺序（不对外暴露），播放队列面板只绑定 <code>queue</code>。<code>addNext(song)</code> 只把歌曲插入 <code>playOrder</code> 的 <code>index + 1</code>，不切歌、不写历史；无 <code>current</code> 时直接以该歌曲开始播放。</li>
   <li><code>bufferedMs</code> 保存引擎上报的已缓冲毫秒数，切歌加载新曲前清零；播放条用它计算缓冲 overlay 百分比，并与缓存完成度取较大值。</li>
   <li><code>playNext()</code> 负责手动下一首与自动续播：确定切换到下一首（含列表循环回绕）时，先把原 <code>current</code> 追加到 <code>playHistory</code>，再调用 <code>playAt()</code>；到队尾停止或单曲循环重播不写入历史。<code>playAt()</code> 只做低层定位与加载，不写历史。</li>
+  <li><code>playHistory</code> 只服务“上一首”回退，与用户可见的播放历史是两套数据。用户可见历史由 <a href="#c4-86">history store</a> 维护：<code>loadAndPlay()</code> 在取到播放链接、引擎开始播放且 token 仍有效后调用 <code>useHistoryStore().record(song)</code>；取链接失败或加载被新请求取代时不写入。暂停后继续播放、同一首重载音质不会产生重复条目，记录时按 <code>songMid</code> 去重并移回顶部。</li>
   <li><code>startPlaylistPlayback</code> / <code>appendPlaylistQueue</code> / <code>replacePlaylistQueue</code> 维护 <code>queueSource</code> 与 <code>queueBuilding</code>；<code>appendPlaylistQueue</code> / <code>replacePlaylistQueue</code> 只在 <code>queueSource.kind === 'playlist'</code> 时生效。队列构建由 playlist store 在“歌单快照 → 队列”边界按 <code>playable !== false</code> 过滤，播放器只负责追加 / 替换，不做检测或清理。未完成快照前只允许一次临时快照；最终快照按签名比较后替换，保留手动“下一首播放”的歌曲、当前曲、进度与历史。</li>
   <li><code>startRadioQueue(songs)</code> 用发现页已拉取的 5 首建立猜你喜欢连续队列：<code>queueSource = { kind: 'radio', id: 'guess' }</code>，模式强制为 <code>sequence</code>，并从第 2 页开始预取。队列激活时 <code>modeLocked = true</code>，<code>setMode</code> / <code>cycleMode</code> / <code>setShuffle</code> / <code>setLoopStatus</code> 均不改变模式；<code>playList</code> / <code>startPlaylistPlayback</code> 会递增 radio 会话并解除锁定。</li>
   <li>猜你喜欢队列在 <code>playAt()</code> 定位到当前队列最后一首时调用 <code>ensureRadioBatch()</code>：通过 <code>window.lychee.recommend.guess(page)</code> 拉取下一批，按 songMid 去重后追加到 <code>playOrder</code> / <code>baseOrder</code>；同一会话最多一个进行中的请求，最多连续翻 3 页；预取较慢且队尾已停止时，补入后自动从新歌继续。失败只提示，不改变当前歌曲与已加载队列。</li>
@@ -1726,7 +1731,9 @@ export declare const RECOMMEND_CACHE_TTL_MS: number;        // 雷达 / 猜你�
 export declare const GUESS_RADIO_BATCH_SIZE: number;        // 5 首
 export declare const RECOMMEND_SECTION_LIMIT: number;       // 3 行；列表分区 30 首
 export declare const PLAYER_STATE_THROTTLE_MS: number;      // 900 ms
-export declare const PLAY_HISTORY_MAX: number;              // 100
+export declare const PLAY_HISTORY_MAX: number;              // 100；上一首回退
+export declare const PLAY_HISTORY_LIMIT: number;            // 1000；用户可见历史
+export declare const PLAY_HISTORY_STORAGE_PREFIX: string;   // 'lychee:play-history:'
 export declare const TOAST_DURATION_MS: number;             // 3600 ms
 export declare const PREVIOUS_RESTART_THRESHOLD_MS: number; // 3000 ms
 export declare const NO_STREAM_SKIP_LIMIT: number;          // 10
@@ -1769,6 +1776,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制雷达 / 猜你喜欢分区缓存（24 小时）；每日推荐不使用该 TTL，按上海自然日 0 点过期。<code>GUESS_RADIO_BATCH_SIZE = 5</code> 控制猜你喜欢连续队列每批拉取数；<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页列表分区的歌曲上限（30 首）；有歌单入口的分区不渲染歌曲条目，其余分区固定 3 行滚动。</li>
   <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，统一队列按入队顺序串行；<code>DOWNLOAD_QUEUE_MAX</code> 限制单次“下载全部”的入队数量；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
   <li><code>RECENT_PLAYLIST_LIMIT</code> 限制最近歌单条数；<code>RECENT_PLAYLIST_CHECK_THROTTLE_MS</code> 与单飞互斥共同限制校验频率；<code>RECENT_PLAYLIST_STORAGE_PREFIX</code> 与账号 musicid 拼接为 localStorage key；<code>SIDEBAR_DRAG_THRESHOLD_PX</code> 为抽屉开关的位移阈值。</li>
+  <li><code>PLAY_HISTORY_MAX</code> 只限制“上一首”回退用的会话历史；<code>PLAY_HISTORY_LIMIT = 1000</code> 限制用户可见的播放历史；<code>PLAY_HISTORY_STORAGE_PREFIX</code> 与账号 musicid（未登录为 <code>anonymous</code>）拼接为 localStorage key。</li>
   <li>已删除 <code>PLAYLIST_CACHE_TTL_MS</code>、<code>PLAYLIST_PREFETCH_CONCURRENCY</code> 与只服务旧逐页补全的 <code>PLAYLIST_PAGE_RETRY_*</code>：缓存改为整份快照，分页串行加载且不做预取。</li>
   <li><code>PLAYLIST_FETCH_PAGE_SIZE = 2000</code>、<code>PLAYLIST_FETCH_PAGE_MAX = 10</code> 控制整份快照拉取；<code>PLAYLIST_FETCH_MISSING_RATIO = 0.02</code> / <code>PLAYLIST_FETCH_MISSING_MIN = 10</code> 允许上游静默省略少量不可用曲目；<code>PLAYLIST_REFRESH_RETRY_MS = 5 × 60_000</code> 为失败后的自动重试间隔。<code>PLAYLIST_PAGE_SIZE = 50</code> 只用于最近歌单校验与轮询首页。</li>
 </ul>
@@ -2438,6 +2446,38 @@ export function useDownloadAction(): {
   <li>由 <code>App.vue</code> 在应用外壳中只挂载一次，打开 / 关闭由 <code>pendingDelete</code> 驱动，不依赖具体页面是否可见；确认 / 取消分别转发到共享 composable。</li>
 </ul>
 
+<h3 id="c4-86">4.86 src/renderer/stores/history.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export interface PlayHistoryEntry {
+  song: Song;
+  playedAtMs: number;
+}
+
+export function useHistoryStore(): HistoryStore;
+
+interface HistoryStore {
+  readonly entries: PlayHistoryEntry[];
+  load(): void;
+  record(song: Song): void;
+  clear(): void;
+}
+</code></pre>
+<ul class="note">
+  <li>用户可见的播放历史按账号保存在 <code>localStorage['lychee:play-history:&lt;musicid|anonymous&gt;']</code>，最多 <code>PLAY_HISTORY_LIMIT</code> 条，未登录使用独立的匿名作用域；官方云端最近播放接口不作为本项目契约，理由见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。</li>
+  <li><code>record(song)</code> 由 <code>loadAndPlay()</code> 在真正开始播放后调用；按 <code>songMid</code> 去重并移回顶部，同时刷新 <code>playedAtMs</code>，不会因暂停后继续或同一首重载音质产生重复条目。</li>
+  <li><code>load()</code> 在启动、登录态变化与账号切换时读取对应作用域；损坏条目直接丢弃，非数组内容回退为空列表。localStorage 不可用时只保留当前会话内存记录。</li>
+  <li><code>clear()</code> 清空内存列表并移除当前作用域的 key；删除播放历史不影响下载、缓存、播放队列或“上一首”使用的会话历史。</li>
+</ul>
+
+<h3 id="c4-87">4.87 src/renderer/views/HistoryView.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// 无 props / emits。播放历史页：页头、本地搜索框、SongTable、清空历史确认框。
+</code></pre>
+<ul class="note">
+  <li>页头显示记录数与“播放全部”“清空历史”；记录为空时“播放全部”和“清空历史”都禁用。清空使用应用内 <a href="#c4-81">ConfirmDialog</a> 危险态，确认后调用 <code>history.clear()</code>。</li>
+  <li>搜索只过滤 <code>history.entries</code>，按歌名 / 歌手 / 专辑做不区分大小写的本地匹配，不发上游请求；无关键词时保留全部记录，结果为空时区分“还没有播放历史”和“没有匹配的播放历史”。</li>
+  <li>列表复用 <a href="#c4-39">SongTable</a>，支持播放、下一首播放、收藏与共用下载入口；双击 / 单曲播放以当前过滤结果为新的播放顺序并替换队列。页面挂载时加载一次收藏状态，歌曲记录顺序不因收藏状态变化而改变。</li>
+  <li>播放历史只记录本机播放，不读取账号云端历史，也不提供跨设备同步。</li>
+</ul>
+
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
 
@@ -2785,7 +2825,7 @@ app::requestSingleInstanceLock()
 <ul class="note">
   <li>队列不再等歌单完整加载：播放开始时允许一次临时快照顶替，优先整份缓存，缓存没有当前曲时退回当前已载入页；每首歌在进入快照前按 <code>playable !== false</code> 过滤，当前曲除外。</li>
   <li>最终快照要求分页全部加载完成、非 stale，且所有歌曲的 VIP / 最高音质 / 可用性探测完成。<code>completingToken</code> 保证单实例补全；轮询在 <code>error</code> / <code>partial</code> 时恢复补全。</li>
-  <li>最终快照与临时快照签名相同则保留现有队列（包括用户手动加入的歌曲）；不同则替换当前曲之后的队列，当前曲、进度与播放历史不变。</li>
+  <li>最终快照与临时快照签名相同则保留现有队列（包括用户手动加入的歌曲）；不同则替换当前曲之后的队列，当前曲、进度与会话播放历史不变。</li>
   <li>队列只在快照边界过滤；播放器不做检测或清理。播放时仍独立校验取流，不可播时沿队列向后尝试。</li>
 </ul>
 
@@ -3047,6 +3087,41 @@ stores/player::setMode / cycleMode / setShuffle / setLoopStatus
   <li>预取在定位到当前队列最后一首时触发，同一 radio 会话只允许一个进行中的请求；最多连续翻 3 页，按 <code>songMid</code> 去重后追加。若预取较慢、队尾已经停止，补入后从新歌继续。</li>
   <li>连续队列激活期间 <code>modeLocked = true</code>：播放模式固定为顺序，不循环、不回绕；<code>setMode</code> / <code>cycleMode</code> / <code>setShuffle</code> / <code>setLoopStatus</code> 与 MPRIS 对应命令都不改变模式。开始播放其他歌单或歌曲时递增 radio 会话并解除锁定。</li>
   <li>批次失败只提示，不改变当前歌曲与已加载队列；没有新歌时在队尾停止。队列面板仍只展示实际待播歌曲，不显示批次边界。</li>
+</ul>
+
+<h3 id="c5-21">5.21 播放历史写入与展示</h3>
+<pre><code>stores/player::loadAndPlay(song)
+├── window.lychee.song.getUrls([song.songMid], quality)
+├── 判断 loadToken 已变化 → return
+├── audio/engine::loadAndPlay(result.url)
+├── 判断 loadToken 已变化 → return
+├── status = 'playing'
+└── stores/history::record(song)
+    ├── 判断账号作用域变化 → stores/history::load()
+    ├── 按 songMid 去重并移回顶部
+    ├── 截断至 PLAY_HISTORY_LIMIT = 1000
+    └── localStorage['lychee:play-history:&lt;musicid|anonymous&gt;']
+
+views/App::onMounted() / watch(auth.musicid)
+└── stores/history::load()
+    └── localStorage['lychee:play-history:&lt;musicid|anonymous&gt;']
+
+views/HistoryView::onMounted()
+├── stores/history::load()
+└── stores/playlist-edit::loadFavorites(entries 的 songMid)
+
+views/HistoryView::filteredSongs()
+└── 判断搜索关键词 → 本地匹配歌名 / 歌手 / 专辑
+
+views/HistoryView::startAt(index)
+└── stores/player::playList(filteredSongs, index)
+    └── stores/player::loadAndPlay(filteredSongs[index])
+        └── stores/history::record(song)                 // 移回顶部
+</code></pre>
+<ul class="note">
+  <li>写入时机绑定“实际开始播放”而不是点击或选中：取流失败、加载被后续请求取代、暂停后继续都不会新增记录。</li>
+  <li>播放历史按账号作用域隔离；启动、退出登录与切换账号时重新加载对应 key，未登录使用 <code>anonymous</code> 作用域，不跨账号复用内存列表。</li>
+  <li>搜索、清空与播放全部都只作用于本机列表；清空不触发上游请求，也不影响下载、缓存与 <a href="#c4-29">播放器的上一首历史</a>。</li>
 </ul>
 
 </body>

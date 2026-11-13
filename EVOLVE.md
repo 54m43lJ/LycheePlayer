@@ -205,3 +205,41 @@
 | `CORE.html` | §4.32 `utils/format.ts`（`#c4-32`） | 改 | 增加 `appTitle(song)` 签名与标题格式、回退规则。 |
 | `README.md` | §2 用户交互 · 窗口标题行 | 增 | 增加窗口 / 任务栏标题跟随当前歌曲的能力说明。 |
 | `ABOUT.html` | 用户交互 · 窗口标题行 | 增 | 与 README 同步。 |
+
+## 8. 播放历史
+
+**需求**：在导航条“浏览”组的最后增加播放历史入口，记录最近播放的 1000 首歌曲；歌曲开始播放即入队，页面提供搜索框过滤，并优先使用官方 API、没有可用官方 API 时改用本地持久化缓存。
+
+**实现思路**：
+
+- 播放历史放在渲染进程：QQ 音乐开放平台的最近播放接口仅面向企业合作方，客户端 SDK 的播放上报也标明仅供内部使用，均无法作为个人桌面客户端可依赖的写入契约；因此按账号持久化到 `localStorage` 的 `lychee:play-history:<musicid|anonymous>`，未登录使用独立的匿名作用域。
+- `shared/constants.ts` 增加 `PLAY_HISTORY_LIMIT = 1000` 与 `PLAY_HISTORY_STORAGE_PREFIX`；原有 `PLAY_HISTORY_MAX = 100` 继续只服务“上一首”回退的会话历史，两套数据互不影响。
+- 新增 `stores/history.ts`：`load()` 读取当前账号记录并丢弃损坏条目，`record(song)` 在歌曲实际开始播放后按 `songMid` 去重、移回顶部并截断到 1000 条，`clear()` 清空内存与当前账号的 key。
+- `player.loadAndPlay()` 在取流成功、引擎开始播放且 token 仍有效后调用 `history.record(song)`；取流失败、加载被新请求取代、暂停后继续与同一首重载音质都不重复写入。
+- `App.vue` 在启动恢复登录态后调用 `history.load()`，并监听 `auth.musicid` 在登录 / 退出 / 切换账号时重新加载对应作用域；侧栏“浏览”组在最近歌单子条目之后增加 `/history` 入口与 `history` 图标。
+- 新增 `views/HistoryView.vue`：页头提供记录数、“播放全部”与需要确认的“清空历史”，搜索框按歌名 / 歌手 / 专辑做本地匹配；列表复用 `SongTable`，支持播放、下一首播放、收藏与共用下载入口，并区分无历史与无匹配两类空状态。
+- 新增 `test/history-store.test.ts` 覆盖去重置顶、1000 条上限、账号隔离、损坏数据与清空；扩展 `test/player-store.test.ts` 覆盖成功播放后写入、无播放链接时不写入。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 1 项“实现播放历史功能” | 改 | 行尾追加 ` [已解决]`。 |
+| `EVOLVE.md` | 新增“播放历史” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `USER.html` | §1 TERMS · 播放历史 | 增 | 增加播放历史定义：按账号本机保存、最多 1000 首、开始播放即写入并去重置顶、本地搜索、不同步云端。 |
+| `USER.html` | §5.2.1 窗口与布局（`#u5-2-1`） | 改 | 路由说明补充播放历史页面。 |
+| `USER.html` | §5.2.2 侧栏与导航（`#u5-2-2`） | 改 | 两个侧栏原型与笔记补充“播放历史”为浏览组最后一项、`/history` 路由与点击行为。 |
+| `USER.html` | §3.4 页面 / URL 架构图（`#u3-4`） | 改 | 路由说明补充播放历史为 `/history` 完整页面；架构图增加历史节点。 |
+| `diagram/page-url-architecture.puml` / `.svg` | 页面与 URL 跳转关系图 | 改 | 增加“播放历史 `/history`”节点、歌手 / 专辑跳转边与侧栏全局入口注记，并重新导出 SVG。 |
+| `USER.html` | §5.2.8 页面结构 · 播放历史（`#u5-2-8`） | 增 | 补页面结构、写入与上限、账号隔离、本地搜索、播放全部、清空确认与空状态。 |
+| `CORE.html` | §1 文件树（`#c1`） | 改 | 增加 `stores/history.ts`、`views/HistoryView.vue` 与 `test/history-store.test.ts`。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 补侧栏播放历史入口、启动加载与账号切换监听。 |
+| `CORE.html` | §4.25 `router/index.ts`（`#c4-25`） | 改 | 路由说明补充 `/downloads` 与 `/history`。 |
+| `CORE.html` | §4.29 `stores/player.ts`（`#c4-29`） | 改 | 说明用户可见历史与会话历史的区别，以及 `loadAndPlay()` 成功后的写入时机。 |
+| `CORE.html` | §4.50 `src/shared/constants.ts`（`#c4-50`） | 改 | 增加 `PLAY_HISTORY_LIMIT = 1000` / `PLAY_HISTORY_STORAGE_PREFIX` 并说明与 `PLAY_HISTORY_MAX` 的分工。 |
+| `CORE.html` | §4.86 `stores/history.ts`（`#c4-86`） | 增 | 新增历史 store 的签名、去重上限、账号作用域、损坏数据与清空行为。 |
+| `CORE.html` | §4.87 `views/HistoryView.vue`（`#c4-87`） | 增 | 新增播放历史页的结构、本地搜索、播放全部与清空确认。 |
+| `CORE.html` | §5.21 播放历史写入与展示（`#c5-21`） | 增 | 增加 `loadAndPlay` → `history.record` → `localStorage` 与页面加载 / 过滤 / 播放调用链。 |
+| `PROVIDER.html` | §2 CONVENTIONS · 播放历史（`#p2`） | 增 | 说明不接入官方云端最近播放接口的理由与本机持久化边界。 |
+| `README.md` | §2 用户交互 · 播放历史行 | 增 | 增加侧栏入口、本机 1000 首、搜索 / 播放全部 / 清空能力说明。 |
+| `ABOUT.html` | 用户交互 · 播放历史行 | 增 | 与 README 同步。 |

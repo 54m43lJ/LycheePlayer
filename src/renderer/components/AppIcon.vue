@@ -36,6 +36,7 @@ const ICONS: Record<string, string[]> = {
   logout: ['M14 5h4a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1h-4', 'M10 8l-4 4 4 4', 'M6 12h9'],
   login: ['M10 5H6a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h4', 'M14 8l4 4-4 4', 'M18 12H9'],
   music: ['M12 3v10.55A4 4 0 1 0 14 17V7h6V3h-8z'],
+  history: ['M3 4v5h5', 'M3.5 12a8.5 8.5 0 1 0 2.5-6', 'M12 7.5V12l3 2'],
   user: ['M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8z', 'M4.5 21a7.5 7.5 0 0 1 15 0'],
   'chevron-left': ['M14.5 6 9 12l5.5 6'],
   'chevron-right': ['M9.5 6 15 12l-5.5 6'],

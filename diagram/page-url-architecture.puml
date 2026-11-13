@@ -14,6 +14,7 @@ skinparam shadowing false
 [登录\n/login] as LOGIN
 [设置\n/settings] as SETTINGS
 [下载中心\n/downloads] as DOWNLOADS
+[播放历史\n/history] as HISTORY
 
 ROOT --> SEARCH : 重定向
 SEARCH --> PLAYLIST : 点击歌单
@@ -29,8 +30,14 @@ PLAYLIST --> LIBRARY : 返回我的歌单
 LOGIN --> LIBRARY : 登录成功
 ARTIST --> ALBUM : 打开专辑
 ALBUM --> ARTIST : 打开歌手
+HISTORY --> ARTIST : 点击歌手
+HISTORY --> ALBUM : 点击专辑
 
 note bottom of DOWNLOADS
   侧栏“下载”为全局入口
+end note
+
+note bottom of HISTORY
+  侧栏“播放历史”为全局入口
 end note
 @enduml

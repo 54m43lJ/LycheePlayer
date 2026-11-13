@@ -9,6 +9,7 @@ import PlayerBar from './components/PlayerBar.vue'
 import ToastStack from './components/ToastStack.vue'
 import { useAuthStore } from './stores/auth'
 import { useDownloadStore } from './stores/download'
+import { useHistoryStore } from './stores/history'
 import { usePlayerStore } from './stores/player'
 import { usePlaylistEditStore } from './stores/playlist-edit'
 import { usePlaylistStore } from './stores/playlist'
@@ -25,6 +26,7 @@ const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const playlistStore = usePlaylistStore()
 const download = useDownloadStore()
+const history = useHistoryStore()
 const recommend = useRecommendStore()
 const settings = useSettingsStore()
 const ui = useUiStore()
@@ -149,6 +151,7 @@ onMounted(() => {
     settings.applyTheme()
     player.applySettings()
     playlistStore.loadRecent()
+    history.load()
     void playlistStore.validateRecent(true)
     if (player.current) {
       void playlistEdit.loadFavorites([player.current.songMid])
@@ -201,6 +204,7 @@ watch(
     download.reset()
     playlistStore.loadRecent()
     void playlistStore.validateRecent(true)
+    history.load()
   }
 )
 
@@ -280,6 +284,15 @@ watch(
             </span>
           </RouterLink>
         </div>
+        <RouterLink
+          class="nav-item"
+          active-class="active"
+          to="/history"
+          @click="onSidebarNavigate"
+        >
+          <AppIcon name="history" :size="18" />
+          <span class="nav-text">播放历史</span>
+        </RouterLink>
         <div class="nav-label" style="margin-top: 14px">应用</div>
         <RouterLink class="nav-item" active-class="active" to="/downloads" @click="onSidebarNavigate">
           <AppIcon name="download" :size="18" />

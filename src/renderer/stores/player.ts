@@ -11,6 +11,7 @@ import { IpcCallError, describeError, unwrap } from '../api'
 import { createAudioEngine, type AudioEngine, type AudioEngineHandlers } from '../audio/engine'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from './auth'
+import { useHistoryStore } from './history'
 import { useSettingsStore, QUALITY_PREFERENCE_OPTIONS } from './settings'
 
 export type PlayMode = 'sequence' | 'repeat-all' | 'repeat-one' | 'shuffle'
@@ -253,6 +254,8 @@ export const usePlayerStore = defineStore('player', () => {
       noStreamStreak = 0
       if (resumeAtMs > 0) seek(resumeAtMs)
       status.value = 'playing'
+      // 链接就绪并真正开始播放后才写入用户可见的播放历史。
+      useHistoryStore().record(song)
       sendState()
     } catch (err) {
       if (token !== loadToken) return
