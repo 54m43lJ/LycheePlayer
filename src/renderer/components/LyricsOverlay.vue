@@ -8,6 +8,7 @@ import LyricsPanel from './LyricsPanel.vue'
 import { usePlayerStore } from '../stores/player'
 import { useUiStore } from '../stores/ui'
 import { singerNames, songCover } from '../utils/format'
+import { resolveSwipeIntent } from '../utils/swipe'
 
 type OverlayPage = 'lyrics' | 'comments'
 
@@ -24,6 +25,7 @@ const dragging = ref(false)
 let pointerId: number | null = null
 let startX = 0
 let startY = 0
+let suppressClick = false
 
 const trackStyle = computed(() => {
   if (!narrow.value) return undefined
@@ -52,7 +54,8 @@ function clampDrag(dx: number): number {
 }
 
 function onPointerDown(event: PointerEvent): void {
-  if (!narrow.value || event.pointerType !== 'touch' || pointerId !== null) return
+  if (!narrow.value || pointerId !== null) return
+  if (!event.isPrimary || (event.pointerType === 'mouse' && event.button !== 0)) return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, button, a, [role="button"], .range')) return
   pointerId = event.pointerId
@@ -67,8 +70,15 @@ function onPointerMove(event: PointerEvent): void {
   const dx = event.clientX - startX
   const dy = event.clientY - startY
   if (!dragging.value) {
-    // 先满足水平位移且明显大于纵向，避免和普通纵向滚动抢手势。
-    if (Math.abs(dx) < 10 || Math.abs(dx) <= Math.abs(dy)) return
+    const intent = resolveSwipeIntent(dx, dy)
+    // 纵向先超过阈值：本次手势交给滚动 / 纵向拖拽，不再尝试切页。
+    if (intent === 'vertical') {
+      pointerId = null
+      dragOffset.value = 0
+      return
+    }
+    if (intent !== 'horizontal') return
+    // 横向锁定后只按横向位移计算，后续纵向位移全部忽略。
     dragging.value = true
     trackRef.value?.setPointerCapture?.(event.pointerId)
   }
@@ -83,11 +93,24 @@ function finishSwipe(event: PointerEvent, cancelled: boolean): void {
   pointerId = null
   dragging.value = false
   dragOffset.value = 0
-  if (wasDragging) trackRef.value?.releasePointerCapture?.(event.pointerId)
+  if (wasDragging) {
+    trackRef.value?.releasePointerCapture?.(event.pointerId)
+    // 拖动结束后吞掉随之而来的 click，避免误触歌词定位或链接。
+    suppressClick = true
+    window.setTimeout(() => {
+      suppressClick = false
+    }, 0)
+  }
   if (cancelled || !wasDragging) return
   const threshold = Math.max(40, Math.min(100, trackWidth() * 0.15))
   if (dx <= -threshold && activePage.value === 'lyrics') activePage.value = 'comments'
   else if (dx >= threshold && activePage.value === 'comments') activePage.value = 'lyrics'
+}
+
+function onClickCapture(event: Event): void {
+  if (!suppressClick) return
+  event.preventDefault()
+  event.stopPropagation()
 }
 
 function onPointerUp(event: PointerEvent): void {
@@ -178,6 +201,7 @@ onBeforeUnmount(() => {
           @pointerup="onPointerUp"
           @pointercancel="onPointerCancel"
           @pointerleave="onPointerLeave"
+          @click.capture="onClickCapture"
         >
           <LyricsPanel
             :inert="narrow && activePage !== 'lyrics'"

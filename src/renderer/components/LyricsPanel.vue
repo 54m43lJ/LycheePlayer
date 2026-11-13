@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import AppIcon from './AppIcon.vue'
 import { useLyrics } from '../composables/lyrics'
@@ -14,6 +14,7 @@ const listRef = ref<HTMLElement | null>(null)
 const dragging = ref(false)
 const DRAG_THRESHOLD = 6
 let pressing = false
+let dragStartX = 0
 let dragStartY = 0
 let dragStartScroll = 0
 let moved = 0
@@ -52,6 +53,7 @@ function onPointerDown(event: PointerEvent): void {
   pressing = true
   dragging.value = false
   moved = 0
+  dragStartX = event.clientX
   dragStartY = event.clientY
   dragStartScroll = listRef.value.scrollTop
 }
@@ -59,9 +61,12 @@ function onPointerDown(event: PointerEvent): void {
 function onPointerMove(event: PointerEvent): void {
   if (!pressing || !listRef.value) return
   const delta = event.clientY - dragStartY
-  // 只有超过阈值才进入拖拽并捕获指针；否则保留原生 click，歌词可正常点击跳转。
+  const deltaX = event.clientX - dragStartX
+  // 只有纵向位移超过阈值且明确大于横向时才进入拖拽；否则保留原生 click，
+  // 也避免和歌词 / 评论分页的横向拖动抢手势。
   if (!dragging.value) {
     if (Math.abs(delta) <= DRAG_THRESHOLD) return
+    if (Math.abs(delta) <= Math.abs(deltaX)) return
     dragging.value = true
     listRef.value.setPointerCapture(event.pointerId)
   }
@@ -91,14 +96,28 @@ function onPointerLeave(): void {
   if (!dragging.value) pressing = false
 }
 
+/** 横向分页捕获指针后，pointerup 不再经过歌词列表，需要在窗口级清理按下态。 */
+function onWindowPointerUp(): void {
+  if (!pressing) return
+  pressing = false
+  dragging.value = false
+}
+
 function seekLine(timeMs: number): void {
   if (suppressClick) return
   player.seek(timeMs)
 }
 
+onMounted(() => {
+  window.addEventListener('pointerup', onWindowPointerUp)
+  window.addEventListener('pointercancel', onWindowPointerUp)
+})
+
 onBeforeUnmount(() => {
   pressing = false
   dragging.value = false
+  window.removeEventListener('pointerup', onWindowPointerUp)
+  window.removeEventListener('pointercancel', onWindowPointerUp)
 })
 </script>
 
