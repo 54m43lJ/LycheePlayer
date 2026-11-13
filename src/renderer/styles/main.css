@@ -230,14 +230,6 @@ button:focus-visible,
   letter-spacing: 0.04em;
 }
 
-.brand-sub {
-  margin-top: 2px;
-  font-size: 10px;
-  color: var(--faint);
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
 .nav {
   display: flex;
   flex: 1 1 auto;

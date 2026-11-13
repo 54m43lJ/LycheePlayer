@@ -219,7 +219,7 @@ onBeforeUnmount(() => downloads.setVisible(false))
               v-model="searchText"
               class="input"
               type="search"
-              placeholder="搜索歌名、歌手或专辑（本地）"
+              aria-label="搜索下载任务"
               autocomplete="off"
               spellcheck="false"
             />

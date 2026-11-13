@@ -179,7 +179,6 @@ onBeforeUnmount(() => {
                 />
               </div>
               <div class="card-name">{{ sectionTitle(section) }}</div>
-              <div class="card-sub">连续推荐 · 顺序播放</div>
             </div>
 
             <div v-else class="empty compact">

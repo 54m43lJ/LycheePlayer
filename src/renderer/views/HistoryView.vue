@@ -76,12 +76,6 @@ onMounted(() => {
       <div>
         <div class="eyebrow">History</div>
         <h1 class="page-title">播放历史</h1>
-        <p class="page-sub">
-          最近播放 {{ history.entries.length }} 首，最多保留 {{ PLAY_HISTORY_LIMIT }} 首
-          <template v-if="searchText">
-            · 筛选 {{ filteredSongs.length }} 首
-          </template>
-        </p>
       </div>
       <div class="page-head-actions">
         <button
@@ -109,7 +103,7 @@ onMounted(() => {
         v-model="searchText"
         class="input"
         type="search"
-        placeholder="搜索歌名、歌手或专辑"
+        aria-label="搜索播放历史"
         autocomplete="off"
         spellcheck="false"
       />

@@ -1176,10 +1176,12 @@ export function destroyTray(): void;
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；tooltip / <code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
+  <li>播放队列筛选输入框不显示占位文字，用 <code>aria-label="筛选队列中的歌曲"</code> 保留无障碍名称；输入值、清除按钮与过滤逻辑不变。</li>
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
   <li>播放队列头部 <code>.lyrics-head-actions</code> 并排放置“清空播放队列”与“关闭播放队列”两个图标按钮；清空按钮使用 <code>trash</code> 图标，队列为空时 <code>disabled</code> 并沿用 <code>.icon-btn:disabled</code> 灰化，滚动或筛选都不影响入口。列表底部不再渲染 <code>.queue-footer</code> 或文字按钮；<code>player.clearQueue()</code> 仍只清空当前曲之后的队列。</li>
   <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
   <li>主界面拖拽手势仅 ≤900px 启用：<code>pointerdown</code> 在宽屏直接返回；触屏 <code>pointerup</code> 若存在非折叠选区则跳过侧栏切换，长按选择文本优先；<code>pointercancel</code> 清理拖拽起点。窄屏非触屏由 §4.49 的 CSS 禁用文本选择。<code>ui.lyricsOpen</code> 为真时 <code>onPointerDown</code> / <code>onPointerUp</code> 提前返回并清空拖拽起点，横向手势完全交给 <a href="#c4-72">LyricsOverlay</a> 的分页处理，避免同时唤起侧栏；左边缘 revealer 是按钮，仍可通过点击打开侧栏。</li>
+  <li>品牌区只显示 <code>Lychee Player</code>，不再渲染副标题；登录后的账号 pill 次级行只显示 <code>musicid</code>，不再拼接“已登录 ·”。</li>
   <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单 / 播放历史”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。“播放历史”位于最近歌单子条目之后，使用 <code>history</code> 图标并链接到 <code>/history</code>。</li>
   <li>挂载时在 <code>auth.refresh()</code> 之后调用 <code>history.load()</code> 读取当前账号的本机历史；监听 <code>auth.musicid</code>，登录 / 退出 / 切换账号时重新加载对应作用域的记录，不跨账号复用内存中的列表。</li>
   <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），每日推荐歌单名通过 <code>dailyPlaylistName</code> 补昵称前缀后显示，点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
@@ -1597,7 +1599,7 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。歌曲表提供单曲播放与“下一首播放”；下载入口统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>。</li>
+  <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。在线搜索框不显示占位文字，用 <code>aria-label="搜索歌曲、歌手、专辑或歌单"</code> 保留无障碍名称。歌曲表提供单曲播放与“下一首播放”；下载入口统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>。</li>
   <li>歌手 / 专辑卡片点击进入 <code>/artist/:mid</code> / <code>/album/:mid</code>，不再以“搜索该歌手 / 专辑的单曲”作为点击行为；MV 卡片使用真实 <code>mv.search</code> 结果进入 <code>/mv/:id</code>。</li>
   <li>歌单结果卡片外层改为 <code>div[role="button"]</code>，卡片中心叠放 <a href="#c4-89">CardPlayButton</a>；播放按钮 <code>@click.stop</code> 调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a>，直接播放整个歌单而不进入详情，卡片其余区域仍跳转 <code>/playlist/:id</code>。</li>
 </ul>
@@ -1618,6 +1620,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>按路由参数加载歌单详情；打开页面无论内容是否变化都先展示该歌单最近一次缓存，同时触发后台静默刷新，不进入整页 loading。刷新成功一次性替换，失败保留缓存且不提示。</li>
+  <li>歌单头只显示歌曲数与歌单 ID，不再显示“已载入 X 首”；底部 <code>.feed-footer</code> 只在 <code>partial</code> / <code>error</code> 时渲染“正在加载”或“加载中断 + 重试”，完整加载后不显示“已载入全部 X 首”。</li>
   <li>歌单头标题与删除确认中的歌单名通过 <code>dailyPlaylistName</code> 展示；每日推荐歌单显示为“昵称的今日私享”，其余歌单名保持原值，不改写缓存元数据。</li>
   <li>心跳只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时存在：隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时；切换歌单或卸载时清除 interval 并调用 <code>playlist.stop(id)</code>。</li>
   <li>心跳由 <code>playlist.poll(id)</code> 用 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 检查首页；发现名称、封面、首屏顺序或数量显著变化时立即后台刷新，并取消待执行的 5 分钟 timeout。</li>
@@ -1625,7 +1628,7 @@ const emit = defineEmits&lt;{
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
   <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>下载按钮统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>：已下载时由全局 <a href="#c4-85">DownloadDeleteDialog</a> 询问是否删除本机文件，未下载时加入统一队列；页面不自行判断资产状态或维护确认框。</li>
-  <li>歌曲区标题显示 <code>已下载 X / Y 首</code>：<code>X</code> 按 <code>downloadedQuality</code> 统计，不把播放缓存算作已下载；有筛选时前置 <code>筛选 N ·</code>。歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。无匹配时显示空结果状态。</li>
+  <li>歌曲区标题显示 <code>已下载 X / Y 首</code>：<code>X</code> 按 <code>downloadedQuality</code> 统计，不把播放缓存算作已下载；有筛选时前置 <code>筛选 N ·</code>。歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；输入框不显示占位文字，用 <code>aria-label="筛选歌名、歌手或专辑"</code> 保留无障碍名称。只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。无匹配时显示空结果状态。</li>
   <li>页面根节点使用 <code>pageRef</code>，挂载时通过 <code>closest('.main')</code> 取得内容区滚动容器，注册 passive <code>scroll</code> 监听并用 <code>ResizeObserver</code> 观察内容尺寸；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击调用 <code>scrollTo({ behavior: 'smooth' })</code>。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
@@ -1651,6 +1654,7 @@ const emit = defineEmits&lt;{
   <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
   <li>账号区展示登录态、到期时间、续期与退出登录；窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。</li>
 </ul>
 
 <h3 id="c4-49">4.49 src/renderer/styles/main.css <a class="backlink" href="#c1">文件树</a></h3>
@@ -1669,7 +1673,7 @@ const emit = defineEmits&lt;{
   <li>按钮文字不换行：<code>.btn</code> 使用 <code>white-space: nowrap</code>；歌单操作区 <code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，子按钮 <code>flex: 0 0 auto</code> 保持内容宽度，空间不足时整组换行；≤900px 媒体查询不再重复声明 <code>flex-wrap</code>。</li>
   <li>危险操作使用 <code>.btn.danger</code>：透明边框、<code>--danger</code> 背景与 <code>--on-accent</code> 文字，悬停使用 danger 与 text 的混色。确认框 <code>.confirm-dialog</code> 复用 <code>.dialog-backdrop</code> / <code>.dialog</code>，限宽 440px；<code>.confirm-message</code> 使用 <code>white-space: pre-line</code> 保留说明换行。</li>
   <li>歌曲表使用 <code>table-layout: fixed</code> 与 <code>width: 100%</code>；<code>.page</code> 不设最大宽度，铺满内容区。操作单元格禁止改为 flex；内部容器负责按钮排列，行边框只挂在 <code>tr</code>。</li>
-  <li>歌单底部 <code>.feed-footer</code> 使用 flex，<code>.spinner</code> 为 <code>inline-block</code> 且 <code>flex: none</code>；播放队列行网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，不包含专辑列，最后一列只容纳图标按钮。</li>
+  <li>歌单底部 <code>.feed-footer</code> 只在加载中 / 中断时渲染，使用 flex，<code>.spinner</code> 为 <code>inline-block</code> 且 <code>flex: none</code>；完整加载后不占位。播放队列行网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，不包含专辑列，最后一列只容纳图标按钮。</li>
   <li>歌曲表操作列四个图标按钮在 <code>.song-action-inner</code> 内等距排列；≤900px 隐藏图标按钮、只显示 <code>more</code> 触发按钮。操作菜单为绝对定位浮层，项内“图标 + 文字”横排，点击外部或 Esc 关闭。</li>
   <li>播放模式为包含式 revealer：<code>.mode-button</code> 使用 32px 方形、9px 圆角、默认透明背景与 <code>--muted</code> 图标，悬停时使用 <code>--accent</code> 34% 混合背景；<code>.mode-wrap.open</code> 时按钮提升到 <code>z-index</code> 浮层之上，并保持 <code>--accent-strong</code> 图标与 <code>--accent-soft</code> 背景，直到菜单关闭；<code>.mode-wrap.open .mode-button:hover</code> 复用普通 hover 的 <code>--accent</code> 34% 混合背景，避免打开态失去既有悬停反馈。菜单 <code>.mode-menu</code> 使用 <code>bottom: 0</code>、<code>width: 100%</code>、<code>padding-bottom: 32px</code> 包住按钮，<code>--panel</code> 背景、9px 圆角与向上阴影，并通过 <code>mode-reveal</code> 的 <code>scaleY</code> 向上展开；菜单只列纯图标 <code>.mode-option</code>，不再有 <code>.mode-option.current</code>。</li>
   <li><code>.mode-button:disabled</code> 使用 <code>--faint</code> 颜色与 0.45 透明度，<code>cursor: default</code>，悬停保持透明背景；用于猜你喜欢连续队列锁定顺序播放时。</li>
@@ -2180,7 +2184,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
   <li>顶部整体进度条为 fixed overlay：<code>.downloads-progress-track</code> 使用 <code>position: fixed</code>、<code>top: 0</code>、<code>left: var(--sidebar-width)</code>、<code>right: 0</code>、<code>z-index: 14</code>、<code>height: 4px</code> 与 <code>pointer-events: none</code>，不占页面布局、不拦截点击，滚动时始终停在内容区顶端；使用 <code>--muted</code> 填充，不显示完成数 / 总数或失败数等数字指示；不再渲染 <code>.downloads-progress-count</code>，也不保留其 900px / 560px 响应式规则。失败数量只在任务列表与“未成功”筛选中体现。进度百分比由 <a href="#c4-80">utils/download-progress.ts</a> 的 <code>downloadOverallProgress</code> 计算。标题区复用普通 <code>.page</code> 的留白与背景。</li>
   <li><code>page-head-actions</code> 提供“清除已完成”“清空目录”“打开文件夹”：前者只清记录，后两者分别删除目录内容与记录、打开下载目录；清空目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认并展示实际路径，播放缓存不受影响。</li>
   <li>任务面板顶部左侧为“全部 / 进行中 / 已完成 / 未成功”过滤，右侧为“全部开始”继续所有暂停任务；无暂停任务或请求进行中时按钮禁用，请求中显示 spinner。过滤只影响展示，整体进度仍按全部任务计算。任务按新到旧展示，不改变主进程队列顺序。</li>
-  <li>工具栏下方提供纯本地搜索框：只对已加载的任务快照按歌名 / 歌手 / 专辑 / <code>songMid</code> / 文件路径做不区分大小写匹配，不发上游请求、不重新扫描目录；与状态过滤叠加，搜索框有内容时显示清除按钮。无匹配时标题为“没有匹配的下载任务”，提示换关键词；未搜索时保持“没有符合条件的任务”与切换过滤提示。</li>
+  <li>工具栏下方提供纯本地搜索框：只对已加载的任务快照按歌名 / 歌手 / 专辑 / <code>songMid</code> / 文件路径做不区分大小写匹配，不发上游请求、不重新扫描目录；与状态过滤叠加，搜索框有内容时显示清除按钮。输入框不显示占位文字，用 <code>aria-label="搜索下载任务"</code> 保留无障碍名称。无匹配时标题为“没有匹配的下载任务”，提示换关键词；未搜索时保持“没有符合条件的任务”与切换过滤提示。</li>
   <li>列表复用统一下载任务行，支持单任务暂停 / 继续 / 删除；删除任务使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认；空状态区分“没有任务”与“没有符合条件的任务”。</li>
 </ul>
 
@@ -2190,6 +2194,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 <ul class="note">
   <li><code>topSections</code> 固定为猜你喜欢与每日推荐（按此顺序，猜你喜欢在左），渲染在 <code>.discover-top</code> 的第一行，两张卡片保持原 150px 尺寸；两张伪歌单卡片都不渲染分区标题、计数或刷新按钮。每日推荐卡片取 <code>section.playlists[0]</code>，通过 <code>dailyPlaylistName</code> 补昵称前缀并跳转歌单详情；猜你喜欢卡片取 <code>section.songs[0]</code> 作封面，点击调用 <code>player.startRadioQueue(section.songs)</code> 启动连续队列，不跳转歌单详情。</li>
   <li>两张卡片封面中心均叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示。每日推荐卡片调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a> 直接播放整单；猜你喜欢卡片直接调用 <code>startRadioQueue(section.songs)</code>，复用连续队列的锁定顺序逻辑。播放按钮阻止冒泡，不触发卡片本身的跳转 / 起播行为。</li>
+  <li>猜你喜欢卡片只渲染标题，不再显示“连续推荐 · 顺序播放”副标题；每日推荐仍显示歌曲数副标题。</li>
   <li><code>listSections</code> 为其余分区（当前仅专属雷达），保留 <code>section-title</code>、计数与单区刷新按钮，继续渲染固定宽度歌曲条目，每区固定高度显示 3 行，超出横向滚动。</li>
   <li>页面挂载后启动 60 秒定时器调用 <code>recommend.refreshDailyIfExpired()</code>，跨过上海 0 点后自动重取日推；卸载时清除定时器。页面不再提供整体“换一批”入口，专属雷达保留自己的单区刷新按钮，日推由自然日过期自动更新。</li>
   <li>页面先渲染三块骨架：首行两张歌单卡片占位，专属雷达渲染 30 条歌曲条目占位；再按 <code>daily → radar → guess</code> 逐块异步填充，未完成的分区不阻塞其他内容。</li>
@@ -2485,8 +2490,8 @@ interface HistoryStore {
 <pre><code>// 无 props / emits。播放历史页：页头、本地搜索框、SongTable、清空历史确认框。
 </code></pre>
 <ul class="note">
-  <li>页头显示记录数与“播放全部”“清空历史”；记录为空时“播放全部”和“清空历史”都禁用。清空使用应用内 <a href="#c4-81">ConfirmDialog</a> 危险态，确认后调用 <code>history.clear()</code>。</li>
-  <li>搜索只过滤 <code>history.entries</code>，按歌名 / 歌手 / 专辑做不区分大小写的本地匹配，不发上游请求；无关键词时保留全部记录，结果为空时区分“还没有播放历史”和“没有匹配的播放历史”。</li>
+  <li>页头只显示标题与“播放全部”“清空历史”，不显示记录数或容量说明；记录为空时“播放全部”和“清空历史”都禁用。清空使用应用内 <a href="#c4-81">ConfirmDialog</a> 危险态，确认后调用 <code>history.clear()</code>。</li>
+  <li>搜索只过滤 <code>history.entries</code>，按歌名 / 歌手 / 专辑做不区分大小写的本地匹配，不发上游请求；输入框不显示占位文字，用 <code>aria-label="搜索播放历史"</code> 保留无障碍名称。无关键词时保留全部记录，结果为空时区分“还没有播放历史”和“没有匹配的播放历史”。</li>
   <li>列表复用 <a href="#c4-39">SongTable</a>，支持播放、下一首播放、收藏与共用下载入口；双击 / 单曲播放以当前过滤结果为新的播放顺序并替换队列。页面挂载时加载一次收藏状态，歌曲记录顺序不因收藏状态变化而改变。</li>
   <li>播放历史只记录本机播放，不读取账号云端历史，也不提供跨设备同步。</li>
 </ul>

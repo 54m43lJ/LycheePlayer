@@ -181,7 +181,7 @@ function changePage(delta: number): void {
         <input
           v-model="keyword"
           type="search"
-          placeholder="搜索歌曲、歌手、专辑或歌单"
+          aria-label="搜索歌曲、歌手、专辑或歌单"
           autocomplete="off"
           spellcheck="false"
         />

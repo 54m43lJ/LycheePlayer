@@ -364,7 +364,6 @@ onBeforeUnmount(() => {
                 <div class="cache-limit-head">
                   <div>
                     <div class="setting-name">播放缓存上限</div>
-                    <div class="setting-desc">超出后按最久未使用自动清理</div>
                   </div>
                   <span class="cache-limit-value">{{ cacheLimitStep.label }}</span>
                 </div>
@@ -465,7 +464,6 @@ onBeforeUnmount(() => {
             <div class="setting-row">
               <div>
                 <div class="setting-name">退出应用</div>
-                <div class="setting-desc">不受“关闭到托盘”影响，直接结束进程</div>
               </div>
               <button class="btn ghost small" @click="quitApp()">
                 <AppIcon name="power" :size="14" />

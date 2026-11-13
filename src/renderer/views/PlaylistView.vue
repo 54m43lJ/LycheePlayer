@@ -303,7 +303,6 @@ onBeforeUnmount(() => {
           <div class="playlist-meta">
             <span>{{ meta.songCount }} 首歌曲</span>
             <span>歌单 ID {{ meta.id }}</span>
-            <span>{{ songs.length }} 首已载入</span>
           </div>
           <div class="playlist-actions">
             <button class="btn primary" :disabled="songs.length === 0" @click="playAll()">
@@ -333,7 +332,13 @@ onBeforeUnmount(() => {
 
       <div v-if="songs.length > 0" class="table-filter">
         <span class="search-icon"><AppIcon name="search" :size="16" /></span>
-        <input v-model="filterText" class="input" placeholder="筛选歌名、歌手或专辑" />
+        <input
+          v-model="filterText"
+          class="input"
+          aria-label="筛选歌名、歌手或专辑"
+          autocomplete="off"
+          spellcheck="false"
+        />
         <button v-if="filterText" class="btn ghost small" @click="filterText = ''">清除</button>
       </div>
 
@@ -366,16 +371,18 @@ onBeforeUnmount(() => {
         <h3>这个歌单还没有可播放的歌曲</h3>
       </div>
 
-      <div v-if="feed && feed.songs.length > 0" class="feed-footer">
+      <div
+        v-if="feed && feed.songs.length > 0 && (feed.status === 'partial' || feed.status === 'error')"
+        class="feed-footer"
+      >
         <template v-if="feed.status === 'partial'">
           <span class="spinner" />
-          已载入 {{ feed.songs.length }} / {{ feed.total }} 首
+          正在加载
         </template>
-        <template v-else-if="feed.status === 'error'">
-          <span>已载入 {{ feed.songs.length }} / {{ feed.total }} 首，加载中断</span>
+        <template v-else>
+          <span>加载中断</span>
           <button class="btn ghost small" @click="retry()">重试</button>
         </template>
-        <template v-else>已载入全部 {{ feed.songs.length }} 首</template>
       </div>
 
       <PlaylistPicker

@@ -242,7 +242,6 @@ watch(
         <div class="brand-mark"><AppIcon name="music" :size="20" /></div>
         <div class="brand-text">
           <div class="brand-name">Lychee Player</div>
-          <div class="brand-sub">QQ Music · Linux</div>
         </div>
       </div>
 
@@ -341,7 +340,7 @@ watch(
           </span>
           <span class="user-meta">
             <span class="user-name">{{ auth.displayName }}</span>
-            <span class="user-state">已登录 · {{ auth.musicid }}</span>
+            <span class="user-state">{{ auth.musicid }}</span>
           </span>
           <AppIcon name="chevron-right" :size="15" />
         </RouterLink>
@@ -396,7 +395,13 @@ watch(
 
       <div v-if="player.queue.length > 0" class="table-filter queue-filter">
         <span class="search-icon"><AppIcon name="search" :size="16" /></span>
-        <input v-model="queueFilter" class="input" placeholder="筛选队列中的歌曲" />
+        <input
+          v-model="queueFilter"
+          class="input"
+          aria-label="筛选队列中的歌曲"
+          autocomplete="off"
+          spellcheck="false"
+        />
         <button v-if="queueFilter" class="btn ghost small" @click="queueFilter = ''">清除</button>
       </div>
 
