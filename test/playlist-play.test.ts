@@ -151,6 +151,38 @@ describe('歌单卡片直接播放', () => {
     })
   })
 
+  it('当前歌单播放中 / 暂停时切换播放状态，其他来源重新起播', async () => {
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const { usePlaylistPlay } = await import('../src/renderer/composables/playlist-play')
+    const player = usePlayerStore()
+    const { isSourcePlaying, isSourcePaused, toggleSource } = usePlaylistPlay()
+    const toggle = vi.spyOn(player, 'toggle').mockImplementation(noop)
+    const start = vi.fn()
+
+    player.queueSource = { kind: 'playlist', id: 'pl1' }
+    player.status = 'playing'
+    expect(isSourcePlaying('playlist', 'pl1')).toBe(true)
+    expect(isSourcePaused('playlist', 'pl1')).toBe(false)
+    toggleSource('playlist', 'pl1', start)
+    expect(toggle).toHaveBeenCalledTimes(1)
+    expect(start).not.toHaveBeenCalled()
+
+    player.status = 'paused'
+    expect(isSourcePlaying('playlist', 'pl1')).toBe(false)
+    expect(isSourcePaused('playlist', 'pl1')).toBe(true)
+    toggleSource('playlist', 'pl1', start)
+    expect(toggle).toHaveBeenCalledTimes(2)
+
+    player.status = 'playing'
+    toggleSource('playlist', 'other', start)
+    expect(start).toHaveBeenCalledTimes(1)
+
+    player.queueSource = { kind: 'playlist', id: 'pl1' }
+    player.status = 'stopped'
+    toggleSource('playlist', 'pl1', start)
+    expect(start).toHaveBeenCalledTimes(2)
+  })
+
   it('空歌单不入队', async () => {
     getCached.mockResolvedValue({ ok: true, data: cached([]) })
     get.mockResolvedValue({ ok: true, data: page([]) })

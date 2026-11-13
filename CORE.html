@@ -1601,7 +1601,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>页面状态：关键词、当前类型、结果、分页、加载与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。在线搜索框不显示占位文字，用 <code>aria-label="搜索歌曲、歌手、专辑或歌单"</code> 保留无障碍名称。歌曲表提供单曲播放与“下一首播放”；下载入口统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>。</li>
   <li>歌手 / 专辑卡片点击进入 <code>/artist/:mid</code> / <code>/album/:mid</code>，不再以“搜索该歌手 / 专辑的单曲”作为点击行为；MV 卡片使用真实 <code>mv.search</code> 结果进入 <code>/mv/:id</code>。歌手 / 专辑卡片只显示名称，不用副标题解释点击行为。</li>
-  <li>歌单结果卡片外层改为 <code>div[role="button"]</code>，卡片中心叠放 <a href="#c4-89">CardPlayButton</a>；播放按钮 <code>@click.stop</code> 调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a>，直接播放整个歌单而不进入详情，卡片其余区域仍跳转 <code>/playlist/:id</code>。</li>
+  <li>歌单结果卡片外层改为 <code>div[role="button"]</code>，卡片中心叠放 <a href="#c4-89">CardPlayButton</a>；播放按钮 <code>@click.stop</code> 调用 <a href="#c4-90">usePlaylistPlay().toggleSource</a>，当前歌单播放 / 暂停时切换播放状态，否则直接播放整个歌单而不进入详情；卡片其余区域仍跳转 <code>/playlist/:id</code>。</li>
 </ul>
 
 <h3 id="c4-45">4.45 src/renderer/views/LibraryView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1612,7 +1612,7 @@ const emit = defineEmits&lt;{
   <li>监听 <code>playlist-edit.favoriteVersion</code>，收藏成功后重新拉取歌单列表，更新“我喜欢”卡片数量；歌单卡片提供改名 / 删除 / 新建菜单。</li>
   <li>新建 / 改名 / 删除歌单走 <code>playlist-edit</code> 的真实写入：创建与改名复用 <code>PlaylistEditDialog</code>，删除使用 <a href="#c4-81">ConfirmDialog</a> 的危险态按钮确认；成功后刷新“我的歌单”卡片并清除对应缓存，失败保留原状态并提示。</li>
   <li>歌单卡片名称通过 <code>dailyPlaylistName</code> 展示，每日推荐歌单同样补当前昵称前缀；其余歌单名保持原值。</li>
-  <li>每张歌单卡片封面中心叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示；点击调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a> 直接播放整个歌单，不进入详情。播放按钮的 click / keydown 阻止冒泡，避免同时触发卡片跳转；加载期间显示 spinner 并禁用。</li>
+  <li>每张歌单卡片封面中心叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示；点击调用 <a href="#c4-90">usePlaylistPlay().toggleSource</a>：该歌单正在播放时暂停，暂停后继续，否则直接播放整个歌单，不进入详情。播放按钮的 click / keydown 阻止冒泡，避免同时触发卡片跳转；加载期间显示 spinner 并禁用。</li>
 </ul>
 
 <h3 id="c4-46">4.46 src/renderer/views/PlaylistView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -2193,7 +2193,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 </code></pre>
 <ul class="note">
   <li><code>topSections</code> 固定为猜你喜欢与每日推荐（按此顺序，猜你喜欢在左），渲染在 <code>.discover-top</code> 的第一行，两张卡片保持原 150px 尺寸；两张伪歌单卡片都不渲染分区标题、计数或刷新按钮。每日推荐卡片取 <code>section.playlists[0]</code>，通过 <code>dailyPlaylistName</code> 补昵称前缀并跳转歌单详情；猜你喜欢卡片取 <code>section.songs[0]</code> 作封面，点击调用 <code>player.startRadioQueue(section.songs)</code> 启动连续队列，不跳转歌单详情。</li>
-  <li>两张卡片封面中心均叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示。每日推荐卡片调用 <a href="#c4-90">usePlaylistPlay().playPlaylist</a> 直接播放整单；猜你喜欢卡片直接调用 <code>startRadioQueue(section.songs)</code>，复用连续队列的锁定顺序逻辑。播放按钮阻止冒泡，不触发卡片本身的跳转 / 起播行为。</li>
+  <li>两张卡片封面中心均叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示。每日推荐卡片调用 <a href="#c4-90">usePlaylistPlay().toggleSource</a> 播放 / 暂停整单；猜你喜欢卡片以 <code>radio / guess</code> 来源调用同一 <code>toggleSource</code>，首次点击执行 <code>startRadioQueue(section.songs)</code>，之后随当前队列状态暂停 / 继续。播放按钮阻止冒泡，不触发卡片本身的跳转 / 起播行为。</li>
   <li>猜你喜欢卡片只渲染标题，不再显示“连续推荐 · 顺序播放”副标题；每日推荐仍显示歌曲数副标题。</li>
   <li><code>listSections</code> 为其余分区（当前仅专属雷达），保留 <code>section-title</code>、计数与单区刷新按钮，继续渲染固定宽度歌曲条目，每区固定高度显示 3 行，超出横向滚动。</li>
   <li>页面挂载后启动 60 秒定时器调用 <code>recommend.refreshDailyIfExpired()</code>，跨过上海 0 点后自动重取日推；卸载时清除定时器。页面不再提供整体“换一批”入口，专属雷达保留自己的单区刷新按钮，日推由自然日过期自动更新。</li>
@@ -2518,13 +2518,17 @@ export function resolveSwipeIntent(
 <h3 id="c4-89">4.89 src/renderer/components/CardPlayButton.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>interface Props {
   loading?: boolean; // 默认 false
+  playing?: boolean; // 当前卡片来源正在播放
+  paused?: boolean; // 当前卡片来源已暂停
   label?: string; // 默认“播放整个歌单”
+  pauseLabel?: string; // 默认“暂停播放”
+  resumeLabel?: string; // 默认“继续播放”
 }
 
 emits: { play: [] };
 </code></pre>
 <ul class="note">
-  <li>歌单卡片封面上的居中圆形播放按钮，复用 <code>AppIcon</code> 的 <code>play</code> 图标与全局 <code>.spinner</code>；<code>title</code> / <code>aria-label</code> 在加载时显示“正在加载歌单”。</li>
+  <li>歌单卡片封面上的居中圆形播放按钮，复用 <code>AppIcon</code> 的 <code>play</code> / <code>pause</code> 图标与全局 <code>.spinner</code>；<code>playing</code> 时显示暂停图标与 <code>pauseLabel</code>，<code>paused</code> 时显示播放图标与 <code>resumeLabel</code>，加载时优先显示“正在加载歌单”。<code>title</code> / <code>aria-label</code> 始终跟随当前语义。</li>
   <li>点击与 keydown 都阻止冒泡，避免触发外层歌单卡片的跳转；加载中设置 <code>disabled</code>，防止重复点击。样式由 <code>.card-play</code> 与卡片 <code>:hover</code> / <code>:focus-within</code> 控制，见 <a href="#c4-49">§4.49</a>。</li>
 </ul>
 
@@ -2532,10 +2536,14 @@ emits: { play: [] };
 <pre><code>export function usePlaylistPlay(): {
   playingId: Ref&lt;string | null&gt;;
   playPlaylist(target: Pick&lt;PlaylistMeta, 'id' | 'name'&gt;): Promise&lt;void&gt;;
+  isSourcePlaying(kind: QueueSource['kind'], id: string): boolean;
+  isSourcePaused(kind: QueueSource['kind'], id: string): boolean;
+  toggleSource(kind: QueueSource['kind'], id: string, start: () => void): void;
 };
 </code></pre>
 <ul class="note">
   <li>所有歌单卡片共用的直接播放入口：优先读取整份缓存，命中则用缓存歌曲立即起播；缓存缺失时读取第一页，避免等待完整快照。</li>
+  <li><code>isSourcePlaying</code> / <code>isSourcePaused</code> 只在 <code>player.queueSource</code> 的 <code>kind + id</code> 与卡片来源一致，且播放状态分别为 <code>playing</code> / <code>paused</code> 时为真。<code>toggleSource()</code> 在来源匹配且状态非 <code>stopped</code> 时调用 <code>player.toggle()</code> 完成暂停 / 继续；其他来源或已停止时执行传入的起播函数，重新启动整个歌单。</li>
   <li>起播调用 <code>player.startPlaylistPlayback(first, { kind: 'playlist', id })</code>，先用已读取的缓存 / 第一页调用 <code>player.appendPlaylistQueue(first, songs)</code> 补齐待播队列，再以 <code>playlist.beginQueueBuild()</code> 建立队列来源，并在后台 <code>playlist.load(id)</code>；完整快照就绪后由 store 的队列构建流程去重并替换为整单，失败时保留已起播歌曲。</li>
   <li><code>playingId</code> 为模块级单例，同一时间只允许一个歌单进入加载流程，卡片按 id 显示 spinner；空歌单提示“这个歌单里还没有可播放的歌曲”，上游 / 缓存错误统一 Toast。</li>
 </ul>
@@ -3189,25 +3197,28 @@ views/HistoryView::startAt(index)
 
 <h3 id="c5-22">5.22 歌单卡片直接播放</h3>
 <pre><code>views/LibraryView / SearchView / DiscoverView::CardPlayButton@play
-└── composables/playlist-play::playPlaylist(target)
-    ├── 判断 playingId !== null → 忽略重复点击
-    ├── window.lychee.playlist.getCached(target.id)
-    │   └── ipc::handle('playlist.getCached')
-    │       └── api/playlist::getCachedPlaylist(target.id)
-    ├── 判断缓存为空 → window.lychee.playlist.get(target.id, { offset: 0 })
-    │   └── ipc::handle('playlist.get')
-    │       └── api/playlist::fetchPlaylistPage(target.id, 0)
-    ├── 判断无歌曲 → Toast“这个歌单里还没有可播放的歌曲”
-    ├── stores/player::startPlaylistPlayback(first, { kind: 'playlist', id })
-    ├── stores/playlist::beginQueueBuild()
-    └── stores/playlist::load(target.id)                    // 后台完整快照
-        └── 快照就绪 → stores/playlist::maybeFinalizeQueue()
-            └── stores/player::appendPlaylistQueue(current, fullSongs)
+└── composables/playlist-play::toggleSource(kind, id, start)
+    ├── 判断 queueSource.kind + id 匹配且 status = playing / paused → stores/player::toggle()  // 暂停 / 继续
+    └── 判断其他来源或 status = stopped → start()
+        └── composables/playlist-play::playPlaylist(target)
+            ├── 判断 playingId !== null → 忽略重复点击
+            ├── window.lychee.playlist.getCached(target.id)
+            │   └── ipc::handle('playlist.getCached')
+            │       └── api/playlist::getCachedPlaylist(target.id)
+            ├── 判断缓存为空 → window.lychee.playlist.get(target.id, { offset: 0 })
+            │   └── ipc::handle('playlist.get')
+            │       └── api/playlist::fetchPlaylistPage(target.id, 0)
+            ├── 判断无歌曲 → Toast“这个歌单里还没有可播放的歌曲”
+            ├── stores/player::startPlaylistPlayback(first, { kind: 'playlist', id })
+            ├── stores/playlist::beginQueueBuild()
+            └── stores/playlist::load(target.id)            // 后台完整快照
+                └── 快照就绪 → stores/playlist::maybeFinalizeQueue()
+                    └── stores/player::appendPlaylistQueue(current, fullSongs)
 </code></pre>
 <ul class="note">
   <li>起播不等待完整快照：缓存命中时直接用缓存歌曲，否则用第一页 50 首；完整歌单在后台加载完成后替换为整单队列，当前曲与播放进度保持不变。</li>
   <li>进度只在上游 / 缓存读取阶段显示 spinner，后台刷新不阻塞卡片操作；同一时刻只允许一个歌单进入加载流程，避免连续点击互相覆盖队列。</li>
-  <li>每日推荐卡片的播放按钮走同一入口；猜你喜欢是连续队列伪歌单，仍直接调用 <code>startRadioQueue(section.songs)</code>，不读取歌单接口。</li>
+  <li>每日推荐卡片的播放按钮走同一 <code>toggleSource</code> 入口；猜你喜欢以 <code>radio / guess</code> 来源调用它，<code>start</code> 回调执行 <code>startRadioQueue(section.songs)</code>，不读取歌单接口。</li>
 </ul>
 
 </body>

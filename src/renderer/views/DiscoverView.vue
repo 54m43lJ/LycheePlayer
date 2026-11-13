@@ -19,7 +19,8 @@ const recommend = useRecommendStore()
 const player = usePlayerStore()
 const router = useRouter()
 const toast = useToast()
-const { playingId, playPlaylist } = usePlaylistPlay()
+const { playingId, playPlaylist, isSourcePlaying, isSourcePaused, toggleSource } =
+  usePlaylistPlay()
 
 const sections = computed(() => recommend.feed.sections)
 const topSections = computed(() => {
@@ -151,7 +152,13 @@ onBeforeUnmount(() => {
                 />
                 <CardPlayButton
                   :loading="playingId === section.playlists[0].id"
-                  @play="playPlaylist(section.playlists[0])"
+                  :playing="isSourcePlaying('playlist', section.playlists[0].id)"
+                  :paused="isSourcePaused('playlist', section.playlists[0].id)"
+                  @play="
+                    toggleSource('playlist', section.playlists[0].id, () =>
+                      playPlaylist(section.playlists[0])
+                    )
+                  "
                 />
               </div>
               <div class="card-name">{{ playlistTitle(section.playlists[0].name) }}</div>
@@ -175,7 +182,9 @@ onBeforeUnmount(() => {
                 />
                 <CardPlayButton
                   label="开始播放猜你喜欢"
-                  @play="startGuessRadio(section)"
+                  :playing="isSourcePlaying('radio', 'guess')"
+                  :paused="isSourcePaused('radio', 'guess')"
+                  @play="toggleSource('radio', 'guess', () => startGuessRadio(section))"
                 />
               </div>
               <div class="card-name">{{ sectionTitle(section) }}</div>

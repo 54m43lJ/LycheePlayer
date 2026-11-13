@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 import type { PlaylistMeta, Song } from '@shared/types'
 import { describeError, unwrap } from '../api'
-import { usePlayerStore } from '../stores/player'
+import { usePlayerStore, type QueueSource } from '../stores/player'
 import { usePlaylistStore } from '../stores/playlist'
 import { useToast } from './toast'
 
@@ -16,6 +16,31 @@ export function usePlaylistPlay() {
   const player = usePlayerStore()
   const playlist = usePlaylistStore()
   const toast = useToast()
+
+  function isSourceActive(kind: QueueSource['kind'], id: string): boolean {
+    return player.queueSource?.kind === kind && player.queueSource.id === id
+  }
+
+  function isSourcePlaying(kind: QueueSource['kind'], id: string): boolean {
+    return isSourceActive(kind, id) && player.status === 'playing'
+  }
+
+  function isSourcePaused(kind: QueueSource['kind'], id: string): boolean {
+    return isSourceActive(kind, id) && player.status === 'paused'
+  }
+
+  /** 当前卡片来源正在播放 / 暂停时切换播放状态；否则执行该卡片的起播逻辑。 */
+  function toggleSource(
+    kind: QueueSource['kind'],
+    id: string,
+    start: () => void
+  ): void {
+    if (isSourceActive(kind, id) && player.status !== 'stopped') {
+      player.toggle()
+      return
+    }
+    start()
+  }
 
   async function playPlaylist(target: Pick<PlaylistMeta, 'id' | 'name'>): Promise<void> {
     if (!target.id || playingId.value !== null) return
@@ -50,5 +75,11 @@ export function usePlaylistPlay() {
     }
   }
 
-  return { playingId, playPlaylist }
+  return {
+    playingId,
+    playPlaylist,
+    isSourcePlaying,
+    isSourcePaused,
+    toggleSource
+  }
 }

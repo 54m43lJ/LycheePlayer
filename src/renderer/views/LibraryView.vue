@@ -18,7 +18,8 @@ const router = useRouter()
 const auth = useAuthStore()
 const edit = usePlaylistEditStore()
 const toast = useToast()
-const { playingId, playPlaylist } = usePlaylistPlay()
+const { playingId, playPlaylist, isSourcePlaying, isSourcePaused, toggleSource } =
+  usePlaylistPlay()
 
 const playlists = ref<PlaylistMeta[]>([])
 const loading = ref(false)
@@ -186,7 +187,9 @@ watch(
               <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="30" />
               <CardPlayButton
                 :loading="playingId === playlist.id"
-                @play="playPlaylist(playlist)"
+                :playing="isSourcePlaying('playlist', playlist.id)"
+                :paused="isSourcePaused('playlist', playlist.id)"
+                @play="toggleSource('playlist', playlist.id, () => playPlaylist(playlist))"
               />
             </div>
             <div class="card-name">

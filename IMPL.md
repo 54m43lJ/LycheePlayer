@@ -458,3 +458,30 @@
 | `CORE.html` | §4.67 `DownloadsView.vue`（`#c4-67`） | 改 | 下载搜索框不显示占位文字，保留无障碍名称。 |
 | `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 改 | 猜你喜欢卡片只显示标题，删除“连续推荐 · 顺序播放”。 |
 | `CORE.html` | §4.87 `HistoryView.vue`（`#c4-87`） | 改 | 页头只显示标题；搜索框改为 `aria-label`；空状态只提示下一步，不再说明容量。 |
+
+### 3.15 歌单卡片播放按钮不随播放状态切换
+
+**问题描述**：歌单卡片的中心按钮只有“播放整个歌单”一种状态。当前卡片对应歌单已经在播放时，按钮仍显示播放图标，点击会重新起播而不是暂停；也无法从卡片恢复已暂停的歌单。用户要求按钮跟随播放器状态，在当前正在播放时显示暂停并点击暂停，暂停后还能点击继续。
+
+**解决方法**：
+
+- `usePlaylistPlay` 增加 `isSourcePlaying()` / `isSourcePaused()` / `toggleSource()`：按 `player.queueSource` 的 `kind + id` 判断卡片是否对应当前队列；正在播放或已暂停时调用 `player.toggle()`，其他来源或已停止时执行原起播函数。
+- `CardPlayButton` 增加 `playing` / `paused` / `pauseLabel` / `resumeLabel`：播放时显示 `pause` 图标与“暂停播放”，暂停后显示 `play` 图标与“继续播放”，加载态仍优先显示 spinner；`title` / `aria-label` 同步切换。
+- “我的歌单”、搜索结果、发现页每日推荐均以 `playlist / <id>` 来源接入；猜你喜欢以 `radio / guess` 来源接入，首次播放仍调用 `startRadioQueue()`。
+- 扩展 `test/playlist-play.test.ts`，覆盖同来源播放 / 暂停切换、其他来源重新起播与已停止状态重新启动。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 3 项“歌单 hover 播放按钮智能切换” | 改 | 行尾追加 ` [已解决]`。 |
+| `USER.html` | §1 TERMS · 歌单卡片播放（`#u1`） | 改 | 补播放中显示暂停、暂停后继续，以及猜你喜欢同样支持。 |
+| `USER.html` | §5.2.8 页面结构（`#u5-2-8`） | 改 | 搜索 / 我的歌单 / 发现行补充卡片按钮随播放状态切换；增加全局状态同步说明。 |
+| `CORE.html` | §4.44 `SearchView.vue`（`#c4-44`） | 改 | 歌单卡片改用 `toggleSource`。 |
+| `CORE.html` | §4.45 `LibraryView.vue`（`#c4-45`） | 改 | 歌单卡片改用 `toggleSource` 并传入播放 / 暂停状态。 |
+| `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 改 | 每日推荐接入 `playlist` 来源；猜你喜欢接入 `radio / guess` 来源。 |
+| `CORE.html` | §4.89 `CardPlayButton.vue`（`#c4-89`） | 改 | 增加 `playing` / `paused` 与暂停 / 继续文案，图标和 aria 标签随状态切换。 |
+| `CORE.html` | §4.90 `playlist-play.ts`（`#c4-90`） | 改 | 增加 `isSourcePlaying` / `isSourcePaused` / `toggleSource` 签名与判定规则。 |
+| `CORE.html` | §5.22 歌单卡片直接播放（`#c5-22`） | 改 | 调用树增加同来源暂停 / 继续分支，原起播流程挂在其他来源 / 已停止分支下。 |
+| `README.md` | §2 用户交互 · 歌单卡片播放行 | 改 | 补充播放中暂停、暂停后继续。 |
+| `ABOUT.html` | 用户交互 · 歌单卡片播放行 | 改 | 与 README 同步。 |

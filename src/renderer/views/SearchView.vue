@@ -27,7 +27,8 @@ const download = useDownloadStore()
 const auth = useAuthStore()
 const toast = useToast()
 const { requestDownload } = useDownloadAction()
-const { playingId, playPlaylist } = usePlaylistPlay()
+const { playingId, playPlaylist, isSourcePlaying, isSourcePaused, toggleSource } =
+  usePlaylistPlay()
 
 const TABS: Array<{ value: SearchType; label: string }> = [
   { value: 'song', label: '单曲' },
@@ -311,7 +312,9 @@ function changePage(delta: number): void {
               <CoverArt :src="playlist.coverUrl" image-class="card-cover" :icon-size="30" />
               <CardPlayButton
                 :loading="playingId === playlist.id"
-                @play="playPlaylist(playlist)"
+                :playing="isSourcePlaying('playlist', playlist.id)"
+                :paused="isSourcePaused('playlist', playlist.id)"
+                @play="toggleSource('playlist', playlist.id, () => playPlaylist(playlist))"
               />
             </div>
             <div class="card-name">{{ playlist.name }}</div>
