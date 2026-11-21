@@ -138,6 +138,8 @@ export interface LycheeApi {
   }
   user: {
     getProfile(): Promise<IpcResult<UserProfile>>
+    /** 当前账号是否具有 VIP 权益；未登录或接口失败返回 false。 */
+    isVip(): Promise<IpcResult<boolean>>
   }
   lyric: {
     get(songId: string): Promise<IpcResult<Lyric>>

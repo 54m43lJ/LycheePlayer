@@ -20,6 +20,8 @@ const player = usePlayerStore()
 const router = useRouter()
 const toast = useToast()
 const sessionRefreshing = ref(false)
+const isVip = ref(false)
+let vipRequest = 0
 const appVersion = __APP_VERSION__
 const appLicense = __APP_LICENSE__
 
@@ -70,6 +72,29 @@ watch(
 )
 
 let cacheLimitSaveTimer: number | null = null
+
+/** VIP 权益只用于账号区徽标；未登录或上游失败时保持隐藏。 */
+async function loadVip(): Promise<void> {
+  const request = ++vipRequest
+  if (!auth.loggedIn) {
+    isVip.value = false
+    return
+  }
+  try {
+    const value = unwrap(await window.lychee.user.isVip())
+    if (request === vipRequest) isVip.value = value
+  } catch {
+    if (request === vipRequest) isVip.value = false
+  }
+}
+
+watch(
+  () => [auth.loggedIn, auth.musicid] as const,
+  () => {
+    void loadVip()
+  },
+  { immediate: true }
+)
 
 async function loadFlags(): Promise<void> {
   try {
@@ -426,6 +451,7 @@ onBeforeUnmount(() => {
                     {{ auth.method === 'wechat' ? '微信' : 'QQ' }} · musicid {{ auth.musicid }}
                   </div>
                 </div>
+                <span v-if="isVip" class="pay-badge">VIP</span>
               </div>
               <div class="setting-row">
                 <div>

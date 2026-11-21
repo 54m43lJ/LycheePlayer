@@ -642,7 +642,7 @@
   <div class="u-col">
     <div class="u-panel">
       <h5>账号</h5>
-      <div class="u-rowline"><span>Lychee<br /><small>QQ · musicid 0123456789</small></span></div>
+      <div class="u-rowline"><span>Lychee<br /><small>QQ · musicid 0123456789</small></span><span class="u-badge gold">VIP</span></div>
       <div class="u-rowline"><span>凭证到期<br /><small>2026-10-21 12:00</small></span><span class="u-tab">立即续期</span></div>
       <div class="u-rowline"><span class="u-tab">我的歌单</span><span class="u-tab">退出登录</span></div>
     </div>
@@ -666,7 +666,7 @@
   <li><code>Settings</code> 的确切持久化字段为 <code>defaultQuality</code>、<code>closeToTray</code>、<code>theme</code>、<code>audioCacheEnabled</code>、<code>audioCacheMaxBytes</code>、<code>downloadDir?</code>。<code>downloadDir</code> 缺省为 <code>~/Music/Lychee Player</code>；<code>audioCacheMaxBytes</code> 限定为 6 个缓存档位；未知值由主进程回退默认。</li>
   <li>关于区展示版本、音频引擎与许可证；版本与许可证以构建配置为准。</li>
   <li>音质四档，默认“自动”；与播放条共用同一持久化偏好，任一处修改即时同步；回退静默，不弹提示。</li>
-  <li>关闭到托盘默认开启；窗口区只保留“关闭到托盘”，右侧“应用”面板提供“退出应用”，直接结束进程且不受关闭到托盘影响；账号区展示登录方式、musicid 与到期时间，不显示“已登录”徽标。QQ / 微信扫码凭证在到期前自动续期，调用上游遇到登录失效时也会立即尝试续期并重试一次原请求；续期成功 / 失败后登录态实时更新，auth-failed 时弹出全局重新登录界面。登录后始终允许手动续期，按钮不按凭证类型禁用。</li>
+  <li>关闭到托盘默认开启；窗口区只保留“关闭到托盘”，右侧“应用”面板提供“退出应用”，直接结束进程且不受关闭到托盘影响；账号区展示登录方式、musicid 与到期时间，不显示“已登录”徽标；检测到当前账号具有 VIP 权益时在右侧显示“VIP”标记，检测不到则不显示。QQ / 微信扫码凭证在到期前自动续期，调用上游遇到登录失效时也会立即尝试续期并重试一次原请求；续期成功 / 失败后登录态实时更新，auth-failed 时弹出全局重新登录界面。登录后始终允许手动续期，按钮不按凭证类型禁用。</li>
   <li>修改设置即写盘，无保存按钮；播放中切换音质会立即重载当前曲目。</li>
 </ul>
 

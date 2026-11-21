@@ -157,7 +157,8 @@ const api: LycheeApi = {
     clearCache: () => invoke<null>('download.clearCache')
   },
   user: {
-    getProfile: () => invoke<UserProfile>('user.getProfile')
+    getProfile: () => invoke<UserProfile>('user.getProfile'),
+    isVip: () => invoke<boolean>('user.isVip')
   },
   lyric: {
     get: (songId: string) => invoke<Lyric>('lyric.get', songId),
