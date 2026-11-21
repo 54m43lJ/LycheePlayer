@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, RouterView, useRoute } from 'vue-router'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
 import DownloadDeleteDialog from './components/DownloadDeleteDialog.vue'
 import LyricsOverlay from './components/LyricsOverlay.vue'
 import PlayerBar from './components/PlayerBar.vue'
+import ReauthDialog from './components/ReauthDialog.vue'
 import ToastStack from './components/ToastStack.vue'
 import { useAuthStore } from './stores/auth'
 import { useDownloadStore } from './stores/download'
@@ -21,6 +22,7 @@ import { appTitle, dailyPlaylistName, singerNames, songCover } from './utils/for
 import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuthStore()
 const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
@@ -47,6 +49,9 @@ const filteredQueue = computed(() => {
     return haystack.includes(keyword)
   })
 })
+const showReauth = computed(
+  () => Boolean(auth.reauthReason) && route.name !== 'login'
+)
 const currentPlaylistId = computed(() => player.queueSource?.id ?? '')
 const viewedPlaylistId = computed(() =>
   route.name === 'playlist' ? String(route.params.id ?? '') : ''
@@ -83,6 +88,11 @@ async function toggleTheme(): Promise<void> {
 function onSidebarNavigate(): void {
   ui.closeLyrics()
   ui.closeSidebar()
+}
+
+function openReauthLogin(): void {
+  auth.dismissReauth()
+  void router.push('/login')
 }
 
 function recentPlaylistName(name: string): string {
@@ -355,6 +365,12 @@ watch(
 
     <PlayerBar />
     <DownloadDeleteDialog />
+    <ReauthDialog
+      :open="showReauth"
+      :reason="auth.reauthReason"
+      @login="openReauthLogin"
+      @dismiss="auth.dismissReauth"
+    />
 
     <aside class="lyrics-panel queue-panel" :class="{ open: ui.queueOpen }">
       <div class="lyrics-head">

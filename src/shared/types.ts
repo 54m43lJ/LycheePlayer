@@ -343,12 +343,16 @@ export interface Settings {
   downloadDir?: string
 }
 
+export type ReauthReason = 'v1' | 'auth-failed'
+
 export interface AuthStatus {
   loggedIn: boolean
   method: LoginMethod | null
   musicid: string | null
   expiresAtMs: number | null
   canRefresh: boolean
+  /** 非空时显示全局重新登录界面；清空凭证不属于该界面，由触发方负责。 */
+  reauthReason: ReauthReason | null
 }
 
 export type MprisCommand =

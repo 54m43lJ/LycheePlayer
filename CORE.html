@@ -40,7 +40,6 @@
 │   │   ├── <a href="#c4-5">ipc.ts</a>                        IPC 路由注册
 │   │   ├── <a href="#c4-6">settings.ts</a>                   设置持久化
 │   │   ├── <a href="#c4-7">credential.ts</a>                 凭证存取
-│   │   ├── <a href="#c4-7-1">credential-migration.ts</a>       凭证版本迁移与字段归一化
 │   │   ├── <a href="#c4-51">startup-flags.ts</a>             启动参数文件解析与应用
 │   │   ├── api/                              上游接口层
 │   │   │   ├── <a href="#c4-8">client.ts</a>                 统一请求、错误与重试
@@ -123,6 +122,7 @@
 │       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
 │       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
 │       │   ├── <a href="#c4-81">ConfirmDialog.vue</a>          应用内确认框
+│       │   ├── <a href="#c4-91">ReauthDialog.vue</a>           全局重新登录弹层
 │       │   ├── <a href="#c4-85">DownloadDeleteDialog.vue</a>  删除下载确认框
 │       │   └── <a href="#c4-82">CatalogDescription.vue</a>     歌手 / 专辑简介折叠
 │       ├── views/
@@ -144,7 +144,7 @@
 │   │   ├── login-wechat.test.ts              微信换证请求与凭证解析
 │   │   ├── playlist-cache.test.ts            整份歌单缓存与 complete 标记
 │   │   └── search.test.ts                    搜索映射与空关键词
-│   ├── credential-migration.test.ts          v1→v2 凭证迁移
+│   ├── credential-store.test.ts              v1 凭证清空与失效原因
 │   ├── fixtures/                             脱敏上游响应
 │   ├── player-store.test.ts                  播放顺序、队列补齐与快照保留
 │   ├── history-store.test.ts                 播放历史去重、上限与账号隔离
@@ -629,12 +629,16 @@ export interface Settings {
   audioCacheMaxBytes: number;
 }
 
+export type ReauthReason = 'v1' | 'auth-failed';
+
 export interface AuthStatus {
   loggedIn: boolean;
   method: LoginMethod | null;
   musicid: string | null;
   expiresAtMs: number | null;
   canRefresh: boolean;
+  /** 非空时显示全局重新登录弹层；清空凭证由触发方负责，不在弹层内执行。 */
+  reauthReason: ReauthReason | null;
 }
 
 export type MprisCommand =
@@ -683,7 +687,7 @@ export interface FlagsFile {
 }
 </code></pre>
 <ul class="note">
-  <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；<code>method</code> 显式区分 QQ / 微信，续期按它分流；续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态。</li>
+  <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；<code>method</code> 显式区分 QQ / 微信，续期按它分流；续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态；<code>reauthReason</code> 只表达“为什么显示重新登录弹层”，不承担清空凭证。</li>
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
   <li><code>Comment</code> / <code>CommentPage</code> 是 <code>comment.get</code> 的跨 IPC 数据模型；<code>CommentPostResult</code> 是 <code>comment.post</code> 的返回模型；原始字段映射见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
   <li><code>ArtistAlbum</code> 是歌手页专辑卡片的跨 IPC 模型，<code>kind</code> 由上游 <code>albumType</code> 归一化为 <code>lp</code> / <code>ep</code> / <code>single</code> / <code>live</code> / <code>other</code>；<code>ArtistAlbumPage</code> 为 <code>artist.getAlbums</code> 的分页返回模型。</li>
@@ -865,6 +869,7 @@ function handle(
   <li><code>playlist.getSnapshot</code> / <code>playlist.cancelSnapshot</code> 按歌单 ID 保存 <code>{ token, AbortController }</code>；只允许匹配 token 的取消操作中止对应请求，新请求会先中止同歌单的旧请求。取消后当前网络请求立即中止，快照不会替换内容或写缓存。</li>
   <li><code>registerIpc</code> 注册 <code>setUpstreamBlockNotifier</code>，104009 首次进入截断窗口时通过 <code>broadcast('upstream:blocked', event)</code> 通知所有窗口；preload 暴露 <code>window.lychee.upstream.onBlocked</code>，同一窗口内只发送一次。</li>
   <li><code>login.openWebLogin</code> 只接受 <code>qq</code> / <code>wechat</code>；登录、续期、退出后的 <code>AuthStatus</code> 都带当前 <code>method</code>，渲染层据此展示登录方式。</li>
+  <li><code>currentAuthStatus</code> 从 <code>credential.getReauthReason()</code> 读取 <code>reauthReason</code>；该字段只用于触发全局重新登录弹层，不在 IPC 内清空凭证。</li>
 </ul>
 
 <h3 id="c4-6">4.6 src/main/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -881,27 +886,17 @@ export async function saveSettings(next: Settings): Promise&lt;void&gt;;
 
 <h3 id="c4-7">4.7 src/main/credential.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getCredential(): Credential | null;
+export function getReauthReason(): ReauthReason | null;
 export async function loadCredential(): Promise&lt;Credential | null&gt;;
 export async function saveCredential(credential: Credential): Promise&lt;void&gt;;
 export async function clearCredential(): Promise&lt;void&gt;;
 </code></pre>
 <ul class="note">
-  <li><code>loadCredential</code> 接受 v1 / v2 凭证；v1 读取时就地迁移为 v2（<code>loginType=1</code> 或 <code>musickey</code> 以 <code>W_X</code> 开头 → <code>method=wechat</code>，否则 <code>qq</code>），不强制重新扫码。解密失败时不缓存失败结果、保留文件，后续调用可重试；检测到旧明文时，仅在密钥环可用时迁移，否则拒绝登录。</li>
-  <li><code>saveCredential</code> 只写入 v2；密钥环不可用时抛错，拒绝明文保存。</li>
+  <li><code>loadCredential</code> 只接受 v2。检测到 v1 时不迁移、不解密，直接删除凭证文件、记录 <code>reauthReason='v1'</code> 并返回 <code>null</code>；该清空行为只属于 v1 读取链路，与全局重新登录弹层解耦。</li>
+  <li>未知版本或无效字段返回 <code>null</code>，不把未知结构当成当前凭证。解密失败时不缓存失败结果、保留文件，后续调用可重试；检测到旧明文时，仅在密钥环可用时重新加密，否则拒绝登录。</li>
+  <li><code>saveCredential</code> 只写入 v2 并在成功后清除 <code>reauthReason</code>；密钥环不可用时抛错，拒绝明文保存。</li>
+  <li><code>getReauthReason</code> 只返回主进程记录的失效原因；渲染层据此显示弹层，弹层不反向调用凭证清理。</li>
   <li><code>Credential.webCookies</code> 保存登录网页会话 Cookie（QQ 的 <code>p_skey</code> / <code>skey</code>，微信的 <code>wxuin</code> / <code>wxopenid</code> 等），与 <code>musickey</code> 一起加密落盘；它只在主进程内使用，绝不跨 IPC。网页会话 Cookie 缺失时签名写入可能返回 80105。</li>
-</ul>
-
-<h4 id="c4-7-1">4.7.1 src/main/credential-migration.ts <a class="backlink" href="#c1">文件树</a></h4>
-<pre><code>export function inferLoginMethod(value: {
-  method?: unknown;
-  loginType?: unknown;
-  musickey?: unknown;
-}): LoginMethod;
-export function normalizeCredential(value: unknown): Credential | null;
-</code></pre>
-<ul class="note">
-  <li><code>normalizeCredential</code> 是 v1 / v2 共用的字段归一化入口；校验 <code>musicid</code> / <code>musickey</code> / <code>expiredAtMs</code>，只保留有效字符串字段与非空 <code>webCookies</code>，并丢弃旧 <code>loginType</code>。</li>
-  <li><code>inferLoginMethod</code> 只用于迁移：<code>loginType=1</code> 或 <code>musickey</code> 以 <code>W_X</code> 开头视为微信，否则视为 QQ；新凭证直接使用 <code>method</code>。</li>
 </ul>
 
 <h3 id="c4-8">4.8 src/main/api/client.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1215,10 +1210,11 @@ export function destroyTray(): void;
 </code></pre>
 
 <h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板、Toast 与删除下载确认框；下载中心由路由页承载。
+<pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板、Toast、删除下载确认框与全局重新登录弹层；下载中心由路由页承载。
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
+  <li>全局只挂载一个 <a href="#c4-91">ReauthDialog</a>，由 <code>auth.reauthReason</code> 控制显示；当前路由为 <code>/login</code> 时不显示。点击“重新登录”由 <code>App.vue</code> 关闭弹层并路由到登录页。</li>
   <li>监听 <code>player.current</code> 并立即执行一次，把 <code>appTitle(current)</code> 写入 <code>document.title</code>；Electron 默认将页面标题同步到窗口 / 任务栏，切歌即时更新，无歌曲时回退应用名。</li>
   <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
   <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
@@ -1307,8 +1303,10 @@ interface AuthStore {
   readonly displayName: string;
   readonly expiresAtMs: number | null;
   readonly canRefresh: boolean;
+  readonly reauthReason: ReauthReason | null;
 
   refresh(): Promise&lt;void&gt;;
+  dismissReauth(): void;
   loginWithCookie(cookie: string): Promise&lt;void&gt;;
   openWebLogin(method: LoginMethod): Promise&lt;void&gt;;
   refreshSession(): Promise&lt;void&gt;;
@@ -1316,6 +1314,7 @@ interface AuthStore {
 }
 </code></pre>
 <ul class="note">
+  <li><code>applyStatus</code> 在未登录且 <code>AuthStatus.reauthReason</code> 非空时设置 <code>reauthReason</code>；用户选择“稍后”后记录本次已忽略的原因，同一原因不重复弹出，登录成功或退出时清除。</li>
   <li><code>logout</code> 只调用登录 IPC、清空自身状态并派发 <code>lychee:logout</code> 事件；不直接导入 playlist / recommend / player store。应用层监听事件完成跨 store 重置。</li>
 </ul>
 
@@ -2605,6 +2604,16 @@ emits: { play: [] };
   <li><code>playingId</code> 为模块级单例，同一时间只允许一个歌单进入加载流程，卡片按 id 显示 spinner；空歌单提示“这个歌单里还没有可播放的歌曲”，上游 / 缓存错误统一 Toast。</li>
 </ul>
 
+<h3 id="c4-91">4.91 src/renderer/components/ReauthDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// props: open: boolean; reason: ReauthReason | null
+// emits: login, dismiss
+</code></pre>
+<ul class="note">
+  <li>全局重新登录弹层，由 <code>App.vue</code> 挂载；只负责提示与“重新登录 / 稍后”，不读取、写入或清除凭证。清空凭证始终由触发方负责：v1 在 <code>credential.ts</code>，后续 auth-failed 在续期状态机。</li>
+  <li><code>reason='v1'</code> 显示“登录凭证需要更新 / 旧版本登录凭证已清除”；<code>reason='auth-failed'</code> 显示“登录已失效”。两种触发共用同一弹层，但触发逻辑分离。</li>
+  <li>点击“重新登录”由 <code>App.vue</code> 先关闭弹层再路由到 <code>/login</code>；已处于 <code>/login</code> 时不显示弹层。登录成功后 <code>AuthStatus.loggedIn</code> 清除 <code>reauthReason</code>。</li>
+</ul>
+
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
 
@@ -2625,6 +2634,7 @@ emits: { play: [] };
 </code></pre>
 <ul class="note">
   <li><code>loadCredential</code> 失败按未登录继续，不阻塞启动；定时器同时承担密钥环晚解锁后的重试。</li>
+  <li>检测到 v1 凭证时，<code>loadCredential</code> 直接删除文件并记录 <code>reauthReason='v1'</code>，不解密、不迁移；<code>login.getStatus</code> 返回该原因后由 <code>App.vue</code> 显示 <a href="#c4-91">ReauthDialog</a>。</li>
   <li><code>sendPlayerCommand</code> 把 MPRIS / 托盘命令转成 <code>player:command</code> 推送。</li>
 </ul>
 

@@ -7,7 +7,6 @@ import {
   WECHAT_LOGIN_APP_ID
 } from '../../shared/constants'
 import { getCredential, saveCredential } from '../credential'
-import { inferLoginMethod } from '../credential-migration'
 import {
   assertUpstreamAvailable,
   mapUpstreamCode,
@@ -522,7 +521,7 @@ export async function loginWithCookie(cookie: string): Promise<Credential> {
     throw new UpstreamError('AUTH_EXPIRED', 'Cookie 缺少有效的 uin 或 qm_keyst')
   }
   const credential: Credential = {
-    method: inferLoginMethod({ musickey: key, loginType: jar.login_type }),
+    method: key.startsWith('W_X') || jar.login_type === '1' ? 'wechat' : 'qq',
     musicid: uin,
     musickey: key,
     expiredAtMs: null,

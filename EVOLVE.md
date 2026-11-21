@@ -315,17 +315,17 @@
 
 ## 11. 微信扫码登录入口
 
-**需求**：登录页顶部提供 xlogin 与微信扫码切换；微信接入官方网页扫码链路，登录成功后与 QQ 共用同一份凭证模型并保留续期字段；凭证显式记录登录方式，旧凭证自动识别迁移；微信登录与续期在真实账号验证前标注未验证。
+**需求**：登录页顶部提供 xlogin 与微信扫码切换；微信接入官方网页扫码链路，登录成功后与 QQ 共用同一份凭证模型并保留续期字段；凭证显式记录登录方式，v1 凭证读取时直接清空；微信登录与续期在真实账号验证前标注未验证。
 
 **实现思路**：
 
 - 登录方式提升为 `LoginMethod = 'qq' | 'wechat'` 并写入 `Credential.method`；QQ 与微信共用 `musicid`、`musickey`、`expiredAtMs`、`webCookies`，微信额外保存 `refreshToken`、`accessToken`、`openid`、`unionid`、`refreshKey`。`tmeLoginType` 由 method 派生（QQ=2，微信=1）。
-- 凭证存储升级为 v2；读取 v1 时按 `loginType=1` 或 `musickey` 的 `W_X` 前缀识别微信，否则按 QQ 迁移，不强制重新扫码。新增 `credential-migration.ts` 负责字段归一化与旧字段清理。
+- 凭证存储升级为 v2；读取 v1 时不再迁移，直接清空并要求用户重新登录。清空逻辑属于 v1 读取链路，不进入重新登录弹层。
 - `web-login.ts` 引入按方式分流的登录运行上下文：QQ 使用 `lychee-xlogin` 与 OAuth code / Cookie 换证；微信使用 `lychee-wechat-login`，加载 `open.weixin.qq.com/connect/qrconnect`，从 `wx_redirect.html?login_type=2` 捕获 code，调用 `music.login.LoginServer/Login`（`tmeLoginType=1`、`strAppid` + code）换证。
 - 微信成功后把捕获到的网页 Cookie 与凭证字段合并为 `webCookies`（补齐 `uin` / `wxuin`、`qqmusic_key` / `qm_keyst`、`login_type=2`、`wxopenid` / `wxunionid`、`wxrefresh_token` / `wxaccess_token`）；若官方页已写入 Cookie，则保留 Cookie 兜底解析。
 - 同一时间只保留一个登录运行；切换方式或离开登录页会取消旧流程、清理旧分区并摘除旧视图，旧 Promise 的拒绝由渲染层按序号忽略。`openWebLogin(method)` 贯通 IPC / preload / auth store，`AuthStatus` 增加 `method`。
 - 续期按 `Credential.method` 分流：微信只走 `music.login.LoginServer/Login` 的 `loginMode=2`；QQ 保持 QQLogin 主路径与既有 refresh_token 回退。本轮不改变续期状态机与全局重新登录 UI。
-- 新增微信换证与凭证迁移单测；微信真实扫码、收藏写入与续期尚未验收，文档按未验证记录。
+- 新增微信换证与 v1 凭证清空单测；微信真实扫码、收藏写入与续期尚未验收，文档按未验证记录。
 
 **文档操作**：
 
@@ -338,12 +338,11 @@
 | `PROVIDER.html` | §3.1.1 微信扫码登录协议（`#p3-1-1`） | 增 | 增加微信二维码、回调 code、换证、Cookie 合并、续期与未验证说明。 |
 | `PROVIDER.html` | §4.1 上游方法 / 参数 / 请求画像（`#p4-1`） | 改 | 增加微信换证、微信续期、微信二维码与请求画像；回退续期改称微信续期。 |
 | `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | `Credential` 增加 `method`、移除 `loginType`；`QqLoginPayload` 增加 `expired_at` 与微信字段说明。 |
-| `CORE.html` | §1 文件树（`#c1`） | 改 | 增加 `credential-migration.ts` 与微信换证 / 凭证迁移测试。 |
+| `CORE.html` | §1 文件树（`#c1`） | 改 | 增加微信换证 / v1 凭证清空测试。 |
 | `CORE.html` | §4.1 `src/shared/types.ts`（`#c4-1`） | 改 | 增加 `LoginMethod`、`Credential.method`、`AuthStatus.method`。 |
 | `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | `login.openWebLogin(method)`。 |
 | `CORE.html` | §4.5 `src/main/ipc.ts`（`#c4-5`） | 改 | 说明登录方式参数校验与 `AuthStatus.method`。 |
-| `CORE.html` | §4.7 `src/main/credential.ts`（`#c4-7`） | 改 | 记录 v1→v2 迁移与微信字段保留。 |
-| `CORE.html` | §4.7.1 `src/main/credential-migration.ts`（`#c4-7-1`） | 增 | 新增 `inferLoginMethod` / `normalizeCredential` 签名与迁移规则。 |
+| `CORE.html` | §4.7 `src/main/credential.ts`（`#c4-7`） | 改 | 记录 v2 存储、v1 清空与微信字段保留。 |
 | `CORE.html` | §4.16 `src/main/api/login.ts`（`#c4-16`） | 改 | 增加 `exchangeWechatLoginCode`、微信续期与按 method 分流。 |
 | `CORE.html` | §4.17 `src/main/api/web-login.ts`（`#c4-17`） | 改 | 增加按方式分区、登录运行取消、微信 code 捕获与 Cookie 合并。 |
 | `CORE.html` | §4.28 `src/renderer/stores/auth.ts`（`#c4-28`） | 改 | 增加 `method` 与 `openWebLogin(method)`。 |
@@ -363,3 +362,36 @@
 | `diagram/general-architecture.puml` | 登录组件与授权 | 改 | 登录组件标注增加微信扫码。 |
 | `diagram/seq-login.puml` | 登录流程 | 改 | 增加微信扫码分支。 |
 | `diagram/prov-login-wechat.puml` | 微信扫码协议 | 增 | 新增微信二维码、回调 code 与换证时序图。 |
+
+## 12. 旧版凭证清空与全局重新登录弹层
+
+**需求**：v1 凭证不再迁移，读取时直接清空并要求用户重新登录；同时先落地全局重新登录弹层，供本次 v1 清空与后续续期 auth-failed 共用，但清空凭证只在 v1 读取链路中执行，不进入弹层逻辑。
+
+**实现思路**：
+
+- `credential.ts` 只接受 v2；读到 `version: 1` 时不解密、不迁移，直接删除凭证文件、清空内存缓存并记录 `reauthReason = 'v1'`，随后按未登录继续启动。
+- 新增 `ReauthReason = 'v1' | 'auth-failed'` 与 `AuthStatus.reauthReason`；主进程通过 `getReauthReason()` 暴露原因，登录成功保存新凭证时清除。
+- 新增全局 `components/ReauthDialog.vue`：只负责展示标题 / 说明与“重新登录 / 稍后”，不读取、写入或清空凭证；`App.vue` 挂载该弹层，已在登录页时不重复显示。
+- `stores/auth.ts` 保存 `reauthReason` 与本次已忽略的原因；选择“稍后”只关闭本次提示，登录成功、退出或原因消失时清除；后续 auth-failed 触发只改变 reason，复用同一弹层。
+- 点击“重新登录”时由 `App.vue` 关闭弹层并路由到 `/login`；凭证清理仍由触发方负责，后续续期状态机不应调用弹层来清空凭证。
+- 新增 `test/credential-store.test.ts`，覆盖 v1 直接删除、未解密、不触发普通缺省凭证的重新登录提示，以及缺失文件不误报。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | “优化刷新登录”子项“全局重新登录弹层” | 增 | 增加 v1 清空触发与弹层职责边界，并标记 `[已解决]`。 |
+| `EVOLVE.md` | 新增“旧版凭证清空与全局重新登录弹层” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `PROVIDER.html` | §2 CONVENTIONS · 凭证版本 | 增 | 明确只接受 v2；v1 直接清空，迁移不属于登录协议或弹层。 |
+| `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | `loginType` 仅存在于已废弃 v1，当前版本不读取。 |
+| `CORE.html` | §1 文件树（`#c1`） | 改 | 移除 `credential-migration.ts`；增加 `ReauthDialog.vue` 与 `credential-store.test.ts`。 |
+| `CORE.html` | §4.1 `src/shared/types.ts`（`#c4-1`） | 改 | 增加 `ReauthReason` 与 `AuthStatus.reauthReason`。 |
+| `CORE.html` | §4.5 `src/main/ipc.ts`（`#c4-5`） | 改 | `currentAuthStatus` 读取 `reauthReason`，不在 IPC 内清空凭证。 |
+| `CORE.html` | §4.7 `src/main/credential.ts`（`#c4-7`） | 改 | 只接受 v2；v1 直接删除并记录原因；新增 `getReauthReason()`。 |
+| `CORE.html` | §4.23 `src/renderer/App.vue`（`#c4-23`） | 改 | 全局挂载 `ReauthDialog`，登录页不重复显示。 |
+| `CORE.html` | §4.28 `src/renderer/stores/auth.ts`（`#c4-28`） | 改 | 增加 `reauthReason`、`dismissReauth()` 与“稍后”状态。 |
+| `CORE.html` | §4.91 `ReauthDialog.vue`（`#c4-91`） | 增 | 新增全局重新登录弹层的 props / emits 与职责边界。 |
+| `CORE.html` | §5.1 启动（`#c5-1`） | 改 | 补充 v1 凭证清空与全局弹层触发。 |
+| `USER.html` | §3.2 登录（`#u3-2`） | 改 | 补充旧版本凭证清除与全局重新登录界面。 |
+| `USER.html` | §5.2.6 登录页（`#u5-2-6`） | 改 | 补充弹层在任意页面出现、登录页不重复显示。 |
+| `USER.html` | §5.3 错误与通知（`#u5-3`） | 改 | 补充重新登录弹层不使用 Toast，v1 与 auth-failed 共用弹层但触发逻辑分离。 |

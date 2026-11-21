@@ -141,6 +141,10 @@
     <td><code>webCookies</code> 是登录网页会话，不是登录方式。QQ / 微信扫码成功后抓取并加密保存，用于收藏签名等需要网页会话的请求；手动粘贴 Cookie 是独立入口，见 <a href="#p3-2">§3.2</a>。</td>
   </tr>
   <tr>
+    <td>凭证版本</td>
+    <td>当前只接受 v2；v1 不做迁移，读取时直接清空并触发全局重新登录提示。凭证迁移不属于登录协议，也不由重新登录弹层执行。</td>
+  </tr>
+  <tr>
     <td>收藏写入</td>
     <td>201 目录的 <code>AddSonglist</code> / <code>DelSonglist</code> 必须走 <code>u6.y.qq.com/cgi-bin/musics.fcg</code> 的 zzc 签名 + AES-128-GCM <code>ag-1</code> 通道；旧 <code>fcg_music_add2songdir.fcg</code> 在最小 Cookie 下返回 <code>403 invalid request / no permit</code>，不再使用。写接口只负责写入；写后状态与成员刷新由 CORE 的统一歌单刷新流程负责（见 <a href="CORE.html#c4-55">CORE §4.55</a> / <a href="CORE.html#c4-61">§4.61</a>），不在写接口内做整单读回。</td>
   </tr>
@@ -919,7 +923,7 @@ interface QqLoginPayload {
   access_token?: string;
   openid?: string;
   unionid?: string;
-  loginType?: number;                     // 仅旧凭证迁移读取，新凭证不再保存
+  loginType?: number;                     // 仅存在于已废弃的 v1 凭证；当前版本不读取
 }
 </code></pre>
 
@@ -992,7 +996,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqLoginPayload</code></td>
-    <td><code>musickey</code> · <code>str_musicid</code> / <code>musicid</code> / <code>uin</code> / <code>qq</code> · <code>keyExpiresIn</code> · <code>musickeyCreateTime</code> · <code>expired_at</code> · <code>refresh_*</code> · <code>access_token</code> · <code>openid</code> · <code>unionid</code> · <code>loginType</code>（仅旧迁移）</td>
+    <td><code>musickey</code> · <code>str_musicid</code> / <code>musicid</code> / <code>uin</code> / <code>qq</code> · <code>keyExpiresIn</code> · <code>musickeyCreateTime</code> · <code>expired_at</code> · <code>refresh_*</code> · <code>access_token</code> · <code>openid</code> · <code>unionid</code>；<code>loginType</code> 仅存在于 v1 凭证，当前版本不读取</td>
     <td>凭证对象可能嵌套在 <code>data</code> / <code>credential</code> / <code>result</code> 中；以包含 <code>musickey</code> 的对象为准。QQ 使用 <code>keyExpiresIn</code> + <code>musickeyCreateTime</code>；微信可能使用 <code>expired_at</code>。</td>
   </tr>
   <tr>

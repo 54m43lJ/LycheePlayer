@@ -46,7 +46,13 @@ import { getStreamUrls } from './api/song'
 import { probeAvailability, clearAvailabilityCache } from './api/availability'
 import { getProfile } from './api/user'
 import { toIpcError, setUpstreamBlockNotifier } from './api/client'
-import { clearCredential, getCredential, loadCredential, saveCredential } from './credential'
+import {
+  clearCredential,
+  getCredential,
+  getReauthReason,
+  loadCredential,
+  saveCredential
+} from './credential'
 import { getSettings, saveSettings } from './settings'
 import { publishState } from './integration/mpris'
 import { updateTray } from './integration/tray'
@@ -102,7 +108,8 @@ function currentAuthStatus(): AuthStatus {
     method: credential?.method ?? null,
     musicid: credential?.musicid ?? null,
     expiresAtMs: credential?.expiredAtMs ?? null,
-    canRefresh: Boolean(credential?.refreshToken)
+    canRefresh: Boolean(credential?.refreshToken),
+    reauthReason: getReauthReason()
   }
 }
 

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { AuthStatus, LoginMethod, UserProfile } from '@shared/types'
+import type { AuthStatus, LoginMethod, ReauthReason, UserProfile } from '@shared/types'
 import { unwrap } from '../api'
 
 export const useAuthStore = defineStore('auth', () => {
@@ -11,6 +11,8 @@ export const useAuthStore = defineStore('auth', () => {
   const ready = ref(false)
   const expiresAtMs = ref<number | null>(null)
   const canRefresh = ref(false)
+  const reauthReason = ref<ReauthReason | null>(null)
+  let dismissedReauthReason: ReauthReason | null = null
 
   const displayName = computed(() => profile.value?.nickname ?? (musicid.value ? `音乐 ID ${musicid.value}` : '未登录'))
 
@@ -21,10 +23,25 @@ export const useAuthStore = defineStore('auth', () => {
     expiresAtMs.value = status.expiresAtMs
     canRefresh.value = status.canRefresh
     if (status.loggedIn) {
+      reauthReason.value = null
+      dismissedReauthReason = null
       void loadProfile()
     } else {
       profile.value = null
+      if (status.reauthReason) {
+        if (status.reauthReason !== dismissedReauthReason) {
+          reauthReason.value = status.reauthReason
+        }
+      } else {
+        reauthReason.value = null
+        dismissedReauthReason = null
+      }
     }
+  }
+
+  function dismissReauth(): void {
+    dismissedReauthReason = reauthReason.value
+    reauthReason.value = null
   }
 
   async function loadProfile(): Promise<void> {
@@ -39,7 +56,14 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       applyStatus(unwrap(await window.lychee.login.getStatus()))
     } catch {
-      applyStatus({ loggedIn: false, method: null, musicid: null, expiresAtMs: null, canRefresh: false })
+      applyStatus({
+        loggedIn: false,
+        method: null,
+        musicid: null,
+        expiresAtMs: null,
+        canRefresh: false,
+        reauthReason: null
+      })
     } finally {
       ready.value = true
     }
@@ -67,6 +91,8 @@ export const useAuthStore = defineStore('auth', () => {
     profile.value = null
     expiresAtMs.value = null
     canRefresh.value = false
+    reauthReason.value = null
+    dismissedReauthReason = null
     window.dispatchEvent(new Event('lychee:logout'))
   }
 
@@ -79,7 +105,9 @@ export const useAuthStore = defineStore('auth', () => {
     displayName,
     expiresAtMs,
     canRefresh,
+    reauthReason,
     refresh,
+    dismissReauth,
     loginWithCookie,
     openWebLogin,
     refreshSession,
