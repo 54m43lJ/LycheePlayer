@@ -52,7 +52,6 @@ export interface LycheeApi {
   }
   login: {
     getStatus(): Promise<IpcResult<AuthStatus>>
-    loginWithCookie(cookie: string): Promise<IpcResult<AuthStatus>>
     openWebLogin(method: LoginMethod): Promise<IpcResult<AuthStatus>>
     refreshSession(): Promise<IpcResult<AuthStatus>>
     logout(): Promise<IpcResult<null>>

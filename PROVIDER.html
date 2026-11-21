@@ -138,7 +138,7 @@
   </tr>
   <tr>
     <td>网页会话 Cookie</td>
-    <td><code>webCookies</code> 是登录网页会话，不是登录方式。QQ / 微信扫码成功后抓取并加密保存，用于收藏签名等需要网页会话的请求；手动粘贴 Cookie 是独立入口，见 <a href="#p3-2">§3.2</a>。</td>
+    <td><code>webCookies</code> 是登录网页会话，不是登录方式。QQ / 微信扫码成功后抓取并加密保存，用于收藏签名等需要网页会话的请求；应用不提供手动粘贴 Cookie 的登录入口。</td>
   </tr>
   <tr>
     <td>凭证版本</td>
@@ -217,7 +217,7 @@
   <li>xlogin 直接完成 OAuth 时，应用也可从 <code>will-navigate</code> / <code>will-redirect</code> / <code>did-navigate</code> 的 URL 捕获 <code>code</code>，直接进入换证。</li>
   <li>OAuth 授权成功后，<code>QQConnectLogin.LoginServer/QQLogin</code> 返回 <code>musickey</code> 与续期字段；应用解析为 <code>Credential</code>（<code>method = qq</code>）并在主进程入库。扫码成功后会在清理 <code>lychee-xlogin</code> 分区前抓取 <code>qq.com</code> 网页 Cookie（<code>p_skey</code> / <code>skey</code> 等），写入 <code>Credential.webCookies</code>。</li>
   <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；登录视图在结束或超时后清理。</li>
-  <li>QQ 扫码登录只走内嵌官方 xlogin 组件；微信扫码见 <a href="#p3-1-1">§3.1.1</a>，Cookie 登录见 <a href="#p3-2">§3.2</a>。</li>
+  <li>QQ 扫码登录只走内嵌官方 xlogin 组件；微信扫码见 <a href="#p3-1-1">§3.1.1</a>。应用不提供手动 Cookie 登录。</li>
 </ul>
 
 <h4 id="p3-1-1">3.1.1 微信扫码登录协议</h4>
@@ -231,16 +231,7 @@
   <li><strong>验证状态：未验证。</strong> 当前实现按官方网页版链路接入，尚未用真实微信账号完成扫码、收藏写入与续期验收；在这些验收完成前，不把微信登录视为稳定功能。第三方 appid 与重定向页属于 QQ 音乐网页实现细节，可能随上游变更。</li>
 </ul>
 
-<h3 id="p3-2">3.2 Cookie 登录协议</h3>
-<div class="diagram"><img src="diagram/prov-cookie.svg" alt="Cookie 登录上游协议时序图"></div>
-<ul class="note">
-  <li>Cookie 至少需要有效的 <code>uin</code> 与 <code>qm_keyst</code>；缺失或格式无效直接返回 <code>AUTH_EXPIRED</code>。</li>
-  <li>应用用该凭证请求用户资料接口，<code>g_tk</code> 由 <code>hash33(musickey, 5381)</code> 计算；<code>code === 0</code> 视为登录态有效。</li>
-  <li>验证成功后生成 <code>Credential</code>，保存在主进程；Cookie 登录会保留完整 Cookie jar，其中 <code>p_skey</code> / <code>skey</code> 等网页会话字段写入 <code>Credential.webCookies</code>，与 <code>musickey</code> 一起加密保存，仅主进程使用。</li>
-  <li>验证失败返回 <code>AUTH_EXPIRED</code>，提示用户重新获取 Cookie。普通内容请求只依赖 <code>musickey</code>；收藏签名写入还依赖 <code>webCookies</code>，缺失时可能返回 80105。</li>
-</ul>
-
-<h3 id="p3-3">3.3 播放链接协议</h3>
+<h3 id="p3-2">3.2 播放链接协议</h3>
 <div class="diagram"><img src="diagram/prov-play.svg" alt="播放链接上游协议时序图"></div>
 <ul class="note">
   <li>先通过 <code>get_song_detail_yqq</code> 获取 <code>media_mid</code>，再按请求音质拼出 vkey 的 <code>filename</code>。</li>
@@ -252,7 +243,7 @@
   <li>vkey 失效或流中断时，播放器对同一歌曲最多每 30 秒自动重新取一次链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”。<code>PROVIDER</code> 不再承诺“不会自动重新获取链接”。</li>
 </ul>
 
-<h3 id="p3-4">3.4 QQ Web 签名 / 加密协议（收藏写入）</h3>
+<h3 id="p3-3">3.3 QQ Web 签名 / 加密协议（收藏写入）</h3>
 <p>
 201 目录的收藏写入使用 QQ 官网 Web 通道；算法参考 MIT 项目 <code>jixunmoe/qmweb-sign</code>，使用 Node 内置 <code>crypto</code> 实现，不新增依赖。
 </p>
@@ -309,7 +300,7 @@
   <tr><td>专辑歌曲</td><td><code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code></td><td>按 <code>albumMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
   <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。上游 <code>104009</code> 主要出现在 vkey / 播放链接请求；整单可用性探测按 50 首分批，会放大触发概率。</td></tr>
   <tr><td>收藏状态</td><td><code>music.musicasset.SongFavRead / IsSongFanByMid</code></td><td>按 <code>v_songMid</code> 批量读取 <code>m_fan</code> 红心状态。</td></tr>
-  <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-4">§3.4</a>。</td></tr>
+  <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-3">§3.3</a>。</td></tr>
   <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表；<code>song_num</code> 单次可返回约 1 万首，大歌单会静默省略少量不可用曲目，分页须用固定 <code>song_begin</code> 递增。歌单不存在 / 已失效时 <code>req_0.code</code> 仍为 <code>0</code>，失效码位于顶层 <code>data.code = -100006</code>，且 <code>dirinfo</code> 为空壳、<code>songlist</code> 为空；不能只看 <code>retcode</code>。</td></tr>
   <tr><td>我的歌单</td><td><code>music.musicasset.PlaylistBaseRead / GetPlaylistByUin</code></td><td>当前账号创建 / 收藏的歌单列表。</td></tr>
   <tr><td>每日推荐</td><td><code>music.recommend.RecommendFeed / get_recommend_feed</code> → <code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>取当天的动态推荐歌单卡片（<code>subtype:510</code>），再读取完整 30 首。</td></tr>
@@ -491,7 +482,7 @@
 </table>
 <ul class="note">
   <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
-  <li>普通内容 CGI 不需要额外签名；收藏写入必须使用 <a href="#p3-4">§3.4</a> 的 zzc 签名 + <code>ag-1</code> 加密通道；<code>g_tk</code> 还用于 OAuth 授权、歌词与用户资料请求。</li>
+  <li>普通内容 CGI 不需要额外签名；收藏写入必须使用 <a href="#p3-3">§3.3</a> 的 zzc 签名 + <code>ag-1</code> 加密通道；<code>g_tk</code> 还用于 OAuth 授权、歌词与用户资料请求。</li>
   <li>歌曲评论单页实测上限 25 条（26 起返回业务码 <code>10000</code>），因此应用固定使用 25 条。未登录时匿名发送，登录后携带 Cookie 以读取 <code>IsPraised</code>。评论区只读取最新评论，通过 <code>LastCommentSeqNo</code> 游标翻页，不提供“最旧”排序。</li>
   <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。上游单次最多返回 100 首，应用固定 50 首/页。</li>
   <li>推荐、歌单写入与 MV 的方法 / 参数已按真实请求固定；内部调用路径与错误处理见 <a href="CORE.html#c4-53">CORE §4.53</a> / <a href="CORE.html#c4-55">§4.55</a> / <a href="CORE.html#c4-56">§4.56</a>。fixture 只覆盖部分映射，具体覆盖范围与未覆盖字段见 <a href="#p4-3">§4.3</a>；接口真实可用性以实际请求结果为准。</li>
@@ -547,7 +538,7 @@ interface QqLoginRequest {
   <tr><th>上游信号</th><th>内部 ErrorCode</th><th>含义 / 处理</th></tr>
   <tr><td><code>1000</code> / <code>104401</code> / <code>104400</code> / <code>301</code></td><td><code>AUTH_EXPIRED</code></td><td>凭证过期、无效或未登录；提示重新登录。</td></tr>
   <tr><td><code>104604</code> / <code>2001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游瞬时繁忙；短退避重试，仍失败则提示稍后再试。</td></tr>
-  <tr><td><code>80105</code></td><td><code>UPSTREAM_CHANGED</code></td><td>收藏签名通道缺少网页会话；提示退出后重新登录（扫码或 Cookie），以同步 <code>webCookies</code>。</td></tr>
+  <tr><td><code>80105</code></td><td><code>UPSTREAM_CHANGED</code></td><td>收藏签名通道缺少网页会话；提示退出后重新扫码登录，以同步 <code>webCookies</code>。</td></tr>
   <tr><td><code>1101</code></td><td><code>UPSTREAM_CHANGED</code></td><td>该歌曲暂不支持收藏；保留原状态并提示。</td></tr>
   <tr><td><code>100001</code></td><td><code>QUOTA_LIMITED</code></td><td>上游限流；不重试，直接提示稍后再试。</td></tr>
   <tr><td><code>104003</code></td><td><code>NO_STREAM</code></td><td>无权限（未登录、账号等级不足或播放授权异常）；播放链接流程继续回退，全部档位失败后按登录态、VIP 与数字专辑标记生成文案。</td></tr>

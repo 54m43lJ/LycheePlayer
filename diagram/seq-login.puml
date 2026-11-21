@@ -14,8 +14,6 @@ alt xlogin 扫码（默认）
 else 微信扫码
   APP -> WX : 启动官方微信二维码\n（见 PROVIDER §3.1.1）
   WX --> APP : 扫码并确认
-else Cookie 登录（兜底）
-  U -> APP : 粘贴浏览器 Cookie\n（见 PROVIDER §3.2）
 end
 APP --> U : 进入已登录状态
 @enduml

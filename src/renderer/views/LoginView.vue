@@ -2,7 +2,6 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { LoginMethod } from '@shared/types'
-import AppIcon from '../components/AppIcon.vue'
 import { describeError } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
@@ -12,8 +11,6 @@ const router = useRouter()
 const toast = useToast()
 
 const method = ref<LoginMethod>('qq')
-const cookie = ref('')
-const cookieSubmitting = ref(false)
 const embedFailed = ref(false)
 const frameRef = ref<HTMLElement | null>(null)
 
@@ -77,20 +74,6 @@ function reloadEmbed(): void {
     sendBounds()
     void startEmbedLogin()
   })
-}
-
-async function submitCookie(): Promise<void> {
-  if (!cookie.value.trim()) return
-  cookieSubmitting.value = true
-  try {
-    await auth.loginWithCookie(cookie.value.trim())
-    toast.show('Cookie 登录成功')
-    void router.replace('/library')
-  } catch (err) {
-    toast.error(describeError(err))
-  } finally {
-    cookieSubmitting.value = false
-  }
 }
 
 onMounted(async () => {
@@ -162,27 +145,6 @@ onBeforeUnmount(() => {
       <div v-if="embedFailed" class="embed-retry">
         <button class="btn ghost small" @click="reloadEmbed()">{{ reloadLabel }}</button>
       </div>
-
-      <details class="cookie-box">
-        <summary>使用 Cookie 登录（兜底）</summary>
-        <div class="field">
-          <textarea
-            v-model="cookie"
-            class="textarea"
-            spellcheck="false"
-            placeholder="uin=o0123456789; qm_keyst=...; qqmusic_key=..."
-          />
-        </div>
-        <button
-          class="btn primary"
-          style="margin-top: 10px"
-          :disabled="cookieSubmitting || !cookie.trim()"
-          @click="submitCookie()"
-        >
-          <AppIcon name="login" :size="15" />
-          {{ cookieSubmitting ? '验证中…' : '使用 Cookie 登录' }}
-        </button>
-      </details>
     </section>
   </div>
 </template>

@@ -339,7 +339,7 @@ watch(
           <span class="user-avatar"><AppIcon name="user" :size="17" /></span>
           <span class="user-meta">
             <span class="user-name">登录 QQ 音乐</span>
-            <span class="user-state">扫码或粘贴 Cookie</span>
+            <span class="user-state">xlogin / 微信扫码</span>
           </span>
           <AppIcon name="chevron-right" :size="15" />
         </RouterLink>

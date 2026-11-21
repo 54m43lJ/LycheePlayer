@@ -18,7 +18,7 @@ import {
   IPC_SONG_MIDS_MAX,
   PROBE_MIDS_MAX
 } from '../shared/constants'
-import { loginWithCookie, refreshSession } from './api/login'
+import { refreshSession } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
 import { getComments, likeComment, postComment, unlikeComment } from './api/comment'
@@ -207,16 +207,6 @@ export function registerIpc(): void {
   handle('login.getStatus', async () => {
     // 密钥环解锁较晚时，状态查询会重试解密已保存的凭证。
     await loadCredential()
-    return currentAuthStatus()
-  })
-  handle('login.loginWithCookie', async (cookie: unknown) => {
-    if (typeof cookie !== 'string' || cookie.trim().length === 0) {
-      throw new Error('Cookie 不能为空')
-    }
-    const credential = await loginWithCookie(cookie)
-    await saveCredential(credential)
-    // 重新登录后旧的不可播缓存可能来自失效会话，必须丢弃重探。
-    clearAvailabilityCache()
     return currentAuthStatus()
   })
   handle('login.openWebLogin', async (method: unknown) => {

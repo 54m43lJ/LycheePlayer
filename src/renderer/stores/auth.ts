@@ -69,11 +69,6 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function loginWithCookie(cookie: string): Promise<void> {
-    const status = unwrap(await window.lychee.login.loginWithCookie(cookie))
-    applyStatus(status)
-  }
-
   async function openWebLogin(loginMethod: LoginMethod): Promise<void> {
     const status = unwrap(await window.lychee.login.openWebLogin(loginMethod))
     applyStatus(status)
@@ -108,7 +103,6 @@ export const useAuthStore = defineStore('auth', () => {
     reauthReason,
     refresh,
     dismissReauth,
-    loginWithCookie,
     openWebLogin,
     refreshSession,
     logout

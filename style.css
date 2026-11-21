@@ -157,7 +157,6 @@ div.diagram img { display: block; }
 /* 登录页 */
 .u-login { width: 100%; max-width: 800px; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
 .u-embed { height: 332px; border: 1px dashed var(--p-gold); border-radius: 10px; background: #fff; color: #4b5563; display: grid; place-items: center; text-align: center; font-size: 11px; }
-.u-cookie { border: 1px solid var(--p-line); border-radius: 8px; padding: 8px 12px; color: var(--p-muted); }
 
 /* 设置页 */
 .u-settings { width: 820px; padding: 14px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

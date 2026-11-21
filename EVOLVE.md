@@ -353,7 +353,7 @@
 | `CORE.html` | §5.3.1 微信扫码登录（`#c5-3-1`） | 增 | 增加微信二维码、code 捕获、换证、Cookie 合并与未验证说明。 |
 | `CORE.html` | §5.7 会话续期（`#c5-7`） | 改 | 续期分支改为按 `Credential.method` 分流。 |
 | `USER.html` | §1 TERMS · 登录方式 | 增 | 定义 QQ / 微信扫码方式。 |
-| `USER.html` | §2 登录凭证边界 | 改 | 扫码与 Cookie 登录均保存 `webCookies`。 |
+| `USER.html` | §2 登录凭证边界 | 改 | QQ / 微信扫码均保存 `webCookies`。 |
 | `USER.html` | §3.2 登录（`#u3-2`） | 改 | 补充顶部方式切换、微信扫码与未验证状态。 |
 | `USER.html` | §5.2.6 登录页（`#u5-2-6`） | 改 | 原型增加方式切换与微信二维码占位；补切换、失败与登录方式展示。 |
 | `USER.html` | §5.2.7 设置页（`#u5-2-7`） | 改 | 账号区展示登录方式；续期表述改为 QQ / 微信扫码凭证。 |
@@ -380,7 +380,7 @@
 
 | 文档 | 章节 | 操作 | 内容 |
 |---|---|---|---|
-| `TODO.md` | “优化刷新登录”子项“全局重新登录弹层” | 增 | 增加 v1 清空触发与弹层职责边界，并标记 `[已解决]`。 |
+| `TODO.md` | 第 1 项子项“全局重新登录弹层” | 增 | 增加 v1 清空触发与弹层职责边界，并标记 `[已解决]`。 |
 | `EVOLVE.md` | 新增“旧版凭证清空与全局重新登录弹层” | 增 | 记录需求、实现思路与本次文档操作。 |
 | `PROVIDER.html` | §2 CONVENTIONS · 凭证版本 | 增 | 明确只接受 v2；v1 直接清空，迁移不属于登录协议或弹层。 |
 | `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | `loginType` 仅存在于已废弃 v1，当前版本不读取。 |
@@ -395,3 +395,42 @@
 | `USER.html` | §3.2 登录（`#u3-2`） | 改 | 补充旧版本凭证清除与全局重新登录界面。 |
 | `USER.html` | §5.2.6 登录页（`#u5-2-6`） | 改 | 补充弹层在任意页面出现、登录页不重复显示。 |
 | `USER.html` | §5.3 错误与通知（`#u5-3`） | 改 | 补充重新登录弹层不使用 Toast，v1 与 auth-failed 共用弹层但触发逻辑分离。 |
+
+## 13. 删除手动 Cookie 登录入口
+
+**需求**：移除用户粘贴 Cookie 的登录入口及配套链路；扫码成功后抓取的网页会话继续保留用于收藏写入；登录页收敛为“顶部切换 + 单个扫码区”，并顺带消除 Cookie 折叠面板造成的嵌入区偏移 / 重叠。
+
+**实现思路**：
+
+- `LoginView.vue` 删除 Cookie 输入区、提交函数、提交状态与相关引用；登录页只保留顶部 xlogin / 微信扫码切换、单个扫码占位区与失败重载按钮。
+- 删除 `loginWithCookie` 的 IPC 通道、preload 方法、auth store action 与主进程公开入口；同时删除仅供手动 Cookie 使用的 `parseCookieString` / `probeCredential`。
+- `webCookies` 与 `requestOAuthCodeWithCookies` 保留：前者是 QQ / 微信扫码后的网页会话，后者是 QQ 扫码换证步骤；收藏签名链路不变。
+- 删除 `.cookie-box` 与文档样式 `.u-cookie`；登录页布局改为顶部切换 + 单个嵌入区，Cookie 面板消失后不再出现垂直居中位移导致的嵌入区偏移 / 重叠。
+- 侧栏未登录文案改为“xlogin / 微信扫码”，80105 提示改为“退出后重新扫码登录”；不在手动 Cookie 路径上保留任何用户入口或错误文案。
+- 文档删除 Cookie 登录协议与 `prov-cookie` 图，播放链接协议 / Web 签名协议依次前移；`seq-login` 只保留两种扫码分支。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 2 项“删除手动 Cookie 登录入口” | 改 | 行尾追加 ` [已解决]`。 |
+| `EVOLVE.md` | 新增“删除手动 Cookie 登录入口” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `USER.html` | §2 登录凭证边界 | 改 | 只保留 QQ / 微信扫码保存 `webCookies`。 |
+| `USER.html` | §3.2 登录（`#u3-2`） | 改 | 删除 Cookie 登录方式与分支链接，只保留两种扫码。 |
+| `USER.html` | §5.2.6 登录页（`#u5-2-6`） | 改 | 原型删除 Cookie 折叠入口，页面收敛为顶部切换 + 单个扫码区。 |
+| `USER.html` | §5.2.7 设置页（`#u5-2-7`） | 改 | 删除“手动 Cookie 凭证不提供立即续期”的表述。 |
+| `USER.html` | §5.3 错误与通知（`#u5-3`） | 改 | 80105 提示改为退出后重新扫码登录。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 删除 `login.loginWithCookie`。 |
+| `CORE.html` | §4.16 `src/main/api/login.ts`（`#c4-16`） | 改 | 删除 `loginWithCookie` / `parseCookieString` / `probeCredential`。 |
+| `CORE.html` | §4.28 `src/renderer/stores/auth.ts`（`#c4-28`） | 改 | 删除 `loginWithCookie` action。 |
+| `CORE.html` | §4.47 `src/renderer/views/LoginView.vue`（`#c4-47`） | 改 | 登录页只保留扫码方式切换与扫码视图。 |
+| `CORE.html` | §5.4 登录态恢复与重新登录提示（`#c5-4`） | 改 | 原 Cookie 登录调用栈替换为登录态恢复 / 重新登录弹层调用栈。 |
+| `PROVIDER.html` | §2 CONVENTIONS · 网页会话 Cookie | 改 | 明确不提供手动粘贴 Cookie 登录入口。 |
+| `PROVIDER.html` | §3.1 QQ 扫码登录协议（`#p3-1`） | 改 | 删除 Cookie 登录链接。 |
+| `PROVIDER.html` | §3.2 Cookie 登录协议 | 删 | 整节删除，原播放链接协议前移为 §3.2。 |
+| `PROVIDER.html` | §3.3 QQ Web 签名 / 加密协议（`#p3-3`） | 改 | 由原 §3.4 前移并同步内部链接。 |
+| `PROVIDER.html` | §4.2 消息与错误（`#p4-2`） | 改 | 80105 提示改为重新扫码登录同步网页会话。 |
+| `README.md` | §2 用户交互 · 登录行 | 改 | 删除粘贴浏览器 Cookie 的入口说明。 |
+| `ABOUT.html` | 用户交互 · 登录行 | 改 | 与 README 同步。 |
+| `diagram/seq-login.puml` | 登录流程 | 改 | 删除 Cookie 分支，只保留 xlogin / 微信扫码。 |
+| `diagram/prov-cookie.puml` | Cookie 登录协议 | 删 | 删除 Cookie 登录时序图及其导出 SVG。 |

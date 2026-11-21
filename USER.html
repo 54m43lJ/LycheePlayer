@@ -276,7 +276,7 @@
   </tr>
   <tr>
     <td>登录凭证边界</td>
-    <td>凭证只存在于主进程；渲染进程只消费登录态。QQ / 微信扫码与 Cookie 登录会保存登录网页会话 Cookie（<code>webCookies</code>）用于收藏写入，仍只存在于主进程并加密保存；凭证不会跨 IPC。系统密钥环不可用时禁用登录，绝不退化为明文保存。</td>
+    <td>凭证只存在于主进程；渲染进程只消费登录态。QQ / 微信扫码会保存登录网页会话 Cookie（<code>webCookies</code>）用于收藏写入，仍只存在于主进程并加密保存；凭证不会跨 IPC。系统密钥环不可用时禁用登录，绝不退化为明文保存。</td>
   </tr>
   <tr>
     <td>主题</td>
@@ -307,9 +307,9 @@
 <h3 id="u3-2">3.2 登录</h3>
 <div class="diagram"><img src="diagram/seq-login.svg" alt="登录流程图"></div>
 <ul class="note">
-  <li>登录页顶部可在 xlogin 扫码（默认）与微信扫码之间切换；Cookie 登录仍为兜底入口。两种扫码方式同一时间只显示一个扫码视图。</li>
-  <li>扫码分支的详细协议见 <a href="PROVIDER.html#p3-1">PROVIDER §3.1</a> 与 <a href="PROVIDER.html#p3-1-1">§3.1.1</a>；Cookie 分支见 <a href="PROVIDER.html#p3-2">PROVIDER §3.2</a>。USER 只描述方式选择与结果，不重复协议细节。</li>
-  <li>登录成功后自动进入“我的歌单”；扫码失败时提供“重新加载登录组件”，Cookie 无效时提示重新获取。微信扫码链路尚未用真实账号完成验收，当前按未验证功能对待。</li>
+  <li>登录页顶部可在 xlogin 扫码（默认）与微信扫码之间切换；两种扫码方式同一时间只显示一个扫码视图。应用不提供手动 Cookie 登录。</li>
+  <li>扫码分支的详细协议见 <a href="PROVIDER.html#p3-1">PROVIDER §3.1</a> 与 <a href="PROVIDER.html#p3-1-1">§3.1.1</a>。USER 只描述方式选择与结果，不重复协议细节。</li>
+  <li>登录成功后自动进入“我的歌单”；扫码失败时提供“重新加载登录组件”。微信扫码链路尚未用真实账号完成验收，当前按未验证功能对待。</li>
   <li>读取到旧版本登录凭证时直接清除，并弹出全局重新登录界面；弹层只提供“重新登录 / 稍后”，不负责清除凭证。</li>
   <li>凭证在主进程内直接入库；保存与使用边界见 <a href="#u2">§2</a>。</li>
 </ul>
@@ -320,7 +320,7 @@
   <li>双击歌曲、“播放全部”与单曲播放都会替换播放队列；“下一首播放”只把歌曲插入队列头，不改变当前歌曲。</li>
   <li>播放队列入口与面板见 <a href="#u5-2-9">§5.2.9</a>；不可播处理见该节，其他加载失败不自动跳过，文案见 <a href="#u5-3">§5.3</a>。</li>
   <li>实际音质可能与请求音质不同；播放条以标记展示实际档位。</li>
-  <li>上游链接获取协议见 <a href="PROVIDER.html#p3-3">PROVIDER §3.3</a>。</li>
+  <li>上游链接获取协议见 <a href="PROVIDER.html#p3-2">PROVIDER §3.2</a>。</li>
 </ul>
 
 <h3 id="u3-4">3.4 页面 / URL 架构图</h3>
@@ -588,11 +588,10 @@
 <div class="ui-proto u-login">
   <div class="u-tabs"><span class="u-tab active">xlogin 扫码</span><span class="u-tab">微信扫码</span></div>
   <div class="u-embed"><span>官方扫码登录组件<br />（WebContentsView 占位区域；QQ 高 332px，微信用居中二维码区）</span></div>
-  <div class="u-cookie">▸ 使用 Cookie 登录（兜底，默认折叠）</div>
 </div>
 </div>
 <ul class="note">
-  <li>未登录时页面从上到下为：扫码方式切换、单个扫码组件、Cookie 折叠入口。切换方式时取消当前扫码并清理旧会话，只保留一个组件。</li>
+  <li>未登录时页面从上到下为：扫码方式切换、单个扫码组件。切换方式时取消当前扫码并清理旧会话，只保留一个组件。</li>
   <li>QQ 组件宽度 100%，最大 800px；微信二维码区居中，宽约 400px；≤560px 均保持 100%。</li>
   <li>组件由主进程 <code>WebContentsView</code> 按占位矩形定位（<code>login.setEmbedBounds</code>），登录页本身不承载远程内容。</li>
   <li>扫码成功自动跳转“我的歌单”；失败时在组件下方出现“重新加载登录组件”或“重新加载微信登录”。</li>
@@ -663,7 +662,7 @@
   <li><code>Settings</code> 的确切持久化字段为 <code>defaultQuality</code>、<code>closeToTray</code>、<code>theme</code>、<code>audioCacheEnabled</code>、<code>audioCacheMaxBytes</code>、<code>downloadDir?</code>。<code>downloadDir</code> 缺省为 <code>~/Music/Lychee Player</code>；<code>audioCacheMaxBytes</code> 限定为 6 个缓存档位；未知值由主进程回退默认。</li>
   <li>关于区展示版本、音频引擎与许可证；版本与许可证以构建配置为准。</li>
   <li>音质四档，默认“自动”；与播放条共用同一持久化偏好，任一处修改即时同步；回退静默，不弹提示。</li>
-  <li>关闭到托盘默认开启；窗口区只保留“关闭到托盘”，右侧“应用”面板提供“退出应用”，直接结束进程且不受关闭到托盘影响；账号区展示登录方式与到期时间。QQ / 微信扫码凭证在到期前自动续期，调用上游遇到登录失效时也会立即尝试续期并重试一次原请求；手动 Cookie 凭证不提供“立即续期”按钮。</li>
+  <li>关闭到托盘默认开启；窗口区只保留“关闭到托盘”，右侧“应用”面板提供“退出应用”，直接结束进程且不受关闭到托盘影响；账号区展示登录方式与到期时间。QQ / 微信扫码凭证在到期前自动续期，调用上游遇到登录失效时也会立即尝试续期并重试一次原请求。</li>
   <li>修改设置即写盘，无保存按钮；播放中切换音质会立即重载当前曲目。</li>
 </ul>
 
@@ -746,7 +745,7 @@
   <tr><td><code>UPSTREAM_NETWORK</code></td><td>网络异常，请稍后重试；播放链接被上游拒绝时提示检查网络 / VPN / 代理出口</td><td>保留当前状态，允许用户重试。</td></tr>
   <tr><td><code>AUTH_EXPIRED</code></td><td>登录已失效，请重新登录</td><td>主进程先自动尝试续期一次并重试原请求；仍失败时提示用户前往登录页，不自动清除凭证。</td></tr>
   <tr><td><code>NO_STREAM</code></td><td>按账号权限与内容状态提示：需要 VIP / 购买、播放授权异常，或可能需要 VIP / 已下架</td><td>播放条沿队列向后尝试到可播；连续 10 首不可播或队列为空时停止。</td></tr>
-  <tr><td><code>UPSTREAM_CHANGED</code></td><td>上游接口发生变化；收藏相关可显示上游 80105 / 1101 文案</td><td>提示稍后再试；保留当前状态。80105 提示退出后重新登录（扫码或 Cookie）以同步网页会话；1101 提示该歌曲暂不支持收藏。</td></tr>
+  <tr><td><code>UPSTREAM_CHANGED</code></td><td>上游接口发生变化；收藏相关可显示上游 80105 / 1101 文案</td><td>提示稍后再试；保留当前状态。80105 提示退出后重新扫码登录以同步网页会话；1101 提示该歌曲暂不支持收藏。</td></tr>
   <tr><td><code>QUOTA_LIMITED</code></td><td>请求过于频繁，请稍后重试</td><td>提示稍后再试；用户可手动重试。</td></tr>
   <tr><td><code>NO_PERMISSION</code></td><td>当前账号无权执行该操作；播放设备受限时提示当前设备无法播放；发表评论需要验证码时提示先在官方客户端完成验证</td><td>保留原状态；不可编辑的歌单不显示编辑入口；评论草稿保留。</td></tr>
   <tr><td><code>INTERNAL</code></td><td>主进程内部错误</td><td>提示主进程内部错误，详情只写入主进程日志。</td></tr>

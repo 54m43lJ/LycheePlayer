@@ -1206,7 +1206,7 @@ button:focus-visible,
   box-shadow: var(--shadow);
 }
 
-/* 登录页宽版：官方登录组件（主进程 WebContentsView）占满内容宽度，仅下方保留 Cookie 折叠面板 */
+/* 登录页宽版：顶部方式切换 + 单个官方扫码组件（主进程 WebContentsView） */
 .login-wide {
   width: 100%;
   max-width: 800px;
@@ -1267,35 +1267,6 @@ button:focus-visible,
 .embed-retry {
   display: flex;
   justify-content: center;
-}
-
-.cookie-box summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  list-style: none;
-}
-
-.cookie-box summary::-webkit-details-marker {
-  display: none;
-}
-
-.cookie-box summary::before {
-  content: '＋';
-  margin-right: 6px;
-  color: var(--accent-strong);
-}
-
-.cookie-box[open] summary::before {
-  content: '－';
-}
-
-.cookie-hint {
-  margin: 10px 0;
-  color: var(--faint);
-  font-size: 11px;
-  line-height: 1.6;
 }
 
 /* ---------- Settings ---------- */

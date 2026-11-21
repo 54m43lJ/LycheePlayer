@@ -709,7 +709,6 @@ export interface FlagsFile {
   };
   login: {
     getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
-    loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     openWebLogin(method: LoginMethod): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     refreshSession(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     logout(): Promise&lt;IpcResult&lt;null&gt;&gt;;
@@ -1090,7 +1089,6 @@ export function exchangeQqLoginCode(code: string): Promise&lt;Credential&gt;;
 export function exchangeWechatLoginCode(code: string): Promise&lt;Credential&gt;;
 export function refreshSession(): Promise&lt;Credential&gt;;
 export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;
-export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
 async function refreshMusickey(current: Credential): Promise&lt;Credential&gt;;
 async function refreshViaQqLogin(current: Credential): Promise&lt;Credential&gt;;
 async function refreshViaToken(current: Credential): Promise&lt;Credential&gt;;
@@ -1098,12 +1096,10 @@ function mergeRefreshedCredential(
   current: Credential,
   data: Record&lt;string, unknown&gt;
 ): Credential;
-async function probeCredential(credential: Credential): Promise&lt;'ok' | 'expired'&gt;;
 
 </code></pre>
 <ul class="note">
   <li><code>exchangeQqLoginCode</code> 调用 <code>QQConnectLogin.LoginServer/QQLogin</code>，解析为 <code>method=qq</code>；<code>exchangeWechatLoginCode</code> 调用 <code>music.login.LoginServer/Login</code>（<code>tmeLoginType=1</code>、<code>strAppid</code> + <code>code</code>），解析为 <code>method=wechat</code>，并兼容微信的 <code>expired_at</code> 到期字段。</li>
-  <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，按 <code>loginType</code> 与 <code>musickey</code> 前缀推断 <code>method</code>，先向资料接口验证再返回凭证。</li>
   <li><code>refreshSession</code> 按 <code>Credential.method</code> 分流：<code>wechat</code> 只走 <code>music.login.LoginServer/Login</code> 的 <code>loginMode=2</code>；<code>qq</code> 走 <code>QQConnectLogin.LoginServer/QQLogin</code>（旧 <code>musickey</code> + <code>expired_in</code>），失败且存在 <code>refresh_token</code> 时保留原有回退。成功后写回凭证。<code>refreshIfNeeded</code> 按到期时间或时间间隔触发，启动检查与 30 分钟定时器都会调用；<code>musicu</code> 的登录失效重试也复用 <code>refreshSession</code>。</li>
   <li><code>requestOAuthCodeWithCookies</code> 在发起 authorize 前先调用 <code>throttleUpstream()</code>，与其他上游请求共用同一限速队列。</li>
 </ul>
@@ -1307,7 +1303,6 @@ interface AuthStore {
 
   refresh(): Promise&lt;void&gt;;
   dismissReauth(): void;
-  loginWithCookie(cookie: string): Promise&lt;void&gt;;
   openWebLogin(method: LoginMethod): Promise&lt;void&gt;;
   refreshSession(): Promise&lt;void&gt;;
   logout(): Promise&lt;void&gt;;
@@ -1692,7 +1687,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>挂载后上报登录组件占位矩形并启动内嵌登录；ResizeObserver 与滚动监听保持矩形同步，卸载时摘除视图并取消登录。</li>
   <li>顶部提供 <code>xlogin 扫码</code> / <code>微信扫码</code> 分段切换，同一时间只有一个 <code>WebContentsView</code>；切换时取消旧流程、清理旧分区、重置失败态，再按新方式加载。微信模式使用更高的二维码占位区。</li>
-  <li>Cookie 登录仍为折叠兜底入口；扫码或 Cookie 登录成功后路由跳转到“我的歌单”。</li>
+  <li>登录页只提供 xlogin / 微信扫码，不提供手动 Cookie 入口；扫码成功后路由跳转到“我的歌单”。</li>
 </ul>
 
 <h3 id="c4-48">4.48 src/renderer/views/SettingsView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1912,10 +1907,10 @@ export function toggleFavorite(songMid: string): Promise&lt;FavoriteState&gt;;
 </code></pre>
 <ul class="note">
   <li>读取用 <code>music.musicasset.SongFavRead / IsSongFanByMid</code> 的 <code>v_songMid</code> 批量；结果按账号缓存 <code>FAVORITE_STATUS_CACHE_MS = 30_000</code>。未登录或读取失败按未收藏处理。</li>
-  <li>写入用官网 Web 通道 <code>u6.y.qq.com/cgi-bin/musics.fcg?encoding=ag-1&amp;sign=...</code>，模块 <code>music.musicasset.PlaylistDetailWrite</code>，方法 <code>AddSonglist</code> / <code>DelSonglist</code>，参数为 <code>dirId:201</code> 与 <code>v_songInfo:[{ songId, songType }]</code>。签名与 AES-128-GCM 协议见 <a href="PROVIDER.html#p3-4">PROVIDER §3.4</a>。</li>
+  <li>写入用官网 Web 通道 <code>u6.y.qq.com/cgi-bin/musics.fcg?encoding=ag-1&amp;sign=...</code>，模块 <code>music.musicasset.PlaylistDetailWrite</code>，方法 <code>AddSonglist</code> / <code>DelSonglist</code>，参数为 <code>dirId:201</code> 与 <code>v_songInfo:[{ songId, songType }]</code>。签名与 AES-128-GCM 协议见 <a href="PROVIDER.html#p3-3">PROVIDER §3.3</a>。</li>
   <li><code>songType</code> 必须取歌曲详情的真实值，不能用 <code>0</code> 兜底；错误类型可能返回 80105 或生成用户不可见的隐藏记录。</li>
   <li>写后必须读回确认：业务码成功、状态接口为 true 或总数增加都不单独构成成功条件，还要确认成员可见性（例如后续 <code>CgiGetDiss</code>）；状态读回不一致时抛错并回滚 UI。</li>
-  <li>上游 80105 提示“请退出后重新登录（扫码或 Cookie），以同步网页会话”；1101 表示该歌曲暂不支持收藏；2001 / 104604 做短暂退避重试。收藏签名写入与普通读取一样先经过全局上游限速。</li>
+  <li>上游 80105 提示“请退出后重新扫码登录，以同步网页会话”；1101 表示该歌曲暂不支持收藏；2001 / 104604 做短暂退避重试。收藏签名写入与普通读取一样先经过全局上游限速。</li>
   <li>成功后使 <code>liked</code> 歌单缓存失效，并通过 <code>playlist.invalidate('liked')</code> 触发已打开歌单立即轮询；失败不刷新。</li>
 </ul>
 
@@ -2726,19 +2721,23 @@ views/LoginView::selectMethod(next)
   <li><strong>验证状态：未验证。</strong> 真实微信扫码、收藏写入与续期尚未验收；在验收完成前按未验证功能记录，不把微信链路视为稳定。</li>
 </ul>
 
-<h3 id="c5-4">5.4 Cookie 登录（兜底）</h3>
-<pre><code>views/LoginView::submitCookie()
-└── stores/auth::loginWithCookie(cookie)
-    └── window.lychee.login.loginWithCookie(cookie)
-        └── ipc::handle('login.loginWithCookie')
-            ├── api/login::loginWithCookie(cookie)
-            │   ├── api/login::parseCookieString(cookie)
-            │   └── api/login::probeCredential(credential)
-            └── credential::saveCredential(credential)
+<h3 id="c5-4">5.4 登录态恢复与重新登录提示</h3>
+<pre><code>views/App.vue::onMounted()
+└── stores/auth::refresh()
+    └── window.lychee.login.getStatus()
+        └── ipc::handle('login.getStatus')
+            ├── credential::loadCredential()
+            │   └── 判断 version === 1 → 删除凭证文件 / reauthReason = 'v1'
+            └── ipc::currentAuthStatus()
+                └── credential::getReauthReason()
+                    └── stores/auth::applyStatus(status)
+                        └── views/App.vue::showReauth
+                            └── components/ReauthDialog
 </code></pre>
 <ul class="note">
-  <li>Cookie 至少需要有效的 <code>uin</code> 与 <code>qm_keyst</code>；资料接口验证失败返回 <code>AUTH_EXPIRED</code>。</li>
-  <li>验证成功后 <code>submitCookie</code> 跳转“我的歌单”；凭证保存边界见 <a href="USER.html#u2">USER §2</a>。</li>
+  <li>v1 凭证的清空发生在 <code>credential.loadCredential()</code>，不发生在弹层或 <code>auth.refresh()</code>；弹层只消费 <code>AuthStatus.reauthReason</code>。</li>
+  <li>点击“重新登录”由 <code>App.vue</code> 关闭弹层并路由到 <code>/login</code>；登录成功后 <code>AuthStatus.loggedIn</code> 与 <code>saveCredential()</code> 清除原因。</li>
+  <li>后续续期 auth-failed 只需设置同一个 <code>reauthReason</code> 字段；续期状态机负责是否清空凭证，弹层不承担该职责。</li>
 </ul>
 
 <h3 id="c5-5">5.5 播放单曲</h3>

@@ -117,7 +117,7 @@ function assertEnvelope<T>(response: PlaylistEnvelope<T>, action: string, write:
   if (Number(failed) === 80105) {
     throw new UpstreamError(
       'UPSTREAM_CHANGED',
-      '收藏失败：请退出后重新登录（扫码或 Cookie），以同步网页会话'
+      '收藏失败：请退出后重新扫码登录，以同步网页会话'
     )
   }
   if (Number(failed) === 1101) {
