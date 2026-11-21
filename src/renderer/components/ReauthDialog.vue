@@ -23,11 +23,7 @@ watch(
 const title = computed(() =>
   props.reason === 'v1' ? '登录凭证需要更新' : '登录已失效'
 )
-const message = computed(() =>
-  props.reason === 'v1'
-    ? '旧版本登录凭证已清除，请重新登录。'
-    : '当前登录凭证无法继续使用，请重新登录。'
-)
+const message = '请重新登录。'
 
 function onKeydown(event: KeyboardEvent): void {
   if (props.open && event.key === 'Escape') emit('dismiss')

@@ -107,7 +107,6 @@ onBeforeUnmount(() => {
           {{ auth.displayName }}<br />
           <span class="mono faint">musicid {{ auth.musicid }}</span>
         </p>
-        <p class="faint">{{ auth.method === 'wechat' ? '微信扫码登录' : 'QQ 扫码登录' }}</p>
         <div style="display: flex; gap: 10px; justify-content: center">
           <button class="btn primary" @click="router.push('/library')">进入我的歌单</button>
           <button class="btn ghost" @click="auth.logout()">退出登录</button>

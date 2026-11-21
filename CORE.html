@@ -1232,7 +1232,7 @@ export function destroyTray(): void;
   <li>播放队列头部 <code>.lyrics-head-actions</code> 并排放置“清空播放队列”与“关闭播放队列”两个图标按钮；清空按钮使用 <code>trash</code> 图标，队列为空时 <code>disabled</code> 并沿用 <code>.icon-btn:disabled</code> 灰化，滚动或筛选都不影响入口。列表底部不再渲染 <code>.queue-footer</code> 或文字按钮；<code>player.clearQueue()</code> 仍只清空当前曲之后的队列。</li>
   <li>侧栏：宽屏固定 224px；≤900px 改为单列 grid + 固定覆盖式抽屉（<code>UiStore.sidebarOpen</code>），抽屉默认隐藏、打开时覆盖内容区，不压缩主内容。左边缘 revealer 与拖拽把手按位移 / 速度吸附，Esc 与外部点击关闭，<code>prefers-reduced-motion</code> 时不启用动画；打开时焦点进入抽屉，关闭后回到触发点。</li>
   <li>主界面拖拽手势仅 ≤900px 启用：<code>pointerdown</code> 在宽屏直接返回；触屏 <code>pointerup</code> 若存在非折叠选区则跳过侧栏切换，长按选择文本优先；<code>pointercancel</code> 清理拖拽起点。窄屏非触屏由 §4.49 的 CSS 禁用文本选择。<code>ui.lyricsOpen</code> 为真时 <code>onPointerDown</code> / <code>onPointerUp</code> 提前返回并清空拖拽起点，横向手势完全交给 <a href="#c4-72">LyricsOverlay</a> 的分页处理，避免同时唤起侧栏；左边缘 revealer 是按钮，仍可通过点击打开侧栏。</li>
-  <li>品牌区只显示 <code>Lychee Player</code>，不再渲染副标题；登录后的账号 pill 次级行只显示 <code>musicid</code>，不再拼接“已登录 ·”。</li>
+  <li>品牌区只显示 <code>Lychee Player</code>，不再渲染副标题；登录后的账号 pill 次级行只显示 <code>musicid</code>，不再拼接“已登录 ·”；未登录 pill 只显示“登录 QQ 音乐”，不显示扫码方式或其它次级说明。</li>
   <li>侧栏“浏览”组顺序固定为“发现 / 搜索 / 我喜欢 / 我的歌单 / 播放历史”；“我喜欢”仅在登录后显示，使用 <code>heart</code> 图标并链接到 <code>/playlist/${FAVORITES_PLAYLIST_ID}</code>，点击走 <code>onSidebarNavigate()</code> 关闭窄屏抽屉；复用 <code>PlaylistView</code> 的 favorites 分支，不新增路由或 IPC。“播放历史”位于最近歌单子条目之后，使用 <code>history</code> 图标并链接到 <code>/history</code>。</li>
   <li>挂载时在 <code>auth.refresh()</code> 之后调用 <code>history.load()</code> 读取当前账号的本机历史；监听 <code>auth.musicid</code>，登录 / 退出 / 切换账号时重新加载对应作用域的记录，不跨账号复用内存中的列表。</li>
   <li>“我的歌单”下渲染 <code>playlist.recent</code>（最多 5 条），每日推荐歌单名通过 <code>dailyPlaylistName</code> 补昵称前缀后显示，点击进入对应歌单，校验失败条目显示失效态。子条目高亮同时读取当前 <code>playlist</code> 路由与 <code>player.queueSource</code>：<code>viewedPlaylistId</code> 只在 <code>route.name === 'playlist'</code> 时取 <code>route.params.id</code>，避免 <code>/mv/:id</code> 等同样使用 <code>id</code> 参数的路由误命中；<code>item.id === viewedPlaylistId || item.id === currentPlaylistId</code> 即高亮。“正在播放”音量图标仍只由 <code>currentPlaylistId</code> 决定。</li>
@@ -1697,7 +1697,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>挂载后上报登录组件占位矩形并启动内嵌登录；ResizeObserver 与滚动监听保持矩形同步，卸载时摘除视图并取消登录。</li>
   <li>顶部提供 <code>xlogin 扫码</code> / <code>微信扫码</code> 分段切换，同一时间只有一个 <code>WebContentsView</code>；切换时取消旧流程、清理旧分区、重置失败态，再按新方式加载。微信模式使用更高的二维码占位区。</li>
-  <li>登录页只提供 xlogin / 微信扫码，不提供手动 Cookie 入口；扫码成功后路由跳转到“我的歌单”。</li>
+  <li>登录页只提供 xlogin / 微信扫码，不提供手动 Cookie 入口；扫码成功后路由跳转到“我的歌单”。已登录态只显示头像、昵称、<code>musicid</code> 与操作按钮，不显示登录方式说明行。</li>
 </ul>
 
 <h3 id="c4-48">4.48 src/renderer/views/SettingsView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1709,7 +1709,7 @@ const emit = defineEmits&lt;{
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
   <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
-  <li>账号区展示登录态、到期时间、续期与退出登录；登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>账号区展示昵称、登录方式、<code>musicid</code> 与到期时间，不显示“已登录”徽标；登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
   <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。“播放缓存”标题也不再附加“不影响已下载”等括号说明。</li>
 </ul>
 
@@ -2617,7 +2617,7 @@ emits: { play: [] };
 </code></pre>
 <ul class="note">
   <li>全局重新登录弹层，由 <code>App.vue</code> 挂载；只负责提示与“重新登录 / 稍后”，不读取、写入或清除凭证。清空凭证始终由触发方负责：v1 在 <code>credential.ts</code>，后续 auth-failed 在续期状态机。</li>
-  <li><code>reason='v1'</code> 显示“登录凭证需要更新 / 旧版本登录凭证已清除”；<code>reason='auth-failed'</code> 显示“登录已失效”。两种触发共用同一弹层，但触发逻辑分离。</li>
+  <li><code>reason='v1'</code> 标题为“登录凭证需要更新”，<code>reason='auth-failed'</code> 为“登录已失效”；正文统一只提示“请重新登录。”，不复述凭证清除或失效原因。两种触发共用同一弹层，但触发逻辑分离。</li>
   <li>点击“重新登录”由 <code>App.vue</code> 先关闭弹层再路由到 <code>/login</code>；已处于 <code>/login</code> 时不显示弹层。登录成功后 <code>AuthStatus.loggedIn</code> 清除 <code>reauthReason</code>。</li>
 </ul>
 

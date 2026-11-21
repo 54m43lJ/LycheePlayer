@@ -423,10 +423,9 @@ onBeforeUnmount(() => {
                 <div>
                   <div class="setting-name">{{ auth.displayName }}</div>
                   <div class="setting-desc mono">
-                    {{ auth.method === 'wechat' ? '微信扫码' : 'QQ 扫码' }} · musicid {{ auth.musicid }}
+                    {{ auth.method === 'wechat' ? '微信' : 'QQ' }} · musicid {{ auth.musicid }}
                   </div>
                 </div>
-                <span class="pay-badge">已登录</span>
               </div>
               <div class="setting-row">
                 <div>
