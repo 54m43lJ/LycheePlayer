@@ -7,6 +7,7 @@ import {
   COMMENT_PAGE_SIZE
 } from '@shared/constants'
 import AppIcon from './AppIcon.vue'
+import ImageLightbox from './ImageLightbox.vue'
 import { describeError, unwrap } from '../api'
 import { useAuthStore } from '../stores/auth'
 import { usePlayerStore } from '../stores/player'
@@ -31,6 +32,8 @@ const showBottom = ref(false)
 const songId = computed(() => player.current?.songId ?? '')
 const draft = ref('')
 const posting = ref(false)
+const failedMedia = ref<Record<string, boolean>>({})
+const viewerUrl = ref<string | null>(null)
 const canPost = computed(
   () => auth.loggedIn && draft.value.trim().length > 0 && !posting.value
 )
@@ -74,6 +77,7 @@ async function load(): Promise<void> {
     hasMore.value = false
     cursor.value = ''
     error.value = ''
+    failedMedia.value = {}
     loading.value = false
     updateJumpControls()
     return
@@ -84,6 +88,7 @@ async function load(): Promise<void> {
   loadingAll.value = false
   error.value = ''
   cursor.value = ''
+  failedMedia.value = {}
   if (listRef.value) listRef.value.scrollTop = 0
   try {
     const page = unwrap(await window.lychee.comment.get(id, ''))
@@ -168,14 +173,28 @@ function avatarLetter(name: string): string {
   return name.slice(0, 1).toUpperCase() || '?'
 }
 
+function mediaFailed(url: string): boolean {
+  return Boolean(failedMedia.value[url])
+}
+
+function markMediaFailed(url: string): void {
+  failedMedia.value = { ...failedMedia.value, [url]: true }
+}
+
+function openViewer(url: string): void {
+  viewerUrl.value = url
+}
+
 interface CommentPart {
   text?: string
   emoji?: string
+  missing?: boolean
 }
 
 /**
  * 正文中的 U+FFFC 是内嵌表情的占位。EmoPic 只提供一个表情图，
- * 因此只替换第一个占位符，其余占位符直接丢弃；没有占位符时追加到末尾。
+ * 第一个占位符替换为表情，其余占位符显示加载失败占位；
+ * 没有占位符时把表情追加到末尾。Pic 不参与占位符映射。
  */
 function contentParts(comment: Comment): CommentPart[] {
   const emoji = comment.emojiUrl ?? ''
@@ -184,9 +203,13 @@ function contentParts(comment: Comment): CommentPart[] {
   let emojiUsed = false
   chunks.forEach((text, index) => {
     if (text) parts.push({ text })
-    if (index < chunks.length - 1 && emoji && !emojiUsed) {
-      parts.push({ emoji })
-      emojiUsed = true
+    if (index < chunks.length - 1) {
+      if (emoji && !emojiUsed) {
+        parts.push({ emoji })
+        emojiUsed = true
+      } else {
+        parts.push({ missing: true })
+      }
     }
   })
   if (emoji && !emojiUsed) parts.push({ emoji })
@@ -321,23 +344,51 @@ onBeforeUnmount(() => {
               <span class="comment-text">
                 <template v-for="(part, index) in contentParts(comment)" :key="index">
                   <img
-                    v-if="part.emoji"
+                    v-if="part.emoji && !mediaFailed(part.emoji)"
                     class="comment-emoji"
                     :src="part.emoji"
                     alt="表情"
                     loading="lazy"
+                    @error="markMediaFailed(part.emoji)"
                   />
+                  <span
+                    v-else-if="part.emoji"
+                    class="comment-media-failed comment-media-failed-emoji"
+                    title="表情加载失败"
+                    aria-label="表情加载失败"
+                  >
+                    <AppIcon name="file-broken" :size="14" />
+                  </span>
+                  <span
+                    v-else-if="part.missing"
+                    class="comment-media-failed comment-media-failed-emoji"
+                    title="媒体加载失败"
+                    aria-label="媒体加载失败"
+                  >
+                    <AppIcon name="file-broken" :size="14" />
+                  </span>
                   <template v-else>{{ part.text }}</template>
                 </template>
               </span>
             </div>
             <img
-              v-if="comment.imageUrl"
+              v-if="comment.imageUrl && !mediaFailed(comment.imageUrl)"
               class="comment-media"
               :src="comment.imageUrl"
               alt="评论图片"
               loading="lazy"
+              title="查看大图"
+              @error="markMediaFailed(comment.imageUrl)"
+              @click="openViewer(comment.imageUrl)"
             />
+            <div
+              v-else-if="comment.imageUrl"
+              class="comment-media-failed"
+              title="图片加载失败"
+              aria-label="图片加载失败"
+            >
+              <AppIcon name="file-broken" :size="24" />
+            </div>
             <div class="comment-foot">
               <span class="comment-time">{{ timeLabel(comment.createdAtMs) }}</span>
               <button
@@ -395,5 +446,7 @@ onBeforeUnmount(() => {
         <AppIcon v-else name="to-bottom" :size="17" />
       </button>
     </div>
+
+    <ImageLightbox :url="viewerUrl" @close="viewerUrl = null" />
   </section>
 </template>

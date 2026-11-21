@@ -63,6 +63,7 @@
     -apple-system,
     BlinkMacSystemFont,
     'Segoe UI',
+    'Noto Sans Yi',
     sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -3983,6 +3984,86 @@ button:focus-visible,
   margin-top: 7px;
   border-radius: 6px;
   object-fit: contain;
+  cursor: zoom-in;
+}
+
+.comment-media-failed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 42px;
+  margin-top: 7px;
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  background: var(--subtle-bg);
+  color: var(--faint);
+}
+
+.comment-media-failed-emoji {
+  width: 20px;
+  height: 20px;
+  margin: 0 1px;
+  border: 0;
+  background: transparent;
+  vertical-align: -4px;
+}
+
+.image-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.86);
+}
+
+.image-lightbox-stage {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.image-lightbox-image {
+  flex: none;
+  max-width: 100%;
+  max-height: 100%;
+  cursor: zoom-in;
+  object-fit: contain;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.image-lightbox-image.natural {
+  max-width: none;
+  max-height: none;
+  cursor: grab;
+}
+
+.image-lightbox-image.dragging {
+  cursor: grabbing;
+}
+
+.image-lightbox-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  cursor: pointer;
+}
+
+.image-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .comment-foot {

@@ -591,3 +591,50 @@
 | `CORE.html` | §4.16 `src/main/api/login.ts`（`#c4-16`） | 改 | 记录 QQ 续期所需 OAuth 参数、`comm` 字段、Cookie 回退与 `req1` 响应兼容。 |
 | `PROVIDER.html` | §4.1 上游方法（`#p4-1`） | 改 | 补充 QQLogin 续期的 OAuth 参数与 10006 触发原因。 |
 | `PROVIDER.html` | §4.5 请求画像（`#p4-5`） | 改 | 同步 QQ 续期请求画像与公共参数。 |
+
+### 3.20 评论附图与表情缺少加载失败占位和大图查看
+
+**问题描述**：评论的附图（`Pic`）与内嵌表情（`EmoPic`）直接绑定 `<img>`，源图 404 或网络失败时浏览器显示破图图标，且没有统一的失败态；附图也无法放大查看。ISSUES 要求两者都显示“折角纸张 + 右下角 X”的小占位，并让附图支持全屏查看、适应屏幕 / 原始大小切换与拖动。
+
+**解决方法**：
+
+- `CommentsPanel` 用 `failedMedia` 按 URL 记录加载失败的媒体；`img` 触发 `error` 后改渲染 `file-broken` 占位。表情占位保持 20px 行内尺寸，附图占位固定 56×42px；刷新评论或切歌时清空失败记录重新尝试。
+- `AppIcon` 新增 `file-broken` 图标：折角纸张轮廓与右下角 X。
+- 新增 `ImageLightbox`：通过 `Teleport` 覆盖全屏，背景变暗、右上角关闭；点击图片在适应屏幕与原始大小之间切换，原始大小超出视口时按指针拖动平移并夹紧边界。Esc、空白点击与返回手势都能关闭，且打开时优先于歌词 / 评论层处理 Esc 与返回。
+- 附图加载成功后点击打开查看器；表情保持不可点击。
+- 新增样式：评论媒体 `zoom-in` 指针、失败占位虚线框、查看器背景 / 图片 / 关闭按钮与拖动光标。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 3 项“评论 pic / emopic 占位与附图查看” | 改 | 行尾追加 ` [已解决] `。 |
+| `USER.html` | §5.2.5 歌词与评论（`#u5-2-5`） | 改 | 补充加载失败占位、附图全屏查看、尺寸切换与拖动。 |
+| `CORE.html` | §1 文件树 · `components/ImageLightbox.vue` | 增 | 登记评论图片查看器。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 记录 `failedMedia`、占位尺寸与附图查看入口。 |
+| `CORE.html` | §4.93 `ImageLightbox.vue`（`#c4-93`） | 增 | 记录全屏层、尺寸切换、拖动平移与关闭方式。 |
+| `README.md` | §2 用户交互 · 歌词 / 评论行 | 改 | 补充附图可点击查看大图。 |
+| `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 与 README 同步。 |
+
+### 3.21 评论占位符语义、缺图占位与 Yi 文种缺字
+
+**问题描述**：上一轮只处理了 `<img>` 加载失败，`好听哈￼`（Im Doing Fine，2026-10-24 10:22）这类 `Content` 带 `U+FFFC`、`Pic` / `EmoPic` 都为空的评论被主进程提前删除占位符，界面不会出现占位图标。另一个歧义是 `Pic` 是否使用 `U+FFFC`；抽样上游评论后确认：Ladyfingers 的 `我的故事总是发生在夏天￼`（2026-10-11 21:27，CmId `1!hAwDtmYh-7PDqHWNGYz5WwGArLvZcxQNY05CpPH8snrdd3vHJnsoIIQY9h5-YbOO`）**只有 `Pic`，没有 `EmoPic`**：`Pic` 为 `https://music-file.y.qq.com/comment/u/oK6kowEAoK4z7K-kow6qoeSsNv/23ab0/0d56550082963481998aac593c23eea5cddc2b9d_20242f.jpg`，`EmoPic` 为空字符串。继续翻取该歌曲 758 条评论后统计：`Pic` 非空 88 条，其中仅 1 条同时带 `U+FFFC`；`EmoPic` 非空 6 条，全部不带 `U+FFFC`；无任何媒体的 `U+FFFC` 4 条。另一首 Im Doing Fine 的 200 条样本同样未出现 `EmoPic + U+FFFC` 的稳定组合。因此附图没有可靠的占位映射，`U+FFFC` 只能按内嵌表情位置或残留占位处理。另有 Ladyfingers 2026-11-13 20:04 的评论包含 `ꈍ◡ꈍ`，其中 `U+A20D` 在缺少 Yi 字体的 Linux 上显示为缺字方框。
+
+**解决方法**：
+
+- `normalizeCommentContent` 明确区分三种情况：有 `EmoPic` 时保留 `U+FFFC` 供表情定位；只有 `Pic` 时移除残留占位；两者都没有时保留占位，交给渲染层显示失败图标。
+- 评论过滤改为先移除 `U+FFFC` 再判断正文是否为空，避免只剩占位符且没有媒体的记录进入列表。
+- `CommentsPanel` 的 `contentParts` 把第一个占位替换为 `EmoPic`，其余占位生成 `missing` 部分并显示 `file-broken` 占位；`Pic` 始终单独渲染在正文下方，不消费占位符。
+- 新增 `@fontsource/noto-sans-yi` 的 Yi 子集并在正文 `font-family` 末尾加入 `Noto Sans Yi`，缺失字形时回退到内置字体；OFL 许可证随打包资源分发。
+- 更新 `test/api/comment.test.ts`：无媒体占位符保留，带 `Pic` 的占位符仍移除。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `USER.html` | §5.2.5 歌词与评论（`#u5-2-5`） | 改 | 明确 `U+FFFC` 只对应表情，无媒体占位显示失败图标，`Pic` 单独展示。 |
+| `CORE.html` | §4.15 `comment.ts`（`#c4-15`） | 改 | 记录 `EmoPic` / `Pic` / 无媒体三种占位处理与过滤规则。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 记录首个占位换表情、其余占位显示失败图标、附图不消费占位。 |
+| `CORE.html` | §3 SBOM / §4.22 `main.ts` | 改 | 登记 `@fontsource/noto-sans-yi` 与 `Noto Sans Yi` 字体回退。 |
+| `PROVIDER.html` | §2 CONVENTIONS / §4.3 数据模型与转换 | 改 | 说明 `Pic` 不参与 `U+FFFC` 映射及无媒体占位的处理。 |
+| `README.md` / `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 补充加载失败占位。 |

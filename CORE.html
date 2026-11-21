@@ -123,6 +123,7 @@
 │       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
 │       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
 │       │   ├── <a href="#c4-81">ConfirmDialog.vue</a>          应用内确认框
+│       │   ├── <a href="#c4-93">ImageLightbox.vue</a>          评论图片查看器
 │       │   ├── <a href="#c4-91">ReauthDialog.vue</a>           全局重新登录弹层
 │       │   ├── <a href="#c4-85">DownloadDeleteDialog.vue</a>  删除下载确认框
 │       │   └── <a href="#c4-82">CatalogDescription.vue</a>     歌手 / 专辑简介折叠
@@ -280,6 +281,7 @@
   <tr><td><code>electron-vite</code></td><td>Electron 三进程构建集成。</td></tr>
   <tr><td><code>@vitejs/plugin-vue</code></td><td>Vue SFC 编译。</td></tr>
   <tr><td><code>vue-tsc</code></td><td>Vue SFC 类型检查。</td></tr>
+  <tr><td><code>@fontsource/noto-sans-yi</code></td><td>渲染进程内置 Yi 文种字体（OFL-1.1），回退评论等文本中的 ꈍ 等 <code>U+A000-A4C6</code> 字符。</td></tr>
   <tr><td><code>@types/node</code></td><td>Node.js 类型声明。</td></tr>
 </table>
 <ul class="note">
@@ -1089,7 +1091,7 @@ export function unlikeComment(commentId: string): Promise&lt;CommentLikeResult&g
 <ul class="note">
   <li>评论读取未登录时匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>。点赞状态优先取 <code>IsPraised</code>，缺失时回退 <code>IsLiked</code>（仅兼容旧字段），两者都缺失按 <code>false</code>；<code>songId</code> 为空或非数字时返回空评论，不发起请求。</li>
   <li><code>normalizeCommentContent()</code> 把上游 <code>Content</code> 中的真实 <code>\r\n</code> / <code>\r</code> 与字面量 <code>\r\n</code> / <code>\n</code> / <code>\r</code> 统一为 <code>\n</code>，再写入 <code>Comment.content</code>；渲染层使用 <code>white-space: pre-wrap</code> 展示换行，不做 HTML 解析。上游同一字段混用两种写法，属于数据格式不统一，不是渲染逃逸问题。</li>
-  <li><code>Content</code> 中的 <code>U+FFFC</code>（对象替换符）标记内嵌表情图的位置：<code>EmoPic</code> 非空时保留占位，由渲染层替换为表情图；<code>EmoPic</code> 为空时只留下没有对应对象的空框，映射时移除。<code>Pic</code> 映射为 <code>Comment.imageUrl</code>，<code>EmoPic</code> 映射为 <code>Comment.emojiUrl</code>，两者与头像一样把 <code>http:</code> 改为 <code>https:</code>。正文为空但存在图片或表情的评论仍保留，正文与媒体都为空时才过滤。</li>
+  <li><code>Content</code> 中的 <code>U+FFFC</code>（对象替换符）只标记内嵌表情图（<code>EmoPic</code>）的位置：有 <code>EmoPic</code> 时保留占位，由渲染层替换为表情图；只有附图（<code>Pic</code>）时按残留占位移除；两者都没有时保留，由渲染层显示加载失败占位。上游样本中带 <code>Pic</code> 的评论多数没有 <code>U+FFFC</code>，因此不为附图建立占位映射，<code>Pic</code> 始终单独映射为 <code>Comment.imageUrl</code> 并显示在正文下方。<code>EmoPic</code> 映射为 <code>Comment.emojiUrl</code>，两者与头像一样把 <code>http:</code> 改为 <code>https:</code>。正文移除占位符后为空且没有媒体时过滤；只有图片或表情的评论仍保留。</li>
   <li>评论读取使用 <code>music.globalComment.CommentRead / GetNewCommentList</code>（游标 <code>LastCommentSeqNo</code>，<code>PageNum</code> 固定 0，上游忽略分页页码）。上游 <code>PageSize</code> 实测上限为 25（26 起返回业务码 10000），应用固定每页 25 条。<code>SeqNo</code> 可能超过 <code>Number.MAX_SAFE_INTEGER</code>，必须按字符串保留；<code>hasMore</code> 需同时满足上游 <code>HasMore</code> 与下一页游标非空。评论只保留最新评论游标分页，不提供“最旧”或按点赞排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，热评附加模块不进入评论列表。</li>
   <li>点赞使用 <code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code>，参数 <code>{ comment_id, type: 3 | 4, uin }</code>（3 点赞、4 取消）；需要登录，响应的 <code>data.code</code> / <code>msg</code> / <code>subcode</code> 全为 0 才算成功。上游不返回点赞数量，<code>CommentLikeResult.likedCount</code> 为可选；返回的 <code>liked</code> 由请求 <code>type</code> 决定，前端乐观更新计数，失败时回滚。</li>
   <li>发表评论使用 <code>music.globalComment.CommentWriteServer / AddComment</code>，参数 <code>{ Content, BizType: 1, BizId: 数字歌曲 ID, BizSubType: 2 }</code>；需要登录。正文先去首尾空白，空内容或超过 <code>COMMENT_CONTENT_MAX = 300</code> 字时不发请求；<code>SubCode === 0</code> 才成功，<code>SubCode=1000</code> 映射登录失效，<code>VerifyUrl</code> 非空映射为需要验证码的 <code>NO_PERMISSION</code>，其余非 0 按 <code>Msg</code> 返回失败。</li>
@@ -1220,6 +1222,9 @@ export function destroyTray(): void;
 <h3 id="c4-22">4.22 src/renderer/main.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>createApp(App).use(createPinia()).use(router).mount('#app');
 </code></pre>
+<ul class="note">
+  <li>入口导入 <code>@fontsource/noto-sans-yi/yi-400.css</code>；正文 <code>font-family</code> 在系统字体之后加入 <code>Noto Sans Yi</code>，仅当现有字体缺字时回退，避免评论中的 Yi 文种字符（如 <code>U+A20D</code>）显示为缺字方框。字体以 OFL-1.1 分发。</li>
+</ul>
 
 <h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>// 无 props / emits。应用外壳：侧栏（宽屏固定 / 窄屏抽屉）、内容区、播放条、播放队列面板、Toast、删除下载确认框与全局重新登录弹层；下载中心由路由页承载。
@@ -1649,7 +1654,8 @@ const emit = defineEmits&lt;{
   <li>顶部只显示“评论”标题、总数与刷新入口，不再提供“最新 / 最旧”排序切换。刷新只重载评论，不触发歌词重载。</li>
   <li>分页每页 25 条，滚动到底且 <code>hasMore=true</code> 时按游标追加下一页；组件使用 <code>cursor</code> 状态保存 <code>nextCursor</code>，不保留 <code>pageNo</code>。右下角按滚动位置显示独立圆形“跳转到顶部 / 底部”按钮：顶部按钮在 <code>scrollTop &gt; 120</code> 时出现；底部按钮在仍有下一页或未滚到底时出现。点击“跳转到顶部”平滑回顶；点击“跳转到底部”先串行补拉剩余评论（最多 <code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 页 / 约 1000 条），再直接滚到底部。补拉期间按钮显示 spinner；组件卸载、切歌或刷新时通过 token 立即取消后续页。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
   <li>追加下一页前用现有评论的 <code>id</code> 集合去重，只插入未出现过的评论；顺序完全沿用上游“最新”顺序，不按 <code>createdAtMs</code> 本地重排，刷新与翻页重叠不会产生重复行。</li>
-  <li>评论行两行布局：第一行头像 + 昵称 + 正文（完整展示，不截断），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。正文按纯文本渲染，<code>U+FFFC</code> 占位替换为 <code>emojiUrl</code> 表情图，无占位符时表情追加在正文末尾；<code>imageUrl</code> 附图显示在正文下方。只有图片或表情、正文为空的评论照常显示。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
+  <li>评论行两行布局：第一行头像 + 昵称 + 正文（完整展示，不截断），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。正文按纯文本渲染，第一个 <code>U+FFFC</code> 占位替换为 <code>emojiUrl</code> 表情图，其余占位显示加载失败图标；没有占位符时表情追加在正文末尾；没有表情也没有附图时，<code>U+FFFC</code> 同样显示失败图标。<code>imageUrl</code> 附图始终显示在正文下方，不消费占位符。只有图片或表情、正文为空的评论照常显示。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
+  <li>表情或附图的 <code>img</code> 触发 <code>error</code> 时按 URL 记入 <code>failedMedia</code>，改渲染 <code>file-broken</code> 小占位（折角纸张 + 右下角 X）：表情占位保持 20px 行内尺寸，附图占位为 56×42px；刷新评论或切歌时清空失败记录并重新尝试加载。附图加载成功后点击打开 <a href="#c4-93">ImageLightbox</a>，表情不提供查看大图。</li>
   <li>底部固定 <code>.comment-composer</code>：多行输入框（<code>maxlength = COMMENT_CONTENT_MAX</code>）与“发表”按钮；未登录时输入框与按钮禁用，占位文案为“登录后发表评论”。<code>canPost</code> 要求已登录、去空白后非空且不在提交中；提交期间按钮显示 spinner。</li>
   <li>发表成功后清空草稿并重新调用 <code>load()</code> 拉取最新评论（不本地插入返回行），失败保留草稿并 Toast；切歌清空草稿。评论滚动区底部 padding 与跳转按钮位置按输入框高度上移，避免最后一条评论或按钮被输入框遮挡。</li>
 </ul>
@@ -2641,6 +2647,16 @@ export function installBackNavigation(fallback: () =&gt; void): () =&gt; void;
   <li><code>useBackDismiss</code> 监听浮层打开状态：每次打开都重新入栈，保证最近打开的浮层最先关闭；关闭或组件卸载时注销。</li>
   <li><code>installBackNavigation</code> 订阅 <code>window.lychee.navigation.onBack</code>，并监听 <code>Alt + ←</code>；后退时优先 <code>dismissTopPopup()</code>，没有浮层才调用传入的 fallback（<code>App.vue</code> 传 <code>router.back()</code>）。同一 200ms 窗口内的重复事件只处理一次。</li>
   <li>在 <code>window</code> 捕获阶段拦截鼠标后退键（<code>button === 3</code>）的 <code>mouseup</code>，阻止 Chromium 自带历史导航；实际关闭 / 导航由主进程推送的 <code>navigation:back</code> 驱动，避免一次按键触发两次动作。</li>
+</ul>
+
+<h3 id="c4-93">4.93 src/renderer/components/ImageLightbox.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// props: url: string | null
+// emits: close
+</code></pre>
+<ul class="note">
+  <li>由 <a href="#c4-42">CommentsPanel</a> 挂载，<code>url</code> 非空时通过 <code>Teleport</code> 渲染到底层 <code>body</code>；固定全屏、背景 <code>rgba(0, 0, 0, 0.86)</code>、层级 90，右上角提供关闭按钮。点击图片外的空白或按 Esc 关闭；打开期间通过 <a href="#c4-92">back-navigation</a> 注册后退关闭，Esc 在窗口捕获阶段处理，不继续关闭歌词 / 评论层。</li>
+  <li>默认适应屏幕：图片 <code>max-width / max-height: 100%</code>，点击图片或在原尺寸下单击切换为原始大小；原始大小取消最大尺寸限制，图片超出视口时可用指针拖动平移，平移范围按图片与视口尺寸夹紧，拖动结束不误触尺寸切换。</li>
+  <li>切换图片或重新打开时重置为适应屏幕并清空平移偏移；关闭后不移除评论滚动位置。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>

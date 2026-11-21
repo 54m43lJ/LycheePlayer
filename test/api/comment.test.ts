@@ -89,7 +89,7 @@ describe('api/comment', () => {
     ])
   })
 
-  it('removes the orphaned object replacement character from comment content', async () => {
+  it('keeps orphaned object replacement characters for the failure placeholder', async () => {
     vi.stubGlobal('fetch', async () =>
       respond({
         code: 0,
@@ -112,7 +112,10 @@ describe('api/comment', () => {
 
     const { getComments } = await import('../../src/main/api/comment')
     const page = await getComments('123', '')
-    expect(page.comments.map((comment) => comment.content)).toEqual(['好听哈', '中间文字'])
+    expect(page.comments.map((comment) => comment.content)).toEqual([
+      '好听哈\uFFFC',
+      '\uFFFC中间\uFFFC文字'
+    ])
     expect(page.comments.map((comment) => comment.id)).toEqual(['a', 'b'])
   })
 

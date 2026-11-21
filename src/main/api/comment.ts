@@ -60,13 +60,18 @@ function normalizeHttpsUrl(value: string | undefined): string {
  * 上游评论正文的换行格式不统一：部分记录直接返回真实换行，
  * 另一些记录返回字面量 “\n” / “\r\n” / “\r”。统一归一化为真实换行，
  * 交给评论区的 white-space: pre-wrap 渲染；不解析 HTML。
- * U+FFFC（对象替换符）标记内嵌表情图的位置；EmoPic 为空时它只是
- * 没有对应对象的残留占位，渲染层会显示为空框，因此在映射时移除。
+ * U+FFFC（对象替换符）仅表示内嵌表情（EmoPic）位置。附图（Pic）始终
+ * 单独显示在正文下方，带 Pic 的评论里出现的 U+FFFC 按残留占位移除；
+ * 两者都没有时保留 U+FFFC，交给渲染层显示加载失败占位。
  */
-function normalizeCommentContent(value: string | undefined, hasEmoji: boolean): string {
+function normalizeCommentContent(
+  value: string | undefined,
+  hasEmoji: boolean,
+  hasImage: boolean
+): string {
   if (!value) return ''
   const text = value.replace(/\r\n?/g, '\n').replace(/\\r\\n|\\n|\\r/g, '\n')
-  return hasEmoji ? text : text.replace(/\uFFFC/g, '')
+  return hasEmoji || !hasImage ? text : text.replace(/\uFFFC/g, '')
 }
 
 function toComment(raw: RawComment): Comment {
@@ -77,7 +82,7 @@ function toComment(raw: RawComment): Comment {
     id: String(raw.CmId ?? ''),
     nickname: raw.Nick ?? '',
     avatarUrl: normalizeHttpsUrl(raw.Avatar),
-    content: normalizeCommentContent(raw.Content, Boolean(emojiUrl)),
+    content: normalizeCommentContent(raw.Content, Boolean(emojiUrl), Boolean(imageUrl)),
     imageUrl: imageUrl || undefined,
     emojiUrl: emojiUrl || undefined,
     likedCount: Number(raw.PraiseNum ?? 0),
@@ -128,7 +133,7 @@ export async function getComments(
     .filter(
       (comment) =>
         comment.id.length > 0 &&
-        (comment.content.trim().length > 0 ||
+        (comment.content.replace(/\uFFFC/g, '').trim().length > 0 ||
           Boolean(comment.imageUrl) ||
           Boolean(comment.emojiUrl))
     )
