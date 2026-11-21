@@ -147,8 +147,10 @@ export const IPC_SONG_MIDS_MAX = 100
 export const LOGIN_EMBED_TIMEOUT_MS = 5 * 60_000
 /** 内嵌登录读取 session Cookie 的轮询间隔。推荐值 1000 ms。 */
 export const LOGIN_COOKIE_POLL_MS = 1000
-/** 登录组件的独立 session 分区名。 */
+/** QQ xlogin 登录组件的独立 session 分区名。 */
 export const LOGIN_EMBED_PARTITION = 'lychee-xlogin'
+/** 微信扫码登录组件的独立 session 分区名。 */
+export const WECHAT_LOGIN_PARTITION = 'lychee-wechat-login'
 /** 会话续期定时器间隔。推荐值 30 × 60_000 ms。 */
 export const SESSION_REFRESH_INTERVAL_MS = 30 * 60_000
 /** 凭证到期前提前续期的窗口。推荐值 10 × 60_000 ms。 */
@@ -210,6 +212,12 @@ export const STARTUP_FLAGS_MAX_BYTES = 8 * 1024
 export const STARTUP_FLAGS_MAX_LINES = 64
 
 // ---------- 外部资源 ----------
+
+/** QQ 音乐在微信开放平台的网站应用 appid；官方网页扫码登录使用。 */
+export const WECHAT_LOGIN_APP_ID = 'wx48db31d50e334801'
+/** 官方微信扫码完成后的回调页；应用从该页 URL 捕获 wx code。 */
+export const WECHAT_LOGIN_REDIRECT_URI =
+  'https://y.qq.com/portal/wx_redirect.html?login_type=2&surl=https%3A%2F%2Fy.qq.com%2F'
 
 /** 官方 xlogin 扫码组件地址。 */
 export const XLOGIN_URL =

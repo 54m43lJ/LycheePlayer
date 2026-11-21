@@ -9,7 +9,7 @@ component "Lychee Player" as APP
 cloud "QQ 音乐" {
   [内容与播放链接 CGI\n(y.qq.com / u.y.qq.com)] as API
   [音频流\n(ws.stream.qqmusic.qq.com)] as STREAM
-  [登录组件与授权\n(xlogin / graph.qq.com)] as LOGIN
+  [登录组件与授权\n(xlogin / 微信扫码 / graph.qq.com)] as LOGIN
 }
 
 component "系统密钥环\n(libsecret)" as KEYRING

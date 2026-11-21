@@ -16,6 +16,7 @@ import type {
   FavoriteState,
   FlagsFile,
   IpcResult,
+  LoginMethod,
   Lyric,
   MprisCommand,
   MvDetail,
@@ -52,7 +53,7 @@ export interface LycheeApi {
   login: {
     getStatus(): Promise<IpcResult<AuthStatus>>
     loginWithCookie(cookie: string): Promise<IpcResult<AuthStatus>>
-    openWebLogin(): Promise<IpcResult<AuthStatus>>
+    openWebLogin(method: LoginMethod): Promise<IpcResult<AuthStatus>>
     refreshSession(): Promise<IpcResult<AuthStatus>>
     logout(): Promise<IpcResult<null>>
     /** 上报登录组件占位区域（页面坐标）；null 摘除。主进程据此定位 WebContentsView。 */

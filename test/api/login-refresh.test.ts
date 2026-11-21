@@ -26,11 +26,11 @@ function bodyOf(init?: RequestInit): Record<string, any> {
 
 function baseCredential(): Record<string, unknown> {
   return {
+    method: 'qq',
     musicid: '100',
     musickey: 'old-key',
     expiredAtMs: Date.now() + 60_000,
-    refreshToken: 'old-refresh',
-    loginType: 2
+    refreshToken: 'old-refresh'
   }
 }
 
@@ -117,8 +117,8 @@ describe('api/login 自动续期', () => {
   it('uses the token flow first for WeChat credentials', async () => {
     store.current = {
       ...baseCredential(),
-      musickey: 'W_X-old-key',
-      loginType: 1
+      method: 'wechat',
+      musickey: 'W_X-old-key'
     }
     const bodies: Array<Record<string, any>> = []
     vi.stubGlobal('fetch', async (_url: string | URL, init?: RequestInit) => {
@@ -134,6 +134,11 @@ describe('api/login 自动续期', () => {
 
     expect(bodies).toHaveLength(1)
     expect(bodies[0]?.req_0?.module).toBe('music.login.LoginServer')
+    expect(bodies[0]?.comm?.tmeLoginType).toBe(1)
+    expect(bodies[0]?.req_0?.param).toMatchObject({
+      refresh_token: 'old-refresh',
+      str_musicid: '100'
+    })
     expect(next.musickey).toBe('wx-new-key')
   })
 

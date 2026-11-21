@@ -99,6 +99,7 @@ function currentAuthStatus(): AuthStatus {
   const credential = getCredential()
   return {
     loggedIn: Boolean(credential),
+    method: credential?.method ?? null,
     musicid: credential?.musicid ?? null,
     expiresAtMs: credential?.expiredAtMs ?? null,
     canRefresh: Boolean(credential?.refreshToken)
@@ -211,8 +212,11 @@ export function registerIpc(): void {
     clearAvailabilityCache()
     return currentAuthStatus()
   })
-  handle('login.openWebLogin', async () => {
-    const credential = await openWebLogin()
+  handle('login.openWebLogin', async (method: unknown) => {
+    if (method !== 'qq' && method !== 'wechat') {
+      throw new Error('登录方式无效')
+    }
+    const credential = await openWebLogin(method)
     await saveCredential(credential)
     clearAvailabilityCache()
     return currentAuthStatus()

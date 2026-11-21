@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import type { LoginMethod } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import { describeError } from '../api'
 import { useToast } from '../composables/toast'
@@ -10,14 +11,19 @@ const auth = useAuthStore()
 const router = useRouter()
 const toast = useToast()
 
+const method = ref<LoginMethod>('qq')
 const cookie = ref('')
 const cookieSubmitting = ref(false)
 const embedFailed = ref(false)
 const frameRef = ref<HTMLElement | null>(null)
 
 let frameObserver: ResizeObserver | null = null
+let loginSeq = 0
 
 const avatarLetter = computed(() => auth.displayName.slice(0, 1).toUpperCase())
+const reloadLabel = computed(() =>
+  method.value === 'wechat' ? '重新加载微信登录' : '重新加载登录组件'
+)
 
 /** 登录组件由主进程 WebContentsView 绘制；渲染端只上报占位区域（页面坐标），null 摘除。 */
 function sendBounds(): void {
@@ -36,22 +42,41 @@ function clearBounds(): void {
   window.lychee.login.setEmbedBounds(null)
 }
 
-async function startEmbedLogin(): Promise<void> {
+async function startEmbedLogin(loginMethod: LoginMethod = method.value): Promise<void> {
+  const seq = ++loginSeq
   embedFailed.value = false
   try {
-    await auth.openWebLogin()
+    await auth.openWebLogin(loginMethod)
+    if (seq !== loginSeq) return
     toast.show('扫码登录成功')
     void router.replace('/library')
   } catch (err) {
+    if (seq !== loginSeq) return
     clearBounds()
     embedFailed.value = true
     toast.error(describeError(err))
   }
 }
 
+function selectMethod(next: LoginMethod): void {
+  if (next === method.value) return
+  method.value = next
+  embedFailed.value = false
+  loginSeq += 1
+  clearBounds()
+  void nextTick(() => {
+    sendBounds()
+    void startEmbedLogin(next)
+  })
+}
+
 function reloadEmbed(): void {
-  sendBounds()
-  void startEmbedLogin()
+  loginSeq += 1
+  clearBounds()
+  void nextTick(() => {
+    sendBounds()
+    void startEmbedLogin()
+  })
 }
 
 async function submitCookie(): Promise<void> {
@@ -79,6 +104,7 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  loginSeq += 1
   frameObserver?.disconnect()
   window.removeEventListener('scroll', sendBounds, true)
   clearBounds()
@@ -98,6 +124,7 @@ onBeforeUnmount(() => {
           {{ auth.displayName }}<br />
           <span class="mono faint">musicid {{ auth.musicid }}</span>
         </p>
+        <p class="faint">{{ auth.method === 'wechat' ? '微信扫码登录' : 'QQ 扫码登录' }}</p>
         <div style="display: flex; gap: 10px; justify-content: center">
           <button class="btn primary" @click="router.push('/library')">进入我的歌单</button>
           <button class="btn ghost" @click="auth.logout()">退出登录</button>
@@ -106,9 +133,34 @@ onBeforeUnmount(() => {
     </section>
 
     <section v-else class="login-card login-wide">
-      <div ref="frameRef" class="embed-frame"></div>
+      <div class="login-methods" role="tablist" aria-label="登录方式">
+        <button
+          class="login-method"
+          :class="{ active: method === 'qq' }"
+          role="tab"
+          :aria-selected="method === 'qq'"
+          @click="selectMethod('qq')"
+        >
+          xlogin 扫码
+        </button>
+        <button
+          class="login-method"
+          :class="{ active: method === 'wechat' }"
+          role="tab"
+          :aria-selected="method === 'wechat'"
+          @click="selectMethod('wechat')"
+        >
+          微信扫码
+        </button>
+      </div>
+
+      <div
+        ref="frameRef"
+        class="embed-frame"
+        :class="method === 'wechat' ? 'wechat' : 'qq'"
+      ></div>
       <div v-if="embedFailed" class="embed-retry">
-        <button class="btn ghost small" @click="reloadEmbed()">重新加载登录组件</button>
+        <button class="btn ghost small" @click="reloadEmbed()">{{ reloadLabel }}</button>
       </div>
 
       <details class="cookie-box">

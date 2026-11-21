@@ -308,8 +308,12 @@ export interface AudioCacheProgress {
   complete: boolean
 }
 
+/** 登录方式；续期与凭证展示按此分流，不从 musickey 前缀或 Cookie 内容推断。 */
+export type LoginMethod = 'qq' | 'wechat'
+
 /** 登录凭证；完整字段与转换见 PROVIDER §4.3。仅主进程持有。 */
 export interface Credential {
+  method: LoginMethod
   musicid: string
   musickey: string
   expiredAtMs: number | null
@@ -318,7 +322,6 @@ export interface Credential {
   accessToken?: string
   openid?: string
   unionid?: string
-  loginType?: number
   /** 登录网页会话 Cookie（p_skey / skey 等），仅主进程使用。 */
   webCookies?: Record<string, string>
 }
@@ -342,6 +345,7 @@ export interface Settings {
 
 export interface AuthStatus {
   loggedIn: boolean
+  method: LoginMethod | null
   musicid: string | null
   expiresAtMs: number | null
   canRefresh: boolean

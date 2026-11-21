@@ -5,11 +5,15 @@ skinparam defaultTextAlignment center
 actor 用户 as U
 participant "Lychee Player" as APP
 participant "QQ 登录" as QQ
+participant "微信开放平台" as WX
 
 U -> APP : 打开登录页
-alt 扫码登录（默认）
+alt xlogin 扫码（默认）
   APP -> QQ : 启动官方 xlogin 登录\n（见 PROVIDER §3.1）
   QQ --> APP : 登录成功
+else 微信扫码
+  APP -> WX : 启动官方微信二维码\n（见 PROVIDER §3.1.1）
+  WX --> APP : 扫码并确认
 else Cookie 登录（兜底）
   U -> APP : 粘贴浏览器 Cookie\n（见 PROVIDER §3.2）
 end

@@ -1,10 +1,11 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import type { AuthStatus, UserProfile } from '@shared/types'
+import type { AuthStatus, LoginMethod, UserProfile } from '@shared/types'
 import { unwrap } from '../api'
 
 export const useAuthStore = defineStore('auth', () => {
   const loggedIn = ref(false)
+  const method = ref<LoginMethod | null>(null)
   const musicid = ref<string | null>(null)
   const profile = ref<UserProfile | null>(null)
   const ready = ref(false)
@@ -15,6 +16,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   function applyStatus(status: AuthStatus): void {
     loggedIn.value = status.loggedIn
+    method.value = status.method
     musicid.value = status.musicid
     expiresAtMs.value = status.expiresAtMs
     canRefresh.value = status.canRefresh
@@ -37,7 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       applyStatus(unwrap(await window.lychee.login.getStatus()))
     } catch {
-      applyStatus({ loggedIn: false, musicid: null, expiresAtMs: null, canRefresh: false })
+      applyStatus({ loggedIn: false, method: null, musicid: null, expiresAtMs: null, canRefresh: false })
     } finally {
       ready.value = true
     }
@@ -48,8 +50,8 @@ export const useAuthStore = defineStore('auth', () => {
     applyStatus(status)
   }
 
-  async function openWebLogin(): Promise<void> {
-    const status = unwrap(await window.lychee.login.openWebLogin())
+  async function openWebLogin(loginMethod: LoginMethod): Promise<void> {
+    const status = unwrap(await window.lychee.login.openWebLogin(loginMethod))
     applyStatus(status)
   }
 
@@ -60,6 +62,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function logout(): Promise<void> {
     unwrap(await window.lychee.login.logout())
     loggedIn.value = false
+    method.value = null
     musicid.value = null
     profile.value = null
     expiresAtMs.value = null
@@ -69,6 +72,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   return {
     loggedIn,
+    method,
     musicid,
     profile,
     ready,

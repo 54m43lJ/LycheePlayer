@@ -1,0 +1,17 @@
+@startuml prov-login-wechat
+skinparam shadowing false
+skinparam defaultTextAlignment center
+
+actor 用户 as U
+participant "Lychee Player" as APP
+participant "微信开放平台\n(open.weixin.qq.com)" as WX
+participant "QQ 音乐登录服务\n(music.login.LoginServer)" as QM
+
+APP -> WX : 加载官方微信二维码页\n(appid, redirect_uri)
+WX --> APP : 二维码
+U -> APP : 扫码并确认
+WX --> APP : 跳转 redirect_uri\n(login_type=2, code)
+APP -> APP : 捕获 code\n抓取网页 Cookie
+APP -> QM : musicu.fcg\nmusic.login.LoginServer/Login\n{ strAppid, code }
+QM --> APP : musickey / musicid /\nopenid / unionid / refresh_token ...
+@enduml

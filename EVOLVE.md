@@ -312,3 +312,54 @@
 | `CORE.html` | §5.22 歌单卡片直接播放（`#c5-22`） | 增 | 增加 `CardPlayButton` → `playPlaylist` → 缓存 / 首页 → `startPlaylistPlayback` → `load` 调用链。 |
 | `README.md` | §2 用户交互 · 歌单卡片播放行 | 增 | 增加悬停中心播放、整单直接播放与猜你喜欢差异说明。 |
 | `ABOUT.html` | 用户交互 · 歌单卡片播放行 | 增 | 与 README 同步。 |
+
+## 11. 微信扫码登录入口
+
+**需求**：登录页顶部提供 xlogin 与微信扫码切换；微信接入官方网页扫码链路，登录成功后与 QQ 共用同一份凭证模型并保留续期字段；凭证显式记录登录方式，旧凭证自动识别迁移；微信登录与续期在真实账号验证前标注未验证。
+
+**实现思路**：
+
+- 登录方式提升为 `LoginMethod = 'qq' | 'wechat'` 并写入 `Credential.method`；QQ 与微信共用 `musicid`、`musickey`、`expiredAtMs`、`webCookies`，微信额外保存 `refreshToken`、`accessToken`、`openid`、`unionid`、`refreshKey`。`tmeLoginType` 由 method 派生（QQ=2，微信=1）。
+- 凭证存储升级为 v2；读取 v1 时按 `loginType=1` 或 `musickey` 的 `W_X` 前缀识别微信，否则按 QQ 迁移，不强制重新扫码。新增 `credential-migration.ts` 负责字段归一化与旧字段清理。
+- `web-login.ts` 引入按方式分流的登录运行上下文：QQ 使用 `lychee-xlogin` 与 OAuth code / Cookie 换证；微信使用 `lychee-wechat-login`，加载 `open.weixin.qq.com/connect/qrconnect`，从 `wx_redirect.html?login_type=2` 捕获 code，调用 `music.login.LoginServer/Login`（`tmeLoginType=1`、`strAppid` + code）换证。
+- 微信成功后把捕获到的网页 Cookie 与凭证字段合并为 `webCookies`（补齐 `uin` / `wxuin`、`qqmusic_key` / `qm_keyst`、`login_type=2`、`wxopenid` / `wxunionid`、`wxrefresh_token` / `wxaccess_token`）；若官方页已写入 Cookie，则保留 Cookie 兜底解析。
+- 同一时间只保留一个登录运行；切换方式或离开登录页会取消旧流程、清理旧分区并摘除旧视图，旧 Promise 的拒绝由渲染层按序号忽略。`openWebLogin(method)` 贯通 IPC / preload / auth store，`AuthStatus` 增加 `method`。
+- 续期按 `Credential.method` 分流：微信只走 `music.login.LoginServer/Login` 的 `loginMode=2`；QQ 保持 QQLogin 主路径与既有 refresh_token 回退。本轮不改变续期状态机与全局重新登录 UI。
+- 新增微信换证与凭证迁移单测；微信真实扫码、收藏写入与续期尚未验收，文档按未验证记录。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 1 项“实现微信登录入口” | 改 | 行尾追加 ` [已解决] `。 |
+| `EVOLVE.md` | 新增“微信扫码登录入口” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `PROVIDER.html` | §1 TERMS · 登录凭证 / 登录方式 / 微信扫码 | 改 | 凭证改为两种扫码方式共用；新增 `LoginMethod` 与微信扫码定义。 |
+| `PROVIDER.html` | §3.1 QQ 扫码登录协议（`#p3-1`） | 改 | 标明 `method=qq`，补充微信入口链接。 |
+| `PROVIDER.html` | §3.1.1 微信扫码登录协议（`#p3-1-1`） | 增 | 增加微信二维码、回调 code、换证、Cookie 合并、续期与未验证说明。 |
+| `PROVIDER.html` | §4.1 上游方法 / 参数 / 请求画像（`#p4-1`） | 改 | 增加微信换证、微信续期、微信二维码与请求画像；回退续期改称微信续期。 |
+| `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | `Credential` 增加 `method`、移除 `loginType`；`QqLoginPayload` 增加 `expired_at` 与微信字段说明。 |
+| `CORE.html` | §1 文件树（`#c1`） | 改 | 增加 `credential-migration.ts` 与微信换证 / 凭证迁移测试。 |
+| `CORE.html` | §4.1 `src/shared/types.ts`（`#c4-1`） | 改 | 增加 `LoginMethod`、`Credential.method`、`AuthStatus.method`。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | `login.openWebLogin(method)`。 |
+| `CORE.html` | §4.5 `src/main/ipc.ts`（`#c4-5`） | 改 | 说明登录方式参数校验与 `AuthStatus.method`。 |
+| `CORE.html` | §4.7 `src/main/credential.ts`（`#c4-7`） | 改 | 记录 v1→v2 迁移与微信字段保留。 |
+| `CORE.html` | §4.7.1 `src/main/credential-migration.ts`（`#c4-7-1`） | 增 | 新增 `inferLoginMethod` / `normalizeCredential` 签名与迁移规则。 |
+| `CORE.html` | §4.16 `src/main/api/login.ts`（`#c4-16`） | 改 | 增加 `exchangeWechatLoginCode`、微信续期与按 method 分流。 |
+| `CORE.html` | §4.17 `src/main/api/web-login.ts`（`#c4-17`） | 改 | 增加按方式分区、登录运行取消、微信 code 捕获与 Cookie 合并。 |
+| `CORE.html` | §4.28 `src/renderer/stores/auth.ts`（`#c4-28`） | 改 | 增加 `method` 与 `openWebLogin(method)`。 |
+| `CORE.html` | §4.47 `src/renderer/views/LoginView.vue`（`#c4-47`） | 改 | 增加顶部方式切换、切换取消与微信占位区。 |
+| `CORE.html` | §4.49 `src/renderer/styles/main.css`（`#c4-49`） | 改 | 增加方式切换胶囊、微信二维码占位区样式。 |
+| `CORE.html` | §4.50 `src/shared/constants.ts`（`#c4-50`） | 改 | 增加微信分区、appid、回调地址常量。 |
+| `CORE.html` | §5.3 扫码登录（`#c5-3`） | 改 | 调用树改为按方式创建视图 / 取消旧流程，并新增微信分支。 |
+| `CORE.html` | §5.3.1 微信扫码登录（`#c5-3-1`） | 增 | 增加微信二维码、code 捕获、换证、Cookie 合并与未验证说明。 |
+| `CORE.html` | §5.7 会话续期（`#c5-7`） | 改 | 续期分支改为按 `Credential.method` 分流。 |
+| `USER.html` | §1 TERMS · 登录方式 | 增 | 定义 QQ / 微信扫码方式。 |
+| `USER.html` | §2 登录凭证边界 | 改 | 扫码与 Cookie 登录均保存 `webCookies`。 |
+| `USER.html` | §3.2 登录（`#u3-2`） | 改 | 补充顶部方式切换、微信扫码与未验证状态。 |
+| `USER.html` | §5.2.6 登录页（`#u5-2-6`） | 改 | 原型增加方式切换与微信二维码占位；补切换、失败与登录方式展示。 |
+| `USER.html` | §5.2.7 设置页（`#u5-2-7`） | 改 | 账号区展示登录方式；续期表述改为 QQ / 微信扫码凭证。 |
+| `README.md` | §2 用户交互 · 登录行 | 改 | 补充 xlogin / 微信扫码切换与未验证状态。 |
+| `ABOUT.html` | 用户交互 · 登录行 | 改 | 与 README 同步。 |
+| `diagram/general-architecture.puml` | 登录组件与授权 | 改 | 登录组件标注增加微信扫码。 |
+| `diagram/seq-login.puml` | 登录流程 | 改 | 增加微信扫码分支。 |
+| `diagram/prov-login-wechat.puml` | 微信扫码协议 | 增 | 新增微信二维码、回调 code 与换证时序图。 |

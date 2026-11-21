@@ -40,6 +40,7 @@
 │   │   ├── <a href="#c4-5">ipc.ts</a>                        IPC 路由注册
 │   │   ├── <a href="#c4-6">settings.ts</a>                   设置持久化
 │   │   ├── <a href="#c4-7">credential.ts</a>                 凭证存取
+│   │   ├── <a href="#c4-7-1">credential-migration.ts</a>       凭证版本迁移与字段归一化
 │   │   ├── <a href="#c4-51">startup-flags.ts</a>             启动参数文件解析与应用
 │   │   ├── api/                              上游接口层
 │   │   │   ├── <a href="#c4-8">client.ts</a>                 统一请求、错误与重试
@@ -140,8 +141,10 @@
 │       └── index.html                        渲染进程 HTML 入口
 ├── test/
 │   ├── api/                                  api 层回放测试
+│   │   ├── login-wechat.test.ts              微信换证请求与凭证解析
 │   │   ├── playlist-cache.test.ts            整份歌单缓存与 complete 标记
 │   │   └── search.test.ts                    搜索映射与空关键词
+│   ├── credential-migration.test.ts          v1→v2 凭证迁移
 │   ├── fixtures/                             脱敏上游响应
 │   ├── player-store.test.ts                  播放顺序、队列补齐与快照保留
 │   ├── history-store.test.ts                 播放历史去重、上限与账号隔离
@@ -186,6 +189,10 @@
   <tr>
     <td>凭证边界</td>
     <td>凭证只存在于主进程 <code>credential.ts</code>；不得跨 IPC、写日志或进入渲染进程。存储实现与密钥环降级见 <a href="PROVIDER.html#p2">PROVIDER §2</a>，用户侧边界见 <a href="USER.html#u2">USER §2</a>。</td>
+  </tr>
+  <tr>
+    <td>登录方式</td>
+    <td><code>Credential.method</code> 是续期与登录页展示的唯一依据（<code>qq</code> / <code>wechat</code>）；不得在运行时从 <code>musickey</code> 前缀或 Cookie 内容推断。登录 / 续期 / 退出后的主进程状态都通过 <code>AuthStatus</code> 暴露当前方式。</td>
   </tr>
   <tr>
     <td>上游隔离</td>
@@ -589,7 +596,10 @@ export interface DownloadStorageInfo {
   cacheFiles?: number;
 }
 
+export type LoginMethod = 'qq' | 'wechat';
+
 export interface Credential {
+  method: LoginMethod;
   musicid: string;
   musickey: string;
   expiredAtMs: number | null;
@@ -598,8 +608,7 @@ export interface Credential {
   accessToken?: string;
   openid?: string;
   unionid?: string;
-  loginType?: number;
-  /** 登录网页会话 Cookie（p_skey / skey 等）；仅主进程使用，加密保存。 */
+  /** 登录网页会话 Cookie（p_skey / skey / wxuin 等）；仅主进程使用，加密保存。 */
   webCookies?: Record&lt;string, string&gt;;
 }
 
@@ -622,6 +631,7 @@ export interface Settings {
 
 export interface AuthStatus {
   loggedIn: boolean;
+  method: LoginMethod | null;
   musicid: string | null;
   expiresAtMs: number | null;
   canRefresh: boolean;
@@ -673,7 +683,7 @@ export interface FlagsFile {
 }
 </code></pre>
 <ul class="note">
-  <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；其续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态。</li>
+  <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；<code>method</code> 显式区分 QQ / 微信，续期按它分流；续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态。</li>
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
   <li><code>Comment</code> / <code>CommentPage</code> 是 <code>comment.get</code> 的跨 IPC 数据模型；<code>CommentPostResult</code> 是 <code>comment.post</code> 的返回模型；原始字段映射见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
   <li><code>ArtistAlbum</code> 是歌手页专辑卡片的跨 IPC 模型，<code>kind</code> 由上游 <code>albumType</code> 归一化为 <code>lp</code> / <code>ep</code> / <code>single</code> / <code>live</code> / <code>other</code>；<code>ArtistAlbumPage</code> 为 <code>artist.getAlbums</code> 的分页返回模型。</li>
@@ -696,7 +706,7 @@ export interface FlagsFile {
   login: {
     getStatus(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     loginWithCookie(cookie: string): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
-    openWebLogin(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
+    openWebLogin(method: LoginMethod): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     refreshSession(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     logout(): Promise&lt;IpcResult&lt;null&gt;&gt;;
     setEmbedBounds(rect: EmbedRect | null): void;
@@ -854,6 +864,7 @@ function handle(
   <li><code>download</code> 命名空间用 <code>startMany</code> 取代批次接口，不提供批次级暂停 / 继续 / 删除 / 重试；<code>download.clearDirectory</code> 删除下载目录内容与任务记录，不影响播放缓存。</li>
   <li><code>playlist.getSnapshot</code> / <code>playlist.cancelSnapshot</code> 按歌单 ID 保存 <code>{ token, AbortController }</code>；只允许匹配 token 的取消操作中止对应请求，新请求会先中止同歌单的旧请求。取消后当前网络请求立即中止，快照不会替换内容或写缓存。</li>
   <li><code>registerIpc</code> 注册 <code>setUpstreamBlockNotifier</code>，104009 首次进入截断窗口时通过 <code>broadcast('upstream:blocked', event)</code> 通知所有窗口；preload 暴露 <code>window.lychee.upstream.onBlocked</code>，同一窗口内只发送一次。</li>
+  <li><code>login.openWebLogin</code> 只接受 <code>qq</code> / <code>wechat</code>；登录、续期、退出后的 <code>AuthStatus</code> 都带当前 <code>method</code>，渲染层据此展示登录方式。</li>
 </ul>
 
 <h3 id="c4-6">4.6 src/main/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -875,9 +886,22 @@ export async function saveCredential(credential: Credential): Promise&lt;void&gt
 export async function clearCredential(): Promise&lt;void&gt;;
 </code></pre>
 <ul class="note">
-  <li><code>loadCredential</code> 只接受加密凭证；解密失败时不缓存失败结果、保留文件，后续调用可重试。检测到旧明文时，仅在密钥环可用时迁移；密钥环不可用则拒绝登录，不加载明文。</li>
-  <li><code>saveCredential</code> 在密钥环不可用时抛错，拒绝明文保存。</li>
-  <li><code>Credential.webCookies</code> 保存登录网页会话 Cookie（<code>p_skey</code> / <code>skey</code> 等），与 <code>musickey</code> 一起加密落盘；它只在主进程内使用，绝不跨 IPC。旧凭证需重新登录一次补齐；网页会话 Cookie 缺失时签名写入可能返回 80105。</li>
+  <li><code>loadCredential</code> 接受 v1 / v2 凭证；v1 读取时就地迁移为 v2（<code>loginType=1</code> 或 <code>musickey</code> 以 <code>W_X</code> 开头 → <code>method=wechat</code>，否则 <code>qq</code>），不强制重新扫码。解密失败时不缓存失败结果、保留文件，后续调用可重试；检测到旧明文时，仅在密钥环可用时迁移，否则拒绝登录。</li>
+  <li><code>saveCredential</code> 只写入 v2；密钥环不可用时抛错，拒绝明文保存。</li>
+  <li><code>Credential.webCookies</code> 保存登录网页会话 Cookie（QQ 的 <code>p_skey</code> / <code>skey</code>，微信的 <code>wxuin</code> / <code>wxopenid</code> 等），与 <code>musickey</code> 一起加密落盘；它只在主进程内使用，绝不跨 IPC。网页会话 Cookie 缺失时签名写入可能返回 80105。</li>
+</ul>
+
+<h4 id="c4-7-1">4.7.1 src/main/credential-migration.ts <a class="backlink" href="#c1">文件树</a></h4>
+<pre><code>export function inferLoginMethod(value: {
+  method?: unknown;
+  loginType?: unknown;
+  musickey?: unknown;
+}): LoginMethod;
+export function normalizeCredential(value: unknown): Credential | null;
+</code></pre>
+<ul class="note">
+  <li><code>normalizeCredential</code> 是 v1 / v2 共用的字段归一化入口；校验 <code>musicid</code> / <code>musickey</code> / <code>expiredAtMs</code>，只保留有效字符串字段与非空 <code>webCookies</code>，并丢弃旧 <code>loginType</code>。</li>
+  <li><code>inferLoginMethod</code> 只用于迁移：<code>loginType=1</code> 或 <code>musickey</code> 以 <code>W_X</code> 开头视为微信，否则视为 QQ；新凭证直接使用 <code>method</code>。</li>
 </ul>
 
 <h3 id="c4-8">4.8 src/main/api/client.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1068,6 +1092,7 @@ export function unlikeComment(commentId: string): Promise&lt;CommentLikeResult&g
 <h3 id="c4-16">4.16 src/main/api/login.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function requestOAuthCodeWithCookies(jar: Record&lt;string, string&gt;): Promise&lt;string&gt;;
 export function exchangeQqLoginCode(code: string): Promise&lt;Credential&gt;;
+export function exchangeWechatLoginCode(code: string): Promise&lt;Credential&gt;;
 export function refreshSession(): Promise&lt;Credential&gt;;
 export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;
 export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
@@ -1082,28 +1107,34 @@ async function probeCredential(credential: Credential): Promise&lt;'ok' | 'expir
 
 </code></pre>
 <ul class="note">
-  <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
-  <li><code>refreshSession</code> 先走 QQ 网页登录的 <code>QQConnectLogin.LoginServer/QQLogin</code>：携带旧 <code>musickey</code> 与 <code>expired_in = SESSION_REFRESH_EXPIRED_IN</code> 换取新 key，不依赖 <code>refresh_token</code>；微信账号或 QQLogin 失败时回退到 <code>refresh_token</code> 流程，成功后写回凭证。<code>refreshIfNeeded</code> 按到期时间或时间间隔触发，启动检查与 30 分钟定时器都会调用；<code>musicu</code> 的登录失效重试也复用 <code>refreshSession</code>，因此到期瞬间的请求不必等下一次定时器。</li>
+  <li><code>exchangeQqLoginCode</code> 调用 <code>QQConnectLogin.LoginServer/QQLogin</code>，解析为 <code>method=qq</code>；<code>exchangeWechatLoginCode</code> 调用 <code>music.login.LoginServer/Login</code>（<code>tmeLoginType=1</code>、<code>strAppid</code> + <code>code</code>），解析为 <code>method=wechat</code>，并兼容微信的 <code>expired_at</code> 到期字段。</li>
+  <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，按 <code>loginType</code> 与 <code>musickey</code> 前缀推断 <code>method</code>，先向资料接口验证再返回凭证。</li>
+  <li><code>refreshSession</code> 按 <code>Credential.method</code> 分流：<code>wechat</code> 只走 <code>music.login.LoginServer/Login</code> 的 <code>loginMode=2</code>；<code>qq</code> 走 <code>QQConnectLogin.LoginServer/QQLogin</code>（旧 <code>musickey</code> + <code>expired_in</code>），失败且存在 <code>refresh_token</code> 时保留原有回退。成功后写回凭证。<code>refreshIfNeeded</code> 按到期时间或时间间隔触发，启动检查与 30 分钟定时器都会调用；<code>musicu</code> 的登录失效重试也复用 <code>refreshSession</code>。</li>
   <li><code>requestOAuthCodeWithCookies</code> 在发起 authorize 前先调用 <code>throttleUpstream()</code>，与其他上游请求共用同一限速队列。</li>
 </ul>
 
 <h3 id="c4-17">4.17 src/main/api/web-login.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function isAllowedHost(url: string): boolean;
 export function setEmbedBounds(rect: EmbedRect | null): void;
-export function disposeEmbedView(): void;
-export function openWebLogin(): Promise&lt;Credential&gt;;
-function createEmbedView(): WebContentsView;
-function attachCapture(wc: WebContents): void;
-function onWillNavigate(event: ElectronEvent, url: string): void;
-function onWillRedirect(event: ElectronEvent, url: string): void;
-function onDidNavigate(event: ElectronEvent, url: string): void;
-function extractOauthCode(url: string): string | null;
-function runEmbedLogin(): Promise&lt;Credential&gt;;
+export function disposeEmbedView(target?: WebContentsView | null): void;
+export function openWebLogin(method: LoginMethod): Promise&lt;Credential&gt;;
+function createEmbedView(method: LoginMethod, onCode: (code: string) =&gt; void): WebContentsView;
+function attachCapture(wc: WebContents, method: LoginMethod, onCode: (code: string) =&gt; void): void;
+function extractQqCode(url: string): string | null;
+function extractWechatCode(url: string): string | null;
+function loginUrlFor(method: LoginMethod): string;
+function runEmbedLogin(
+  run: LoginRun,
+  resolve: (credential: Credential) =&gt; void,
+  reject: (error: unknown) =&gt; void
+): Promise&lt;void&gt;;
 
 </code></pre>
 <ul class="note">
-  <li><code>setEmbedBounds</code> 由渲染进程上报的页面坐标驱动 <code>WebContentsView</code> 的创建、定位与首次加载；<code>null</code> 摘除视图。</li>
-  <li><code>openWebLogin</code> 在独立 session 分区中启动登录流程：先等待 <code>clearStorageData()</code> 完成，再轮询 Cookie 或捕获 OAuth 回调 code，换取 <code>Credential</code>；不负责创建或定位视图。先清理可避免残留 <code>p_skey</code> 在用户扫码前触发换证。</li>
+  <li><code>setEmbedBounds</code> 只负责定位；<code>null</code> 会取消进行中的登录并摘除视图。<code>openWebLogin(method)</code> 负责创建对应方法的 <code>WebContentsView</code>、加载登录页并启动流程；两种方法使用独立 session 分区（<code>lychee-xlogin</code> / <code>lychee-wechat-login</code>）。</li>
+  <li>切换方法时先取消旧流程（拒绝旧 Promise、清理旧分区、摘除旧视图），再按新方法加载；旧流程的清理只作用于自己的视图，避免误删新视图。</li>
+  <li>QQ 通过 Cookie 轮询或 OAuth 回调 code 换证；微信通过 <code>will-redirect</code> / <code>will-navigate</code> 捕获 <code>wx_redirect.html?login_type=2</code> 的 code，调用 <code>exchangeWechatLoginCode</code>，并把二维码分区的网页 Cookie 与凭证字段合并为 <code>webCookies</code>。两种方式都先清理分区再开始，避免残留 Cookie 误触发登录。</li>
+  <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；登录成功后清理视图与分区。</li>
 </ul>
 
 <h3 id="c4-18">4.18 src/main/integration/mpris.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1269,6 +1300,7 @@ export function createAudioEngine(handlers: AudioEngineHandlers): AudioEngine;
 
 interface AuthStore {
   readonly loggedIn: boolean;
+  readonly method: LoginMethod | null;
   readonly musicid: string | null;
   readonly profile: UserProfile | null;
   readonly ready: boolean;
@@ -1278,7 +1310,7 @@ interface AuthStore {
 
   refresh(): Promise&lt;void&gt;;
   loginWithCookie(cookie: string): Promise&lt;void&gt;;
-  openWebLogin(): Promise&lt;void&gt;;
+  openWebLogin(method: LoginMethod): Promise&lt;void&gt;;
   refreshSession(): Promise&lt;void&gt;;
   logout(): Promise&lt;void&gt;;
 }
@@ -1659,8 +1691,9 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>挂载后上报登录组件占位矩形并启动内嵌登录；ResizeObserver 与滚动监听保持矩形同步，卸载时摘除视图。</li>
-  <li>Cookie 登录为折叠兜底入口；登录成功后路由跳转到“我的歌单”。</li>
+  <li>挂载后上报登录组件占位矩形并启动内嵌登录；ResizeObserver 与滚动监听保持矩形同步，卸载时摘除视图并取消登录。</li>
+  <li>顶部提供 <code>xlogin 扫码</code> / <code>微信扫码</code> 分段切换，同一时间只有一个 <code>WebContentsView</code>；切换时取消旧流程、清理旧分区、重置失败态，再按新方式加载。微信模式使用更高的二维码占位区。</li>
+  <li>Cookie 登录仍为折叠兜底入口；扫码或 Cookie 登录成功后路由跳转到“我的歌单”。</li>
 </ul>
 
 <h3 id="c4-48">4.48 src/renderer/views/SettingsView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -1681,6 +1714,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>深色与浅色 token 定义在 <code>:root</code> / <code>[data-theme]</code>；视觉契约见 <a href="USER.html#u5">USER §5</a>。</li>
+  <li>登录页顶部 <code>.login-methods</code> 为胶囊分段切换，<code>.login-method.active</code> 使用 <code>--accent-soft</code> 背景与 <code>--accent-strong</code> 文字；<code>.embed-frame.qq</code> 高 332px，<code>.embed-frame.wechat</code> 居中、宽 <code>min(400px, 100%)</code>、高 400px。</li>
   <li>主题 token 增 <code>--shadow-color</code>（深色 <code>var(--text)</code> 20%、浅色 14% 混色）与统一缩放后的 <code>--shadow-sm: 0 2px 6px</code>、<code>--shadow: 0 5px 16px</code>、<code>--shadow-lg: 0 7px 22px</code>、<code>--shadow-up: 0 -4px 12px</code>、<code>--shadow-left: -8px 0 24px</code>、<code>--shadow-right: 8px 0 24px</code>、<code>--shadow-handle: 3px 0 10px</code>。</li>
   <li>删除空状态占位封面的虚线边框；品牌、按钮、封面 / 头像、弹层、面板、Toast、模态框、抽屉与拖拽把手等全部投影改用上述 fg 阴影 token。焦点环（<code>0 0 0 Npx</code>）、输入框 inset 高光与遮罩纯背景不属于投影，保持独立。</li>
   <li>键盘焦点环由 <code>a</code> / <code>button</code> / <code>[role="button"]</code> / <code>[tabindex]</code> 的 <code>:focus-visible</code> 统一提供：<code>outline: 2px solid var(--accent-strong)</code> 与 <code>outline-offset: -2px</code> 向内绘制，避免 <code>.nav</code>、<code>.discover-strip</code>、<code>.discover-playlists</code> 等滚动容器的 <code>overflow</code> 裁剪描边；输入框、文本域与滑杆继续使用各自的聚焦样式。</li>
@@ -1772,7 +1806,8 @@ export declare const NO_STREAM_SKIP_LIMIT: number;          // 10
 export declare const IPC_SONG_MIDS_MAX: number;             // 100
 export declare const LOGIN_EMBED_TIMEOUT_MS: number;        // 5 × 60_000 ms
 export declare const LOGIN_COOKIE_POLL_MS: number;          // 1000 ms
-export declare const LOGIN_EMBED_PARTITION: string;         // 'lychee-xlogin'
+export declare const LOGIN_EMBED_PARTITION: string;         // 'lychee-xlogin'；QQ
+export declare const WECHAT_LOGIN_PARTITION: string;        // 'lychee-wechat-login'；微信
 export declare const SESSION_REFRESH_INTERVAL_MS: number;   // 30 × 60_000 ms
 export declare const SESSION_REFRESH_AHEAD_MS: number;      // 10 × 60_000 ms
 export declare const SESSION_REFRESH_FALLBACK_MS: number;   // 6 小时
@@ -1795,6 +1830,8 @@ export declare const AUDIO_CACHE_DIR: string;               // 'audio'
 export declare const STARTUP_FLAGS_MAX_BYTES: number;       // 8 × 1024
 export declare const STARTUP_FLAGS_MAX_LINES: number;       // 64
 export declare const XLOGIN_URL: string;                    // 官方 xlogin 组件地址
+export declare const WECHAT_LOGIN_APP_ID: string;           // 'wx48db31d50e334801'
+export declare const WECHAT_LOGIN_REDIRECT_URI: string;     // 官方 wx_redirect 回调页
 export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
 </code></pre>
 <ul class="note">
@@ -2623,43 +2660,60 @@ app::requestSingleInstanceLock()
   <li>启动参数文件格式与安全边界见 <a href="USER.html#u2">USER §2</a>；设置页保存后下次启动生效。</li>
 </ul>
 
-<h3 id="c5-3">5.3 扫码登录（内嵌 xlogin）</h3>
+<h3 id="c5-3">5.3 扫码登录（QQ / 微信）</h3>
 <pre><code>views/LoginView::onMounted()
 ├── nextTick()
 ├── views/LoginView::sendBounds()
 │   └── window.lychee.login.setEmbedBounds(rect)
 │       └── ipcMain.on('login.setEmbedBounds')
 │           └── api/web-login::setEmbedBounds(rect)
-│               ├── api/web-login::createEmbedView()
-│               │   └── api/web-login::attachCapture(webContents)
-│               │       ├── webContents.on('will-navigate')
-│               │       │   └── api/web-login::onWillNavigate()
-│               │       ├── webContents.on('will-redirect')
-│               │       │   └── api/web-login::onWillRedirect()
-│               │       └── webContents.on('did-navigate')
-│               │           └── api/web-login::onDidNavigate()
-│               └── webContents.loadURL(XLOGIN_URL)
+│               └── 判断 rect === null → api/web-login::cancelActiveLogin()
 ├── new ResizeObserver(views/LoginView::sendBounds)
 ├── window.addEventListener('scroll', views/LoginView::sendBounds, true)
-└── views/LoginView::startEmbedLogin()
-    └── stores/auth::openWebLogin()
-        └── window.lychee.login.openWebLogin()
+└── views/LoginView::startEmbedLogin(method)
+    └── stores/auth::openWebLogin(method)
+        └── window.lychee.login.openWebLogin(method)
             └── ipc::handle('login.openWebLogin')
-                ├── api/web-login::openWebLogin()
+                ├── api/web-login::openWebLogin(method)
                 │   ├── 判断 safeStorage.isEncryptionAvailable() === false → 拒绝登录
-                │   ├── api/web-login::runEmbedLogin()
-                │   │   ├── session.fromPartition('lychee-xlogin').clearStorageData()
-                │   │   ├── setInterval(api/web-login::finishFromCookies, 1000)
-                │   │   ├── setTimeout(api/web-login::fail, 5 * 60_000)
-                │   │   ├── 判断 Cookie 含 p_skey 且含 p_uin/pt4_token/uin
-                │   │   ├── api/login::requestOAuthCodeWithCookies(jar)
-                │   │   └── api/login::exchangeQqLoginCode(code)
+                │   ├── 判断 active 存在 → 同方法复用 / 异方法取消
+                │   └── api/web-login::runEmbedLogin(run)
+                │       ├── session.fromPartition(partitionFor(method)).clearStorageData()
+                │       ├── api/web-login::createEmbedView(method, onCode)
+                │       ├── webContents.loadURL(api/web-login::loginUrlFor(method))
+                │       ├── setInterval(api/web-login::finishFromCookies, 1000)
+                │       └── setTimeout(api/web-login::fail, 5 * 60_000)
                 └── credential::saveCredential(credential)
+
+views/LoginView::selectMethod(next)
+├── api/web-login::setEmbedBounds(null) → api/web-login::cancelActiveLogin()
+└── views/LoginView::startEmbedLogin(next)
 </code></pre>
 <ul class="note">
-  <li>登录视图为独立 session 分区的 <code>WebContentsView</code>；只放行腾讯相关域名（<code>qq.com</code> / <code>gtimg.cn</code> / <code>weixin.qq.com</code>）导航与子窗口，登录前后各清理一次。</li>
-  <li>OAuth 回调路径：<code>attachCapture</code> 监听 <code>will-navigate</code> / <code>will-redirect</code> / <code>did-navigate</code>，<code>extractOauthCode</code> 从 URL 提取 <code>code</code>，<code>emitCode</code> 调用 <code>succeed(code)</code> → <code>exchangeQqLoginCode(code)</code>。Cookie 轮询路径需要 <code>p_skey</code> 与 <code>p_uin</code> / <code>pt4_token</code> / <code>uin</code> 之一。</li>
-  <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；成功后 <code>startEmbedLogin</code> 跳转“我的歌单”，没有独立的状态推送。</li>
+  <li>登录视图为独立 session 分区的 <code>WebContentsView</code>：QQ 使用 <code>lychee-xlogin</code>，微信使用 <code>lychee-wechat-login</code>；只放行腾讯相关域名（<code>qq.com</code> / <code>gtimg.cn</code> / <code>weixin.qq.com</code>）导航与子窗口，登录前后各清理一次。</li>
+  <li>同一时间只有一个活动登录流程；切换方式或离开登录页时，旧流程被取消并清理，旧 Promise 的拒绝由渲染层按序号忽略，不会覆盖新方式的失败态。</li>
+  <li>QQ 路径：<code>attachCapture</code> 监听导航，<code>extractQqCode</code> 提取 OAuth <code>code</code> → <code>exchangeQqLoginCode(code)</code>；Cookie 轮询需要 <code>p_skey</code> 与 <code>p_uin</code> / <code>pt4_token</code> / <code>uin</code> 之一。</li>
+  <li>微信路径见 <a href="#c5-3-1">§5.3.1</a>。超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；成功后 <code>startEmbedLogin</code> 跳转“我的歌单”。</li>
+</ul>
+
+<h4 id="c5-3-1">5.3.1 微信扫码登录</h4>
+<pre><code>api/web-login::openWebLogin('wechat')
+├── session.fromPartition('lychee-wechat-login').clearStorageData()
+├── webContents.loadURL('https://open.weixin.qq.com/connect/qrconnect?...')
+├── webContents.on('will-redirect' / 'will-navigate')
+│   └── api/web-login::extractWechatCode(url)
+│       └── 判断 y.qq.com/*/wx_redirect.html 且 login_type === '2'
+├── api/web-login::succeed(code)
+│   ├── api/login::exchangeWechatLoginCode(code)
+│   │   └── music.login.LoginServer/Login { comm.tmeLoginType: 1, strAppid, code }
+│   ├── api/web-login::mergeWechatCookies(credential, jar)
+│   └── credential::saveCredential(credential)
+└── api/web-login::credentialFromWechatCookies(jar)   // 兜底：网页已写入 Cookie
+</code></pre>
+<ul class="note">
+  <li>微信二维码由官方 <code>open.weixin.qq.com/connect/qrconnect</code> 提供，回调页为 QQ 音乐自己的 <code>wx_redirect.html</code>；应用不构造或重编码二维码。</li>
+  <li><code>mergeWechatCookies</code> 以捕获到的 <code>qq.com</code> Cookie 为基础，补齐 <code>uin</code> / <code>wxuin</code>、<code>qqmusic_key</code> / <code>qm_keyst</code>、<code>login_type=2</code> 与微信续期字段；收藏签名写入使用该 <code>webCookies</code>。</li>
+  <li><strong>验证状态：未验证。</strong> 真实微信扫码、收藏写入与续期尚未验收；在验收完成前按未验证功能记录，不把微信链路视为稳定。</li>
 </ul>
 
 <h3 id="c5-4">5.4 Cookie 登录（兜底）</h3>
@@ -2784,8 +2838,8 @@ app::requestSingleInstanceLock()
 ├── 判断无凭证 → return
 └── 判断续期条件 → api/login::refreshSession()
     ├── api/login::refreshMusickey(current)
-    │   ├── 判断微信账号 → api/login::refreshViaToken(current)
-    │   └── 判断 QQ 网页登录 → api/login::refreshViaQqLogin(current)
+    │   ├── 判断 current.method === 'wechat' → api/login::refreshViaToken(current)
+    │   └── 判断 current.method === 'qq' → api/login::refreshViaQqLogin(current)
     │       └── 判断 QQLogin 失败且有 refresh_token → api/login::refreshViaToken(current)
     └── credential::saveCredential(refreshed)
 
@@ -2796,7 +2850,7 @@ api/client::musicu(...)
 </code></pre>
 <ul class="note">
   <li>续期条件分两种情况：凭证有到期时间时，在 <code>SESSION_REFRESH_AHEAD_MS</code> 窗口内触发；凭证无到期时间时，达到 <code>SESSION_REFRESH_FALLBACK_MS</code> 触发。两种情况都不满足则跳过。</li>
-  <li>QQ 网页登录优先用旧 <code>musickey</code> 调 <code>QQConnectLogin.LoginServer/QQLogin</code>，旧 key 已过期时仍可尝试恢复；微信账号或 QQLogin 失败时回退到 <code>refresh_token</code> 流程。</li>
+  <li>续期按 <code>Credential.method</code> 分流：QQ 用旧 <code>musickey</code> 调 <code>QQConnectLogin.LoginServer/QQLogin</code>，旧 key 已过期时仍可尝试恢复；微信只走 <code>music.login.LoginServer/Login</code> 的 <code>loginMode=2</code>，使用 <code>refresh_token</code> / <code>access_token</code> / <code>openid</code>。QQ 失败且存在 <code>refresh_token</code> 时保留原有回退。</li>
   <li>续期失败保留旧凭证并等待下一次重试；启动检查与定时器都会触发该路径。登录失效的请求由 <code>musicu</code> / <code>withCredentialRefresh</code> 自动续期一次并重试，避免等到下一个 30 分钟检查窗口。</li>
 </ul>
 

@@ -67,7 +67,7 @@ const api: LycheeApi = {
   login: {
     getStatus: () => invoke<AuthStatus>('login.getStatus'),
     loginWithCookie: (cookie) => invoke<AuthStatus>('login.loginWithCookie', cookie),
-    openWebLogin: () => invoke<AuthStatus>('login.openWebLogin'),
+    openWebLogin: (method) => invoke<AuthStatus>('login.openWebLogin', method),
     refreshSession: () => invoke<AuthStatus>('login.refreshSession'),
     logout: () => invoke<null>('login.logout'),
     setEmbedBounds: (rect) => {

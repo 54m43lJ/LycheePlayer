@@ -1,11 +1,13 @@
-import type { Credential } from '../../shared/types'
+import type { Credential, LoginMethod } from '../../shared/types'
 import {
   OAUTH_TIMEOUT_MS,
   SESSION_REFRESH_AHEAD_MS,
   SESSION_REFRESH_EXPIRED_IN,
-  SESSION_REFRESH_FALLBACK_MS
+  SESSION_REFRESH_FALLBACK_MS,
+  WECHAT_LOGIN_APP_ID
 } from '../../shared/constants'
 import { getCredential, saveCredential } from '../credential'
+import { inferLoginMethod } from '../credential-migration'
 import {
   assertUpstreamAvailable,
   mapUpstreamCode,
@@ -129,7 +131,58 @@ export async function exchangeQqLoginCode(code: string): Promise<Credential> {
     throw new UpstreamError('UPSTREAM_CHANGED', 'QQLogin 响应缺少 data')
   }
   console.info('[login] QQLogin 成功，正在解析凭证')
-  return parseLoginCredential(node.data)
+  return parseLoginCredential(node.data, 'qq')
+}
+
+/**
+ * 微信扫码登录换证：官方网页 wx_redirect 使用同一接口，参数为 strAppid + code。
+ * code 来自 open.weixin.qq.com 的回调 URL，单次有效。
+ */
+export async function exchangeWechatLoginCode(code: string): Promise<Credential> {
+  const payload = {
+    comm: { tmeAppID: 'qqmusic', tmeLoginType: '1' },
+    req: {
+      module: 'music.login.LoginServer',
+      method: 'Login',
+      param: { strAppid: WECHAT_LOGIN_APP_ID, code }
+    }
+  }
+  const response = await upstreamRequest<{
+    code: number
+    req?: { code: number; data?: Record<string, unknown>; message?: string }
+    req_0?: { code: number; data?: Record<string, unknown>; message?: string }
+  }>({
+    host: 'https://u.y.qq.com',
+    path: '/cgi-bin/musicu.fcg',
+    params: {},
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'User-Agent': USER_AGENT,
+      Referer: 'https://y.qq.com/',
+      Origin: 'https://y.qq.com',
+      Cookie: 'login_type=2'
+    },
+    body: JSON.stringify(payload),
+    credential: null,
+    stringFields: ['musicid', 'str_musicid']
+  })
+
+  const node = response.req ?? response.req_0
+  if (response.code !== 0) {
+    throw mapUpstreamCode(response.code, 'music.login.LoginServer.Login(wx)')
+  }
+  if (!node) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '微信登录响应缺少 req')
+  }
+  if (node.code !== 0) {
+    throw mapUpstreamCode(node.code, 'music.login.LoginServer.Login(wx)')
+  }
+  if (!node.data) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '微信登录响应缺少 data')
+  }
+  console.info('[login] 微信 Login 成功，正在解析凭证')
+  return parseLoginCredential(node.data, 'wechat')
 }
 
 function findCredentialPayload(value: unknown, depth = 0): Record<string, unknown> | null {
@@ -143,7 +196,8 @@ function findCredentialPayload(value: unknown, depth = 0): Record<string, unknow
   return null
 }
 
-function parseLoginCredential(data: unknown): Credential {
+/** 解析登录响应；微信响应的到期字段可能是 expired_at，而不是 QQ 的 keyExpiresIn。 */
+function parseLoginCredential(data: unknown, method: LoginMethod): Credential {
   const payload = findCredentialPayload(data)
   if (!payload) {
     throw new UpstreamError('UPSTREAM_CHANGED', '登录响应缺少 musickey')
@@ -158,10 +212,22 @@ function parseLoginCredential(data: unknown): Credential {
   const expiresIn = Number(payload.keyExpiresIn ?? 0)
   const createdAt = Number(payload.musickeyCreateTime ?? 0)
   const createdAtMs = createdAt > 1_000_000_000_000 ? createdAt : createdAt * 1000
-  const expiredAtMs =
+  let expiredAtMs =
     createdAtMs > 0 && expiresIn > 0 ? createdAtMs + expiresIn * 1000 : null
+  if (expiredAtMs === null) {
+    const rawExpiry = Number(payload.expired_at ?? payload.expiredAt ?? 0)
+    if (Number.isFinite(rawExpiry) && rawExpiry > 0) {
+      expiredAtMs =
+        rawExpiry > 1_000_000_000_000
+          ? rawExpiry
+          : rawExpiry > 1_000_000_000
+            ? rawExpiry * 1000
+            : Date.now() + rawExpiry * 1000
+    }
+  }
 
   return {
+    method,
     musicid,
     musickey,
     expiredAtMs,
@@ -170,10 +236,7 @@ function parseLoginCredential(data: unknown): Credential {
       typeof payload.refresh_token === 'string' ? payload.refresh_token : undefined,
     accessToken: typeof payload.access_token === 'string' ? payload.access_token : undefined,
     openid: typeof payload.openid === 'string' ? payload.openid : undefined,
-    unionid: typeof payload.unionid === 'string' ? payload.unionid : undefined,
-    loginType: Number.isFinite(Number(payload.loginType))
-      ? Number(payload.loginType)
-      : undefined
+    unionid: typeof payload.unionid === 'string' ? payload.unionid : undefined
   }
 }
 
@@ -248,8 +311,12 @@ function mergeRefreshedCredential(
   if (typeof payload.refresh_key === 'string' && payload.refresh_key.length > 0) {
     merged.refreshKey = payload.refresh_key
   }
-  if (Number.isFinite(Number(payload.loginType))) merged.loginType = Number(payload.loginType)
   return merged
+}
+
+/** 上游 comm.tmeLoginType：QQ 网页登录为 2，微信登录为 1。 */
+function tmeLoginType(method: LoginMethod): number {
+  return method === 'wechat' ? 1 : 2
 }
 
 /**
@@ -268,7 +335,7 @@ async function refreshViaQqLogin(current: Credential): Promise<Credential> {
       Referer: 'https://y.qq.com/'
     },
     body: JSON.stringify({
-      comm: { tmeLoginType: current.loginType ?? 2 },
+      comm: { tmeLoginType: tmeLoginType('qq') },
       req_0: {
         module: 'QQConnectLogin.LoginServer',
         method: 'QQLogin',
@@ -288,7 +355,7 @@ async function refreshViaQqLogin(current: Credential): Promise<Credential> {
 }
 
 /**
- * 移动端 / 微信等登录方式的回退路径：music.login.LoginServer/Login（loginMode=2）
+ * 微信登录的续期路径：music.login.LoginServer/Login（loginMode=2）
  * 用 refresh_token 换新 musickey。
  */
 async function refreshViaToken(current: Credential): Promise<Credential> {
@@ -307,7 +374,7 @@ async function refreshViaToken(current: Credential): Promise<Credential> {
     },
     body: JSON.stringify({
       comm: {
-        tmeLoginType: current.loginType ?? 2,
+        tmeLoginType: tmeLoginType(current.method),
         ct: 11,
         cv: 20_090_008,
         tmeAppID: 'qqmusic'
@@ -317,10 +384,12 @@ async function refreshViaToken(current: Credential): Promise<Credential> {
         method: 'Login',
         param: {
           openid: current.openid ?? '',
+          unionid: current.unionid ?? '',
           access_token: current.accessToken ?? '',
           refresh_token: current.refreshToken,
           expired_in: current.expiredAtMs ? Math.floor(current.expiredAtMs / 1000) : 0,
           musicid: Number(current.musicid),
+          str_musicid: current.musicid,
           musickey: current.musickey,
           refresh_key: current.refreshKey ?? '',
           loginMode: 2
@@ -335,10 +404,9 @@ async function refreshViaToken(current: Credential): Promise<Credential> {
   )
 }
 
-/** 先走 QQ 网页登录的 QQLogin 续期，微信账号或失败时回退到 refresh_token。 */
+/** 微信只走 token 续期；QQ 走 QQLogin，失败且存在 refresh_token 时保留原有回退。 */
 async function refreshMusickey(current: Credential): Promise<Credential> {
-  const wechat = current.loginType === 1 || current.musickey.startsWith('W_X')
-  if (wechat) {
+  if (current.method === 'wechat') {
     return refreshViaToken(current)
   }
   try {
@@ -454,6 +522,7 @@ export async function loginWithCookie(cookie: string): Promise<Credential> {
     throw new UpstreamError('AUTH_EXPIRED', 'Cookie 缺少有效的 uin 或 qm_keyst')
   }
   const credential: Credential = {
+    method: inferLoginMethod({ musickey: key, loginType: jar.login_type }),
     musicid: uin,
     musickey: key,
     expiredAtMs: null,

@@ -73,7 +73,12 @@ beforeEach(() => {
   musicuMock.mockReset()
   vipMock.mockReset()
   tripBlockMock.mockReset()
-  credentialState.value = { musicid: '42', musickey: 'key', expiredAtMs: null }
+  credentialState.value = {
+    method: 'qq',
+    musicid: '42',
+    musickey: 'key',
+    expiredAtMs: null
+  }
   downloadedState.value = null
   musicuMock.mockImplementation(async (module: string) => {
     if (module === 'music.trackInfo.UniformRuleCtrl') {
