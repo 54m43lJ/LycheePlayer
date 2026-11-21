@@ -158,7 +158,7 @@
   </tr>
   <tr>
     <td>评论正文换行</td>
-    <td><code>Content</code> 同一字段同时存在真实换行与字面量 <code>\n</code> / <code>\r\n</code> / <code>\r</code>，属于上游格式不统一。映射为内部评论时统一归一化为真实换行；渲染层使用 <code>white-space: pre-wrap</code>，不解析 HTML。</td>
+    <td><code>Content</code> 同一字段同时存在真实换行与字面量 <code>\n</code> / <code>\r\n</code> / <code>\r</code>，属于上游格式不统一。映射为内部评论时统一归一化为真实换行；渲染层使用 <code>white-space: pre-wrap</code>，不解析 HTML。正文中的 <code>U+FFFC</code>（对象替换符）是内嵌表情图的位置标记：<code>EmoPic</code> 为对应的表情图片 URL，<code>EmoPic</code> 为空时该占位没有对象、映射时移除；没有占位符但 <code>EmoPic</code> 非空时表情追加在正文末尾。<code>Pic</code> 是评论附图，与正文分开展示。图片 / 表情 URL 与头像一样把 <code>http:</code> 改为 <code>https:</code>。仅有 <code>Pic</code> 或 <code>EmoPic</code>、正文为空的评论仍然有效。</td>
   </tr>
   <tr>
     <td>评论发表</td>
@@ -700,6 +700,10 @@ interface QqComment {
   Nick?: string;
   Avatar?: string;
   Content?: string;
+  /** 评论附图 URL。 */
+  Pic?: string;
+  /** 内嵌表情图片 URL，对应 Content 中的 U+FFFC 占位。 */
+  EmoPic?: string;
   PubTime?: number;
   PraiseNum?: number;
   ReplyCnt?: number;
@@ -1054,7 +1058,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code> → <code>CommentPage</code></td>
-    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。</td>
+    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>（真实 / 字面量换行统一为 <code>\n</code>，保留有 <code>EmoPic</code> 的 <code>U+FFFC</code> 占位、移除无表情的占位）；<code>Pic → imageUrl</code>、<code>EmoPic → emojiUrl</code>，无值时为空，<code>http:</code> 改为 <code>https:</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code> → <code>UserProfile</code></td>

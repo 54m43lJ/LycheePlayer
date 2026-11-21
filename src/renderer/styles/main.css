@@ -3949,6 +3949,33 @@ button:focus-visible,
   margin: 0;
 }
 
+.comment-emoji {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin: 0 1px;
+  vertical-align: -4px;
+  object-fit: contain;
+}
+
+.comment-text > .comment-emoji:only-child {
+  width: 64px;
+  height: 64px;
+  margin: 0;
+  vertical-align: middle;
+}
+
+.comment-media {
+  display: block;
+  width: auto;
+  max-width: min(100%, 260px);
+  height: auto;
+  max-height: 200px;
+  margin-top: 7px;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
 .comment-foot {
   display: flex;
   align-items: center;

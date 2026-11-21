@@ -168,6 +168,31 @@ function avatarLetter(name: string): string {
   return name.slice(0, 1).toUpperCase() || '?'
 }
 
+interface CommentPart {
+  text?: string
+  emoji?: string
+}
+
+/**
+ * 正文中的 U+FFFC 是内嵌表情的占位。EmoPic 只提供一个表情图，
+ * 因此只替换第一个占位符，其余占位符直接丢弃；没有占位符时追加到末尾。
+ */
+function contentParts(comment: Comment): CommentPart[] {
+  const emoji = comment.emojiUrl ?? ''
+  const chunks = comment.content.split('\uFFFC')
+  const parts: CommentPart[] = []
+  let emojiUsed = false
+  chunks.forEach((text, index) => {
+    if (text) parts.push({ text })
+    if (index < chunks.length - 1 && emoji && !emojiUsed) {
+      parts.push({ emoji })
+      emojiUsed = true
+    }
+  })
+  if (emoji && !emojiUsed) parts.push({ emoji })
+  return parts
+}
+
 async function submitComment(): Promise<void> {
   const id = songId.value
   const content = draft.value.trim()
@@ -293,8 +318,26 @@ onBeforeUnmount(() => {
           <div class="comment-content">
             <div class="comment-head">
               <span class="comment-nick">{{ comment.nickname || '匿名用户' }}</span>
-              <span class="comment-text">{{ comment.content }}</span>
+              <span class="comment-text">
+                <template v-for="(part, index) in contentParts(comment)" :key="index">
+                  <img
+                    v-if="part.emoji"
+                    class="comment-emoji"
+                    :src="part.emoji"
+                    alt="表情"
+                    loading="lazy"
+                  />
+                  <template v-else>{{ part.text }}</template>
+                </template>
+              </span>
             </div>
+            <img
+              v-if="comment.imageUrl"
+              class="comment-media"
+              :src="comment.imageUrl"
+              alt="评论图片"
+              loading="lazy"
+            />
             <div class="comment-foot">
               <span class="comment-time">{{ timeLabel(comment.createdAtMs) }}</span>
               <button

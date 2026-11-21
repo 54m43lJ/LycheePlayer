@@ -14,6 +14,10 @@ interface RawComment {
   Nick?: string
   Avatar?: string
   Content?: string
+  /** 评论附图 URL。 */
+  Pic?: string
+  /** 评论内嵌表情图片 URL，对应 Content 中的 U+FFFC 占位。 */
+  EmoPic?: string
   PubTime?: number
   PraiseNum?: number
   ReplyCnt?: number
@@ -47,7 +51,7 @@ interface AddCommentData {
   VerifyUrl?: string
 }
 
-function normalizeAvatar(value: string | undefined): string {
+function normalizeHttpsUrl(value: string | undefined): string {
   if (!value) return ''
   return value.startsWith('http://') ? `https://${value.slice(7)}` : value
 }
@@ -56,19 +60,26 @@ function normalizeAvatar(value: string | undefined): string {
  * 上游评论正文的换行格式不统一：部分记录直接返回真实换行，
  * 另一些记录返回字面量 “\n” / “\r\n” / “\r”。统一归一化为真实换行，
  * 交给评论区的 white-space: pre-wrap 渲染；不解析 HTML。
+ * U+FFFC（对象替换符）标记内嵌表情图的位置；EmoPic 为空时它只是
+ * 没有对应对象的残留占位，渲染层会显示为空框，因此在映射时移除。
  */
-function normalizeCommentContent(value: string | undefined): string {
+function normalizeCommentContent(value: string | undefined, hasEmoji: boolean): string {
   if (!value) return ''
-  return value.replace(/\r\n?/g, '\n').replace(/\\r\\n|\\n|\\r/g, '\n')
+  const text = value.replace(/\r\n?/g, '\n').replace(/\\r\\n|\\n|\\r/g, '\n')
+  return hasEmoji ? text : text.replace(/\uFFFC/g, '')
 }
 
 function toComment(raw: RawComment): Comment {
   const seconds = Number(raw.PubTime ?? 0)
+  const emojiUrl = normalizeHttpsUrl(raw.EmoPic)
+  const imageUrl = normalizeHttpsUrl(raw.Pic)
   return {
     id: String(raw.CmId ?? ''),
     nickname: raw.Nick ?? '',
-    avatarUrl: normalizeAvatar(raw.Avatar),
-    content: normalizeCommentContent(raw.Content),
+    avatarUrl: normalizeHttpsUrl(raw.Avatar),
+    content: normalizeCommentContent(raw.Content, Boolean(emojiUrl)),
+    imageUrl: imageUrl || undefined,
+    emojiUrl: emojiUrl || undefined,
     likedCount: Number(raw.PraiseNum ?? 0),
     replyCount: Number(raw.ReplyCnt ?? 0),
     createdAtMs: seconds > 0 ? (seconds > 1_000_000_000_000 ? seconds : seconds * 1000) : 0,
@@ -114,7 +125,13 @@ export async function getComments(
   const nextCursor = String(raw.at(-1)?.SeqNo ?? '')
   const comments = raw
     .map(toComment)
-    .filter((comment) => comment.id.length > 0 && comment.content.trim().length > 0)
+    .filter(
+      (comment) =>
+        comment.id.length > 0 &&
+        (comment.content.trim().length > 0 ||
+          Boolean(comment.imageUrl) ||
+          Boolean(comment.emojiUrl))
+    )
     .slice(0, COMMENT_PAGE_SIZE)
 
   return {

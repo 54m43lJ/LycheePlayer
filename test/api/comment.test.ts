@@ -89,6 +89,131 @@ describe('api/comment', () => {
     ])
   })
 
+  it('removes the orphaned object replacement character from comment content', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: 'A', Content: '好听哈\uFFFC', PubTime: 100 },
+                { CmId: 'b', Nick: 'B', Content: '\uFFFC中间\uFFFC文字', PubTime: 90 },
+                { CmId: 'c', Nick: 'C', Content: '\uFFFC', PubTime: 80 }
+              ],
+              Total: 3,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    )
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', '')
+    expect(page.comments.map((comment) => comment.content)).toEqual(['好听哈', '中间文字'])
+    expect(page.comments.map((comment) => comment.id)).toEqual(['a', 'b'])
+  })
+
+  it('maps comment images and inline emoji and keeps media-only comments', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                {
+                  CmId: 'a',
+                  Nick: 'A',
+                  Content: '好听哈\uFFFC',
+                  Pic: 'http://pic.test/a.png',
+                  PubTime: 100
+                },
+                {
+                  CmId: 'b',
+                  Nick: 'B',
+                  Content: '找到\uFFFC宝藏',
+                  EmoPic: 'http://emo.test/b.png',
+                  PubTime: 90
+                },
+                {
+                  CmId: 'c',
+                  Nick: 'C',
+                  Content: '',
+                  Pic: 'https://pic.test/c.png',
+                  PubTime: 80
+                },
+                {
+                  CmId: 'd',
+                  Nick: 'D',
+                  Content: '',
+                  EmoPic: 'https://emo.test/d.gif',
+                  PubTime: 70
+                },
+                {
+                  CmId: 'e',
+                  Nick: 'E',
+                  Content: '\uFFFC',
+                  Pic: 'https://pic.test/e.png',
+                  PubTime: 60
+                },
+                {
+                  CmId: 'f',
+                  Nick: 'F',
+                  Content: '原版6',
+                  EmoPic: 'https://emo.test/f.png',
+                  PubTime: 50
+                },
+                { CmId: 'g', Nick: 'G', Content: '  ', PubTime: 40 },
+                { CmId: 'h', Nick: 'H', Content: '', PubTime: 30 }
+              ],
+              Total: 8,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    )
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', '')
+    expect(page.comments.map((comment) => comment.id)).toEqual([
+      'a',
+      'b',
+      'c',
+      'd',
+      'e',
+      'f'
+    ])
+    expect(page.comments[0]).toMatchObject({
+      content: '好听哈',
+      imageUrl: 'https://pic.test/a.png'
+    })
+    expect(page.comments[1]).toMatchObject({
+      content: '找到\uFFFC宝藏',
+      emojiUrl: 'https://emo.test/b.png'
+    })
+    expect(page.comments[2]).toMatchObject({
+      content: '',
+      imageUrl: 'https://pic.test/c.png'
+    })
+    expect(page.comments[3]).toMatchObject({
+      content: '',
+      emojiUrl: 'https://emo.test/d.gif'
+    })
+    expect(page.comments[4]).toMatchObject({
+      content: '',
+      imageUrl: 'https://pic.test/e.png'
+    })
+    expect(page.comments[5]).toMatchObject({
+      content: '原版6',
+      emojiUrl: 'https://emo.test/f.png'
+    })
+  })
+
   it('maps IsPraised / IsLiked to liked and reads comments with the login cookie', async () => {
     let cookie = ''
     let uin = 0

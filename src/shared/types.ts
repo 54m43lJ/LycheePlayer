@@ -103,7 +103,12 @@ export interface Comment {
   id: string
   nickname: string
   avatarUrl: string
+  /** 正文；内嵌表情图片的位置用 U+FFFC 标记。 */
   content: string
+  /** 评论附图（上游 Pic）；无附图为空。 */
+  imageUrl?: string
+  /** 评论内嵌表情图片（上游 EmoPic）；无表情为空。 */
+  emojiUrl?: string
   likedCount: number
   replyCount: number
   createdAtMs: number
