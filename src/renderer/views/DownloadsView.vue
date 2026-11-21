@@ -119,6 +119,17 @@ function confirmClearCompleted(): void {
   void run(() => downloads.clearCompleted(), '已清除完成记录')
 }
 
+function confirmClearTasks(): void {
+  const ids = filteredTasks.value.map((task) => task.id)
+  if (ids.length === 0) return
+  confirmState.value = {
+    title: '清空任务',
+    message: `确定清空当前显示的 ${ids.length} 个任务？已下载的文件会保留在本机，仅移除任务记录。`,
+    confirmLabel: '清空',
+    action: () => void run(() => downloads.clearTasks(ids), '下载任务已清空')
+  }
+}
+
 async function resumeAll(): Promise<void> {
   if (resumingAll.value || pausedCount.value === 0) return
   resumingAll.value = true
@@ -206,15 +217,24 @@ onBeforeUnmount(() => downloads.setVisible(false))
                 {{ item.label }}
               </button>
             </div>
-            <button
-              class="btn ghost small"
-              :disabled="resumingAll || pausedCount === 0"
-              @click="resumeAll()"
-            >
-              <span v-if="resumingAll" class="spinner" />
-              <AppIcon v-else name="play" :size="14" />
-              全部开始
-            </button>
+            <div class="downloads-toolbar-actions">
+              <button
+                class="btn ghost small"
+                :disabled="resumingAll || pausedCount === 0"
+                @click="resumeAll()"
+              >
+                <span v-if="resumingAll" class="spinner" />
+                <AppIcon v-else name="play" :size="14" />
+                全部开始
+              </button>
+              <button
+                class="btn ghost small"
+                :disabled="filteredTasks.length === 0"
+                @click="confirmClearTasks()"
+              >
+                清空
+              </button>
+            </div>
           </div>
 
           <div class="table-filter downloads-search">

@@ -2690,6 +2690,12 @@ button:focus-visible,
   padding: 12px 20px;
 }
 
+.downloads-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .downloads-filter {
   display: inline-flex;
   gap: 2px;

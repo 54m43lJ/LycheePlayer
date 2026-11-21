@@ -68,6 +68,7 @@ import { readFlagsFile, writeFlagsFile } from './startup-flags'
 import {
   assetStates,
   clearCompletedDownloads,
+  clearDownloadTasks,
   clearDownloadDirectory,
   downloadStorage,
   listDownloads,
@@ -168,6 +169,13 @@ function downloadRequestsArg(value: unknown): DownloadRequest[] {
     throw new Error(`下载歌曲列表必须为非空数组且不超过 ${DOWNLOAD_QUEUE_MAX} 个`)
   }
   return value.map(downloadRequestArg)
+}
+
+function taskIdsArg(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > DOWNLOAD_QUEUE_MAX) {
+    throw new Error(`任务列表必须为非空数组且不超过 ${DOWNLOAD_QUEUE_MAX} 个`)
+  }
+  return value.map((item) => stringArg(item, '任务 ID'))
 }
 
 let lastPlayerStatus: PlayerState['status'] = 'stopped'
@@ -442,6 +450,10 @@ export function registerIpc(): void {
   })
   handle('download.clearCompleted', async () => {
     await clearCompletedDownloads()
+    return null
+  })
+  handle('download.clearTasks', async (ids: unknown) => {
+    await clearDownloadTasks(taskIdsArg(ids))
     return null
   })
   handle('download.clearDirectory', async () => {

@@ -151,6 +151,7 @@ const api: LycheeApi = {
     remove: (id: string) => invoke<null>('download.remove', id),
     removeSong: (songMid: string) => invoke<null>('download.removeSong', songMid),
     clearCompleted: () => invoke<null>('download.clearCompleted'),
+    clearTasks: (ids: string[]) => invoke<null>('download.clearTasks', ids),
     clearDirectory: () => invoke<null>('download.clearDirectory'),
     storage: () => invoke<DownloadStorageInfo>('download.storage'),
     openFolder: () => invoke<null>('download.openFolder'),

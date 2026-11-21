@@ -782,6 +782,7 @@ export interface FlagsFile {
     remove(id: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
     removeSong(songMid: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
     clearCompleted(): Promise&lt;IpcResult&lt;null&gt;&gt;;
+    clearTasks(ids: string[]): Promise&lt;IpcResult&lt;null&gt;&gt;;
     clearDirectory(): Promise&lt;IpcResult&lt;null&gt;&gt;;
     storage(): Promise&lt;IpcResult&lt;DownloadStorageInfo&gt;&gt;;
     openFolder(): Promise&lt;IpcResult&lt;null&gt;&gt;;
@@ -2121,6 +2122,7 @@ export function resumeAllDownloads(): Promise&lt;DownloadTask[]&gt;;
 export function removeDownload(id: string): Promise&lt;void&gt;;
 export function removeDownloadedSong(songMid: string): Promise&lt;void&gt;;
 export function clearCompletedDownloads(): Promise&lt;void&gt;;
+export function clearDownloadTasks(ids: string[]): Promise&lt;void&gt;;
 export function clearDownloadDirectory(): Promise&lt;void&gt;;
 export function writePart(url: string, filePath: string): Promise&lt;void&gt;;
 export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
@@ -2133,7 +2135,7 @@ export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
   <li><code>loadedScope</code> 保护未加载下载模块的退出：从未加载时 <code>flushDownloads</code> / <code>saveIndex</code> 直接返回，避免写出空索引覆盖旧记录；切换账号前先清掉旧定时器并把旧账号索引落盘；退出时使用同步 <code>writeFileSync</code> + <code>renameSync</code> 写 <code>.part</code> 后原子替换。</li>
   <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；文件名由 <code>downloadFileName</code> 按“歌名-歌手-专辑”生成，多个歌手用顿号连接，缺失片段跳过，非法字符替换为 <code>_</code>，全空回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队时先用已知的歌名 / 歌手 / 专辑生成占位路径，最终路径在出队时按解析结果重算；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。出队解析时用上游结果覆盖 <code>name</code> / <code>singers</code> / <code>albumName</code> 并随索引持久化，供下载中心纯本地搜索；旧索引缺少这两个字段时归一化为空数组 / 空字符串。</li>
   <li><code>resumeAllDownloads()</code> 一次遍历任务，只把 <code>paused</code> 置为 <code>pending</code>、清空错误并 <code>touchTask</code>；<code>downloading</code> / <code>done</code> / <code>failed</code> 不受影响。有任务被继续时调用 <code>schedulePump()</code>，返回被继续任务的快照。渲染层通过 <code>download.resumeAll</code> 一次 IPC 完成，不逐条调用 <code>resume</code>；store 用返回快照替换任务并在有任务时启动轮询。</li>
-  <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> 删除最终文件与 <code>.part</code>；<code>removeDownloadedSong</code> 按 <code>songMid</code> 删除全部 <code>done</code> 任务及其音频、残留分片与下载封面，供歌单中再次点击已下载歌曲的下载按钮时使用，不影响播放缓存；<code>clearDownloadDirectory</code> 先中止活动下载、清空记录，再删除下载目录内容，并拒绝文件系统根目录、用户主目录及其上级目录；该操作不影响播放缓存。</li>
+  <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>clearDownloadTasks</code> 按任务 ID 停止其中的活动任务、移除记录并写回索引，同样保留磁盘上的已下载文件、分片与封面，由下载中心按当前显示范围决定传入哪些 ID；<code>removeDownload</code> 删除最终文件与 <code>.part</code>；<code>removeDownloadedSong</code> 按 <code>songMid</code> 删除全部 <code>done</code> 任务及其音频、残留分片与下载封面，供歌单中再次点击已下载歌曲的下载按钮时使用，不影响播放缓存；<code>clearDownloadDirectory</code> 先中止活动下载、清空记录，再删除下载目录内容，并拒绝文件系统根目录、用户主目录及其上级目录；该操作不影响播放缓存。</li>
   <li><code>assetStates</code> 只读取可用性缓存（<code>peekAvailability</code>）与缓存 / 下载信息，不主动探测上游；未探测过的歌曲 <code>maxQuality</code> 为 <code>null</code>。<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
   <li>104009 全局截断窗口内 <code>pump</code> 在出队前检查 <code>upstreamBlockRemainingMs()</code>，窗口内不再取下一个任务，并按剩余时长 + 1 秒安排恢复；正在解析的任务收到 104009 时保持 <code>pending</code>、清空错误并安排恢复，不标记 <code>failed</code>。</li>
   <li>下载任务不受页面请求生命周期约束：任务由主进程队列持有，页面只订阅进度；离开页面不取消下载。这是页面请求取消约定的明确例外。</li>
@@ -2279,7 +2281,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
   <li>由侧栏“下载”<code>RouterLink</code> 进入；挂载时调用 <code>download.setVisible(true)</code>，卸载时调用 <code>setVisible(false)</code>，下载任务本身继续由主进程队列执行。</li>
   <li>顶部整体进度条为 fixed overlay：<code>.downloads-progress-track</code> 使用 <code>position: fixed</code>、<code>top: 0</code>、<code>left: var(--sidebar-width)</code>、<code>right: 0</code>、<code>z-index: 14</code>、<code>height: 4px</code> 与 <code>pointer-events: none</code>，不占页面布局、不拦截点击，滚动时始终停在内容区顶端；使用 <code>--muted</code> 填充，不显示完成数 / 总数或失败数等数字指示；不再渲染 <code>.downloads-progress-count</code>，也不保留其 900px / 560px 响应式规则。失败数量只在任务列表与“未成功”筛选中体现。进度百分比由 <a href="#c4-80">utils/download-progress.ts</a> 的 <code>downloadOverallProgress</code> 计算。标题区复用普通 <code>.page</code> 的留白与背景。</li>
   <li><code>page-head-actions</code> 提供“清除已完成”“清空目录”“打开文件夹”：前者只清记录，后两者分别删除目录内容与记录、打开下载目录；清空目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认并展示实际路径，播放缓存不受影响。</li>
-  <li>任务面板顶部左侧为“全部 / 进行中 / 已完成 / 未成功”过滤，右侧为“全部开始”继续所有暂停任务；无暂停任务或请求进行中时按钮禁用，请求中显示 spinner。过滤只影响展示，整体进度仍按全部任务计算。任务按新到旧展示，不改变主进程队列顺序。</li>
+  <li>任务面板顶部左侧为“全部 / 进行中 / 已完成 / 未成功”过滤，右侧为“全部开始”继续所有暂停任务与“清空”；无暂停任务或请求进行中时“全部开始”禁用，请求中显示 spinner。“清空”取当前 <code>filteredTasks</code>（状态筛选叠加本地搜索）的 ID，经 <a href="#c4-81">ConfirmDialog</a> 确认后调用 <code>downloads.clearTasks(ids)</code>，只移除这些记录并保留磁盘文件；没有可见任务时按钮禁用。“清空目录”才删除文件。过滤只影响展示，整体进度仍按全部任务计算。任务按新到旧展示，不改变主进程队列顺序。</li>
   <li>工具栏下方提供纯本地搜索框：只对已加载的任务快照按歌名 / 歌手 / 专辑 / <code>songMid</code> / 文件路径做不区分大小写匹配，不发上游请求、不重新扫描目录；与状态过滤叠加，搜索框有内容时显示清除按钮。输入框不显示占位文字，用 <code>aria-label="搜索下载任务"</code> 保留无障碍名称。无匹配时标题为“没有匹配的下载任务”，提示换关键词；未搜索时保持“没有符合条件的任务”与切换过滤提示。</li>
   <li>列表复用统一下载任务行，支持单任务暂停 / 继续 / 删除；删除任务使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认；空状态区分“没有任务”与“没有符合条件的任务”。</li>
   <li>页面根节点绑定 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 提供右下角“跳转到顶部 / 跳转到底部”按钮，显隐阈值与 <a href="#c4-46">PlaylistView</a> 共用。</li>
@@ -2345,6 +2347,7 @@ interface DownloadStore {
   remove(id: string): Promise&lt;void&gt;;
   removeSong(songMid: string): Promise&lt;void&gt;;
   clearCompleted(): Promise&lt;void&gt;;
+  clearTasks(ids: string[]): Promise&lt;void&gt;;
   clearDirectory(): Promise&lt;void&gt;;
   reset(): void;
 }

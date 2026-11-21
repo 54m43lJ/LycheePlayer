@@ -583,6 +583,22 @@ async function stopRuntime(runtime: RuntimeTask): Promise<void> {
   }
 }
 
+/** 清空指定任务记录：停止其中的活动任务，但保留磁盘上的已下载文件。 */
+export async function clearDownloadTasks(ids: string[]): Promise<void> {
+  await ensureScope()
+  if (ids.length === 0) return
+  const targets = new Set(ids)
+  const runtimes: RuntimeTask[] = []
+  for (const [id, runtime] of tasks) {
+    if (!targets.has(id)) continue
+    tasks.delete(id)
+    runtimes.push(runtime)
+  }
+  for (const runtime of runtimes) runtime.controller?.abort()
+  await Promise.all(runtimes.map((runtime) => stopRuntime(runtime)))
+  if (runtimes.length > 0) await saveIndex()
+}
+
 /** 清空下载目录：停止任务后删除目录内全部内容，并清空任务记录。 */
 export async function clearDownloadDirectory(): Promise<void> {
   await ensureScope()

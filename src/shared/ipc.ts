@@ -131,6 +131,8 @@ export interface LycheeApi {
     remove(id: string): Promise<IpcResult<null>>
     removeSong(songMid: string): Promise<IpcResult<null>>
     clearCompleted(): Promise<IpcResult<null>>
+    /** 清空指定任务记录；保留磁盘上的已下载文件。 */
+    clearTasks(ids: string[]): Promise<IpcResult<null>>
     clearDirectory(): Promise<IpcResult<null>>
     storage(): Promise<IpcResult<DownloadStorageInfo>>
     openFolder(): Promise<IpcResult<null>>

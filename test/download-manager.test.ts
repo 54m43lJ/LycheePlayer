@@ -136,6 +136,29 @@ describe('download/manager queue', () => {
     expect(existsSync(join(downloadDir, '晴天_Live-周杰伦、杨瑞代-叶惠美.flac'))).toBe(false)
   })
 
+  it('clears task records without deleting downloaded files', async () => {
+    rmSync(downloadDir, { recursive: true, force: true })
+    getDetailMock.mockRejectedValue(new Error('stop before resolving'))
+    const { clearDownloadTasks, listDownloads, startDownloads } = await import(
+      '../src/main/download/manager'
+    )
+    const leftover = await listDownloads()
+    if (leftover.length > 0) {
+      await clearDownloadTasks(leftover.map((item) => item.id))
+    }
+    const [task] = await startDownloads(
+      [{ songMid: 'keep', name: '保留文件', singers: ['歌手'], albumName: '专辑' }],
+      'flac'
+    )
+    mkdirSync(downloadDir, { recursive: true })
+    writeFileSync(task!.filePath, 'audio')
+
+    await clearDownloadTasks([task!.id])
+
+    expect(await listDownloads()).toEqual([])
+    expect(existsSync(task!.filePath)).toBe(true)
+  })
+
   it('clears downloaded files, partials, covers and records', async () => {
     mkdirSync(downloadDir, { recursive: true })
     for (const mid of ['m1', 'm2', 'm3']) {

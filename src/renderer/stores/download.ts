@@ -159,6 +159,22 @@ export const useDownloadStore = defineStore('download', () => {
     await load()
   }
 
+  /** 清空指定任务记录；磁盘上的已下载文件不受影响。 */
+  async function clearTasks(ids: string[]): Promise<void> {
+    const unique = [...new Set(ids.filter(Boolean))]
+    if (unique.length === 0) return
+    const removed = new Set(unique)
+    const songMids = tasks.value
+      .filter((task) => removed.has(task.id))
+      .map((task) => task.songMid)
+    unwrap(await window.lychee.download.clearTasks(unique))
+    tasks.value = tasks.value.filter((task) => !removed.has(task.id))
+    for (const id of removed) knownStatuses.delete(id)
+    if (songMids.length > 0) void refreshAssets(songMids)
+    storage.value = unwrap(await window.lychee.download.storage())
+    if (!hasActive()) stopPolling()
+  }
+
   /** 清空下载目录内的文件与下载记录；不影响播放缓存。 */
   async function clearDirectory(): Promise<void> {
     unwrap(await window.lychee.download.clearDirectory())
@@ -199,6 +215,7 @@ export const useDownloadStore = defineStore('download', () => {
     remove,
     removeSong,
     clearCompleted,
+    clearTasks,
     clearDirectory,
     reset
   }
