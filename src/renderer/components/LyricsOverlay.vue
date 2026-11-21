@@ -5,6 +5,7 @@ import AppIcon from './AppIcon.vue'
 import CommentsPanel from './CommentsPanel.vue'
 import CoverArt from './CoverArt.vue'
 import LyricsPanel from './LyricsPanel.vue'
+import { pushBackDismiss } from '../composables/back-navigation'
 import { usePlayerStore } from '../stores/player'
 import { useUiStore } from '../stores/ui'
 import { singerNames, songCover } from '../utils/format'
@@ -134,9 +135,12 @@ function onNarrowChange(event: MediaQueryListEvent): void {
   dragOffset.value = 0
 }
 
+const releaseBackDismiss = pushBackDismiss(() => ui.closeLyrics())
+
 onMounted(() => narrowQuery.addEventListener('change', onNarrowChange))
 
 onBeforeUnmount(() => {
+  releaseBackDismiss()
   narrowQuery.removeEventListener('change', onNarrowChange)
   pointerId = null
   dragging.value = false

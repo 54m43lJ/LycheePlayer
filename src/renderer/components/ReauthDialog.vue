@@ -2,6 +2,7 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { ReauthReason } from '@shared/types'
 import AppIcon from './AppIcon.vue'
+import { useBackDismiss } from '../composables/back-navigation'
 
 const props = defineProps<{
   open: boolean
@@ -10,6 +11,8 @@ const props = defineProps<{
 
 const emit = defineEmits<{ login: []; dismiss: [] }>()
 const loginRef = ref<HTMLButtonElement | null>(null)
+
+useBackDismiss(() => props.open, () => emit('dismiss'))
 
 watch(
   () => props.open,

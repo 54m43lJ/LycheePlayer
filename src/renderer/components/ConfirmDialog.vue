@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import AppIcon from './AppIcon.vue'
+import { useBackDismiss } from '../composables/back-navigation'
 
 const props = withDefaults(
   defineProps<{
@@ -16,6 +17,8 @@ const props = withDefaults(
 
 const emit = defineEmits<{ confirm: []; cancel: [] }>()
 const cancelRef = ref<HTMLButtonElement | null>(null)
+
+useBackDismiss(() => props.open, () => emit('cancel'))
 
 function onKeydown(event: KeyboardEvent): void {
   if (!props.open || event.key !== 'Escape') return

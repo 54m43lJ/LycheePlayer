@@ -194,6 +194,13 @@ const api: LycheeApi = {
       return () => ipcRenderer.removeListener('player:command', listener)
     }
   },
+  navigation: {
+    onBack: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('navigation:back', listener)
+      return () => ipcRenderer.removeListener('navigation:back', listener)
+    }
+  },
   upstream: {
     onBlocked: (callback) => {
       const listener = (

@@ -75,6 +75,17 @@ export function createMainWindow(): BrowserWindow {
     if (mainWindow === window) mainWindow = null
   })
 
+  // 系统后退手势（鼠标侧键等）只转发给渲染层，由浮层栈或路由历史决定去向。
+  let lastBackAt = 0
+  window.on('app-command', (_event, command) => {
+    if (command !== 'browser-backward') return
+    // Linux 会为按下与抬起各发一次；同一次操作只转发一次。
+    const now = Date.now()
+    if (now - lastBackAt < 200) return
+    lastBackAt = now
+    window.webContents.send('navigation:back')
+  })
+
   window.webContents.setWindowOpenHandler(({ url }) => {
     if (isAllowedHost(url)) {
       return {

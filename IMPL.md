@@ -546,3 +546,28 @@
 | `PROVIDER.html` | §4.5 请求画像（`#p4-5`） | 改 | 增加 QQLogin 续期请求画像。 |
 | `README.md` | §2 用户交互 · 登录行 | 改 | 补充凭证到期前自动续期。 |
 | `ABOUT.html` | 用户交互 · 登录行 | 改 | 与 README 同步。 |
+
+### 3.18 后退手势在浮层打开时执行页面导航
+
+**问题描述**：鼠标侧键后退由 Chromium 直接遍历历史，应用没有统一的浮层拦截。歌词 / 评论、播放队列、窄屏侧栏或确认对话框打开时按下后退，会直接切换路由；浮层要么被路由变化顺带关闭，要么继续覆盖新页面。各组件只处理 Esc 与关闭按钮，没有共享的“后退优先关闭最上层浮层”入口。
+
+**解决方法**：
+
+- 新增 `composables/back-navigation.ts`：模块级关闭栈、`pushBackDismiss` / `dismissTopPopup`、`useBackDismiss` 与 `installBackNavigation`。浮层打开时入栈，关闭或卸载时注销；后退只关闭栈顶，没有浮层才调用 `router.back()`。
+- 主进程监听窗口 `app-command` 的 `browser-backward`，通过 `navigation:back` 推送给渲染层，不在主进程执行导航；Linux 按下 / 抬起各触发一次，主进程与渲染层都以 200ms 窗口去重。
+- 渲染层在捕获阶段拦截后退侧键的 `mouseup`，阻止 Chromium 自带历史导航，确保一次按键只产生一次浮层关闭或路由后退。
+- 歌词 / 评论、播放队列、窄屏侧栏、`ConfirmDialog`、`ReauthDialog`、`PlaylistPicker`、`PlaylistEditDialog` 接入统一浮层栈；“下载”删除确认框复用 `ConfirmDialog`，随其生效。
+- 新增 `test/back-navigation.test.ts` 覆盖后进先出的关闭顺序。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 1 项“在任何弹出时‘后退’操作的行为应该是关闭弹出” | 改 | 行尾追加 ` [已解决] `。 |
+| `USER.html` | §2 CONVENTIONS · 后退手势（`#u2`） | 增 | 说明后退优先关闭最上层浮层，没有浮层才沿路由历史返回。 |
+| `CORE.html` | §1 文件树 · `composables/back-navigation.ts` / `test/back-navigation.test.ts` | 增 | 登记浮层关闭栈与测试。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 增加 `navigation.onBack` 与 `navigation:back` 通道。 |
+| `CORE.html` | §4.4 `src/main/index.ts`（`#c4-4`） | 改 | 记录 `app-command` 后退转发与去重。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 安装后退分发，播放队列与窄屏侧栏注册关闭。 |
+| `CORE.html` | §4.66 / §4.72 / §4.77 / §4.81 / §4.91 | 改 | 各对话框与歌词 / 评论浮层补充后退关闭注册。 |
+| `CORE.html` | §4.92 `back-navigation.ts`（`#c4-92`） | 增 | 记录关闭栈、打开状态监听、后退分发与鼠标侧键拦截。 |

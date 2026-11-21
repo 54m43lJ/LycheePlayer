@@ -2,9 +2,12 @@
 import { ref, watch } from 'vue'
 import type { PlaylistMeta } from '@shared/types'
 import AppIcon from './AppIcon.vue'
+import { useBackDismiss } from '../composables/back-navigation'
 
 const props = defineProps<{ open: boolean; playlist?: PlaylistMeta | null }>()
 const emit = defineEmits<{ close: []; submit: [name: string] }>()
+
+useBackDismiss(() => props.open, () => emit('close'))
 
 const name = ref('')
 

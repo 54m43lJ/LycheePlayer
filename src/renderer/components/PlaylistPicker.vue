@@ -4,12 +4,15 @@ import type { PlaylistMeta } from '@shared/types'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import { describeError, unwrap } from '../api'
+import { useBackDismiss } from '../composables/back-navigation'
 import { useToast } from '../composables/toast'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { playlistSubtitle } from '../utils/format'
 
 const props = defineProps<{ open: boolean; songMids: string[]; songName?: string }>()
 const emit = defineEmits<{ close: []; added: [id: string] }>()
+
+useBackDismiss(() => props.open, () => emit('close'))
 
 const toast = useToast()
 const playlistEdit = usePlaylistEditStore()

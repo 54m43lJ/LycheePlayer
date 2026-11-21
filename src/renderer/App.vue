@@ -8,6 +8,7 @@ import LyricsOverlay from './components/LyricsOverlay.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ReauthDialog from './components/ReauthDialog.vue'
 import ToastStack from './components/ToastStack.vue'
+import { installBackNavigation, useBackDismiss } from './composables/back-navigation'
 import { useAuthStore } from './stores/auth'
 import { useDownloadStore } from './stores/download'
 import { useHistoryStore } from './stores/history'
@@ -61,6 +62,7 @@ const favoritesPath = `/playlist/${FAVORITES_PLAYLIST_ID}`
 let offCommand: (() => void) | null = null
 let offUpstreamBlocked: (() => void) | null = null
 let offLoginStatus: (() => void) | null = null
+let offBackNavigation: (() => void) | null = null
 
 function onLogout(): void {
   playlistStore.reset()
@@ -108,6 +110,10 @@ function openSidebar(): void {
 // 侧栏拖拽手势只在窄屏启用；宽屏仍通过侧栏按钮或空白点击进入。
 const narrowQuery = window.matchMedia('(max-width: 900px)')
 let dragStartX: number | null = null
+
+// 后退优先关闭当前浮层；没有浮层时才沿路由历史返回。
+useBackDismiss(() => ui.queueOpen, () => ui.closeQueue())
+useBackDismiss(() => ui.sidebarOpen && narrowQuery.matches, () => ui.closeSidebar())
 
 function hasSelectedText(): boolean {
   const selection = window.getSelection()
@@ -157,6 +163,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
+  offBackNavigation = installBackNavigation(() => router.back())
   window.addEventListener('lychee:logout', onLogout)
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('pointerdown', onPointerDown)
@@ -183,6 +190,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  offBackNavigation?.()
   offCommand?.()
   offLoginStatus?.()
   offUpstreamBlocked?.()
