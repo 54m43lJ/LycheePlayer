@@ -26,6 +26,8 @@ export interface Singer {
   mid: string
   /** 可能为空；渲染时跳过空名称。 */
   name: string
+  /** 搜索结果可带歌手头像；歌曲内嵌歌手通常没有。 */
+  avatarUrl?: string
 }
 
 export interface Album {
@@ -78,7 +80,7 @@ export interface PlaylistDetail {
 }
 
 export interface SearchRequest {
-  type: 'song' | 'singer' | 'album' | 'playlist'
+  type: 'song' | 'singer' | 'album' | 'playlist' | 'mv'
   keyword: string
   pageNo: number
   pageSize: number
@@ -91,6 +93,8 @@ export interface SearchResult {
   playlists: PlaylistMeta[]
   mvs?: MvSummary[]
   total: number
+  /** 上游是否还有下一页（来自 meta.nextpage）；缺省时调用方按 total 推断。 */
+  hasMore?: boolean
 }
 
 export interface Lyric {

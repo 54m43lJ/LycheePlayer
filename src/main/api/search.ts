@@ -4,9 +4,11 @@ import {
   SEARCH_EMPTY_RETRY_MS,
   SEARCH_PAGE_NO_MAX,
   SEARCH_PAGE_SIZE_DEFAULT,
-  SEARCH_PAGE_SIZE_MAX
+  SEARCH_PAGE_SIZE_MAX,
+  SEARCH_SINGER_PAGE_SIZE
 } from '../../shared/constants'
 import { UpstreamError, musicu } from './client'
+import { searchMv } from './mv'
 import { rawSongToSong } from './song'
 
 interface RawSinger {
@@ -14,6 +16,9 @@ interface RawSinger {
   mid?: string
   singerName?: string
   name?: string
+  singerPic?: string
+  pic?: string
+  avatar?: string
 }
 
 interface RawAlbum {
@@ -37,12 +42,14 @@ interface RawPlaylist {
 }
 
 interface SearchData {
+  /** 真实响应把总数放在 data.meta，旧 fixture 可能放在 body.meta。 */
+  meta?: { sum?: number; estimate_sum?: number; nextpage?: number }
   body?: {
     song?: { list?: unknown[] }
     singer?: { list?: RawSinger[] }
     album?: { list?: RawAlbum[] }
     songlist?: { list?: RawPlaylist[] }
-    meta?: { sum?: number; estimate_sum?: number }
+    meta?: { sum?: number; estimate_sum?: number; nextpage?: number }
   }
 }
 
@@ -61,7 +68,8 @@ function coverUrl(value: string | undefined): string {
 function toSinger(raw: RawSinger): Singer {
   return {
     mid: raw.singerMID ?? raw.mid ?? '',
-    name: raw.singerName ?? raw.name ?? ''
+    name: raw.singerName ?? raw.name ?? '',
+    avatarUrl: coverUrl(raw.singerPic ?? raw.pic ?? raw.avatar) || undefined
   }
 }
 
@@ -81,6 +89,9 @@ function parseSearch(data: SearchData): SearchResult {
   if (!body) {
     throw new UpstreamError('UPSTREAM_CHANGED', '搜索响应缺少 body')
   }
+  const meta = data.meta ?? body.meta
+  const hasMore =
+    typeof meta?.nextpage === 'number' ? meta.nextpage !== -1 : undefined
   return {
     songs: (body.song?.list ?? []).map(rawSongToSong),
     singers: (body.singer?.list ?? []).map(toSinger).filter((singer) => singer.mid.length > 0),
@@ -93,7 +104,8 @@ function parseSearch(data: SearchData): SearchResult {
     playlists: (body.songlist?.list ?? [])
       .map(toPlaylist)
       .filter((playlist) => playlist.id.length > 0),
-    total: Number(body.meta?.sum ?? body.meta?.estimate_sum ?? 0)
+    total: Number(meta?.sum ?? meta?.estimate_sum ?? 0),
+    ...(hasMore === undefined ? {} : { hasMore })
   }
 }
 
@@ -113,10 +125,13 @@ export async function searchByType(req: SearchRequest): Promise<SearchResult> {
     return { songs: [], singers: [], albums: [], playlists: [], total: 0 }
   }
   const pageNo = Math.max(1, Math.min(SEARCH_PAGE_NO_MAX, Math.floor(req.pageNo) || 1))
+  const pageLimit =
+    req.type === 'singer' ? SEARCH_SINGER_PAGE_SIZE : SEARCH_PAGE_SIZE_MAX
   const pageSize = Math.max(
     1,
-    Math.min(SEARCH_PAGE_SIZE_MAX, Math.floor(req.pageSize) || SEARCH_PAGE_SIZE_DEFAULT)
+    Math.min(pageLimit, Math.floor(req.pageSize) || SEARCH_PAGE_SIZE_DEFAULT)
   )
+  if (req.type === 'mv') return searchMv(keyword, pageNo, pageSize)
   const body = {
     num_per_page: pageSize,
     page_num: pageNo,

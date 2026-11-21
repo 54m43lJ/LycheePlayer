@@ -81,6 +81,120 @@ describe('api/search', () => {
     expect(result.songs[1].name).toBe('Company')
   })
 
+  it('reads the total from top-level meta and maps singer avatars', async () => {
+    replay({
+      code: 0,
+      req_0: {
+        code: 0,
+        data: {
+          meta: { sum: 8, estimate_sum: 8, nextpage: 2 },
+          body: {
+            singer: {
+              list: [
+                {
+                  singerMID: '0025NhlN2yWrP4',
+                  singerName: '周杰伦',
+                  singerPic: 'http://y.gtimg.cn/music/photo_new/T001R150x150M0000025NhlN2yWrP4_11.jpg'
+                }
+              ]
+            }
+          }
+        }
+      }
+    })
+
+    const { searchByType } = await import('../../src/main/api/search')
+    const result = await searchByType({
+      type: 'singer',
+      keyword: '周杰伦',
+      pageNo: 1,
+      pageSize: 20
+    })
+
+    expect(result.total).toBe(8)
+    expect(result.hasMore).toBe(true)
+    expect(result.singers[0]).toMatchObject({
+      mid: '0025NhlN2yWrP4',
+      name: '周杰伦',
+      avatarUrl:
+        'https://y.gtimg.cn/music/photo_new/T001R150x150M0000025NhlN2yWrP4_11.jpg'
+    })
+  })
+
+  it('uses the fixed singer page size of 24', async () => {
+    const calls = replay({
+      code: 0,
+      req_0: {
+        code: 0,
+        data: {
+          meta: { sum: 1 },
+          body: {
+            singer: {
+              list: [{ singerMID: 'mid', singerName: '歌手' }]
+            }
+          }
+        }
+      }
+    })
+
+    const { searchByType } = await import('../../src/main/api/search')
+    await searchByType({
+      type: 'singer',
+      keyword: '歌手',
+      pageNo: 1,
+      pageSize: 48
+    })
+
+    const payload = JSON.parse(
+      new URL(calls[0]!.url).searchParams.get('data') ?? '{}'
+    ) as { req_0?: { param?: { num_per_page?: number } } }
+    expect(payload.req_0?.param?.num_per_page).toBe(24)
+  })
+
+  it('routes the mv type to MV search with pagination metadata', async () => {
+    replay({
+      code: 0,
+      req_0: {
+        code: 0,
+        data: {
+          meta: { sum: 598, estimate_sum: 1895, nextpage: -1 },
+          body: {
+            mv: {
+              list: [
+                {
+                  v_id: 'w0026q7f01a',
+                  mv_name: '晴天',
+                  mv_pic_url: 'http://y.gtimg.cn/music/photo_new/T015R640x360M10300061J2t0b0PPW.jpg',
+                  singer_list: [{ mid: '0025NhlN2yWrP4', name: '周杰伦' }]
+                }
+              ]
+            }
+          }
+        }
+      }
+    })
+
+    const { searchByType } = await import('../../src/main/api/search')
+    const result = await searchByType({
+      type: 'mv',
+      keyword: '周杰伦',
+      pageNo: 2,
+      pageSize: 20
+    })
+
+    expect(result.total).toBe(598)
+    expect(result.hasMore).toBe(false)
+    expect(result.mvs).toEqual([
+      {
+        mvId: 'w0026q7f01a',
+        name: '晴天',
+        singerName: '周杰伦',
+        coverUrl:
+          'https://y.gtimg.cn/music/photo_new/T015R640x360M10300061J2t0b0PPW.jpg'
+      }
+    ])
+  })
+
   it('returns an empty result for a blank keyword without calling upstream', async () => {
     const calls = replay({})
     const { searchByType } = await import('../../src/main/api/search')

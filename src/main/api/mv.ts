@@ -1,5 +1,5 @@
 import type { MvDetail, MvStream, MvSummary, SearchResult } from '../../shared/types'
-import { SEARCH_PAGE_SIZE_DEFAULT } from '../../shared/constants'
+import { SEARCH_PAGE_SIZE_DEFAULT, SEARCH_PAGE_SIZE_MAX } from '../../shared/constants'
 import { UpstreamError, musicu } from './client'
 
 interface RawMvSummary {
@@ -13,9 +13,10 @@ interface RawMvSummary {
 }
 
 interface MvSearchData {
+  meta?: { sum?: number; estimate_sum?: number; nextpage?: number }
   body?: {
     mv?: { list?: RawMvSummary[] }
-    meta?: { sum?: number; estimate_sum?: number }
+    meta?: { sum?: number; estimate_sum?: number; nextpage?: number }
   }
 }
 
@@ -67,14 +68,22 @@ function toSummary(raw: RawMvSummary): MvSummary {
 }
 
 /** MV 搜索：复用桌面搜索接口的 search_type:4。 */
-export async function searchMv(keyword: string, pageNo: number): Promise<SearchResult> {
+export async function searchMv(
+  keyword: string,
+  pageNo: number,
+  pageSize = SEARCH_PAGE_SIZE_DEFAULT
+): Promise<SearchResult> {
   const term = keyword.trim()
   if (!term) return { songs: [], singers: [], albums: [], playlists: [], mvs: [], total: 0 }
+  const perPage = Math.max(
+    1,
+    Math.min(SEARCH_PAGE_SIZE_MAX, Math.floor(pageSize) || SEARCH_PAGE_SIZE_DEFAULT)
+  )
   const data = await musicu<MvSearchData>(
     'music.search.SearchCgiService',
     'DoSearchForQQMusicDesktop',
     {
-      num_per_page: SEARCH_PAGE_SIZE_DEFAULT,
+      num_per_page: perPage,
       page_num: Math.max(1, Math.floor(pageNo) || 1),
       query: term,
       search_type: 4,
@@ -87,13 +96,17 @@ export async function searchMv(keyword: string, pageNo: number): Promise<SearchR
   const mvs = (body.mv?.list ?? [])
     .map(toSummary)
     .filter((item) => item.mvId.length > 0)
+  const meta = data.meta ?? body.meta
+  const hasMore =
+    typeof meta?.nextpage === 'number' ? meta.nextpage !== -1 : undefined
   return {
     songs: [],
     singers: [],
     albums: [],
     playlists: [],
     mvs,
-    total: Number(body.meta?.sum ?? body.meta?.estimate_sum ?? mvs.length)
+    total: Number(meta?.sum ?? meta?.estimate_sum ?? mvs.length),
+    ...(hasMore === undefined ? {} : { hasMore })
   }
 }
 

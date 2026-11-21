@@ -972,6 +972,19 @@ button:focus-visible,
   gap: 18px;
 }
 
+/* 搜索结果：宽屏固定 8 列，MV 固定 6 列；卡片宽度随容器缩放。 */
+.card-grid.search-grid {
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+}
+
+.card-grid.search-grid-mv {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
+.card-cover.mv-cover {
+  aspect-ratio: 16 / 9;
+}
+
 .card {
   min-width: 0;
   padding: 10px;
@@ -1080,6 +1093,7 @@ button:focus-visible,
   place-items: center;
   width: 100%;
   aspect-ratio: 1;
+  overflow: hidden;
   border-radius: 50%;
   background:
     radial-gradient(circle at 30% 25%, var(--subtle-bg-strong), transparent 45%),
@@ -1088,6 +1102,18 @@ button:focus-visible,
   font-size: 34px;
   font-weight: 800;
   box-shadow: var(--shadow);
+}
+
+.avatar-circle img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.search-more {
+  display: flex;
+  justify-content: center;
+  margin-top: 20px;
 }
 
 /* ---------- Playlist detail ---------- */
@@ -2485,6 +2511,15 @@ button:focus-visible,
   .card-grid {
     grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 10px;
+  }
+
+  /* 窄屏固定 3 列，MV 2 列。 */
+  .card-grid.search-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .card-grid.search-grid-mv {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .song-table .song-duration-col,

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import type { SearchRequest, SearchResult } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
@@ -14,9 +14,10 @@ import { useToast } from '../composables/toast'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { useDownloadStore } from '../stores/download'
-import { SEARCH_PAGE_SIZE_DEFAULT } from '@shared/constants'
+import { SEARCH_PAGE_SIZE_DEFAULT, SEARCH_SINGER_PAGE_SIZE } from '@shared/constants'
 import { useAuthStore } from '../stores/auth'
 import { albumCover, formatCount, playlistSubtitle } from '../utils/format'
+import { mergeSearchResult } from '../utils/search-results'
 
 type SearchType = SearchRequest['type']
 
@@ -34,7 +35,8 @@ const TABS: Array<{ value: SearchType; label: string }> = [
   { value: 'song', label: '单曲' },
   { value: 'singer', label: '歌手' },
   { value: 'album', label: '专辑' },
-  { value: 'playlist', label: '歌单' }
+  { value: 'playlist', label: '歌单' },
+  { value: 'mv', label: 'MV' }
 ]
 
 const HOT_KEYWORDS = ['周杰伦', '林俊杰', '陈奕迅', '邓紫棋', '五月天', '告五人', 'Taylor Swift']
@@ -43,11 +45,17 @@ const keyword = ref('')
 const activeTab = ref<SearchType>('song')
 const result = ref<SearchResult | null>(null)
 const loading = ref(false)
+const loadingMore = ref(false)
 const searched = ref(false)
 const error = ref('')
 const pageNo = ref(1)
-const pageSize = SEARCH_PAGE_SIZE_DEFAULT
+// 歌手固定 24 条一页；其余类型固定 48 条一页，与宽 / 窄屏列数解耦。
+const pageSize = computed(() =>
+  activeTab.value === 'singer' ? SEARCH_SINGER_PAGE_SIZE : SEARCH_PAGE_SIZE_DEFAULT
+)
+const pageRef = ref<HTMLElement | null>(null)
 let requestId = 0
+let scrollRoot: HTMLElement | null = null
 
 const songs = computed(() => result.value?.songs ?? [])
 const singers = computed(() => result.value?.singers ?? [])
@@ -69,11 +77,19 @@ function openPicker(index: number): void {
   pickerIndex.value = index
   pickerOpen.value = true
 }
-const totalPages = computed(() => {
-  if (total.value > 0) return Math.max(1, Math.ceil(total.value / pageSize))
-  return searched.value ? pageNo.value : 1
-})
-const activeLabel = computed(() => TABS.find((tab) => tab.value === activeTab.value)?.label ?? '')
+
+const moreAvailable = ref(false)
+const hasMore = computed(() => searched.value && moreAvailable.value)
+
+function updateMore(data: SearchResult, page: number): void {
+  if (typeof data.hasMore === 'boolean') {
+    moreAvailable.value = data.hasMore
+    return
+  }
+  const pages =
+    data.total > 0 ? Math.max(1, Math.ceil(data.total / pageSize.value)) : page
+  moreAvailable.value = page < pages
+}
 
 watch(songs, (list) => {
   if (list.length > 0) {
@@ -82,45 +98,73 @@ watch(songs, (list) => {
   }
 })
 
-async function search(page = 1): Promise<void> {
+
+
+async function search(page = 1, append = false): Promise<void> {
   const term = keyword.value.trim()
   if (!term) return
+  if (append && (loading.value || loadingMore.value || !hasMore.value)) return
   const currentRequest = ++requestId
-  loading.value = true
-  error.value = ''
+  if (append) {
+    loadingMore.value = true
+  } else {
+    loading.value = true
+    result.value = null
+    moreAvailable.value = false
+    pageNo.value = 0
+    error.value = ''
+    scrollRoot?.scrollTo({ top: 0 })
+  }
   try {
     const data = unwrap(
       await window.lychee.search.byType({
         type: activeTab.value,
         keyword: term,
         pageNo: page,
-        pageSize
+        pageSize: pageSize.value
       })
     )
     if (currentRequest !== requestId) return
-    result.value = data
+    result.value = append && result.value ? mergeSearchResult(result.value, data) : data
     pageNo.value = page
+    updateMore(data, page)
     searched.value = true
-    if (activeTab.value === 'song') {
-      void (async () => {
-        try {
-          const mvResult = unwrap(await window.lychee.mv.search(term, page))
-          if (currentRequest !== requestId || !result.value) return
-          result.value = { ...result.value, mvs: mvResult.mvs ?? [] }
-        } catch {
-          // MV 搜索失败不影响歌曲结果。
-        }
-      })()
-    }
   } catch (err) {
-    if (currentRequest === requestId) {
+    if (currentRequest !== requestId) return
+    if (append) {
+      toast.error(describeError(err))
+    } else {
       error.value = describeError(err)
       toast.error(error.value)
     }
   } finally {
-    if (currentRequest === requestId) loading.value = false
+    if (currentRequest === requestId) {
+      loading.value = false
+      loadingMore.value = false
+    }
   }
 }
+
+function loadMore(): void {
+  void search(pageNo.value + 1, true)
+}
+
+function onScroll(): void {
+  const el = scrollRoot
+  if (!el || loading.value || loadingMore.value || !hasMore.value) return
+  if (el.scrollTop + el.clientHeight >= el.scrollHeight - 160) loadMore()
+}
+
+onMounted(() => {
+  scrollRoot = pageRef.value?.closest<HTMLElement>('.main') ?? null
+  scrollRoot?.addEventListener('scroll', onScroll, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  requestId += 1
+  scrollRoot?.removeEventListener('scroll', onScroll)
+  scrollRoot = null
+})
 
 function switchTab(tab: SearchType): void {
   if (activeTab.value === tab) return
@@ -164,16 +208,10 @@ function openAlbum(mid: string): void {
 function openPlaylist(id: string): void {
   void router.push(`/playlist/${id}`)
 }
-
-function changePage(delta: number): void {
-  const next = pageNo.value + delta
-  if (next < 1 || next > totalPages.value) return
-  void search(next)
-}
 </script>
 
 <template>
-  <div class="page">
+  <div ref="pageRef" class="page">
     <section class="search-hero">
       <div class="eyebrow">Explore</div>
       <h1>搜你想听的</h1>
@@ -182,7 +220,7 @@ function changePage(delta: number): void {
         <input
           v-model="keyword"
           type="search"
-          aria-label="搜索歌曲、歌手、专辑或歌单"
+          aria-label="搜索歌曲、歌手、专辑、歌单或 MV"
           autocomplete="off"
           spellcheck="false"
         />
@@ -245,34 +283,30 @@ function changePage(delta: number): void {
           <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
           <h3>没有找到单曲</h3>
         </div>
-
-        <template v-if="mvs.length > 0">
-          <div class="section-title"><span>MV</span><span class="count">{{ mvs.length }} 个</span></div>
-          <div class="card-grid">
-            <button
-              v-for="item in mvs"
-              :key="item.mvId"
-              class="card"
-              @click="router.push(`/mv/${item.mvId}`)"
-            >
-              <CoverArt :src="item.coverUrl" image-class="card-cover" :icon-size="30" />
-              <div class="card-name">{{ item.name }}</div>
-              <div class="card-sub">{{ item.singerName }}</div>
-            </button>
-          </div>
-        </template>
       </div>
 
       <div v-else-if="activeTab === 'singer'">
-        <div class="section-title"><span>歌手</span><span class="count">{{ singers.length }} 位</span></div>
-        <div v-if="singers.length > 0" class="card-grid">
+        <div class="section-title">
+          <span>歌手</span>
+          <span class="count">{{ total > 0 ? `${formatCount(total)} 位` : `${singers.length} 位` }}</span>
+        </div>
+        <div v-if="singers.length > 0" class="card-grid search-grid">
           <button
             v-for="singer in singers"
             :key="singer.mid"
             class="card"
             @click="openArtist(singer.mid)"
           >
-            <div class="avatar-circle">{{ singer.name.slice(0, 1) }}</div>
+            <div class="avatar-circle">
+              <img
+                v-if="singer.avatarUrl"
+                :src="singer.avatarUrl"
+                alt=""
+                loading="lazy"
+                @error="singer.avatarUrl = ''"
+              />
+              <template v-else>{{ singer.name.slice(0, 1) }}</template>
+            </div>
             <div class="card-name">{{ singer.name }}</div>
           </button>
         </div>
@@ -283,8 +317,11 @@ function changePage(delta: number): void {
       </div>
 
       <div v-else-if="activeTab === 'album'">
-        <div class="section-title"><span>专辑</span><span class="count">{{ albums.length }} 张</span></div>
-        <div v-if="albums.length > 0" class="card-grid">
+        <div class="section-title">
+          <span>专辑</span>
+          <span class="count">{{ total > 0 ? `${formatCount(total)} 张` : `${albums.length} 张` }}</span>
+        </div>
+        <div v-if="albums.length > 0" class="card-grid search-grid">
           <button v-for="album in albums" :key="album.mid" class="card" @click="openAlbum(album.mid)">
             <CoverArt :src="albumCover(album.mid)" image-class="card-cover" :icon-size="30" />
             <div class="card-name">{{ album.name }}</div>
@@ -296,9 +333,12 @@ function changePage(delta: number): void {
         </div>
       </div>
 
-      <div v-else>
-        <div class="section-title"><span>歌单</span><span class="count">{{ playlists.length }} 个</span></div>
-        <div v-if="playlists.length > 0" class="card-grid">
+      <div v-else-if="activeTab === 'playlist'">
+        <div class="section-title">
+          <span>歌单</span>
+          <span class="count">{{ total > 0 ? `${formatCount(total)} 个` : `${playlists.length} 个` }}</span>
+        </div>
+        <div v-if="playlists.length > 0" class="card-grid search-grid">
           <div
             v-for="playlist in playlists"
             :key="playlist.id"
@@ -327,13 +367,33 @@ function changePage(delta: number): void {
         </div>
       </div>
 
-      <div v-if="totalPages > 1" class="pager">
-        <button class="icon-btn" :disabled="pageNo <= 1" @click="changePage(-1)">
-          <AppIcon name="chevron-left" :size="17" />
-        </button>
-        <span>{{ activeLabel }} · 第 {{ pageNo }} / {{ totalPages }} 页</span>
-        <button class="icon-btn" :disabled="pageNo >= totalPages" @click="changePage(1)">
-          <AppIcon name="chevron-right" :size="17" />
+      <div v-else-if="activeTab === 'mv'">
+        <div class="section-title">
+          <span>MV</span>
+          <span class="count">{{ total > 0 ? `${formatCount(total)} 个` : `${mvs.length} 个` }}</span>
+        </div>
+        <div v-if="mvs.length > 0" class="card-grid search-grid search-grid-mv">
+          <button
+            v-for="item in mvs"
+            :key="item.mvId"
+            class="card"
+            @click="router.push(`/mv/${item.mvId}`)"
+          >
+            <CoverArt :src="item.coverUrl" image-class="card-cover mv-cover" :icon-size="30" />
+            <div class="card-name">{{ item.name }}</div>
+            <div class="card-sub">{{ item.singerName }}</div>
+          </button>
+        </div>
+        <div v-else class="empty">
+          <div class="empty-icon"><AppIcon name="video" :size="25" /></div>
+          <h3>没有找到 MV</h3>
+        </div>
+      </div>
+
+      <div v-if="hasMore" class="search-more">
+        <button class="btn ghost small" :disabled="loadingMore" @click="loadMore()">
+          <span v-if="loadingMore" class="spinner" />
+          <template v-else>加载更多</template>
         </button>
       </div>
     </template>

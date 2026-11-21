@@ -31,9 +31,11 @@ export const SEARCH_EMPTY_RETRY_COUNT = 1
 /** 搜索页码上限。推荐值 100。 */
 export const SEARCH_PAGE_NO_MAX = 100
 /** 搜索每页默认条数。推荐值 20。 */
-export const SEARCH_PAGE_SIZE_DEFAULT = 20
+export const SEARCH_PAGE_SIZE_DEFAULT = 48
 /** 搜索每页最大条数。推荐值 50。 */
 export const SEARCH_PAGE_SIZE_MAX = 50
+/** 歌手搜索固定每页 24 条；上游单页超过 40 会返回 is_filter 错误与空列表。 */
+export const SEARCH_SINGER_PAGE_SIZE = 24
 
 // ---------- 歌单 ----------
 
