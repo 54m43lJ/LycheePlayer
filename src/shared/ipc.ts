@@ -10,6 +10,7 @@ import type {
   CommentLikeResult,
   CommentPage,
   CommentPostResult,
+  DownloadRequest,
   DownloadStorageInfo,
   DownloadTask,
   EmbedRect,
@@ -122,8 +123,8 @@ export interface LycheeApi {
   download: {
     list(): Promise<IpcResult<DownloadTask[]>>
     assetStates(songMids: string[]): Promise<IpcResult<SongAssetState[]>>
-    start(songMid: string, quality: Quality): Promise<IpcResult<DownloadTask>>
-    startMany(songMids: string[], quality: Quality): Promise<IpcResult<DownloadTask[]>>
+    start(request: DownloadRequest, quality: Quality): Promise<IpcResult<DownloadTask>>
+    startMany(requests: DownloadRequest[], quality: Quality): Promise<IpcResult<DownloadTask[]>>
     pause(id: string): Promise<IpcResult<DownloadTask>>
     resume(id: string): Promise<IpcResult<DownloadTask>>
     resumeAll(): Promise<IpcResult<DownloadTask[]>>

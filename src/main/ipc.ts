@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import { mkdir } from 'node:fs/promises'
 import type {
   AuthStatus,
+  DownloadRequest,
   EmbedRect,
   IpcResult,
   MprisCommand,
@@ -143,6 +144,30 @@ function qualityArg(value: unknown): Quality {
     throw new Error(`非法音质：${String(value)}`)
   }
   return value
+}
+
+/** 渲染层入队时带来的已知歌曲信息；只用于标题与文件名，不触发上游请求。 */
+function downloadRequestArg(value: unknown): DownloadRequest {
+  if (!value || typeof value !== 'object') throw new Error('下载歌曲信息无效')
+  const record = value as Record<string, unknown>
+  const songMid = stringArg(record.songMid, '歌曲 mid')
+  const name = typeof record.name === 'string' ? record.name : ''
+  const albumName = typeof record.albumName === 'string' ? record.albumName : ''
+  const singers = Array.isArray(record.singers)
+    ? record.singers
+        .filter((singer): singer is string => typeof singer === 'string')
+        .map((singer) => singer.trim())
+        .filter(Boolean)
+        .slice(0, 32)
+    : []
+  return { songMid, name, singers, albumName }
+}
+
+function downloadRequestsArg(value: unknown): DownloadRequest[] {
+  if (!Array.isArray(value) || value.length === 0 || value.length > DOWNLOAD_QUEUE_MAX) {
+    throw new Error(`下载歌曲列表必须为非空数组且不超过 ${DOWNLOAD_QUEUE_MAX} 个`)
+  }
+  return value.map(downloadRequestArg)
 }
 
 let lastPlayerStatus: PlayerState['status'] = 'stopped'
@@ -398,11 +423,11 @@ export function registerIpc(): void {
         : []
     )
   )
-  handle('download.start', async (mid: unknown, quality: unknown) =>
-    startDownload(stringArg(mid, '歌曲 mid'), qualityArg(quality))
+  handle('download.start', async (request: unknown, quality: unknown) =>
+    startDownload(downloadRequestArg(request), qualityArg(quality))
   )
-  handle('download.startMany', async (mids: unknown, quality: unknown) =>
-    startDownloads(midArray(mids, DOWNLOAD_QUEUE_MAX), qualityArg(quality))
+  handle('download.startMany', async (requests: unknown, quality: unknown) =>
+    startDownloads(downloadRequestsArg(requests), qualityArg(quality))
   )
   handle('download.pause', async (id: unknown) => pauseDownload(stringArg(id, '任务 ID')))
   handle('download.resume', async (id: unknown) => resumeDownload(stringArg(id, '任务 ID')))

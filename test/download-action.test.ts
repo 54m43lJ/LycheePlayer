@@ -42,7 +42,15 @@ describe('下载按钮共用机制', () => {
     }
     const { pendingDelete, requestDownload, confirmDownloadDelete } = useDownloadAction()
 
-    await requestDownload({ songMid: 'mid', name: '晴天' }, 'flac')
+    await requestDownload(
+      {
+        songMid: 'mid',
+        name: '晴天',
+        singers: [{ mid: 's1', name: '周杰伦' }],
+        album: { mid: 'a1', name: '叶惠美' }
+      },
+      'flac'
+    )
     expect(startMany).not.toHaveBeenCalled()
     expect(pendingDelete.value).toEqual({ songMid: 'mid', name: '晴天' })
 
@@ -66,8 +74,26 @@ describe('下载按钮共用机制', () => {
     }
     const { pendingDelete, requestDownload, cancelDownloadDelete } = useDownloadAction()
 
-    await requestDownload({ songMid: 'mid', name: '晴天' }, 'flac')
-    expect(startMany).toHaveBeenCalledWith(['mid'], 'flac')
+    await requestDownload(
+      {
+        songMid: 'mid',
+        name: '晴天',
+        singers: [{ mid: 's1', name: '周杰伦' }],
+        album: { mid: 'a1', name: '叶惠美' }
+      },
+      'flac'
+    )
+    expect(startMany).toHaveBeenCalledWith(
+      [
+        {
+          songMid: 'mid',
+          name: '晴天',
+          singers: ['周杰伦'],
+          albumName: '叶惠美'
+        }
+      ],
+      'flac'
+    )
     expect(pendingDelete.value).toBeNull()
 
     pendingDelete.value = { songMid: 'mid', name: '晴天' }

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type {
+  DownloadRequest,
   DownloadStorageInfo,
   DownloadTask,
   Quality,
@@ -101,17 +102,20 @@ export const useDownloadStore = defineStore('download', () => {
       : [...tasks.value, task]
   }
 
-  async function startMany(songMids: string[], quality: Quality): Promise<DownloadTask[]> {
-    const next = unwrap(await window.lychee.download.startMany(songMids, quality))
+  async function startMany(
+    requests: DownloadRequest[],
+    quality: Quality
+  ): Promise<DownloadTask[]> {
+    const next = unwrap(await window.lychee.download.startMany(requests, quality))
     for (const task of next) replace(task)
     // “下载全部”不自动打开下载中心；仅在有活动任务时轮询以更新歌曲表图标。
     startPolling()
-    void refreshAssets(songMids)
+    void refreshAssets(requests.map((request) => request.songMid))
     return next
   }
 
-  async function start(songMid: string, quality: Quality): Promise<void> {
-    await startMany([songMid], quality)
+  async function start(request: DownloadRequest, quality: Quality): Promise<void> {
+    await startMany([request], quality)
   }
 
   async function pause(id: string): Promise<void> {

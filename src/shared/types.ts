@@ -265,13 +265,21 @@ export interface MvStream {
 
 export type DownloadSource = 'network' | 'cache'
 
+/** 入队时由渲染层提供的已知歌曲信息，不触发额外上游请求。 */
+export interface DownloadRequest {
+  songMid: string
+  name: string
+  singers: string[]
+  albumName: string
+}
+
 export interface DownloadTask {
   id: string
   songMid: string
   name: string
-  /** 出队解析后回填的歌手名；入队阶段为空，供下载中心纯本地搜索。 */
+  /** 入队时来自列表的已知歌手名；出队解析后回填上游值。 */
   singers: string[]
-  /** 出队解析后回填的专辑名；入队阶段为空，供下载中心纯本地搜索。 */
+  /** 入队时来自列表的已知专辑名；出队解析后回填上游值。 */
   albumName: string
   quality: Quality
   filePath: string

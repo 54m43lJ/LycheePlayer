@@ -549,13 +549,21 @@ export interface MvStream {
 
 export type DownloadSource = 'network' | 'cache';
 
+/** 入队时由渲染层提供的已知歌曲信息，不触发额外上游请求。 */
+export interface DownloadRequest {
+  songMid: string;
+  name: string;
+  singers: string[];
+  albumName: string;
+}
+
 export interface DownloadTask {
   id: string;
   songMid: string;
   name: string;
-  /** 出队解析后回填；入队阶段为空，供下载中心纯本地搜索。 */
+  /** 入队时来自列表的已知歌手名；出队解析后回填上游值。 */
   singers: string[];
-  /** 出队解析后回填；入队阶段为空，供下载中心纯本地搜索。 */
+  /** 入队时来自列表的已知专辑名；出队解析后回填上游值。 */
   albumName: string;
   quality: Quality;
   filePath: string;
@@ -766,8 +774,8 @@ export interface FlagsFile {
   download: {
     list(): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
     assetStates(songMids: string[]): Promise&lt;IpcResult&lt;SongAssetState[]&gt;&gt;;
-    start(songMid: string, quality: Quality): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
-    startMany(songMids: string[], quality: Quality): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
+    start(request: DownloadRequest, quality: Quality): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
+    startMany(requests: DownloadRequest[], quality: Quality): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
     pause(id: string): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
     resume(id: string): Promise&lt;IpcResult&lt;DownloadTask&gt;&gt;;
     resumeAll(): Promise&lt;IpcResult&lt;DownloadTask[]&gt;&gt;;
@@ -847,7 +855,7 @@ export interface FlagsFile {
   <li><code>lyric.decryptQrc</code> 是同步方法，在 preload 内用 Node crypto + zlib 完成解密；主进程只透传密文，接口细节见 <a href="#c4-64">§4.64</a>。</li>
   <li><code>recommend.get</code> / <code>recommend.refresh</code> 在已登录时传 <code>sectionId</code> 只加载并返回该分区，<code>null</code> 才返回完整 feed；未登录直接返回完整空分区用于登录引导。<code>token</code> 用于按请求取消，<code>recommend.cancel</code> 只中止匹配 token 的请求。</li>
   <li><code>recommend.guess(page)</code> 按页拉取猜你喜欢连续队列的一批歌曲，返回 <code>Song[]</code>；<code>page</code> 从 1 开始，主进程只负责单批读取，队列续接由播放器控制。</li>
-  <li>批量参数上限按通道区分：<code>download.startMany</code> 的 <code>midArray</code> 上限为 <code>DOWNLOAD_QUEUE_MAX = 2000</code>；<code>song.getUrls</code>、<code>playlist.addSongs</code> / <code>removeSongs</code>、<code>favorite.get</code> 等其余 mid 数组使用 <code>IPC_SONG_MIDS_MAX = 100</code>；<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>，渲染层探测调度也按 50 分批。</li>
+  <li>批量参数上限按通道区分：<code>download.startMany</code> 的 <code>downloadRequestsArg</code> 上限为 <code>DOWNLOAD_QUEUE_MAX = 2000</code>，逐项校验 <code>songMid</code> 并截断歌手数量；<code>song.getUrls</code>、<code>playlist.addSongs</code> / <code>removeSongs</code>、<code>favorite.get</code> 等其余 mid 数组使用 <code>IPC_SONG_MIDS_MAX = 100</code>；<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>，渲染层探测调度也按 50 分批。</li>
 </ul>
 
 <h3 id="c4-3">4.3 src/shared/xlogin.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1709,7 +1717,7 @@ const emit = defineEmits&lt;{
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
   <li>歌单头操作按钮文字始终单行：<code>.btn</code> 使用 <code>white-space: nowrap</code>，<code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，按钮自身 <code>flex: 0 0 auto</code>；空间不足时“播放全部 / 下载全部 / 返回”整组换行，不压缩按钮或在按钮内折行。</li>
-  <li>歌单头的“下载全部”按钮与“播放全部”并列，仅登录且存在可播歌曲时可用；点击调用 <code>download.startMany(songMids, quality)</code>，按歌单顺序去重入队，成功后提示“已加入下载队列”。不再创建批次或读取批次汇总；调用 <code>download.assetStates</code> 填充歌曲表下载图标。</li>
+  <li>歌单头的“下载全部”按钮与“播放全部”并列，仅登录且存在可播歌曲时可用；点击调用 <code>download.startMany(requests, quality)</code>，每项携带当前列表已知的歌名 / 歌手 / 专辑，按歌单顺序去重入队，成功后提示“已加入下载队列”。不再创建批次或读取批次汇总；调用 <code>download.assetStates</code> 填充歌曲表下载图标。</li>
 </ul>
 
 <h3 id="c4-47">4.47 src/renderer/views/LoginView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -2102,8 +2110,11 @@ export function findDownloadedAudio(
   songMid: string,
   quality: Quality
 ): Promise&lt;{ filePath: string; quality: Quality } | null&gt;;
-export function startDownload(songMid: string, quality: Quality): Promise&lt;DownloadTask&gt;;
-export function startDownloads(songMids: string[], quality: Quality): Promise&lt;DownloadTask[]&gt;;
+export function startDownload(request: DownloadRequest, quality: Quality): Promise&lt;DownloadTask&gt;;
+export function startDownloads(
+  requests: DownloadRequest[],
+  quality: Quality
+): Promise&lt;DownloadTask[]&gt;;
 export function pauseDownload(id: string): Promise&lt;DownloadTask&gt;;
 export function resumeDownload(id: string): Promise&lt;DownloadTask&gt;;
 export function resumeAllDownloads(): Promise&lt;DownloadTask[]&gt;;
@@ -2116,11 +2127,11 @@ export function downloadStorage(): Promise&lt;DownloadStorageInfo&gt;;
 </code></pre>
 <ul class="note">
   <li>任务状态机：<code>pending → downloading → done</code>；暂停把 <code>downloading</code> 置为 <code>paused</code> 并保留 <code>.part</code>；继续使用 <code>Range: bytes=&lt;已有字节&gt;-</code> 追加；失败置 <code>failed</code>，只允许用户手动继续。任务只带 <code>source: 'network' | 'cache'</code>，没有批次字段。</li>
-  <li><code>startDownload</code> / <code>startDownloads</code> 共用 <code>enqueueTask</code>；整单入口按给定顺序去重、截到 <code>DOWNLOAD_QUEUE_MAX</code> 后逐首入队，已有同曲任务直接复用；该上限只作用于整单入队，<code>song.getUrls</code> 等单曲 IPC 仍受 <code>IPC_SONG_MIDS_MAX = 100</code> 限制，<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>。<code>pump</code> 按 <code>DOWNLOAD_CONCURRENCY = 1</code> 出队，歌曲名、歌手、专辑与音质在出队时解析。</li>
+  <li><code>startDownload</code> / <code>startDownloads</code> 共用 <code>enqueueTask</code>；入队请求携带渲染层已加载的 <code>DownloadRequest</code>（<code>songMid</code> / <code>name</code> / <code>singers</code> / <code>albumName</code>），待下载任务立即显示正确的歌名、歌手与专辑，不为此额外请求上游。整单入口按给定顺序去重、截到 <code>DOWNLOAD_QUEUE_MAX</code> 后逐首入队，已有同曲任务直接复用；该上限只作用于整单入队，<code>song.getUrls</code> 等单曲 IPC 仍受 <code>IPC_SONG_MIDS_MAX = 100</code> 限制，<code>song.probe</code> 使用 <code>PROBE_MIDS_MAX = 50</code>。<code>pump</code> 按 <code>DOWNLOAD_CONCURRENCY = 1</code> 出队，音质与最终文件路径仍以出队解析结果为准。</li>
   <li>缓存转下载统一复制文件（<code>copyCachedAudio</code>），不使用硬链接；复制失败会把来源改回 <code>network</code> 并继续正常下载。播放取源固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”。</li>
   <li>下载索引只有 <code>{ tasks: DownloadTask[] }</code>，按账号隔离并放在 <code>downloadDir</code> 下：<code>.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>。只持久化 <code>done</code> / <code>paused</code> 任务；启动时 <code>downloading</code> / <code>pending</code> 统一转为 <code>paused</code>，已丢失文件的 <code>done</code> 任务会被丢弃。</li>
   <li><code>loadedScope</code> 保护未加载下载模块的退出：从未加载时 <code>flushDownloads</code> / <code>saveIndex</code> 直接返回，避免写出空索引覆盖旧记录；切换账号前先清掉旧定时器并把旧账号索引落盘；退出时使用同步 <code>writeFileSync</code> + <code>renameSync</code> 写 <code>.part</code> 后原子替换。</li>
-  <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；文件名由 <code>downloadFileName</code> 按“歌名-歌手-专辑”生成，多个歌手用顿号连接，缺失片段跳过，非法字符替换为 <code>_</code>，全空回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队占位路径仍使用 <code>safeName(songMid)</code>，最终路径在出队时生成；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。出队解析时同时把 <code>singers</code> / <code>albumName</code> 回填到任务并随索引持久化，供下载中心纯本地搜索；旧索引缺少这两个字段时归一化为空数组 / 空字符串。</li>
+  <li>下载先写 <code>&lt;filePath&gt;.part</code>，完成后再 <code>rename</code> 为最终文件；文件名由 <code>downloadFileName</code> 按“歌名-歌手-专辑”生成，多个歌手用顿号连接，缺失片段跳过，非法字符替换为 <code>_</code>，全空回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队时先用已知的歌名 / 歌手 / 专辑生成占位路径，最终路径在出队时按解析结果重算；目录取 <code>Settings.downloadDir</code>，缺省 <code>~/Music/Lychee Player</code>。出队解析时用上游结果覆盖 <code>name</code> / <code>singers</code> / <code>albumName</code> 并随索引持久化，供下载中心纯本地搜索；旧索引缺少这两个字段时归一化为空数组 / 空字符串。</li>
   <li><code>resumeAllDownloads()</code> 一次遍历任务，只把 <code>paused</code> 置为 <code>pending</code>、清空错误并 <code>touchTask</code>；<code>downloading</code> / <code>done</code> / <code>failed</code> 不受影响。有任务被继续时调用 <code>schedulePump()</code>，返回被继续任务的快照。渲染层通过 <code>download.resumeAll</code> 一次 IPC 完成，不逐条调用 <code>resume</code>；store 用返回快照替换任务并在有任务时启动轮询。</li>
   <li><code>clearCompletedDownloads</code> 只清除已完成记录，不删除磁盘文件；<code>removeDownload</code> 删除最终文件与 <code>.part</code>；<code>removeDownloadedSong</code> 按 <code>songMid</code> 删除全部 <code>done</code> 任务及其音频、残留分片与下载封面，供歌单中再次点击已下载歌曲的下载按钮时使用，不影响播放缓存；<code>clearDownloadDirectory</code> 先中止活动下载、清空记录，再删除下载目录内容，并拒绝文件系统根目录、用户主目录及其上级目录；该操作不影响播放缓存。</li>
   <li><code>assetStates</code> 只读取可用性缓存（<code>peekAvailability</code>）与缓存 / 下载信息，不主动探测上游；未探测过的歌曲 <code>maxQuality</code> 为 <code>null</code>。<code>downloadStorage</code> 统计时排除 <code>.lychee-downloads-*</code> 元数据文件。</li>
@@ -2326,8 +2337,8 @@ interface DownloadStore {
   load(): Promise&lt;void&gt;;
   setVisible(next: boolean): void;
   refreshAssets(songMids: string[]): Promise&lt;void&gt;;
-  start(songMid: string, quality: Quality): Promise&lt;void&gt;;
-  startMany(songMids: string[], quality: Quality): Promise&lt;DownloadTask[]&gt;;
+  start(request: DownloadRequest, quality: Quality): Promise&lt;void&gt;;
+  startMany(requests: DownloadRequest[], quality: Quality): Promise&lt;DownloadTask[]&gt;;
   pause(id: string): Promise&lt;void&gt;;
   resume(id: string): Promise&lt;void&gt;;
   resumeAll(): Promise&lt;void&gt;;
@@ -2537,7 +2548,7 @@ export function useDownloadAction(): {
 };
 </code></pre>
 <ul class="note">
-  <li>所有下载按钮的唯一行为入口：<code>requestDownload</code> 先读 <code>download.assets[songMid].downloadedQuality</code>，已下载时只把 <code>pendingDelete</code> 置为目标歌曲，不调用入队；未下载时调用 <code>download.start(songMid, quality)</code> 并提示“已加入下载任务”。</li>
+  <li>所有下载按钮的唯一行为入口：<code>requestDownload</code> 先读 <code>download.assets[songMid].downloadedQuality</code>，已下载时只把 <code>pendingDelete</code> 置为目标歌曲，不调用入队；未下载时调用 <code>download.start(request, quality)</code>，请求由当前歌曲对象直接取出歌名 / 歌手 / 专辑，并提示“已加入下载任务”；不额外请求上游补标题。</li>
   <li><code>confirmDownloadDelete</code> 调用 <code>download.removeSong(songMid)</code> 并提示“已删除下载”；失败走统一错误提示。取消只清空 <code>pendingDelete</code>。</li>
   <li><code>pendingDelete</code> 为模块级单例，<code>App.vue</code> 只渲染一个 <code>DownloadDeleteDialog</code>；歌曲表页面与 <code>PlayerBar</code> 只调用 <code>requestDownload</code>，不各自维护确认状态或删除逻辑。</li>
 </ul>
@@ -3229,17 +3240,17 @@ views/DiscoverView::onBeforeUnmount()
     │               └── ipc::handle('download.removeSong')
     │                   └── download/manager::removeDownloadedSong(songMid)
     │                       └── 删除该曲 done 任务的音频、.part、封面与记录
-    └── 未下载 → stores/download::start(songMid, quality)
-        └── window.lychee.download.start(songMid, quality)
+    └── 未下载 → stores/download::start(request, quality)        // 请求带已知歌名 / 歌手 / 专辑
+        └── window.lychee.download.start(request, quality)
             └── ipc::handle('download.start')
-                └── download/manager::startDownload(songMid, quality)
+                └── download/manager::startDownload(request, quality)
                     ├── 判断缓存达到最高可用档 → 复制缓存文件（copyCachedAudio）
                     ├── 判断已有同曲任务 → 返回现有任务
                     ├── api/song::getStreamUrls([songMid], quality)
                     └── download/manager::writePart(url, filePath)
 </code></pre>
 <pre><code>views/PlaylistView::downloadAll()
-└── stores/download::startMany(songMids, quality)
+└── stores/download::startMany(requests, quality)                    // 每项带已知歌名 / 歌手 / 专辑
     └── window.lychee.download.startMany(...)
         └── ipc::handle('download.startMany')
             └── download/manager::startDownloads(...)

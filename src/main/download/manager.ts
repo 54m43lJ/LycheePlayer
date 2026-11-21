@@ -6,6 +6,7 @@ import { mkdirSync, renameSync, writeFileSync } from 'node:fs'
 import { dirname, extname, join, parse, resolve, sep } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import type {
+  DownloadRequest,
   DownloadSource,
   DownloadStorageInfo,
   DownloadTask,
@@ -56,10 +57,6 @@ function indexPath(): string {
 
 function cleanName(value: string): string {
   return value.replace(/[\\/:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim()
-}
-
-function safeName(value: string): string {
-  return cleanName(value) || 'audio'
 }
 
 /**
@@ -436,20 +433,25 @@ interface EnqueueOptions {
 }
 
 /**
- * 只把歌曲 mid 放入统一队列；歌曲名、文件路径、可用音质等都在 pump 出队时再解析。
- * 单曲下载与“下载全部”共用此入口。
+ * 把歌曲放入统一队列；标题、歌手与专辑直接使用列表已加载的元数据，
+ * 文件路径与可用音质等仍在 pump 出队时解析。单曲下载与“下载全部”共用此入口。
  */
-function enqueueTask(songMid: string, options: EnqueueOptions = {}): DownloadTask {
+function enqueueTask(request: DownloadRequest, options: EnqueueOptions = {}): DownloadTask {
+  const name = request.name.trim() || request.songMid
+  const singers = request.singers.map((singer) => singer.trim()).filter(Boolean)
+  const albumName = request.albumName.trim()
   const task: DownloadTask = {
     id: randomUUID(),
-    songMid,
-    name: songMid,
-    // 歌曲元信息在出队解析时回填，下载中心本地搜索只读取这些字段。
-    singers: [],
-    albumName: '',
+    songMid: request.songMid,
+    name,
+    singers,
+    albumName,
     // 下载统一按最高可用档解析；实际档位在任务执行时回填。
     quality: 'flac',
-    filePath: join(downloadDir(), `${safeName(songMid)}.mp3`),
+    filePath: join(
+      downloadDir(),
+      `${downloadFileName(name, singers, albumName)}.mp3`
+    ),
     coverPath: null,
     status: 'pending',
     receivedBytes: 0,
@@ -461,26 +463,34 @@ function enqueueTask(songMid: string, options: EnqueueOptions = {}): DownloadTas
   return task
 }
 
-function enqueueMissing(songMid: string): DownloadTask {
+function enqueueMissing(request: DownloadRequest): DownloadTask {
   const existing = [...tasks.values()].find(
-    (item) => item.task.songMid === songMid && item.task.status !== 'failed'
+    (item) => item.task.songMid === request.songMid && item.task.status !== 'failed'
   )
-  return existing ? existing.task : enqueueTask(songMid)
+  return existing ? existing.task : enqueueTask(request)
 }
 
-export async function startDownload(songMid: string, _quality: Quality): Promise<DownloadTask> {
-  const [task] = await startDownloads([songMid], _quality)
+export async function startDownload(
+  request: DownloadRequest,
+  _quality: Quality
+): Promise<DownloadTask> {
+  const [task] = await startDownloads([request], _quality)
   return task
 }
 
 /** 把多首歌曲按给定顺序加入同一队列；已存在同曲任务时复用，不合并成批次。 */
 export async function startDownloads(
-  songMids: string[],
+  requests: DownloadRequest[],
   _quality: Quality
 ): Promise<DownloadTask[]> {
   await ensureScope()
-  const mids = [...new Set(songMids.filter(Boolean))].slice(0, DOWNLOAD_QUEUE_MAX)
-  const result = mids.map((mid) => snapshot(enqueueMissing(mid)))
+  const unique = new Map<string, DownloadRequest>()
+  for (const request of requests) {
+    if (request.songMid && !unique.has(request.songMid)) unique.set(request.songMid, request)
+  }
+  const result = [...unique.values()]
+    .slice(0, DOWNLOAD_QUEUE_MAX)
+    .map((request) => snapshot(enqueueMissing(request)))
   schedulePump()
   return result
 }

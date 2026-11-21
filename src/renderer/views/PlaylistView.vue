@@ -118,7 +118,12 @@ async function downloadAll(): Promise<void> {
   if (!meta.value || playableSongs.value.length === 0) return
   try {
     await download.startMany(
-      playableSongs.value.map((song) => song.songMid),
+      playableSongs.value.map((song) => ({
+        songMid: song.songMid,
+        name: song.name,
+        singers: song.singers.map((singer) => singer.name).filter(Boolean),
+        albumName: song.album.name
+      })),
       player.requestedQuality
     )
     toast.show('已加入下载队列')

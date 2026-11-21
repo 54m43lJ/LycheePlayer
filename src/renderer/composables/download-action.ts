@@ -21,7 +21,7 @@ export function useDownloadAction() {
   const toast = useToast()
 
   async function requestDownload(
-    song: Pick<Song, 'songMid' | 'name'>,
+    song: Pick<Song, 'songMid' | 'name' | 'singers' | 'album'>,
     quality: Quality
   ): Promise<void> {
     if (download.assets[song.songMid]?.downloadedQuality) {
@@ -29,7 +29,15 @@ export function useDownloadAction() {
       return
     }
     try {
-      await download.start(song.songMid, quality)
+      await download.start(
+        {
+          songMid: song.songMid,
+          name: song.name,
+          singers: song.singers.map((singer) => singer.name).filter(Boolean),
+          albumName: song.album.name
+        },
+        quality
+      )
       toast.show('已加入下载任务')
     } catch (err) {
       toast.error(describeError(err))

@@ -14,6 +14,7 @@ import type {
   CommentLikeResult,
   CommentPage,
   CommentPostResult,
+  DownloadRequest,
   DownloadStorageInfo,
   DownloadTask,
   FavoriteState,
@@ -140,10 +141,10 @@ const api: LycheeApi = {
     list: () => invoke<DownloadTask[]>('download.list'),
     assetStates: (songMids: string[]) =>
       invoke<SongAssetState[]>('download.assetStates', songMids),
-    start: (songMid: string, quality: Quality) =>
-      invoke<DownloadTask>('download.start', songMid, quality),
-    startMany: (songMids: string[], quality: Quality) =>
-      invoke<DownloadTask[]>('download.startMany', songMids, quality),
+    start: (request: DownloadRequest, quality: Quality) =>
+      invoke<DownloadTask>('download.start', request, quality),
+    startMany: (requests: DownloadRequest[], quality: Quality) =>
+      invoke<DownloadTask[]>('download.startMany', requests, quality),
     pause: (id: string) => invoke<DownloadTask>('download.pause', id),
     resume: (id: string) => invoke<DownloadTask>('download.resume', id),
     resumeAll: () => invoke<DownloadTask[]>('download.resumeAll'),

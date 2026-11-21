@@ -715,3 +715,25 @@
 | `USER.html` | §2 CONVENTIONS · 长页面跳转 / §5.2.8 下载中心 | 改 | 列出全部接入页面与排除页面，下载中心补充按钮说明。 |
 | `CORE.html` | §1 文件树 / §4.46 `PlaylistView` / §4.67 `DownloadsView` | 改 | 改为共用 `usePageJump`，下载中心补充跳转按钮。 |
 | `CORE.html` | §4.95 `page-jump.ts`（composable）/ §4.96 `utils/page-jump.ts` / §4.97 `PageJump.vue` | 增 | 记录滚动监听、显隐判定、接入页面与统一按钮模板。 |
+
+### 3.25 未开始下载任务的标题显示歌曲 ID
+
+**问题描述**：下载任务入队时只保存 `songMid`，`name` 直接写成 mid，歌手与专辑留空；歌曲信息要等 pump 出队解析时才回填。因此在任务真正开始前，下载中心列表标题是一串看不出规律的 ID。若为了补标题在入队阶段调用歌曲详情接口，又会在批量下载时额外轰炸上游。
+
+**解决方法**：
+
+- 新增跨 IPC 的 `DownloadRequest`：`songMid` / `name` / `singers` / `albumName`，由渲染层从当前歌曲对象直接取值，不新增上游请求。
+- `download.start` / `download.startMany` 改为接收 `DownloadRequest`；主进程逐项校验 mid、截断歌手数量，单曲与整单入口共用。
+- `enqueueTask` 直接使用请求中的已知元数据生成任务标题、歌手、专辑与占位文件名；pump 出队后仍用上游解析结果覆盖，并重算最终路径。
+- `useDownloadAction` 从 `Song` 取歌名 / 歌手 / 专辑；歌单“下载全部”为每首歌构造同样的请求。
+- 更新 `test/download-manager.test.ts` 与 `test/download-action.test.ts`，断言入队阶段不请求详情且标题立即正确。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 7 项“未开始的下载任务标题” | 改 | 行尾追加 ` [已解决] `。 |
+| `USER.html` | §5.2.8 下载中心 | 改 | 说明任务加入后立即显示已知歌名 / 歌手 / 专辑。 |
+| `CORE.html` | §4.1 内部类型 / §4.2 IPC / §4.60 `download/manager.ts` / §4.71 `stores/download.ts` | 改 | 增加 `DownloadRequest`，更新入队与出队解析说明。 |
+| `CORE.html` | §5.16 下载调用树 | 改 | 入队调用改为携带 `DownloadRequest`。 |
+| `README.md` / `ABOUT.html` | 用户交互 · 下载行 | 改 | 补充未开始任务立即显示已知歌曲信息。 |

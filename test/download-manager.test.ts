@@ -59,13 +59,24 @@ describe('download/manager queue', () => {
     resolveStreamUrlsMock.mockRejectedValue(new Error('stop after detail'))
 
     const { listDownloads, startDownloads } = await import('../src/main/download/manager')
-    const started = await startDownloads(['m1', 'm2', 'm3'], 'flac')
+    const started = await startDownloads(
+      [
+        { songMid: 'm1', name: 'Song m1', singers: ['歌手一'], albumName: '专辑一' },
+        { songMid: 'm2', name: 'Song m2', singers: ['歌手二'], albumName: '专辑二' },
+        { songMid: 'm3', name: 'Song m3', singers: [], albumName: '' }
+      ],
+      'flac'
+    )
 
-    // 入队阶段不请求歌曲详情，任务只带 mid 进入统一队列。
+    // 入队阶段不请求歌曲详情，标题直接使用列表已加载的元数据。
     expect(getDetailMock).not.toHaveBeenCalled()
-    expect(started.map((task) => task.name)).toEqual(['m1', 'm2', 'm3'])
+    expect(started.map((task) => task.name)).toEqual(['Song m1', 'Song m2', 'Song m3'])
+    expect(started[0]).toMatchObject({
+      singers: ['歌手一'],
+      albumName: '专辑一'
+    })
     const tasks = await listDownloads()
-    expect(tasks.map((task) => task.name)).toEqual(['m1', 'm2', 'm3'])
+    expect(tasks.map((task) => task.name)).toEqual(['Song m1', 'Song m2', 'Song m3'])
 
     // 出队时逐首解析歌曲信息，而不是一次性批量预取。
     await new Promise((resolve) => setTimeout(resolve, 30))
@@ -101,7 +112,15 @@ describe('download/manager queue', () => {
     expect(downloadFileName('歌', [], '')).toBe('歌')
     expect(downloadFileName('A/B', ['C'], 'D')).toBe('A_B-C-D')
 
-    await startDownload('m9', 'flac')
+    await startDownload(
+      {
+        songMid: 'm9',
+        name: '晴天/Live',
+        singers: ['周杰伦', '杨瑞代'],
+        albumName: '叶惠美'
+      },
+      'flac'
+    )
     await vi.waitFor(async () => {
       const task = (await listDownloads()).find((item) => item.songMid === 'm9')
       expect(task?.status, task?.error).toBe('done')
