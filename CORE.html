@@ -101,6 +101,7 @@
 │       │   ├── <a href="#c4-83">download-filter.ts</a>       下载中心纯本地搜索匹配
 │       │   ├── <a href="#c4-88">swipe.ts</a>                  横向拖动方向仲裁
 │       │   ├── <a href="#c4-94">embed-bounds.ts</a>            登录组件占位矩形裁剪
+│       │   ├── <a href="#c4-96">page-jump.ts</a>               长页面跳转按钮显隐判定
 │       │   └── <a href="#c4-64">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
@@ -109,6 +110,7 @@
 │       │   ├── <a href="#c4-90">playlist-play.ts</a>           歌单卡片直接播放行为
 │       │   ├── <a href="#c4-65">availability.ts</a>           可用性探测调度
 │       │   ├── <a href="#c4-92">back-navigation.ts</a>         后退优先关闭浮层
+│       │   ├── <a href="#c4-95">page-jump.ts</a>               页面级跳转按钮
 │       │   └── <a href="#c4-78">revealer-touch.ts</a>          Revealer 触屏手势
 │       ├── components/
 │       │   ├── <a href="#c4-36">AppIcon.vue</a>               图标集
@@ -124,6 +126,7 @@
 │       │   ├── <a href="#c4-77">PlaylistPicker.vue</a>         添加到歌单选择器
 │       │   ├── <a href="#c4-66">PlaylistEditDialog.vue</a>     歌单编辑对话框
 │       │   ├── <a href="#c4-81">ConfirmDialog.vue</a>          应用内确认框
+│       │   ├── <a href="#c4-97">PageJump.vue</a>               长页面跳转按钮
 │       │   ├── <a href="#c4-93">ImageLightbox.vue</a>          评论图片查看器
 │       │   ├── <a href="#c4-91">ReauthDialog.vue</a>           全局重新登录弹层
 │       │   ├── <a href="#c4-85">DownloadDeleteDialog.vue</a>  删除下载确认框
@@ -151,6 +154,7 @@
 │   ├── back-navigation.test.ts               后退关闭浮层的栈顺序
 │   ├── credential-store.test.ts              v1 凭证清空与失效原因
 │   ├── embed-bounds.test.ts                  登录占位矩形裁剪
+│   ├── page-jump.test.ts                     长页面跳转按钮显隐
 │   ├── fixtures/                             脱敏上游响应
 │   ├── player-store.test.ts                  播放顺序、队列补齐与快照保留
 │   ├── history-store.test.ts                 播放历史去重、上限与账号隔离
@@ -1701,7 +1705,7 @@ const emit = defineEmits&lt;{
   <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>下载按钮统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>：已下载时由全局 <a href="#c4-85">DownloadDeleteDialog</a> 询问是否删除本机文件，未下载时加入统一队列；页面不自行判断资产状态或维护确认框。</li>
   <li>歌曲区标题显示 <code>已下载 X / Y 首</code>：<code>X</code> 按 <code>downloadedQuality</code> 统计，不把播放缓存算作已下载；有筛选时前置 <code>筛选 N ·</code>。歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；输入框不显示占位文字，用 <code>aria-label="筛选歌名、歌手或专辑"</code> 保留无障碍名称。只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。无匹配时显示空结果状态。</li>
-  <li>页面根节点使用 <code>pageRef</code>，挂载时通过 <code>closest('.main')</code> 取得内容区滚动容器，注册 passive <code>scroll</code> 监听并用 <code>ResizeObserver</code> 观察内容尺寸；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击调用 <code>scrollTo({ behavior: 'smooth' })</code>。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
+  <li>页面根节点使用 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 取得内容区滚动容器并监听滚动 / 内容尺寸变化；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击平滑滚动。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
   <li>歌单头操作按钮文字始终单行：<code>.btn</code> 使用 <code>white-space: nowrap</code>，<code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，按钮自身 <code>flex: 0 0 auto</code>；空间不足时“播放全部 / 下载全部 / 返回”整组换行，不压缩按钮或在按钮内折行。</li>
@@ -2267,6 +2271,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
   <li>任务面板顶部左侧为“全部 / 进行中 / 已完成 / 未成功”过滤，右侧为“全部开始”继续所有暂停任务；无暂停任务或请求进行中时按钮禁用，请求中显示 spinner。过滤只影响展示，整体进度仍按全部任务计算。任务按新到旧展示，不改变主进程队列顺序。</li>
   <li>工具栏下方提供纯本地搜索框：只对已加载的任务快照按歌名 / 歌手 / 专辑 / <code>songMid</code> / 文件路径做不区分大小写匹配，不发上游请求、不重新扫描目录；与状态过滤叠加，搜索框有内容时显示清除按钮。输入框不显示占位文字，用 <code>aria-label="搜索下载任务"</code> 保留无障碍名称。无匹配时标题为“没有匹配的下载任务”，提示换关键词；未搜索时保持“没有符合条件的任务”与切换过滤提示。</li>
   <li>列表复用统一下载任务行，支持单任务暂停 / 继续 / 删除；删除任务使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认；空状态区分“没有任务”与“没有符合条件的任务”。</li>
+  <li>页面根节点绑定 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 提供右下角“跳转到顶部 / 跳转到底部”按钮，显隐阈值与 <a href="#c4-46">PlaylistView</a> 共用。</li>
 </ul>
 
 <h3 id="c4-68">4.68 src/renderer/views/DiscoverView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -2668,6 +2673,42 @@ export function installBackNavigation(fallback: () =&gt; void): () =&gt; void;
 <ul class="note">
   <li>计算登录占位矩形与 <code>.main</code> 可见区域的交集：左 / 上取较大值，右 / 下取较小值；宽高小于 0 时归零，交由主进程隐藏 <code>WebContentsView</code>。</li>
   <li>只做纯几何裁剪，不读取窗口或 DOM；<a href="#c4-47">LoginView</a> 传入 <code>getBoundingClientRect()</code> 的结果，测试见 <code>test/embed-bounds.test.ts</code>。</li>
+</ul>
+
+<h3 id="c4-95">4.95 src/renderer/composables/page-jump.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function usePageJump(rootRef: Ref&lt;HTMLElement | null&gt;): {
+  showTop: Ref&lt;boolean&gt;;
+  showBottom: Ref&lt;boolean&gt;;
+  scrollToTop: () =&gt; void;
+  scrollToBottom: () =&gt; void;
+};
+</code></pre>
+<ul class="note">
+  <li>挂载时从 <code>rootRef</code> 通过 <code>closest('.main')</code> 取得内容区滚动容器，注册 passive <code>scroll</code> 监听；用 <code>ResizeObserver</code> 观察页面根节点，内容高度变化时重新计算。</li>
+  <li>显隐判定委托 <a href="#c4-96">utils/page-jump::jumpVisibility</a>：距顶 / 距底超过 120px 才显示对应按钮；内容不足一屏时都不显示。</li>
+  <li>点击按钮调用滚动容器的 <code>scrollTo({ behavior: 'smooth' })</code>；卸载时移除监听并断开 observer。接入页面为 <code>LibraryView</code> / <code>PlaylistView</code> / <code>ArtistView</code> / <code>AlbumView</code> / <code>HistoryView</code> / <code>DownloadsView</code>，按钮模板复用 <a href="#c4-97">PageJump</a>。评论弹层保留自己的补拉逻辑；发现、搜索、设置、登录与 MV 页不接入。</li>
+</ul>
+
+<h3 id="c4-96">4.96 src/renderer/utils/page-jump.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export const PAGE_JUMP_THRESHOLD = 120;
+export function jumpVisibility(
+  scrollTop: number,
+  clientHeight: number,
+  scrollHeight: number,
+  threshold?: number
+): { top: boolean; bottom: boolean };
+</code></pre>
+<ul class="note">
+  <li><code>top = scrollTop &gt; threshold</code>，<code>bottom = scrollTop + clientHeight &lt; scrollHeight - threshold</code>；不读取 DOM，测试见 <code>test/page-jump.test.ts</code>。</li>
+</ul>
+
+<h3 id="c4-97">4.97 src/renderer/components/PageJump.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// props: showTop: boolean; showBottom: boolean
+// emits: top, bottom
+</code></pre>
+<ul class="note">
+  <li>统一渲染右下角 <code>.page-jump</code> 两个圆形按钮；只按传入的显隐状态渲染，不自行读取滚动位置。点击分别发出 <code>top</code> / <code>bottom</code>，由页面把事件接到 <a href="#c4-95">usePageJump</a> 的平滑滚动函数。</li>
+  <li>按钮使用 <code>to-top</code> / <code>to-bottom</code> 图标，位置由 <code>main.css</code> 的 <code>.page-jump</code> 固定在播放条上方；页面不再各自复制按钮模板。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>

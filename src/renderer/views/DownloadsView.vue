@@ -3,7 +3,9 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { DownloadTask } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import PageJump from '../components/PageJump.vue'
 import { useDownloadStore } from '../stores/download'
+import { usePageJump } from '../composables/page-jump'
 import { useToast } from '../composables/toast'
 import { matchesDownloadKeyword } from '../utils/download-filter'
 import { downloadOverallProgress } from '../utils/download-progress'
@@ -20,6 +22,8 @@ const FILTERS: Array<{ value: DownloadFilter; label: string }> = [
 
 const downloads = useDownloadStore()
 const toast = useToast()
+const pageRef = ref<HTMLElement | null>(null)
+const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
 
 const tasks = computed(() => downloads.tasks)
 const progress = computed(() => downloadOverallProgress(tasks.value))
@@ -148,7 +152,7 @@ onBeforeUnmount(() => downloads.setVisible(false))
 </script>
 
 <template>
-  <div class="downloads-page">
+  <div ref="pageRef" class="downloads-page">
     <div
       class="downloads-progress-track"
       role="progressbar"
@@ -286,6 +290,13 @@ onBeforeUnmount(() => downloads.setVisible(false))
         <p>在歌单或歌曲表中点击下载按钮，任务会显示在这里。</p>
       </div>
     </div>
+
+    <PageJump
+      :show-top="showTop"
+      :show-bottom="showBottom"
+      @top="scrollToTop"
+      @bottom="scrollToBottom"
+    />
 
     <ConfirmDialog
       :open="confirmState !== null"

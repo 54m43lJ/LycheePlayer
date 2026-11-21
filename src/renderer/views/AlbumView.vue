@@ -5,10 +5,12 @@ import type { AlbumDetail } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import CatalogDescription from '../components/CatalogDescription.vue'
 import CoverArt from '../components/CoverArt.vue'
+import PageJump from '../components/PageJump.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
 import { describeError, unwrap } from '../api'
 import { useDownloadAction } from '../composables/download-action'
+import { usePageJump } from '../composables/page-jump'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
 import { usePlayerStore } from '../stores/player'
@@ -22,6 +24,8 @@ const download = useDownloadStore()
 const auth = useAuthStore()
 const { requestDownload } = useDownloadAction()
 
+const pageRef = ref<HTMLElement | null>(null)
+const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
 const detail = ref<AlbumDetail | null>(null)
 const loading = ref(false)
 const error = ref('')
@@ -103,7 +107,7 @@ watch(mid, () => void load(), { immediate: true })
 </script>
 
 <template>
-  <div class="page">
+  <div ref="pageRef" class="page">
     <div class="page-head">
       <button class="btn ghost small" @click="router.back()">
         <AppIcon name="chevron-left" :size="15" />
@@ -183,6 +187,13 @@ watch(mid, () => void load(), { immediate: true })
           {{ loadingMore ? '加载中' : '加载更多' }}
         </button>
       </div>
+
+      <PageJump
+        :show-top="showTop"
+        :show-bottom="showBottom"
+        @top="scrollToTop"
+        @bottom="scrollToBottom"
+      />
 
       <PlaylistPicker
         :open="pickerOpen"

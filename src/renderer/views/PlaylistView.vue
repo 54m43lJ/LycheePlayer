@@ -4,11 +4,13 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
+import PageJump from '../components/PageJump.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
 import { describeError } from '../api'
 import { useAvailability } from '../composables/availability'
 import { useDownloadAction } from '../composables/download-action'
+import { usePageJump } from '../composables/page-jump'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
@@ -50,11 +52,12 @@ const downloadedCount = computed(
 )
 const filterText = ref('')
 const pageRef = ref<HTMLElement | null>(null)
-const showJumpTop = ref(false)
-const showJumpBottom = ref(false)
-const JUMP_THRESHOLD = 120
-let scrollRoot: HTMLElement | null = null
-let contentObserver: ResizeObserver | null = null
+const {
+  showTop: showJumpTop,
+  showBottom: showJumpBottom,
+  scrollToTop,
+  scrollToBottom
+} = usePageJump(pageRef)
 
 const filteredSongs = computed(() => {
   const keyword = filterText.value.trim().toLowerCase()
@@ -178,22 +181,6 @@ function retry(): void {
   void playlist.retry()
 }
 
-function updateJumpVisibility(): void {
-  const el = scrollRoot
-  if (!el) return
-  showJumpTop.value = el.scrollTop > JUMP_THRESHOLD
-  showJumpBottom.value = el.scrollTop + el.clientHeight < el.scrollHeight - JUMP_THRESHOLD
-}
-
-function scrollToTop(): void {
-  scrollRoot?.scrollTo({ top: 0, behavior: 'smooth' })
-}
-
-function scrollToBottom(): void {
-  const el = scrollRoot
-  if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-}
-
 watch(
   id,
   (value, previous) => {
@@ -255,13 +242,6 @@ function onVisibilityChange(): void {
 }
 
 onMounted(() => {
-  scrollRoot = pageRef.value?.closest<HTMLElement>('.main') ?? null
-  scrollRoot?.addEventListener('scroll', updateJumpVisibility, { passive: true })
-  if (pageRef.value) {
-    contentObserver = new ResizeObserver(() => updateJumpVisibility())
-    contentObserver.observe(pageRef.value)
-  }
-  updateJumpVisibility()
   document.addEventListener('visibilitychange', onVisibilityChange)
   if (document.visibilityState === 'visible') startPolling()
 })
@@ -269,10 +249,6 @@ onMounted(() => {
 onBeforeUnmount(() => {
   stopPolling()
   document.removeEventListener('visibilitychange', onVisibilityChange)
-  scrollRoot?.removeEventListener('scroll', updateJumpVisibility)
-  scrollRoot = null
-  contentObserver?.disconnect()
-  contentObserver = null
   playlist.stop(id.value)
 })
 </script>
@@ -394,28 +370,12 @@ onBeforeUnmount(() => {
       />
     </template>
 
-    <div v-if="showJumpTop || showJumpBottom" class="page-jump">
-      <button
-        v-if="showJumpTop"
-        type="button"
-        class="page-jump-btn"
-        title="跳转到顶部"
-        aria-label="跳转到顶部"
-        @click="scrollToTop()"
-      >
-        <AppIcon name="to-top" :size="17" />
-      </button>
-      <button
-        v-if="showJumpBottom"
-        type="button"
-        class="page-jump-btn"
-        title="跳转到底部"
-        aria-label="跳转到底部"
-        @click="scrollToBottom()"
-      >
-        <AppIcon name="to-bottom" :size="17" />
-      </button>
-    </div>
+    <PageJump
+      :show-top="showJumpTop"
+      :show-bottom="showJumpBottom"
+      @top="scrollToTop"
+      @bottom="scrollToBottom"
+    />
 
     <ConfirmDialog
       :open="removeTarget !== null"

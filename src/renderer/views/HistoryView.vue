@@ -2,8 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import PageJump from '../components/PageJump.vue'
 import SongTable from '../components/SongTable.vue'
 import { useDownloadAction } from '../composables/download-action'
+import { usePageJump } from '../composables/page-jump'
 import { useDownloadStore } from '../stores/download'
 import { useHistoryStore } from '../stores/history'
 import { usePlayerStore } from '../stores/player'
@@ -15,6 +17,8 @@ const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const { requestDownload } = useDownloadAction()
+const pageRef = ref<HTMLElement | null>(null)
+const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
 
 const searchText = ref('')
 const confirmClearOpen = ref(false)
@@ -70,7 +74,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="page">
+  <div ref="pageRef" class="page">
     <div class="page-head">
       <div>
         <div class="eyebrow">History</div>
@@ -133,6 +137,13 @@ onMounted(() => {
       <h3>还没有播放历史</h3>
       <p>播放歌曲后会显示在这里。</p>
     </div>
+
+    <PageJump
+      :show-top="showTop"
+      :show-bottom="showBottom"
+      @top="scrollToTop"
+      @bottom="scrollToBottom"
+    />
 
     <ConfirmDialog
       :open="confirmClearOpen"

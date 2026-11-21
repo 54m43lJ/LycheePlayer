@@ -12,10 +12,12 @@ import { ARTIST_ALBUM_PAGE_MAX } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
 import CatalogDescription from '../components/CatalogDescription.vue'
 import CoverArt from '../components/CoverArt.vue'
+import PageJump from '../components/PageJump.vue'
 import PlaylistPicker from '../components/PlaylistPicker.vue'
 import SongTable from '../components/SongTable.vue'
 import { describeError, unwrap } from '../api'
 import { useDownloadAction } from '../composables/download-action'
+import { usePageJump } from '../composables/page-jump'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
@@ -67,6 +69,7 @@ const albumFilter = ref<AlbumFilter>('all')
 const pickerOpen = ref(false)
 const pickerIndex = ref(-1)
 const pageRef = ref<HTMLElement | null>(null)
+const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
 const SCROLL_LOAD_THRESHOLD = 160
 let scrollRoot: HTMLElement | null = null
 let token = 0
@@ -464,6 +467,13 @@ onBeforeUnmount(() => {
           <h3>{{ albums.length === 0 ? '暂无专辑' : '没有符合筛选的专辑' }}</h3>
         </div>
       </template>
+
+      <PageJump
+        :show-top="showTop"
+        :show-bottom="showBottom"
+        @top="scrollToTop"
+        @bottom="scrollToBottom"
+      />
 
       <PlaylistPicker
         :open="pickerOpen"

@@ -6,8 +6,10 @@ import AppIcon from '../components/AppIcon.vue'
 import CardPlayButton from '../components/CardPlayButton.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
+import PageJump from '../components/PageJump.vue'
 import PlaylistEditDialog from '../components/PlaylistEditDialog.vue'
 import { describeError, unwrap } from '../api'
+import { usePageJump } from '../composables/page-jump'
 import { usePlaylistPlay } from '../composables/playlist-play'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
@@ -20,6 +22,8 @@ const edit = usePlaylistEditStore()
 const toast = useToast()
 const { playingId, playPlaylist, isSourcePlaying, isSourcePaused, toggleSource } =
   usePlaylistPlay()
+const pageRef = ref<HTMLElement | null>(null)
+const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
 
 const playlists = ref<PlaylistMeta[]>([])
 const loading = ref(false)
@@ -112,7 +116,7 @@ watch(
 </script>
 
 <template>
-  <div class="page">
+  <div ref="pageRef" class="page">
     <div class="page-head">
       <div>
         <div class="eyebrow">Library</div>
@@ -218,6 +222,13 @@ watch(
         <button class="btn small" @click="openCreate()">新建歌单</button>
       </div>
     </template>
+
+    <PageJump
+      :show-top="showTop"
+      :show-bottom="showBottom"
+      @top="scrollToTop"
+      @bottom="scrollToBottom"
+    />
 
     <PlaylistEditDialog
       :open="dialogOpen"
