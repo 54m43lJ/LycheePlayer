@@ -1,9 +1,15 @@
 import type { Credential } from '../../shared/types'
-import { OAUTH_TIMEOUT_MS, SESSION_REFRESH_AHEAD_MS, SESSION_REFRESH_FALLBACK_MS } from '../../shared/constants'
+import {
+  OAUTH_TIMEOUT_MS,
+  SESSION_REFRESH_AHEAD_MS,
+  SESSION_REFRESH_EXPIRED_IN,
+  SESSION_REFRESH_FALLBACK_MS
+} from '../../shared/constants'
 import { getCredential, saveCredential } from '../credential'
 import {
   assertUpstreamAvailable,
   mapUpstreamCode,
+  setCredentialRefresher,
   throttleUpstream,
   UpstreamError,
   upstreamRequest
@@ -177,24 +183,117 @@ interface RefreshResponse {
   req?: { code?: number; data?: Record<string, unknown> }
 }
 
-/**
- * 用 refresh_token 续期，返回新的完整凭证。
- * 对应 music.login.LoginServer/Login（loginMode=2），musickey 有效期约 72 小时。
- */
-async function refreshMusickey(current: Credential): Promise<Credential> {
-  if (!current.refreshToken) {
-    throw new UpstreamError('AUTH_EXPIRED', '当前凭证缺少 refresh_token，请重新登录')
+function refreshResponseData(
+  response: RefreshResponse,
+  context: string
+): Record<string, unknown> {
+  const node = response.req_0 ?? response.req
+  if ((response.code ?? 0) !== 0) {
+    throw mapUpstreamCode(response.code ?? 0, context)
+  }
+  if (!node) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '续期响应缺少 req_0')
+  }
+  if ((node.code ?? 0) !== 0) {
+    throw mapUpstreamCode(node.code ?? 0, context)
+  }
+  if (!node.data) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '续期响应缺少 data')
+  }
+  return node.data
+}
+
+/** 把续期响应合并回当前凭证；缺失的续期字段沿用旧值。 */
+function mergeRefreshedCredential(
+  current: Credential,
+  data: Record<string, unknown>
+): Credential {
+  const payload = findCredentialPayload(data)
+  if (!payload) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '续期响应缺少 musickey')
+  }
+  const musickey = String(payload.musickey ?? '')
+  if (!musickey) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '续期响应缺少 musickey')
   }
 
-  const param = {
-    openid: current.openid ?? '',
-    access_token: current.accessToken ?? '',
-    refresh_token: current.refreshToken,
-    expired_in: current.expiredAtMs ? Math.floor(current.expiredAtMs / 1000) : 0,
-    musicid: Number(current.musicid),
-    musickey: current.musickey,
-    refresh_key: current.refreshKey ?? '',
-    loginMode: 2
+  const createdAt = Number(payload.musickeyCreateTime ?? 0)
+  const expiresIn = Number(payload.keyExpiresIn ?? 0)
+  const createdAtMs = createdAt > 1_000_000_000_000 ? createdAt : createdAt * 1000
+  const expiredAtMs =
+    createdAtMs > 0 && expiresIn > 0
+      ? createdAtMs + expiresIn * 1000
+      : Date.now() + SESSION_REFRESH_FALLBACK_MS
+
+  const merged: Credential = {
+    ...current,
+    musickey,
+    expiredAtMs
+  }
+  const rawId = payload.str_musicid ?? payload.musicid ?? payload.uin ?? payload.qq
+  const musicid = String(rawId ?? '').replace(/^o/, '')
+  if (/^\d+$/.test(musicid)) merged.musicid = musicid
+  if (typeof payload.refresh_token === 'string' && payload.refresh_token.length > 0) {
+    merged.refreshToken = payload.refresh_token
+  }
+  if (typeof payload.access_token === 'string' && payload.access_token.length > 0) {
+    merged.accessToken = payload.access_token
+  }
+  if (typeof payload.openid === 'string' && payload.openid.length > 0) {
+    merged.openid = payload.openid
+  }
+  if (typeof payload.unionid === 'string' && payload.unionid.length > 0) {
+    merged.unionid = payload.unionid
+  }
+  if (typeof payload.refresh_key === 'string' && payload.refresh_key.length > 0) {
+    merged.refreshKey = payload.refresh_key
+  }
+  if (Number.isFinite(Number(payload.loginType))) merged.loginType = Number(payload.loginType)
+  return merged
+}
+
+/**
+ * QQ 网页登录的主续期路径：QQConnectLogin.LoginServer/QQLogin 接收旧 musickey，
+ * 返回新的 musickey。它不依赖 refresh_token，旧 key 已过期时仍可尝试恢复。
+ */
+async function refreshViaQqLogin(current: Credential): Promise<Credential> {
+  const response = await upstreamRequest<RefreshResponse>({
+    host: 'https://u.y.qq.com',
+    path: '/cgi-bin/musicu.fcg',
+    params: {},
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'User-Agent': USER_AGENT,
+      Referer: 'https://y.qq.com/'
+    },
+    body: JSON.stringify({
+      comm: { tmeLoginType: current.loginType ?? 2 },
+      req_0: {
+        module: 'QQConnectLogin.LoginServer',
+        method: 'QQLogin',
+        param: {
+          expired_in: SESSION_REFRESH_EXPIRED_IN,
+          musicid: current.musicid,
+          musickey: current.musickey
+        }
+      }
+    }),
+    credential: current
+  })
+  return mergeRefreshedCredential(
+    current,
+    refreshResponseData(response, 'QQConnectLogin.LoginServer.QQLogin(refresh)')
+  )
+}
+
+/**
+ * 移动端 / 微信等登录方式的回退路径：music.login.LoginServer/Login（loginMode=2）
+ * 用 refresh_token 换新 musickey。
+ */
+async function refreshViaToken(current: Credential): Promise<Credential> {
+  if (!current.refreshToken) {
+    throw new UpstreamError('AUTH_EXPIRED', '当前凭证缺少 refresh_token，请重新登录')
   }
   const response = await upstreamRequest<RefreshResponse>({
     host: 'https://u.y.qq.com',
@@ -216,53 +315,41 @@ async function refreshMusickey(current: Credential): Promise<Credential> {
       req_0: {
         module: 'music.login.LoginServer',
         method: 'Login',
-        param
+        param: {
+          openid: current.openid ?? '',
+          access_token: current.accessToken ?? '',
+          refresh_token: current.refreshToken,
+          expired_in: current.expiredAtMs ? Math.floor(current.expiredAtMs / 1000) : 0,
+          musicid: Number(current.musicid),
+          musickey: current.musickey,
+          refresh_key: current.refreshKey ?? '',
+          loginMode: 2
+        }
       }
     }),
     credential: current
   })
+  return mergeRefreshedCredential(
+    current,
+    refreshResponseData(response, 'music.login.LoginServer.Login(refresh)')
+  )
+}
 
-  const node = response.req_0 ?? response.req
-  if ((response.code ?? 0) !== 0) {
-    throw mapUpstreamCode(response.code ?? 0, 'music.login.LoginServer.Login(refresh)')
+/** 先走 QQ 网页登录的 QQLogin 续期，微信账号或失败时回退到 refresh_token。 */
+async function refreshMusickey(current: Credential): Promise<Credential> {
+  const wechat = current.loginType === 1 || current.musickey.startsWith('W_X')
+  if (wechat) {
+    return refreshViaToken(current)
   }
-  if (!node) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '续期响应缺少 req_0')
+  try {
+    return await refreshViaQqLogin(current)
+  } catch (error) {
+    if (!current.refreshToken) throw error
+    console.info(
+      `[login] QQLogin 续期失败，改用 refresh_token：${errorMessage(error)}`
+    )
+    return refreshViaToken(current)
   }
-  if ((node.code ?? 0) !== 0) {
-    throw mapUpstreamCode(node.code ?? 0, 'music.login.LoginServer.Login(refresh)')
-  }
-  const data = node.data
-  if (!data?.musickey) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '续期响应缺少 musickey')
-  }
-
-  const createdAt = Number(data.musickeyCreateTime ?? 0)
-  const expiresIn = Number(data.keyExpiresIn ?? 0)
-  const createdAtMs = createdAt > 1_000_000_000_000 ? createdAt : createdAt * 1000
-  const expiredAtMs =
-    createdAtMs > 0 && expiresIn > 0
-      ? createdAtMs + expiresIn * 1000
-      : Date.now() + SESSION_REFRESH_FALLBACK_MS
-
-  const merged: Credential = {
-    ...current,
-    musickey: String(data.musickey),
-    expiredAtMs
-  }
-  if (typeof data.refresh_token === 'string' && data.refresh_token.length > 0) {
-    merged.refreshToken = data.refresh_token
-  }
-  if (typeof data.access_token === 'string' && data.access_token.length > 0) {
-    merged.accessToken = data.access_token
-  }
-  if (typeof data.openid === 'string' && data.openid.length > 0) merged.openid = data.openid
-  if (typeof data.unionid === 'string' && data.unionid.length > 0) merged.unionid = data.unionid
-  if (typeof data.refresh_key === 'string' && data.refresh_key.length > 0) {
-    merged.refreshKey = data.refresh_key
-  }
-  if (Number.isFinite(Number(data.loginType))) merged.loginType = Number(data.loginType)
-  return merged
 }
 
 let lastRefreshAt = 0
@@ -378,3 +465,6 @@ export async function loginWithCookie(cookie: string): Promise<Credential> {
   }
   return credential
 }
+
+// 上游返回登录失效时，client 通过该入口自动续期一次并重试原请求。
+setCredentialRefresher(refreshSession)

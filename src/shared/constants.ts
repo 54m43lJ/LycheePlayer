@@ -155,6 +155,8 @@ export const SESSION_REFRESH_INTERVAL_MS = 30 * 60_000
 export const SESSION_REFRESH_AHEAD_MS = 10 * 60_000
 /** 凭证无到期时间时的续期间隔。推荐值 6 小时。 */
 export const SESSION_REFRESH_FALLBACK_MS = 6 * 60 * 60_000
+/** QQ 网页登录续期时向 QQLogin 声明的会话有效期（秒）。推荐值 90 天。 */
+export const SESSION_REFRESH_EXPIRED_IN = 90 * 24 * 60 * 60
 /** OAuth 授权请求超时。推荐值 15_000 ms。 */
 export const OAUTH_TIMEOUT_MS = 15_000
 /** 登录流程允许导航的腾讯域名后缀。 */

@@ -888,6 +888,12 @@ export async function clearCredential(): Promise&lt;void&gt;;
 }
 
 export function getGuid(): string;
+export function setCredentialRefresher(
+  refresher: (() =&gt; Promise&lt;unknown&gt;) | null
+): void;
+export async function withCredentialRefresh&lt;T&gt;(
+  run: (credential: Credential) =&gt; Promise&lt;T&gt;
+): Promise&lt;T&gt;;
 export function toIpcError(err: unknown): IpcError;
 export function throttleUpstream(): Promise&lt;void&gt;;
 export function setUpstreamBlockNotifier(
@@ -940,6 +946,7 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
   <li><code>musicu</code> 通过 <code>dataErrorCode(data)</code> 读取具体错误：先取非 0 的 <code>data.retcode</code>，再取顶层负数 <code>data.code</code>（如歌单失效的 <code>-100006</code>）；当 <code>req_0.code</code> 为 <code>0</code> 或 <code>1000</code> 时优先采用该具体码，避免把 vkey 的 <code>104009 invalidq</code> 误判成登录过期。<code>mapUpstreamCode</code> 把 <code>-100006</code> 映射为 <code>NO_PERMISSION</code>（歌单不存在或已失效），把 <code>104009</code> 映射为 <code>UPSTREAM_NETWORK</code> 并保留 <code>upstreamCode</code> 供 vkey 备用入口判断。</li>
   <li><code>mapUpstreamCode</code> 对未识别的业务码统一返回 <code>UPSTREAM_CHANGED</code> 并保留原始 <code>upstreamCode</code>（例如 80092）；写 API 与 <code>assertWrite</code> 据此把 80092 识别为“状态未变化”，而不是普通失败。</li>
   <li><code>getGuid</code> 返回进程级稳定 GUID，供 vkey 请求使用。</li>
+  <li><code>setCredentialRefresher</code> 由 <code>login.ts</code> 注册 <code>refreshSession</code>，避免 client 与 login 循环依赖。<code>musicu</code> 收到 <code>1000</code> / <code>104401</code> / <code>104400</code> 时调用该入口续期一次，成功后换新凭证重试原请求；<code>withCredentialRefresh</code> 为收藏等自行持有凭证的调用方提供同样的单次续期重试。续期失败保留原错误。</li>
 </ul>
 
 <h3 id="c4-9">4.9 src/main/api/hash.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1065,12 +1072,18 @@ export function refreshSession(): Promise&lt;Credential&gt;;
 export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;
 export function loginWithCookie(cookie: string): Promise&lt;Credential&gt;;
 async function refreshMusickey(current: Credential): Promise&lt;Credential&gt;;
+async function refreshViaQqLogin(current: Credential): Promise&lt;Credential&gt;;
+async function refreshViaToken(current: Credential): Promise&lt;Credential&gt;;
+function mergeRefreshedCredential(
+  current: Credential,
+  data: Record&lt;string, unknown&gt;
+): Credential;
 async function probeCredential(credential: Credential): Promise&lt;'ok' | 'expired'&gt;;
 
 </code></pre>
 <ul class="note">
   <li><code>loginWithCookie</code> 解析 <code>uin</code> / <code>qm_keyst</code>，先向资料接口验证再返回凭证。</li>
-  <li><code>refreshSession</code> 用 <code>refresh_token</code> 换新 <code>musickey</code> 并写回凭证；<code>refreshIfNeeded</code> 按到期时间或时间间隔触发。</li>
+  <li><code>refreshSession</code> 先走 QQ 网页登录的 <code>QQConnectLogin.LoginServer/QQLogin</code>：携带旧 <code>musickey</code> 与 <code>expired_in = SESSION_REFRESH_EXPIRED_IN</code> 换取新 key，不依赖 <code>refresh_token</code>；微信账号或 QQLogin 失败时回退到 <code>refresh_token</code> 流程，成功后写回凭证。<code>refreshIfNeeded</code> 按到期时间或时间间隔触发，启动检查与 30 分钟定时器都会调用；<code>musicu</code> 的登录失效重试也复用 <code>refreshSession</code>，因此到期瞬间的请求不必等下一次定时器。</li>
   <li><code>requestOAuthCodeWithCookies</code> 在发起 authorize 前先调用 <code>throttleUpstream()</code>，与其他上游请求共用同一限速队列。</li>
 </ul>
 
@@ -1763,6 +1776,7 @@ export declare const LOGIN_EMBED_PARTITION: string;         // 'lychee-xlogin'
 export declare const SESSION_REFRESH_INTERVAL_MS: number;   // 30 × 60_000 ms
 export declare const SESSION_REFRESH_AHEAD_MS: number;      // 10 × 60_000 ms
 export declare const SESSION_REFRESH_FALLBACK_MS: number;   // 6 小时
+export declare const SESSION_REFRESH_EXPIRED_IN: number;    // 90 天（秒）；QQLogin 续期声明
 export declare const OAUTH_TIMEOUT_MS: number;              // 15_000 ms
 export declare const LOGIN_ALLOWED_DOMAINS: readonly string[]; // qq.com / gtimg.cn / weixin.qq.com
 export declare const FAVORITE_STATUS_CACHE_MS: number;      // 30_000 ms
@@ -2769,13 +2783,21 @@ app::requestSingleInstanceLock()
 <pre><code>api/login::refreshIfNeeded()
 ├── 判断无凭证 → return
 └── 判断续期条件 → api/login::refreshSession()
-    └── api/login::refreshMusickey(current)
-        └── api/client::upstreamRequest('music.login.LoginServer/Login')
-            └── credential::saveCredential(refreshed)
+    ├── api/login::refreshMusickey(current)
+    │   ├── 判断微信账号 → api/login::refreshViaToken(current)
+    │   └── 判断 QQ 网页登录 → api/login::refreshViaQqLogin(current)
+    │       └── 判断 QQLogin 失败且有 refresh_token → api/login::refreshViaToken(current)
+    └── credential::saveCredential(refreshed)
+
+api/client::musicu(...)
+└── 判断上游返回 1000 / 104401 / 104400 → api/client::refreshCredentialOnDemand()
+    ├── api/login::refreshSession()
+    └── 判断续期成功 → api/client::upstreamRequest(原请求, 新凭证)
 </code></pre>
 <ul class="note">
   <li>续期条件分两种情况：凭证有到期时间时，在 <code>SESSION_REFRESH_AHEAD_MS</code> 窗口内触发；凭证无到期时间时，达到 <code>SESSION_REFRESH_FALLBACK_MS</code> 触发。两种情况都不满足则跳过。</li>
-  <li>续期失败保留旧凭证并等待下一次重试；启动检查与定时器都会触发该路径。</li>
+  <li>QQ 网页登录优先用旧 <code>musickey</code> 调 <code>QQConnectLogin.LoginServer/QQLogin</code>，旧 key 已过期时仍可尝试恢复；微信账号或 QQLogin 失败时回退到 <code>refresh_token</code> 流程。</li>
+  <li>续期失败保留旧凭证并等待下一次重试；启动检查与定时器都会触发该路径。登录失效的请求由 <code>musicu</code> / <code>withCredentialRefresh</code> 自动续期一次并重试，避免等到下一个 30 分钟检查窗口。</li>
 </ul>
 
 <h3 id="c5-8">5.8 关闭与退出</h3>

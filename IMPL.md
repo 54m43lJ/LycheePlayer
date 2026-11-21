@@ -518,3 +518,31 @@
 | `PROVIDER.html` | §4.3 数据模型与转换（`#p4-3`） | 改 | `QqComment` 增加 `Pic` / `EmoPic`；转换表补充两个媒体字段。 |
 | `README.md` | §2 用户交互 · 歌词 / 评论行 | 改 | 补充评论支持内嵌表情与附图。 |
 | `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 与 README 同步。 |
+
+### 3.17 QQ 网页登录凭证没有走正确的续期路径
+
+**问题描述**：ISSUES 反馈凭证到期后应用没有主动续期，最终只能重新登录。原实现虽然已有 30 分钟定时检查和到期前 10 分钟窗口，但 `refreshMusickey()` 只调用 `music.login.LoginServer/Login` 的 `refresh_token` 流程，这是移动端 / 微信登录的续期方式；QQ 网页扫码登录的稳定路径是 `QQConnectLogin.LoginServer/QQLogin`，用旧 `musickey` 加 `expired_in` 直接换新 key，旧 key 已过期时仍可尝试恢复。续期路径不匹配时，定时器每次失败后只能等下个 30 分钟，到期瞬间的请求也会直接返回 `AUTH_EXPIRED`。
+
+**解决方法**：
+
+- `refreshMusickey()` 改为优先调用 `QQConnectLogin.LoginServer/QQLogin`，参数 `{ expired_in: 7776000, musicid, musickey }`，其中 `expired_in` 声明 90 天会话；微信账号或 QQLogin 失败且存在 `refresh_token` 时，回退到原 `music.login.LoginServer/Login` 流程。
+- 新增 `mergeRefreshedCredential()` 统一合并续期响应：更新 `musickey`、按 `musickeyCreateTime + keyExpiresIn` 重算 `expiredAtMs`，并在响应携带时更新 `refresh_token` / `access_token` / `openid` / `unionid` / `refresh_key` / `loginType`。
+- `client.ts` 增加 `setCredentialRefresher()` 注册入口，避免 client ↔ login 循环依赖；`musicu` 收到 `1000` / `104401` / `104400` 时自动续期一次并换新凭证重试原请求。收藏等自行持有凭证的流程通过 `withCredentialRefresh()` 获得同样的一次续期重试。
+- 续期失败保留旧凭证与原错误，定时器继续按到期时间重试。
+- 新增 `test/api/login-refresh.test.ts` 与 `test/api/client-auth-refresh.test.ts`，覆盖 QQLogin 主路径、refresh_token 回退、微信账号顺序、到期窗口判断、登录失效自动重试、显式匿名凭证不续期与续期失败保留原错误。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 2 项“凭证到期后自动续期” | 改 | 行尾追加 ` [已解决] `。 |
+| `USER.html` | §5.2.7 设置页（`#u5-2-7`） | 改 | 说明 QQ 网页登录凭证到期前自动续期，登录失效时立即尝试续期并重试；手动 Cookie 不提供“立即续期”按钮。 |
+| `USER.html` | §5.3 错误与通知（`#u5-3`） | 改 | `AUTH_EXPIRED` 先自动续期一次并重试，仍失败才提示重新登录。 |
+| `CORE.html` | §4.8 `src/main/api/client.ts`（`#c4-8`） | 改 | 增加 `setCredentialRefresher()` / `withCredentialRefresh()` 签名与登录失效重试说明。 |
+| `CORE.html` | §4.16 `src/main/api/login.ts`（`#c4-16`） | 改 | 记录 QQLogin 主路径、refresh_token 回退与 `mergeRefreshedCredential()`。 |
+| `CORE.html` | §4.50 `src/shared/constants.ts`（`#c4-50`） | 改 | 增加 `SESSION_REFRESH_EXPIRED_IN`。 |
+| `CORE.html` | §5.7 会话续期（`#c5-7`） | 改 | 调用树增加 QQLogin 主路径、回退分支与 `musicu` 登录失效重试。 |
+| `PROVIDER.html` | §4.1 上游方法（`#p4-1`） | 改 | 拆分 QQ 网页登录续期、refresh_token 回退与 QQ 登录换证，并补充 QQLogin 续期参数。 |
+| `PROVIDER.html` | §4.5 请求画像（`#p4-5`） | 改 | 增加 QQLogin 续期请求画像。 |
+| `README.md` | §2 用户交互 · 登录行 | 改 | 补充凭证到期前自动续期。 |
+| `ABOUT.html` | 用户交互 · 登录行 | 改 | 与 README 同步。 |

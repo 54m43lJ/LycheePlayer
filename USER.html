@@ -655,7 +655,7 @@
   <li><code>Settings</code> 的确切持久化字段为 <code>defaultQuality</code>、<code>closeToTray</code>、<code>theme</code>、<code>audioCacheEnabled</code>、<code>audioCacheMaxBytes</code>、<code>downloadDir?</code>。<code>downloadDir</code> 缺省为 <code>~/Music/Lychee Player</code>；<code>audioCacheMaxBytes</code> 限定为 6 个缓存档位；未知值由主进程回退默认。</li>
   <li>关于区展示版本、音频引擎与许可证；版本与许可证以构建配置为准。</li>
   <li>音质四档，默认“自动”；与播放条共用同一持久化偏好，任一处修改即时同步；回退静默，不弹提示。</li>
-  <li>关闭到托盘默认开启；窗口区只保留“关闭到托盘”，右侧“应用”面板提供“退出应用”，直接结束进程且不受关闭到托盘影响；账号区展示到期时间，手动 Cookie 凭证禁用“立即续期”。</li>
+  <li>关闭到托盘默认开启；窗口区只保留“关闭到托盘”，右侧“应用”面板提供“退出应用”，直接结束进程且不受关闭到托盘影响；账号区展示到期时间。QQ 网页登录凭证在到期前自动续期，调用上游遇到登录失效时也会立即尝试续期并重试一次原请求；手动 Cookie 凭证不提供“立即续期”按钮。</li>
   <li>修改设置即写盘，无保存按钮；播放中切换音质会立即重载当前曲目。</li>
 </ul>
 
@@ -736,7 +736,7 @@
 <table>
   <tr><th>ErrorCode</th><th>界面提示</th><th>行为</th></tr>
   <tr><td><code>UPSTREAM_NETWORK</code></td><td>网络异常，请稍后重试；播放链接被上游拒绝时提示检查网络 / VPN / 代理出口</td><td>保留当前状态，允许用户重试。</td></tr>
-  <tr><td><code>AUTH_EXPIRED</code></td><td>登录已失效，请重新登录</td><td>提示用户前往登录页；不自动清除凭证。</td></tr>
+  <tr><td><code>AUTH_EXPIRED</code></td><td>登录已失效，请重新登录</td><td>主进程先自动尝试续期一次并重试原请求；仍失败时提示用户前往登录页，不自动清除凭证。</td></tr>
   <tr><td><code>NO_STREAM</code></td><td>按账号权限与内容状态提示：需要 VIP / 购买、播放授权异常，或可能需要 VIP / 已下架</td><td>播放条沿队列向后尝试到可播；连续 10 首不可播或队列为空时停止。</td></tr>
   <tr><td><code>UPSTREAM_CHANGED</code></td><td>上游接口发生变化；收藏相关可显示上游 80105 / 1101 文案</td><td>提示稍后再试；保留当前状态。80105 提示退出后重新登录（扫码或 Cookie）以同步网页会话；1101 提示该歌曲暂不支持收藏。</td></tr>
   <tr><td><code>QUOTA_LIMITED</code></td><td>请求过于频繁，请稍后重试</td><td>提示稍后再试；用户可手动重试。</td></tr>

@@ -7,7 +7,8 @@ import {
   throttleUpstream,
   UpstreamError,
   musicu,
-  upstreamRequest
+  upstreamRequest,
+  withCredentialRefresh
 } from './client'
 import { hash33 } from './hash'
 
@@ -320,32 +321,31 @@ export async function getFavoriteStates(mids: string[]): Promise<FavoriteState[]
 
 /** 收藏 / 取消收藏当前歌曲（“我喜欢”歌单）。 */
 export async function toggleFavorite(songMid: string): Promise<FavoriteState> {
-  const credential = getCredential()
-  if (!credential) throw new UpstreamError('AUTH_EXPIRED', '未登录')
+  return withCredentialRefresh(async (credential) => {
+    const before = (await readStatuses(credential, [songMid])).get(songMid) ?? false
+    const target = !before
+    const identity = await fetchTrackIdentity(songMid)
 
-  const before = (await readStatuses(credential, [songMid])).get(songMid) ?? false
-  const target = !before
-  const identity = await fetchTrackIdentity(songMid)
+    await signedPlaylistWrite(credential, target ? 'AddSonglist' : 'DelSonglist', {
+      dirId: 201,
+      v_songInfo: [{ songId: Number(identity.songId), songType: identity.songType }]
+    })
 
-  await signedPlaylistWrite(credential, target ? 'AddSonglist' : 'DelSonglist', {
-    dirId: 201,
-    v_songInfo: [{ songId: Number(identity.songId), songType: identity.songType }]
+    const after = (await readStatuses(credential, [songMid])).get(songMid) ?? false
+    if (after !== target) {
+      throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认收藏变更，请稍后重试')
+    }
+
+    const statuses =
+      statusCache && statusCache.musicid === credential.musicid
+        ? statusCache.statuses
+        : new Map<string, boolean>()
+    statuses.set(songMid, target)
+    statusCache = {
+      musicid: credential.musicid,
+      expiresAtMs: Date.now() + FAVORITE_STATUS_CACHE_MS,
+      statuses
+    }
+    return { songMid, favorited: target }
   })
-
-  const after = (await readStatuses(credential, [songMid])).get(songMid) ?? false
-  if (after !== target) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '上游尚未确认收藏变更，请稍后重试')
-  }
-
-  const statuses =
-    statusCache && statusCache.musicid === credential.musicid
-      ? statusCache.statuses
-      : new Map<string, boolean>()
-  statuses.set(songMid, target)
-  statusCache = {
-    musicid: credential.musicid,
-    expiresAtMs: Date.now() + FAVORITE_STATUS_CACHE_MS,
-    statuses
-  }
-  return { songMid, favorited: target }
 }

@@ -79,6 +79,49 @@ export function getGuid(): string {
   return GUID
 }
 
+let credentialRefresher: (() => Promise<unknown>) | null = null
+
+/** 由 login 模块注册续期入口，避免 client ↔ login 循环依赖。 */
+export function setCredentialRefresher(
+  refresher: (() => Promise<unknown>) | null
+): void {
+  credentialRefresher = refresher
+}
+
+async function refreshCredentialOnDemand(): Promise<boolean> {
+  if (!credentialRefresher) return false
+  try {
+    await credentialRefresher()
+    return true
+  } catch (error) {
+    console.warn(
+      `[auth] 自动续期失败：${error instanceof Error ? error.message : String(error)}`
+    )
+    return false
+  }
+}
+
+/** 登录失效时自动续期一次并重试；用于收藏等自行持有凭证的调用方。 */
+export async function withCredentialRefresh<T>(
+  run: (credential: Credential) => Promise<T>
+): Promise<T> {
+  const current = getCredential()
+  if (!current) throw new UpstreamError('AUTH_EXPIRED', '未登录')
+  try {
+    return await run(current)
+  } catch (error) {
+    if (
+      error instanceof UpstreamError &&
+      error.code === 'AUTH_EXPIRED' &&
+      (await refreshCredentialOnDemand())
+    ) {
+      const refreshed = getCredential()
+      if (refreshed) return run(refreshed)
+    }
+    throw error
+  }
+}
+
 export function toIpcError(err: unknown): IpcError {
   if (err instanceof UpstreamError) {
     return { code: err.code, message: err.message }
@@ -297,25 +340,29 @@ export async function musicu<T>(
   param: Record<string, unknown>,
   options: MusicuOptions = {}
 ): Promise<T> {
-  const credential = options.credential === undefined ? getCredential() : options.credential
-  const comm =
-    options.comm === false
-      ? undefined
-      : {
-          uin: credential?.musicid ? Number(credential.musicid) || 0 : 0,
-          format: 'json',
-          ct: 24,
-          cv: 0,
-          ...options.comm
-        }
+  const canRefresh = options.credential === undefined
+  let credential = options.credential === undefined ? getCredential() : options.credential
+  let busyAttempts = 0
+  let authRetried = false
 
-  const payload: Record<string, unknown> = {
-    req_0: { module, method, param }
-  }
-  if (comm) payload.comm = comm
-
-  for (let attempt = 0; attempt < UPSTREAM_RETRY_ATTEMPTS; attempt += 1) {
+  for (;;) {
     options.signal?.throwIfAborted()
+    const comm =
+      options.comm === false
+        ? undefined
+        : {
+            uin: credential?.musicid ? Number(credential.musicid) || 0 : 0,
+            format: 'json',
+            ct: 24,
+            cv: 0,
+            ...options.comm
+          }
+
+    const payload: Record<string, unknown> = {
+      req_0: { module, method, param }
+    }
+    if (comm) payload.comm = comm
+
     const response = await upstreamRequest<MusicuResponse<T>>({
       host: 'https://u.y.qq.com',
       path: '/cgi-bin/musicu.fcg',
@@ -334,8 +381,24 @@ export async function musicu<T>(
         : baseCode
     if (code !== 0) {
       // 2001 / 104604 为上游瞬时繁忙，短退避后重试；其余错误码直接映射。
-      if ((code === 2001 || code === 104604) && attempt < UPSTREAM_RETRY_ATTEMPTS - 1) {
-        await sleep(MUSICU_BUSY_BACKOFF_MS * 2 ** attempt)
+      if (
+        (code === 2001 || code === 104604) &&
+        busyAttempts < UPSTREAM_RETRY_ATTEMPTS - 1
+      ) {
+        await sleep(MUSICU_BUSY_BACKOFF_MS * 2 ** busyAttempts)
+        busyAttempts += 1
+        continue
+      }
+      const authExpired = code === 1000 || code === 104401 || code === 104400
+      if (
+        authExpired &&
+        canRefresh &&
+        !authRetried &&
+        (await refreshCredentialOnDemand())
+      ) {
+        // 续期成功后换成新凭证重试一次原请求，避免到期瞬间的请求直接失败。
+        authRetried = true
+        credential = getCredential()
         continue
       }
       if (code === 104009 && !options.deferBlock) tripUpstreamBlock()
@@ -349,8 +412,6 @@ export async function musicu<T>(
     }
     return node.data
   }
-
-  throw new UpstreamError('QUOTA_LIMITED', '上游持续繁忙')
 }
 
 export function mapUpstreamCode(code: number, context: string): UpstreamError {
