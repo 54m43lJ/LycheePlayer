@@ -344,13 +344,15 @@ export interface Settings {
 }
 
 export type ReauthReason = 'v1' | 'auth-failed'
+export type RefreshState = 'ok' | 'auth-failed' | 'temp-failed'
 
 export interface AuthStatus {
   loggedIn: boolean
   method: LoginMethod | null
   musicid: string | null
   expiresAtMs: number | null
-  canRefresh: boolean
+  /** 最近一次续期结果；temp-failed 静默重试，auth-failed 触发重新登录。 */
+  refreshState: RefreshState
   /** 非空时显示全局重新登录界面；清空凭证不属于该界面，由触发方负责。 */
   reauthReason: ReauthReason | null
 }

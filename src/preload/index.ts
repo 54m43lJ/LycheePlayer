@@ -69,6 +69,12 @@ const api: LycheeApi = {
     openWebLogin: (method) => invoke<AuthStatus>('login.openWebLogin', method),
     refreshSession: () => invoke<AuthStatus>('login.refreshSession'),
     logout: () => invoke<null>('login.logout'),
+    onStatus: (callback) => {
+      const listener = (_event: Electron.IpcRendererEvent, status: AuthStatus): void =>
+        callback(status)
+      ipcRenderer.on('login:status', listener)
+      return () => ipcRenderer.removeListener('login:status', listener)
+    },
     setEmbedBounds: (rect) => {
       ipcRenderer.send('login.setEmbedBounds', rect)
     }

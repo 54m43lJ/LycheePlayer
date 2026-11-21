@@ -5,7 +5,7 @@ import type { FlagsFile, Settings } from '@shared/types'
 import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
-import { describeError, unwrap } from '../api'
+import { describeError, IpcCallError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
@@ -234,7 +234,10 @@ async function refreshSession(): Promise<void> {
     await auth.refreshSession()
     toast.show('会话已续期')
   } catch (err) {
-    toast.error(describeError(err))
+    // auth-failed 由全局重新登录弹层提示，不再重复 Toast。
+    if (!(err instanceof IpcCallError && err.code === 'AUTH_EXPIRED')) {
+      toast.error(describeError(err))
+    }
   } finally {
     sessionRefreshing.value = false
   }
@@ -430,7 +433,7 @@ onBeforeUnmount(() => {
                   <div class="setting-name">凭证到期</div>
                   <div class="setting-desc">{{ expiryText }}</div>
                 </div>
-                <button class="btn small" :disabled="sessionRefreshing || !auth.canRefresh" @click="refreshSession()">
+                <button class="btn small" :disabled="sessionRefreshing" @click="refreshSession()">
                   {{ sessionRefreshing ? '续期中…' : '立即续期' }}
                 </button>
               </div>

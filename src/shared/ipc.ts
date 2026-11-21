@@ -55,6 +55,8 @@ export interface LycheeApi {
     openWebLogin(method: LoginMethod): Promise<IpcResult<AuthStatus>>
     refreshSession(): Promise<IpcResult<AuthStatus>>
     logout(): Promise<IpcResult<null>>
+    /** 订阅登录态变化；返回取消订阅函数。 */
+    onStatus(callback: (status: AuthStatus) => void): () => void
     /** 上报登录组件占位区域（页面坐标）；null 摘除。主进程据此定位 WebContentsView。 */
     setEmbedBounds(rect: EmbedRect | null): void
   }

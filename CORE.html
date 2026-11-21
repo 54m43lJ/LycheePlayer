@@ -144,6 +144,7 @@
 │   │   ├── login-wechat.test.ts              微信换证请求与凭证解析
 │   │   ├── playlist-cache.test.ts            整份歌单缓存与 complete 标记
 │   │   └── search.test.ts                    搜索映射与空关键词
+│   ├── auth-store.test.ts                    重新登录弹层与续期状态展示
 │   ├── credential-store.test.ts              v1 凭证清空与失效原因
 │   ├── fixtures/                             脱敏上游响应
 │   ├── player-store.test.ts                  播放顺序、队列补齐与快照保留
@@ -630,13 +631,15 @@ export interface Settings {
 }
 
 export type ReauthReason = 'v1' | 'auth-failed';
+export type RefreshState = 'ok' | 'auth-failed' | 'temp-failed';
 
 export interface AuthStatus {
   loggedIn: boolean;
   method: LoginMethod | null;
   musicid: string | null;
   expiresAtMs: number | null;
-  canRefresh: boolean;
+  /** 最近一次续期结果；temp-failed 静默重试，auth-failed 触发重新登录。 */
+  refreshState: RefreshState;
   /** 非空时显示全局重新登录弹层；清空凭证由触发方负责，不在弹层内执行。 */
   reauthReason: ReauthReason | null;
 }
@@ -687,7 +690,7 @@ export interface FlagsFile {
 }
 </code></pre>
 <ul class="note">
-  <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；<code>method</code> 显式区分 QQ / 微信，续期按它分流；续期字段仅主进程使用，不跨 IPC。<code>AuthStatus</code> 是渲染进程可见的登录态；<code>reauthReason</code> 只表达“为什么显示重新登录弹层”，不承担清空凭证。</li>
+  <li><code>Credential</code> 的完整字段与转换见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>；<code>method</code> 显式区分 QQ / 微信，续期按它分流；续期字段仅主进程使用，不跨 IPC。<code>AuthStatus.refreshState</code> 表达续期状态，<code>reauthReason</code> 只表达是否显示重新登录弹层。</li>
   <li><code>Song.songId</code> 为上游数字 ID 的字符串形式；所有接口仍以 <code>songMid</code> 定位歌曲。</li>
   <li><code>Comment</code> / <code>CommentPage</code> 是 <code>comment.get</code> 的跨 IPC 数据模型；<code>CommentPostResult</code> 是 <code>comment.post</code> 的返回模型；原始字段映射见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
   <li><code>ArtistAlbum</code> 是歌手页专辑卡片的跨 IPC 模型，<code>kind</code> 由上游 <code>albumType</code> 归一化为 <code>lp</code> / <code>ep</code> / <code>single</code> / <code>live</code> / <code>other</code>；<code>ArtistAlbumPage</code> 为 <code>artist.getAlbums</code> 的分页返回模型。</li>
@@ -712,6 +715,7 @@ export interface FlagsFile {
     openWebLogin(method: LoginMethod): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     refreshSession(): Promise&lt;IpcResult&lt;AuthStatus&gt;&gt;;
     logout(): Promise&lt;IpcResult&lt;null&gt;&gt;;
+    onStatus(callback: (status: AuthStatus) =&gt; void): () =&gt; void;
     setEmbedBounds(rect: EmbedRect | null): void;
   };
   search: {
@@ -868,7 +872,8 @@ function handle(
   <li><code>playlist.getSnapshot</code> / <code>playlist.cancelSnapshot</code> 按歌单 ID 保存 <code>{ token, AbortController }</code>；只允许匹配 token 的取消操作中止对应请求，新请求会先中止同歌单的旧请求。取消后当前网络请求立即中止，快照不会替换内容或写缓存。</li>
   <li><code>registerIpc</code> 注册 <code>setUpstreamBlockNotifier</code>，104009 首次进入截断窗口时通过 <code>broadcast('upstream:blocked', event)</code> 通知所有窗口；preload 暴露 <code>window.lychee.upstream.onBlocked</code>，同一窗口内只发送一次。</li>
   <li><code>login.openWebLogin</code> 只接受 <code>qq</code> / <code>wechat</code>；登录、续期、退出后的 <code>AuthStatus</code> 都带当前 <code>method</code>，渲染层据此展示登录方式。</li>
-  <li><code>currentAuthStatus</code> 从 <code>credential.getReauthReason()</code> 读取 <code>reauthReason</code>；该字段只用于触发全局重新登录弹层，不在 IPC 内清空凭证。</li>
+  <li><code>currentAuthStatus</code> 从 <code>credential.getReauthReason()</code> 读取 <code>reauthReason</code>，从 <code>login.getRefreshState()</code> 读取 <code>refreshState</code>；两者都只用于界面状态，不在 IPC 内清空凭证。</li>
+  <li><code>registerIpc</code> 通过 <code>setAuthStatusNotifier</code> 注册 <code>broadcast('login:status', currentAuthStatus())</code>；登录、续期、退出后实时同步，渲染层通过 preload 的 <code>login.onStatus</code> 订阅。</li>
 </ul>
 
 <h3 id="c4-6">4.6 src/main/settings.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1089,6 +1094,9 @@ export function exchangeQqLoginCode(code: string): Promise&lt;Credential&gt;;
 export function exchangeWechatLoginCode(code: string): Promise&lt;Credential&gt;;
 export function refreshSession(): Promise&lt;Credential&gt;;
 export function refreshIfNeeded(force?: boolean): Promise&lt;void&gt;;
+export function getRefreshState(): RefreshState;
+export function setAuthStatusNotifier(notifier: (() =&gt; void) | null): void;
+export function resetRefreshState(): void;
 async function refreshMusickey(current: Credential): Promise&lt;Credential&gt;;
 async function refreshViaQqLogin(current: Credential): Promise&lt;Credential&gt;;
 async function refreshViaToken(current: Credential): Promise&lt;Credential&gt;;
@@ -1100,8 +1108,9 @@ function mergeRefreshedCredential(
 </code></pre>
 <ul class="note">
   <li><code>exchangeQqLoginCode</code> 调用 <code>QQConnectLogin.LoginServer/QQLogin</code>，解析为 <code>method=qq</code>；<code>exchangeWechatLoginCode</code> 调用 <code>music.login.LoginServer/Login</code>（<code>tmeLoginType=1</code>、<code>strAppid</code> + <code>code</code>），解析为 <code>method=wechat</code>，并兼容微信的 <code>expired_at</code> 到期字段。</li>
-  <li><code>refreshSession</code> 按 <code>Credential.method</code> 分流：<code>wechat</code> 只走 <code>music.login.LoginServer/Login</code> 的 <code>loginMode=2</code>；<code>qq</code> 走 <code>QQConnectLogin.LoginServer/QQLogin</code>（旧 <code>musickey</code> + <code>expired_in</code>），失败且存在 <code>refresh_token</code> 时保留原有回退。成功后写回凭证。<code>refreshIfNeeded</code> 按到期时间或时间间隔触发，启动检查与 30 分钟定时器都会调用；<code>musicu</code> 的登录失效重试也复用 <code>refreshSession</code>。</li>
-  <li><code>requestOAuthCodeWithCookies</code> 在发起 authorize 前先调用 <code>throttleUpstream()</code>，与其他上游请求共用同一限速队列。</li>
+  <li><code>refreshSession</code> 按 <code>Credential.method</code> 严格分流：<code>wechat</code> 只走 <code>music.login.LoginServer/Login</code> 的 <code>loginMode=2</code>；<code>qq</code> 只走 <code>QQConnectLogin.LoginServer/QQLogin</code>（旧 <code>musickey</code> + <code>expired_in</code>）。不存在跨方式回退，避免把微信凭证送到 QQ 续期路径或反向误用。</li>
+  <li>续期结果写入 <code>refreshState</code>：成功为 <code>ok</code>；<code>AUTH_EXPIRED</code> 为 <code>auth-failed</code> 并设置 <code>reauthReason='auth-failed'</code>；网络 / 超时 / 限流等为 <code>temp-failed</code>，不设置重新登录原因。三种结果都保留旧凭证；<code>auth-failed</code> 暂停自动续期，<code>temp-failed</code> 按 <code>SESSION_REFRESH_RETRY_BASE_MS</code> 起指数退避重试，成功或登录 / 退出时重置。</li>
+  <li><code>setAuthStatusNotifier</code> 由 <code>ipc</code> 注册为广播 <code>login:status</code>；续期成功 / 失败和登录 / 退出都通过 <code>AuthStatus</code> 实时同步渲染层。<code>requestOAuthCodeWithCookies</code> 在发起 authorize 前先调用 <code>throttleUpstream()</code>，与其他上游请求共用同一限速队列。</li>
 </ul>
 
 <h3 id="c4-17">4.17 src/main/api/web-login.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1298,10 +1307,11 @@ interface AuthStore {
   readonly ready: boolean;
   readonly displayName: string;
   readonly expiresAtMs: number | null;
-  readonly canRefresh: boolean;
+  readonly refreshState: RefreshState;
   readonly reauthReason: ReauthReason | null;
 
   refresh(): Promise&lt;void&gt;;
+  applyStatus(status: AuthStatus): void;
   dismissReauth(): void;
   openWebLogin(method: LoginMethod): Promise&lt;void&gt;;
   refreshSession(): Promise&lt;void&gt;;
@@ -1309,7 +1319,7 @@ interface AuthStore {
 }
 </code></pre>
 <ul class="note">
-  <li><code>applyStatus</code> 在未登录且 <code>AuthStatus.reauthReason</code> 非空时设置 <code>reauthReason</code>；用户选择“稍后”后记录本次已忽略的原因，同一原因不重复弹出，登录成功或退出时清除。</li>
+  <li><code>applyStatus</code> 同步 <code>refreshState</code>，并在 <code>AuthStatus.reauthReason</code> 非空时设置 <code>reauthReason</code>；用户选择“稍后”后记录本次已忽略的原因，同一原因不重复弹出，登录成功、退出或再次手动续期时清除。App 通过 <code>login.onStatus</code> 把后台续期结果交给该入口。</li>
   <li><code>logout</code> 只调用登录 IPC、清空自身状态并派发 <code>lychee:logout</code> 事件；不直接导入 playlist / recommend / player store。应用层监听事件完成跨 store 重置。</li>
 </ul>
 
@@ -1699,7 +1709,7 @@ const emit = defineEmits&lt;{
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
   <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
-  <li>账号区展示登录态、到期时间、续期与退出登录；窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>账号区展示登录态、到期时间、续期与退出登录；登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
   <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。“播放缓存”标题也不再附加“不影响已下载”等括号说明。</li>
 </ul>
 
@@ -1805,6 +1815,8 @@ export declare const WECHAT_LOGIN_PARTITION: string;        // 'lychee-wechat-lo
 export declare const SESSION_REFRESH_INTERVAL_MS: number;   // 30 × 60_000 ms
 export declare const SESSION_REFRESH_AHEAD_MS: number;      // 10 × 60_000 ms
 export declare const SESSION_REFRESH_FALLBACK_MS: number;   // 6 小时
+export declare const SESSION_REFRESH_RETRY_BASE_MS: number; // 60_000 ms；temp-failed 首次重试
+export declare const SESSION_REFRESH_RETRY_MAX_MS: number;  // 30 × 60_000 ms；退避上限
 export declare const SESSION_REFRESH_EXPIRED_IN: number;    // 90 天（秒）；QQLogin 续期声明
 export declare const OAUTH_TIMEOUT_MS: number;              // 15_000 ms
 export declare const LOGIN_ALLOWED_DOMAINS: readonly string[]; // qq.com / gtimg.cn / weixin.qq.com
@@ -2845,12 +2857,22 @@ views/LoginView::selectMethod(next)
 <h3 id="c5-7">5.7 会话续期</h3>
 <pre><code>api/login::refreshIfNeeded()
 ├── 判断无凭证 → return
+├── 判断 refreshState === 'auth-failed' 且非 force → return
 └── 判断续期条件 → api/login::refreshSession()
     ├── api/login::refreshMusickey(current)
     │   ├── 判断 current.method === 'wechat' → api/login::refreshViaToken(current)
     │   └── 判断 current.method === 'qq' → api/login::refreshViaQqLogin(current)
-    │       └── 判断 QQLogin 失败且有 refresh_token → api/login::refreshViaToken(current)
-    └── credential::saveCredential(refreshed)
+    ├── 判断成功 → credential::saveCredential(refreshed)
+    │   ├── refreshState = 'ok'
+    │   └── api/login::notifyAuthStatus()
+    └── 判断失败
+        ├── 判断 AUTH_EXPIRED → refreshState = 'auth-failed'
+        │   ├── credential::setReauthReason('auth-failed')
+        │   ├── api/login::clearRefreshRetry()
+        │   └── api/login::notifyAuthStatus()
+        └── 判断其他错误 → refreshState = 'temp-failed'
+            ├── api/login::scheduleRefreshRetry()
+            └── api/login::notifyAuthStatus()
 
 api/client::musicu(...)
 └── 判断上游返回 1000 / 104401 / 104400 → api/client::refreshCredentialOnDemand()
@@ -2858,9 +2880,9 @@ api/client::musicu(...)
     └── 判断续期成功 → api/client::upstreamRequest(原请求, 新凭证)
 </code></pre>
 <ul class="note">
-  <li>续期条件分两种情况：凭证有到期时间时，在 <code>SESSION_REFRESH_AHEAD_MS</code> 窗口内触发；凭证无到期时间时，达到 <code>SESSION_REFRESH_FALLBACK_MS</code> 触发。两种情况都不满足则跳过。</li>
-  <li>续期按 <code>Credential.method</code> 分流：QQ 用旧 <code>musickey</code> 调 <code>QQConnectLogin.LoginServer/QQLogin</code>，旧 key 已过期时仍可尝试恢复；微信只走 <code>music.login.LoginServer/Login</code> 的 <code>loginMode=2</code>，使用 <code>refresh_token</code> / <code>access_token</code> / <code>openid</code>。QQ 失败且存在 <code>refresh_token</code> 时保留原有回退。</li>
-  <li>续期失败保留旧凭证并等待下一次重试；启动检查与定时器都会触发该路径。登录失效的请求由 <code>musicu</code> / <code>withCredentialRefresh</code> 自动续期一次并重试，避免等到下一个 30 分钟检查窗口。</li>
+  <li>续期条件分两种情况：凭证有到期时间时，在 <code>SESSION_REFRESH_AHEAD_MS</code> 窗口内触发；凭证无到期时间时，达到 <code>SESSION_REFRESH_FALLBACK_MS</code> 触发。两种情况都不满足则跳过；<code>auth-failed</code> 后自动检查直接跳过，手动续期仍可重试。</li>
+  <li>续期按 <code>Credential.method</code> 严格分流：QQ 用旧 <code>musickey</code> 调 <code>QQConnectLogin.LoginServer/QQLogin</code>；微信只走 <code>music.login.LoginServer/Login</code> 的 <code>loginMode=2</code>。不存在跨方式回退。</li>
+  <li><code>auth-failed</code> 不删除凭证，只设置 <code>reauthReason='auth-failed'</code> 并广播；弹层由渲染层显示。<code>temp-failed</code> 静默，按退避定时器重试；登录失效的请求由 <code>musicu</code> / <code>withCredentialRefresh</code> 自动续期一次并重试。</li>
 </ul>
 
 <h3 id="c5-8">5.8 关闭与退出</h3>

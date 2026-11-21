@@ -134,7 +134,7 @@
   </tr>
   <tr>
     <td>登录方式边界</td>
-    <td>登录方式由 <code>Credential.method</code> 显式记录，与换证 / 续期协议一一对应：QQ 走 xlogin + <code>QQLogin</code>，微信走官方二维码 + <code>music.login.LoginServer/Login</code>（<code>tmeLoginType=1</code>）。不得在运行时从 <code>musickey</code> 前缀、<code>loginType</code> 或 Cookie 内容猜测方式；QQ 的 <code>refresh_token</code> 回退只属于 QQ，不跨到微信。</td>
+    <td>登录方式由 <code>Credential.method</code> 显式记录，与换证 / 续期协议一一对应：QQ 走 xlogin + <code>QQLogin</code>，微信走官方二维码 + <code>music.login.LoginServer/Login</code>（<code>tmeLoginType=1</code>）。不得在运行时从 <code>musickey</code> 前缀、<code>loginType</code> 或 Cookie 内容猜测方式；续期严格按方式执行，不存在 QQ ↔ 微信的跨方式回退。</td>
   </tr>
   <tr>
     <td>网页会话 Cookie</td>

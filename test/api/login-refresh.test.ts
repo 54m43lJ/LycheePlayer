@@ -1,8 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const store = vi.hoisted(() => ({
   current: null as Record<string, unknown> | null,
-  saved: [] as Array<Record<string, unknown>>
+  saved: [] as Array<Record<string, unknown>>,
+  reauthReason: null as string | null
 }))
 
 vi.mock('../../src/main/credential', () => ({
@@ -10,6 +11,10 @@ vi.mock('../../src/main/credential', () => ({
   saveCredential: async (credential: Record<string, unknown>) => {
     store.current = credential
     store.saved.push(credential)
+    store.reauthReason = null
+  },
+  setReauthReason: (reason: string | null) => {
+    store.reauthReason = reason
   }
 }))
 
@@ -34,9 +39,18 @@ function baseCredential(): Record<string, unknown> {
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
   store.current = baseCredential()
   store.saved = []
+  store.reauthReason = null
+  vi.unstubAllGlobals()
+  const { resetRefreshState } = await import('../../src/main/api/login')
+  resetRefreshState()
+})
+
+afterEach(async () => {
+  const { resetRefreshState } = await import('../../src/main/api/login')
+  resetRefreshState()
   vi.unstubAllGlobals()
 })
 
@@ -58,7 +72,7 @@ describe('api/login 自动续期', () => {
       })
     })
 
-    const { refreshSession } = await import('../../src/main/api/login')
+    const { getRefreshState, refreshSession } = await import('../../src/main/api/login')
     const next = await refreshSession()
 
     expect(bodies).toHaveLength(1)
@@ -75,46 +89,29 @@ describe('api/login 自动续期', () => {
     expect(next.expiredAtMs).toBe((1_700_000_000 + 259_200) * 1000)
     expect(store.current?.musickey).toBe('qq-new-key')
     expect(store.saved).toHaveLength(1)
+    expect(getRefreshState()).toBe('ok')
+    expect(store.reauthReason).toBeNull()
   })
 
-  it('falls back to the refresh_token flow when QQLogin is rejected', async () => {
+  it('does not fall back to the token flow when QQLogin is rejected', async () => {
     const bodies: Array<Record<string, any>> = []
     vi.stubGlobal('fetch', async (_url: string | URL, init?: RequestInit) => {
       bodies.push(bodyOf(init))
-      if (bodies.length === 1) {
-        return respond({ code: 0, req_0: { code: 1000, data: {} } })
-      }
-      return respond({
-        code: 0,
-        req_0: {
-          code: 0,
-          data: {
-            musickey: 'token-new-key',
-            refresh_token: 'new-refresh',
-            keyExpiresIn: 259_200,
-            musickeyCreateTime: 1_700_000_000
-          }
-        }
-      })
+      return respond({ code: 0, req_0: { code: 1000, data: {} } })
     })
 
-    const { refreshSession } = await import('../../src/main/api/login')
-    const next = await refreshSession()
+    const { getRefreshState, refreshSession } = await import('../../src/main/api/login')
+    await expect(refreshSession()).rejects.toMatchObject({ code: 'AUTH_EXPIRED' })
 
-    expect(bodies).toHaveLength(2)
-    expect(bodies[1]?.req_0).toMatchObject({
-      module: 'music.login.LoginServer',
-      method: 'Login',
-      param: {
-        refresh_token: 'old-refresh',
-        musickey: 'old-key'
-      }
-    })
-    expect(next.musickey).toBe('token-new-key')
-    expect(next.refreshToken).toBe('new-refresh')
+    expect(bodies).toHaveLength(1)
+    expect(bodies[0]?.req_0?.module).toBe('QQConnectLogin.LoginServer')
+    expect(store.current?.musickey).toBe('old-key')
+    expect(store.saved).toHaveLength(0)
+    expect(getRefreshState()).toBe('auth-failed')
+    expect(store.reauthReason).toBe('auth-failed')
   })
 
-  it('uses the token flow first for WeChat credentials', async () => {
+  it('uses only the token flow for WeChat credentials', async () => {
     store.current = {
       ...baseCredential(),
       method: 'wechat',
@@ -129,7 +126,7 @@ describe('api/login 自动续期', () => {
       })
     })
 
-    const { refreshSession } = await import('../../src/main/api/login')
+    const { getRefreshState, refreshSession } = await import('../../src/main/api/login')
     const next = await refreshSession()
 
     expect(bodies).toHaveLength(1)
@@ -140,6 +137,37 @@ describe('api/login 自动续期', () => {
       str_musicid: '100'
     })
     expect(next.musickey).toBe('wx-new-key')
+    expect(getRefreshState()).toBe('ok')
+  })
+
+  it('keeps the credential and reports temp-failed on network errors', async () => {
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('network down')
+    })
+
+    const { getRefreshState, refreshSession } = await import('../../src/main/api/login')
+    await expect(refreshSession()).rejects.toMatchObject({ code: 'UPSTREAM_NETWORK' })
+
+    expect(store.current?.musickey).toBe('old-key')
+    expect(store.saved).toHaveLength(0)
+    expect(getRefreshState()).toBe('temp-failed')
+    expect(store.reauthReason).toBeNull()
+  })
+
+  it('pauses automatic retry after auth-failed', async () => {
+    let calls = 0
+    vi.stubGlobal('fetch', async () => {
+      calls += 1
+      return respond({ code: 0, req_0: { code: 1000, data: {} } })
+    })
+
+    const { refreshIfNeeded, refreshSession } = await import('../../src/main/api/login')
+    await expect(refreshSession()).rejects.toMatchObject({ code: 'AUTH_EXPIRED' })
+    expect(calls).toBe(1)
+
+    store.current = { ...baseCredential(), expiredAtMs: Date.now() - 1 }
+    await refreshIfNeeded()
+    expect(calls).toBe(1)
   })
 
   it('only refreshes when the expiry window is reached', async () => {

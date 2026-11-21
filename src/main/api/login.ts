@@ -1,12 +1,14 @@
-import type { Credential, LoginMethod } from '../../shared/types'
+import type { Credential, LoginMethod, RefreshState } from '../../shared/types'
 import {
   OAUTH_TIMEOUT_MS,
   SESSION_REFRESH_AHEAD_MS,
   SESSION_REFRESH_EXPIRED_IN,
   SESSION_REFRESH_FALLBACK_MS,
+  SESSION_REFRESH_RETRY_BASE_MS,
+  SESSION_REFRESH_RETRY_MAX_MS,
   WECHAT_LOGIN_APP_ID
 } from '../../shared/constants'
-import { getCredential, saveCredential } from '../credential'
+import { getCredential, saveCredential, setReauthReason } from '../credential'
 import {
   assertUpstreamAvailable,
   mapUpstreamCode,
@@ -19,6 +21,17 @@ import { hash33 } from './hash'
 
 const USER_AGENT =
   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+
+let authStatusNotifier: (() => void) | null = null
+
+/** 由 ipc 注册登录态广播；login 模块不直接依赖窗口层。 */
+export function setAuthStatusNotifier(notifier: (() => void) | null): void {
+  authStatusNotifier = notifier
+}
+
+function notifyAuthStatus(): void {
+  authStatusNotifier?.()
+}
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
@@ -403,24 +416,52 @@ async function refreshViaToken(current: Credential): Promise<Credential> {
   )
 }
 
-/** 微信只走 token 续期；QQ 走 QQLogin，失败且存在 refresh_token 时保留原有回退。 */
+/** 按 method 严格分流：QQ 只走 QQLogin，微信只走 token 续期，不跨方式回退。 */
 async function refreshMusickey(current: Credential): Promise<Credential> {
   if (current.method === 'wechat') {
     return refreshViaToken(current)
   }
-  try {
-    return await refreshViaQqLogin(current)
-  } catch (error) {
-    if (!current.refreshToken) throw error
-    console.info(
-      `[login] QQLogin 续期失败，改用 refresh_token：${errorMessage(error)}`
-    )
-    return refreshViaToken(current)
-  }
+  return refreshViaQqLogin(current)
 }
 
 let lastRefreshAt = 0
 let refreshPromise: Promise<Credential> | null = null
+let refreshState: RefreshState = 'ok'
+let refreshRetryTimer: NodeJS.Timeout | null = null
+let refreshRetryDelayMs = SESSION_REFRESH_RETRY_BASE_MS
+
+export function getRefreshState(): RefreshState {
+  return refreshState
+}
+
+function isAuthFailure(error: unknown): boolean {
+  return error instanceof UpstreamError && error.code === 'AUTH_EXPIRED'
+}
+
+function clearRefreshRetry(): void {
+  if (refreshRetryTimer) clearTimeout(refreshRetryTimer)
+  refreshRetryTimer = null
+}
+
+function scheduleRefreshRetry(): void {
+  if (refreshRetryTimer) return
+  const delay = refreshRetryDelayMs
+  refreshRetryDelayMs = Math.min(refreshRetryDelayMs * 2, SESSION_REFRESH_RETRY_MAX_MS)
+  refreshRetryTimer = setTimeout(() => {
+    refreshRetryTimer = null
+    void refreshIfNeeded(true)
+  }, delay)
+  refreshRetryTimer.unref?.()
+}
+
+/** 登录成功或退出后重置续期状态；v1 清空不调用该入口。 */
+export function resetRefreshState(): void {
+  clearRefreshRetry()
+  refreshState = 'ok'
+  refreshRetryDelayMs = SESSION_REFRESH_RETRY_BASE_MS
+  setReauthReason(null)
+  notifyAuthStatus()
+}
 
 /** 立即用当前 musicid + musickey 续期并写回凭证。 */
 export function refreshSession(): Promise<Credential> {
@@ -430,13 +471,34 @@ export function refreshSession(): Promise<Credential> {
     if (!current) {
       throw new UpstreamError('AUTH_EXPIRED', '未登录，无法续期')
     }
-    const refreshed = await refreshMusickey(current)
-    await saveCredential(refreshed)
-    lastRefreshAt = Date.now()
-    console.info(
-      `[login] 会话已自动续期，新 musickey ${refreshed.musickey.length} 字符`
-    )
-    return refreshed
+    try {
+      const refreshed = await refreshMusickey(current)
+      await saveCredential(refreshed)
+      lastRefreshAt = Date.now()
+      refreshState = 'ok'
+      refreshRetryDelayMs = SESSION_REFRESH_RETRY_BASE_MS
+      clearRefreshRetry()
+      setReauthReason(null)
+      notifyAuthStatus()
+      console.info(
+        `[login] 会话已自动续期，新 musickey ${refreshed.musickey.length} 字符`
+      )
+      return refreshed
+    } catch (error) {
+      if (isAuthFailure(error)) {
+        refreshState = 'auth-failed'
+        clearRefreshRetry()
+        setReauthReason('auth-failed')
+      } else if (refreshState !== 'auth-failed') {
+        refreshState = 'temp-failed'
+        scheduleRefreshRetry()
+      }
+      notifyAuthStatus()
+      console.warn(
+        `[login] 会话续期失败（${refreshState}）：${errorMessage(error)}`
+      )
+      throw error
+    }
   })().finally(() => {
     refreshPromise = null
   })
@@ -445,11 +507,12 @@ export function refreshSession(): Promise<Credential> {
 
 /**
  * 到期前 10 分钟或每 6 小时续期一次；无过期时间时启动后先续期一次。
- * 上游若拒绝续期，保留旧凭证并等待下一次重试。
+ * auth-failed 暂停自动续期，temp-failed 由退避定时器静默重试；两者都保留旧凭证。
  */
 export function refreshIfNeeded(force = false): Promise<void> {
   const current = getCredential()
   if (!current) return Promise.resolve()
+  if (!force && refreshState === 'auth-failed') return Promise.resolve()
   const now = Date.now()
   const due =
     force ||

@@ -60,6 +60,7 @@ const favoritesPath = `/playlist/${FAVORITES_PLAYLIST_ID}`
 
 let offCommand: (() => void) | null = null
 let offUpstreamBlocked: (() => void) | null = null
+let offLoginStatus: (() => void) | null = null
 
 function onLogout(): void {
   playlistStore.reset()
@@ -174,6 +175,7 @@ onMounted(() => {
   })()
 
   offCommand = window.lychee.player.onCommand((command) => player.handleCommand(command))
+  offLoginStatus = window.lychee.login.onStatus((status) => auth.applyStatus(status))
   offUpstreamBlocked = window.lychee.upstream.onBlocked((event) => {
     const seconds = Math.max(1, Math.ceil((event.untilMs - Date.now()) / 1000))
     toast.error(`QQ 音乐风控：已暂停上游请求 ${seconds} 秒。${event.reason}`)
@@ -182,6 +184,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   offCommand?.()
+  offLoginStatus?.()
   offUpstreamBlocked?.()
   window.removeEventListener('lychee:logout', onLogout)
   document.removeEventListener('keydown', onKeydown)

@@ -18,7 +18,12 @@ import {
   IPC_SONG_MIDS_MAX,
   PROBE_MIDS_MAX
 } from '../shared/constants'
-import { refreshSession } from './api/login'
+import {
+  getRefreshState,
+  refreshSession,
+  resetRefreshState,
+  setAuthStatusNotifier
+} from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
 import { getComments, likeComment, postComment, unlikeComment } from './api/comment'
@@ -108,7 +113,7 @@ function currentAuthStatus(): AuthStatus {
     method: credential?.method ?? null,
     musicid: credential?.musicid ?? null,
     expiresAtMs: credential?.expiredAtMs ?? null,
-    canRefresh: Boolean(credential?.refreshToken),
+    refreshState: getRefreshState(),
     reauthReason: getReauthReason()
   }
 }
@@ -191,6 +196,8 @@ async function runRecommendFetch(
 export function registerIpc(): void {
   // 104009 触发全局截断时，通知渲染层展示 toast；截断本身由上游请求入口执行。
   setUpstreamBlockNotifier((event) => broadcast('upstream:blocked', event))
+  // 登录 / 续期 / 退出后实时同步登录态；续期状态机不直接依赖窗口层。
+  setAuthStatusNotifier(() => broadcast('login:status', currentAuthStatus()))
 
   // ---------- application ----------
   ipcMain.on('app.quit', () => app.quit())
@@ -215,6 +222,7 @@ export function registerIpc(): void {
     }
     const credential = await openWebLogin(method)
     await saveCredential(credential)
+    resetRefreshState()
     clearAvailabilityCache()
     return currentAuthStatus()
   })
@@ -228,6 +236,7 @@ export function registerIpc(): void {
     await clearPlaylistCache()
     clearAvailabilityCache()
     clearRecommendCache()
+    resetRefreshState()
     return null
   })
 

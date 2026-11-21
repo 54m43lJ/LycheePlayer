@@ -434,3 +434,37 @@
 | `ABOUT.html` | 用户交互 · 登录行 | 改 | 与 README 同步。 |
 | `diagram/seq-login.puml` | 登录流程 | 改 | 删除 Cookie 分支，只保留 xlogin / 微信扫码。 |
 | `diagram/prov-cookie.puml` | Cookie 登录协议 | 删 | 删除 Cookie 登录时序图及其导出 SVG。 |
+
+## 14. 优化刷新登录
+
+**需求**：续期严格按登录方式走各自协议，取消跨方式回退；续期结果分为正常、需要重新登录、临时失败；auth-failed 弹出全局重新登录界面，temp-failed 静默重试；失败不丢当前凭证；登录态实时同步，登录后始终允许手动续期。
+
+**实现思路**：
+
+- `refreshMusickey()` 改为严格分流：QQ 只调用 `QQConnectLogin.LoginServer/QQLogin`，微信只调用 `music.login.LoginServer/Login`（`loginMode=2`）；删除 QQLogin 失败后回退到 `refresh_token` 的跨方式分支。
+- 新增 `RefreshState = 'ok' | 'auth-failed' | 'temp-failed'` 与 `AuthStatus.refreshState`；续期成功写 `ok`，`AUTH_EXPIRED` 写 `auth-failed`，网络 / 超时 / 限流等写 `temp-failed`。
+- `auth-failed` 设置 `reauthReason='auth-failed'` 并暂停自动续期；`temp-failed` 不设置重新登录原因，按 `SESSION_REFRESH_RETRY_BASE_MS` 起指数退避、封顶 `SESSION_REFRESH_RETRY_MAX_MS` 静默重试。两者都保留旧凭证，只有重新扫码成功才覆盖。
+- 登录模块增加 `setAuthStatusNotifier()`，由 IPC 注册为广播 `login:status`；登录、续期成功 / 失败、退出后都实时推送 `AuthStatus`，preload 暴露 `login.onStatus`，auth store 通过 `applyStatus()` 统一消费。
+- 登录成功与退出调用 `resetRefreshState()` 清除续期状态、退避定时器与重新登录原因；手动续期始终可重试。
+- 移除 `AuthStatus.canRefresh` 与设置页的禁用条件，登录后“立即续期”始终可用。
+- 扩展 `test/api/login-refresh.test.ts`：覆盖 QQ 不跨方式回退、微信仅 token 续期、auth-failed 保留凭证并暂停自动重试、temp-failed 保留凭证、成功重置状态与到期窗口判断；新增 `test/auth-store.test.ts` 覆盖凭证仍存在时 auth-failed 弹层、稍后忽略与登录成功清除。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 3 项“优化刷新登录” | 改 | 行尾追加 ` [已解决]`。 |
+| `EVOLVE.md` | 新增“优化刷新登录” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `PROVIDER.html` | §2 CONVENTIONS · 登录方式边界 | 改 | 明确续期严格按方式执行，不存在 QQ ↔ 微信跨方式回退。 |
+| `CORE.html` | §4.1 `src/shared/types.ts`（`#c4-1`） | 改 | 增加 `RefreshState` 与 `AuthStatus.refreshState`。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 增加 `login.onStatus` 订阅。 |
+| `CORE.html` | §4.5 `src/main/ipc.ts`（`#c4-5`） | 改 | `currentAuthStatus` 增加 `refreshState`；注册 `login:status` 广播。 |
+| `CORE.html` | §4.16 `src/main/api/login.ts`（`#c4-16`） | 改 | 增加续期状态机、严格分流、退避重试、状态广播与重置入口；删除跨方式回退。 |
+| `CORE.html` | §4.28 `src/renderer/stores/auth.ts`（`#c4-28`） | 改 | 增加 `refreshState`、`applyStatus` 与实时状态订阅；移除 `canRefresh`。 |
+| `CORE.html` | §4.48 `SettingsView.vue`（`#c4-48`） | 改 | 立即续期始终可用；AUTH_EXPIRED 交由全局弹层提示，不重复 Toast。 |
+| `CORE.html` | §4.50 `src/shared/constants.ts`（`#c4-50`） | 改 | 增加续期临时失败重试基础延迟与退避上限。 |
+| `CORE.html` | §5.7 会话续期（`#c5-7`） | 改 | 更新为严格分流、状态机、退避重试与 `login:status` 广播。 |
+| `USER.html` | §5.2.7 设置页（`#u5-2-7`） | 改 | 说明续期结果实时同步、auth-failed 弹层，以及登录后始终允许手动续期。 |
+| `USER.html` | §5.3 错误与通知（`#u5-3`） | 改 | `AUTH_EXPIRED` 区分 auth-failed 全局弹层与 temp-failed 静默重试。 |
+| `README.md` | §2 用户交互 · 登录行 | 改 | 补充续期失败按状态处理与登录态实时同步。 |
+| `ABOUT.html` | 用户交互 · 登录行 | 改 | 与 README 同步。 |

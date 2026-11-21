@@ -40,6 +40,11 @@ export function getReauthReason(): ReauthReason | null {
   return resetReason
 }
 
+/** 由续期状态机或 v1 读取链路设置失效原因；弹层只读取，不调用该入口。 */
+export function setReauthReason(reason: ReauthReason | null): void {
+  resetReason = reason
+}
+
 export async function loadCredential(): Promise<Credential | null> {
   if (loaded) return cached
   try {

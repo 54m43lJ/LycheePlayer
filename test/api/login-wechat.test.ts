@@ -3,7 +3,8 @@ import { WECHAT_LOGIN_APP_ID } from '../../src/shared/constants'
 
 vi.mock('../../src/main/credential', () => ({
   getCredential: () => null,
-  saveCredential: async () => undefined
+  saveCredential: async () => undefined,
+  setReauthReason: () => undefined
 }))
 
 function respond(data: unknown): Response {
