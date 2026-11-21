@@ -313,7 +313,7 @@
   <tr><td>MV 取流</td><td><code>gosrf.Stream.MvUrlProxy / GetMvUrls</code></td><td>按 <code>vids</code> 返回各清晰度的 <code>freeflow_url</code>。</td></tr>
   <tr><td>评论点赞</td><td><code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code></td><td><code>type</code> 3 点赞、4 取消；需要登录。</td></tr>
   <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td><code>Content</code> · <code>BizType</code>（1） · <code>BizId</code> · <code>BizSubType</code>（2）；需要登录，正文字符串上限 300。</td></tr>
-  <tr><td>会话续期（QQ 网页登录）</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>携带旧 <code>musickey</code> 与 <code>expired_in</code> 换新 <code>musickey</code>；不依赖 <code>refresh_token</code>，旧 key 已过期时仍可尝试恢复。</td></tr>
+  <tr><td>会话续期（QQ 网页登录）</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>携带旧 <code>musickey</code>、<code>expired_in</code>、<code>access_token</code>、<code>refresh_token</code>、<code>openid</code> 与数字 <code>musicid</code> 换新 <code>musickey</code>；缺少 OAuth 字段时只传 <code>musicid</code> + <code>musickey</code> 会被上游以 10006 拒绝。旧 key 已过期时仍可尝试恢复。</td></tr>
   <tr><td>微信会话续期</td><td><code>music.login.LoginServer / Login</code></td><td><code>loginMode=2</code>，用 <code>refresh_token</code> / <code>access_token</code> / <code>openid</code> 换新 <code>musickey</code>；<code>comm.tmeLoginType=1</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
   <tr><td>微信登录换证</td><td><code>music.login.LoginServer / Login</code></td><td>用微信回调 <code>code</code> 与 <code>param.strAppid</code> 换取登录凭证；<code>comm.tmeLoginType=1</code>。</td></tr>
@@ -358,7 +358,7 @@
   </tr>
   <tr>
     <td>会话续期（QQ 网页登录）</td>
-    <td><code>expired_in</code>（推荐 <code>7776000</code> 秒 / 90 天） · <code>musicid</code> · <code>musickey</code> · <code>comm.tmeLoginType</code></td>
+    <td><code>expired_in</code>（推荐 <code>7776000</code> 秒 / 90 天） · <code>onlyNeedAccessToken</code>（0） · <code>forceRefreshToken</code>（0） · <code>access_token</code> · <code>refresh_token</code> · <code>openid</code> · <code>musicid</code>（数字） · <code>musickey</code> · <code>comm.tmeLoginType</code>（2） · <code>comm.uin</code> · <code>comm.g_tk</code></td>
   </tr>
   <tr>
     <td>微信会话续期</td>
@@ -471,7 +471,7 @@
   <tr><td>VIP 状态 <code>vip_login_base</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>用户资料 <code>fcg_get_profile_homepage.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=hash33(musickey, 5381)</code></td></tr>
   <tr><td>QQ 登录换证 <code>QQLogin</code></td><td>iPhone iOS 13</td><td><code>https://y.qq.com/</code></td><td>JSON；<code>param.code</code>；不携带凭证</td></tr>
-  <tr><td>QQ 登录续期 <code>QQLogin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>JSON；携带旧 <code>musickey</code>；<code>expired_in</code> 推荐 <code>7776000</code></td></tr>
+  <tr><td>QQ 登录续期 <code>QQLogin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>JSON；携带旧 <code>musickey</code> 与网页登录的 OAuth 字段；<code>expired_in</code> 推荐 <code>7776000</code>，<code>comm</code> 带 <code>uin</code> / <code>g_tk</code> / <code>tmeLoginType=2</code></td></tr>
   <tr><td>微信登录换证 / 续期 <code>music.login.LoginServer</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>登录换证 <code>Content-Type: application/x-www-form-urlencoded</code>、<code>Cookie: login_type=2</code>；续期 <code>loginMode=2</code>、<code>tmeLoginType=1</code></td></tr>
   <tr><td>微信二维码 <code>open.weixin.qq.com</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>独立 session 分区；回调 <code>/portal/wx_redirect.html?login_type=2</code></td></tr>
   <tr><td>会话续期 <code>Login</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>JSON；携带当前凭证</td></tr>

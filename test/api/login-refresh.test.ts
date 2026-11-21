@@ -35,7 +35,14 @@ function baseCredential(): Record<string, unknown> {
     musicid: '100',
     musickey: 'old-key',
     expiredAtMs: Date.now() + 60_000,
-    refreshToken: 'old-refresh'
+    accessToken: 'old-access',
+    refreshToken: 'old-refresh',
+    openid: 'old-openid',
+    webCookies: {
+      psrf_qqaccess_token: 'cookie-access',
+      psrf_qqrefresh_token: 'cookie-refresh',
+      psrf_qqopenid: 'cookie-openid'
+    }
   }
 }
 
@@ -81,16 +88,77 @@ describe('api/login 自动续期', () => {
       method: 'QQLogin',
       param: {
         expired_in: 7_776_000,
-        musicid: '100',
+        onlyNeedAccessToken: 0,
+        forceRefreshToken: 0,
+        access_token: 'old-access',
+        refresh_token: 'old-refresh',
+        openid: 'old-openid',
+        musicid: 100,
         musickey: 'old-key'
       }
     })
+    expect(bodies[0]?.comm).toMatchObject({
+      tmeLoginType: 2,
+      uin: 100,
+      format: 'json',
+      ct: 24,
+      cv: 0
+    })
+    expect(bodies[0]?.comm?.g_tk).toBeTypeOf('number')
     expect(next.musickey).toBe('qq-new-key')
     expect(next.expiredAtMs).toBe((1_700_000_000 + 259_200) * 1000)
     expect(store.current?.musickey).toBe('qq-new-key')
     expect(store.saved).toHaveLength(1)
     expect(getRefreshState()).toBe('ok')
     expect(store.reauthReason).toBeNull()
+  })
+
+  it('falls back to the OAuth fields saved in web cookies', async () => {
+    store.current = {
+      ...baseCredential(),
+      accessToken: undefined,
+      refreshToken: undefined,
+      openid: undefined
+    }
+    let body: Record<string, any> = {}
+    vi.stubGlobal('fetch', async (_url: string | URL, init?: RequestInit) => {
+      body = bodyOf(init)
+      return respond({
+        code: 0,
+        req_0: { code: 0, data: { musickey: 'qq-new-key' } }
+      })
+    })
+
+    const { refreshSession } = await import('../../src/main/api/login')
+    await refreshSession()
+
+    expect(body.req_0?.param).toMatchObject({
+      access_token: 'cookie-access',
+      refresh_token: 'cookie-refresh',
+      openid: 'cookie-openid'
+    })
+  })
+
+  it('accepts a refresh payload returned under req1', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req1: {
+          code: 0,
+          data: {
+            musickey: 'qq-req1-key',
+            keyExpiresIn: 259_200,
+            musickeyCreateTime: 1_700_000_000
+          }
+        }
+      })
+    )
+
+    const { refreshSession } = await import('../../src/main/api/login')
+    const next = await refreshSession()
+
+    expect(next.musickey).toBe('qq-req1-key')
+    expect(next.expiredAtMs).toBe((1_700_000_000 + 259_200) * 1000)
   })
 
   it('does not fall back to the token flow when QQLogin is rejected', async () => {

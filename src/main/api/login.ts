@@ -256,13 +256,14 @@ interface RefreshResponse {
   code?: number
   req_0?: { code?: number; data?: Record<string, unknown> }
   req?: { code?: number; data?: Record<string, unknown> }
+  req1?: { code?: number; data?: Record<string, unknown> }
 }
 
 function refreshResponseData(
   response: RefreshResponse,
   context: string
 ): Record<string, unknown> {
-  const node = response.req_0 ?? response.req
+  const node = response.req_0 ?? response.req ?? response.req1
   if ((response.code ?? 0) !== 0) {
     throw mapUpstreamCode(response.code ?? 0, context)
   }
@@ -331,11 +332,27 @@ function tmeLoginType(method: LoginMethod): number {
   return method === 'wechat' ? 1 : 2
 }
 
+/** QQ 网页登录的 OAuth 字段可能只存在于网页会话 Cookie 中。 */
+function cookieField(current: Credential, ...names: string[]): string | undefined {
+  for (const name of names) {
+    const value = current.webCookies?.[name]
+    if (value) return value
+  }
+  return undefined
+}
+
 /**
  * QQ 网页登录的主续期路径：QQConnectLogin.LoginServer/QQLogin 接收旧 musickey，
- * 返回新的 musickey。它不依赖 refresh_token，旧 key 已过期时仍可尝试恢复。
+ * 返回新的 musickey。params 必须带上网页登录拿到的 access_token / openid；
+ * 只传 musicid + musickey 会被上游以 10006（参数错误）拒绝。
  */
 async function refreshViaQqLogin(current: Credential): Promise<Credential> {
+  const accessToken =
+    current.accessToken ?? cookieField(current, 'psrf_qqaccess_token') ?? ''
+  const refreshToken =
+    current.refreshToken ?? cookieField(current, 'psrf_qqrefresh_token') ?? ''
+  const openid = current.openid ?? cookieField(current, 'psrf_qqopenid') ?? ''
+  const numericId = Number(current.musicid)
   const response = await upstreamRequest<RefreshResponse>({
     host: 'https://u.y.qq.com',
     path: '/cgi-bin/musicu.fcg',
@@ -347,13 +364,26 @@ async function refreshViaQqLogin(current: Credential): Promise<Credential> {
       Referer: 'https://y.qq.com/'
     },
     body: JSON.stringify({
-      comm: { tmeLoginType: tmeLoginType('qq') },
+      comm: {
+        tmeLoginType: tmeLoginType('qq'),
+        uin: Number.isSafeInteger(numericId) ? numericId : 0,
+        g_tk: hash33(current.musickey, 5381),
+        format: 'json',
+        ct: 24,
+        cv: 0,
+        platform: 'yqq'
+      },
       req_0: {
         module: 'QQConnectLogin.LoginServer',
         method: 'QQLogin',
         param: {
           expired_in: SESSION_REFRESH_EXPIRED_IN,
-          musicid: current.musicid,
+          onlyNeedAccessToken: 0,
+          forceRefreshToken: 0,
+          access_token: accessToken,
+          refresh_token: refreshToken,
+          openid,
+          musicid: Number.isSafeInteger(numericId) ? numericId : current.musicid,
           musickey: current.musickey
         }
       }

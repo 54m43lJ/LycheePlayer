@@ -571,3 +571,23 @@
 | `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 安装后退分发，播放队列与窄屏侧栏注册关闭。 |
 | `CORE.html` | §4.66 / §4.72 / §4.77 / §4.81 / §4.91 | 改 | 各对话框与歌词 / 评论浮层补充后退关闭注册。 |
 | `CORE.html` | §4.92 `back-navigation.ts`（`#c4-92`） | 增 | 记录关闭栈、打开状态监听、后退分发与鼠标侧键拦截。 |
+
+### 3.19 QQ 网页登录续期被上游以 10006 拒绝
+
+**问题描述**：QQ 网页扫码登录后，续期日志持续出现 `temp-failed`，上游返回 `10006（QQConnectLogin.LoginServer.QQLogin(refresh)）`。续期请求只发送了 `expired_in`、字符串 `musicid` 与旧 `musickey`，`comm` 只有 `tmeLoginType`；缺少网页登录拿到的 `access_token` / `refresh_token` / `openid`、数字账号与 `uin` / `g_tk` 等公共参数，被上游按参数错误拒绝，并非上游故障。
+
+**解决方法**：
+
+- `refreshViaQqLogin` 参数补齐 `onlyNeedAccessToken` / `forceRefreshToken`（0）、`access_token`、`refresh_token`、`openid` 与数字 `musicid`；OAuth 字段缺失时从 `Credential.webCookies` 的 `psrf_qqaccess_token` / `psrf_qqrefresh_token` / `psrf_qqopenid` 回退读取。
+- 请求 `comm` 补齐 `uin`、`g_tk`（由旧 `musickey` 计算）、`format`、`ct`、`cv` 与 `platform`；登录方式仍固定为 QQ，不跨方式回退。
+- 续期响应解析兼容 `req_0` / `req` / `req1`，避免只在顶层节点名不同时误判为响应缺失。
+- 扩展 `test/api/login-refresh.test.ts`：覆盖完整 QQ 续期参数、网页 Cookie 字段回退与 `req1` 响应。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 2 项“QQ登录刷新时报错” | 改 | 行尾追加 ` [已解决] `。 |
+| `CORE.html` | §4.16 `src/main/api/login.ts`（`#c4-16`） | 改 | 记录 QQ 续期所需 OAuth 参数、`comm` 字段、Cookie 回退与 `req1` 响应兼容。 |
+| `PROVIDER.html` | §4.1 上游方法（`#p4-1`） | 改 | 补充 QQLogin 续期的 OAuth 参数与 10006 触发原因。 |
+| `PROVIDER.html` | §4.5 请求画像（`#p4-5`） | 改 | 同步 QQ 续期请求画像与公共参数。 |
