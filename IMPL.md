@@ -638,3 +638,23 @@
 | `CORE.html` | §3 SBOM / §4.22 `main.ts` | 改 | 登记 `@fontsource/noto-sans-yi` 与 `Noto Sans Yi` 字体回退。 |
 | `PROVIDER.html` | §2 CONVENTIONS / §4.3 数据模型与转换 | 改 | 说明 `Pic` 不参与 `U+FFFC` 映射及无媒体占位的处理。 |
 | `README.md` / `ABOUT.html` | 用户交互 · 歌词 / 评论行 | 改 | 补充加载失败占位。 |
+
+### 3.22 xlogin / 微信扫码视图位置漂移并覆盖播放条
+
+**问题描述**：登录组件的 `WebContentsView` 用渲染层上报的占位矩形定位。宽屏登录卡达到 `max-width: 800px` 后，窗口继续变宽只会改变卡片的水平中心，`ResizeObserver` 观察尺寸但不观察位置，因此上报的 `x` 不再更新，视图像被固定在旧坐标；微信扫码同样复用这条链路。窗口变矮时占位矩形可以伸到 `.main` 之外，而原生视图不参与 CSS 裁剪，会直接覆盖底部播放条。
+
+**解决方法**：
+
+- `LoginView` 同时监听窗口 `resize`、滚动与占位元素尺寸变化；窗口宽度超过卡片最大宽度时也能重新上报中心位置。
+- 新增纯函数 `clampEmbedRect(rect, area)`，把占位矩形与 `.main` 的可见矩形求交集；短窗口下裁剪高度，完全滚出内容区时得到零尺寸。
+- `web-login.applyBounds` 对零宽 / 零高调用 `setVisible(false)`，恢复可见时再 `setVisible(true)` + `setBounds`；零尺寸只隐藏视图，不取消登录，保留 `null` 原有的取消语义。
+- 新增 `test/embed-bounds.test.ts` 覆盖完整可见、底部裁剪与完全移出三种情况。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 4 项“xlogin 扫码登录嵌入位置” | 改 | 行尾追加 ` [已解决] `。 |
+| `USER.html` | §5.2.6 登录页（`#u5-2-6`） | 改 | 说明组件随窗口 / 滚动更新、裁剪到内容区且不覆盖播放条。 |
+| `CORE.html` | §1 文件树 / §4.17 `web-login.ts` / §4.47 `LoginView.vue` | 改 | 记录零尺寸隐藏语义、位置同步与内容区裁剪。 |
+| `CORE.html` | §4.94 `embed-bounds.ts`（`#c4-94`） | 增 | 记录占位矩形交集计算与测试。 |

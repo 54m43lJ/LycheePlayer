@@ -107,7 +107,15 @@ let embedView: WebContentsView | null = null
 let lastBounds: EmbedRect | null = null
 
 function applyBounds(rect: EmbedRect): void {
-  embedView?.setBounds({
+  const view = embedView
+  if (!view) return
+  // 宽 / 高为 0 表示占位区域完全滚出内容区：只隐藏视图，不取消登录。
+  if (rect.width <= 0 || rect.height <= 0) {
+    view.setVisible(false)
+    return
+  }
+  view.setVisible(true)
+  view.setBounds({
     x: Math.round(rect.x),
     y: Math.round(rect.y),
     width: Math.max(1, Math.round(rect.width)),

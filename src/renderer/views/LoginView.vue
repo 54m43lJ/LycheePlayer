@@ -5,6 +5,7 @@ import type { LoginMethod } from '@shared/types'
 import { describeError } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
+import { clampEmbedRect } from '../utils/embed-bounds'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -27,12 +28,15 @@ function sendBounds(): void {
   const frame = frameRef.value
   if (!frame) return
   const rect = frame.getBoundingClientRect()
-  window.lychee.login.setEmbedBounds({
-    x: rect.x,
-    y: rect.y,
-    width: rect.width,
-    height: rect.height
-  })
+  const main = frame.closest('.main')
+  const area = main?.getBoundingClientRect()
+  const bounds = area
+    ? clampEmbedRect(
+        { x: rect.x, y: rect.y, width: rect.width, height: rect.height },
+        { x: area.x, y: area.y, width: area.width, height: area.height }
+      )
+    : { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
+  window.lychee.login.setEmbedBounds(bounds)
 }
 
 function clearBounds(): void {
@@ -84,12 +88,15 @@ onMounted(async () => {
   frameObserver = new ResizeObserver(sendBounds)
   if (frameRef.value) frameObserver.observe(frameRef.value)
   window.addEventListener('scroll', sendBounds, true)
+  // 宽屏登录卡宽度固定、窗口变宽时只有位置变化，ResizeObserver 不会触发。
+  window.addEventListener('resize', sendBounds)
 })
 
 onBeforeUnmount(() => {
   loginSeq += 1
   frameObserver?.disconnect()
   window.removeEventListener('scroll', sendBounds, true)
+  window.removeEventListener('resize', sendBounds)
   clearBounds()
 })
 </script>

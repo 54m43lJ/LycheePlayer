@@ -100,6 +100,7 @@
 │       │   ├── <a href="#c4-80">download-progress.ts</a>     下载中心整体进度计算
 │       │   ├── <a href="#c4-83">download-filter.ts</a>       下载中心纯本地搜索匹配
 │       │   ├── <a href="#c4-88">swipe.ts</a>                  横向拖动方向仲裁
+│       │   ├── <a href="#c4-94">embed-bounds.ts</a>            登录组件占位矩形裁剪
 │       │   └── <a href="#c4-64">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
@@ -149,6 +150,7 @@
 │   ├── auth-store.test.ts                    重新登录弹层与续期状态展示
 │   ├── back-navigation.test.ts               后退关闭浮层的栈顺序
 │   ├── credential-store.test.ts              v1 凭证清空与失效原因
+│   ├── embed-bounds.test.ts                  登录占位矩形裁剪
 │   ├── fixtures/                             脱敏上游响应
 │   ├── player-store.test.ts                  播放顺序、队列补齐与快照保留
 │   ├── history-store.test.ts                 播放历史去重、上限与账号隔离
@@ -1140,7 +1142,7 @@ function runEmbedLogin(
 
 </code></pre>
 <ul class="note">
-  <li><code>setEmbedBounds</code> 只负责定位；<code>null</code> 会取消进行中的登录并摘除视图。<code>openWebLogin(method)</code> 负责创建对应方法的 <code>WebContentsView</code>、加载登录页并启动流程；两种方法使用独立 session 分区（<code>lychee-xlogin</code> / <code>lychee-wechat-login</code>）。</li>
+  <li><code>setEmbedBounds</code> 只负责定位；<code>null</code> 会取消进行中的登录并摘除视图，宽或高为 0 只隐藏视图、不取消登录。<code>applyBounds</code> 在零尺寸时调用 <code>setVisible(false)</code>，恢复可见时重新 <code>setBounds</code>；视图始终被内容区矩形裁剪，不会覆盖底部播放条。<code>openWebLogin(method)</code> 负责创建对应方法的 <code>WebContentsView</code>、加载登录页并启动流程；两种方法使用独立 session 分区（<code>lychee-xlogin</code> / <code>lychee-wechat-login</code>）。</li>
   <li>切换方法时先取消旧流程（拒绝旧 Promise、清理旧分区、摘除旧视图），再按新方法加载；旧流程的清理只作用于自己的视图，避免误删新视图。</li>
   <li>QQ 通过 Cookie 轮询或 OAuth 回调 code 换证；微信通过 <code>will-redirect</code> / <code>will-navigate</code> 捕获 <code>wx_redirect.html?login_type=2</code> 的 code，调用 <code>exchangeWechatLoginCode</code>，并把二维码分区的网页 Cookie 与凭证字段合并为 <code>webCookies</code>。两种方式都先清理分区再开始，避免残留 Cookie 误触发登录。</li>
   <li>超时或失败返回 <code>AUTH_EXPIRED</code>，不保存凭证；登录成功后清理视图与分区。</li>
@@ -1709,7 +1711,7 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>挂载后上报登录组件占位矩形并启动内嵌登录；ResizeObserver 与滚动监听保持矩形同步，卸载时摘除视图并取消登录。</li>
+  <li>挂载后上报登录组件占位矩形并启动内嵌登录；ResizeObserver 只跟踪尺寸变化，窗口 <code>resize</code> 与滚动监听补足位置变化（宽屏卡片达到最大宽度后窗口变宽只会移动中心）。上报前用 <a href="#c4-94">clampEmbedRect</a> 把矩形裁剪到 <code>.main</code> 可见区域，短窗口下不会把 <code>WebContentsView</code> 画到播放条上；完全滚出内容区时上报零尺寸，由主进程隐藏视图但不取消登录。</li>
   <li>顶部提供 <code>xlogin 扫码</code> / <code>微信扫码</code> 分段切换，同一时间只有一个 <code>WebContentsView</code>；切换时取消旧流程、清理旧分区、重置失败态，再按新方式加载。微信模式使用更高的二维码占位区。</li>
   <li>登录页只提供 xlogin / 微信扫码，不提供手动 Cookie 入口；扫码成功后路由跳转到“我的歌单”。已登录态只显示头像、昵称、<code>musicid</code> 与操作按钮，不显示登录方式说明行。</li>
 </ul>
@@ -2657,6 +2659,14 @@ export function installBackNavigation(fallback: () =&gt; void): () =&gt; void;
   <li>由 <a href="#c4-42">CommentsPanel</a> 挂载，<code>url</code> 非空时通过 <code>Teleport</code> 渲染到底层 <code>body</code>；固定全屏、背景 <code>rgba(0, 0, 0, 0.86)</code>、层级 90，右上角提供关闭按钮。点击图片外的空白或按 Esc 关闭；打开期间通过 <a href="#c4-92">back-navigation</a> 注册后退关闭，Esc 在窗口捕获阶段处理，不继续关闭歌词 / 评论层。</li>
   <li>默认适应屏幕：图片 <code>max-width / max-height: 100%</code>，点击图片或在原尺寸下单击切换为原始大小；原始大小取消最大尺寸限制，图片超出视口时可用指针拖动平移，平移范围按图片与视口尺寸夹紧，拖动结束不误触尺寸切换。</li>
   <li>切换图片或重新打开时重置为适应屏幕并清空平移偏移；关闭后不移除评论滚动位置。</li>
+</ul>
+
+<h3 id="c4-94">4.94 src/renderer/utils/embed-bounds.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function clampEmbedRect(rect: EmbedRect, area: EmbedRect): EmbedRect;
+</code></pre>
+<ul class="note">
+  <li>计算登录占位矩形与 <code>.main</code> 可见区域的交集：左 / 上取较大值，右 / 下取较小值；宽高小于 0 时归零，交由主进程隐藏 <code>WebContentsView</code>。</li>
+  <li>只做纯几何裁剪，不读取窗口或 DOM；<a href="#c4-47">LoginView</a> 传入 <code>getBoundingClientRect()</code> 的结果，测试见 <code>test/embed-bounds.test.ts</code>。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
