@@ -230,8 +230,9 @@
 
 **解决方案**：
 
-- 上游 `vip_login_base` 实际提供 `identity.vip`（绿钻）、`identity.huge_vip` / `HugeVip`（豪华绿钻）、`svip`（超级会员）以及 `userinfo.expire` 等字段，不需要另找接口。
-- 新增 `VipStatus`：`state`（known / unknown）、`isVip`、`level`（none / vip / huge_vip / svip）、`expiresAtMs`；到期时间优先读 `userinfo.expire`，为 `-1` 或缺失时回退 `identity.overdate`。
+- 上游 `vip_login_base` 实际提供 `identity.vip`、`svip`、`identity.HugeVip` / `huge_vip`、`identity.overdate`、`identity.HugeVipEnd` 等字段，不需要另找接口。
+- 经同一账号购买超级会员前后对照确认映射：`vip` = 绿钻，`svip` = 豪华绿钻，`HugeVip` / `huge_vip` = 超级会员；购买后 `HugeVip` 从 0 变 1，`svip` 保持不变。
+- 新增 `VipStatus`：`state`（known / unknown）、`isVip`、`level`（none / vip / huge_vip / svip）、`expiresAtMs`；超级会员到期读 `HugeVipEnd`，豪华绿钻到期读 `overdate`（缺失时 `LMEnd`），最后回退 `userinfo.expire`。`userinfo.expire` 实测为 `-1`，不能单独作为到期来源。
 - `getVipStatus()` 负责查询、映射与缓存：成功缓存 `VIP_CACHE_MS`，失败缓存 `VIP_UNKNOWN_CACHE_MS` 并返回 `unknown`；未登录返回已知非会员。
 - `isVipUser()` 保留为兼容包装：已知返回布尔值，未知返回 `null`。
 - IPC 由 `user.isVip` 改为 `user.vipStatus`；设置页在已知会员时显示 `VIP` / `SVIP` 徽标，未知或失败时不显示。
@@ -248,14 +249,14 @@
 | `CORE.html` | §4.48 `SettingsView.vue`（`#c4-48`） | 改 | 徽标改为读取 `vipStatus`，未知不显示。 |
 | `CORE.html` | §4.50 `constants.ts`（`#c4-50`） | 改 | 新增 `VIP_UNKNOWN_CACHE_MS`。 |
 | `CORE.html` | §5.5 播放单曲调用树 | 改 | 无可用 result 时回退 `getVipStatus()`。 |
-| `PROVIDER.html` | §4.1 VIP 状态行 / 数据模型 `QqVipData` | 改 | 记录会员字段、等级映射与 `expire` 解析。 |
+| `PROVIDER.html` | §4.1 VIP 状态行 / 数据模型 `QqVipData` | 改 | 记录会员字段、`vip` / `svip` / `HugeVip` 映射与 `HugeVipEnd` / `overdate` 到期来源。 |
 
 **工作记录**：
 
-- 新增 `test/api/vip-status.test.ts`：覆盖绿钻映射、SVIP 优先、已知非会员、接口失败返回 unknown 与 `isVipUser() === null`。
+- 新增 `test/api/vip-status.test.ts`：覆盖绿钻、豪华绿钻（`svip=1`）、超级会员（`HugeVip=1`）、到期时间来源、已知非会员、接口失败返回 unknown 与 `isVipUser() === null`。
 - 更新歌曲流测试的 user 模块 mock。
 - 使用真实登录态实测 `vip_login_base`：`vip=1`、`HugeVip=0`、`svip=1`、`yearflag=1`、`overdate=2027-03-16`、`userinfo.expire=-1`。账号实际为豪华绿钻、没有超级会员，据此修正此前来自第三方文档的映射：`svip` = 豪华绿钻，`HugeVip` = 超级会员；随后用同一账号购买 3 个月超级会员复测：`HugeVip` 从 0 变为 1，新增 `HugeVipStart/HugeVipEnd`，`svip` 保持不变，确认映射成立。超级会员到期时间读取 `HugeVipEnd`；同时修复 `expiresAtMs` 对 `-1` 的回退。
-- `npm run typecheck`、`npm test`（47 个测试文件、218 个用例）与 `npm run build` 通过。
+- `npm run typecheck`、`npm test`（47 个测试文件、221 个用例）与 `npm run build` 通过。
 
 ### 4.24 取消 vkey 批量探测，改为元数据判断可播性
 
