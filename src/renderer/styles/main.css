@@ -2444,17 +2444,156 @@ button:focus-visible,
   }
 
   .player {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr) auto;
-    gap: 10px;
-    padding: 10px 14px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    gap: 8px 12px;
+    padding: 12px 18px;
+  }
+
+  .player-now {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .player-text {
+    flex: 0 1 auto;
+    max-width: min(72vw, 520px);
+  }
+
+  /* 第一行左侧歌曲信息、右侧交互；进度独占第二行；播放控制单独在第三行居中。 */
+  .player-center {
+    display: contents;
+  }
+
+  .progress-row {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: 12px;
+  }
+
+  .player-controls {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: center;
+    gap: 6px;
+  }
+
+  .player-controls .icon-btn,
+  .player-controls .mode-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .player-controls .icon-btn > svg,
+  .player-controls .mode-button > svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .play-button {
+    width: 46px;
+    height: 46px;
+    margin: 0 8px;
+  }
+
+  .play-button > svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .player .mode-menu {
+    padding-bottom: 40px;
   }
 
   .player-right {
-    gap: 4px;
+    grid-column: 2;
+    grid-row: 1;
+    gap: 8px;
+  }
+
+  .player-right .icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .player-right .icon-btn > svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .player .like-menu,
+  .player .volume-menu {
+    padding-bottom: 40px;
+  }
+
+  .quality-chip {
+    min-width: 58px;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 11px;
   }
 }
 
-/* Extra-narrow screens:<=560px. Two-row player, tighter spacing, single-column options. */
+/* 更窄：歌曲信息与右侧交互拆成两行，进度与播放控制继续各占一行。 */
+@media (max-width: 720px) {
+  .player {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .player-now {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .player-right {
+    grid-column: 1;
+    grid-row: 2;
+    justify-content: center;
+    justify-self: center;
+    gap: 8px;
+  }
+
+  .progress-row {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .player-controls {
+    grid-column: 1;
+    grid-row: 4;
+    justify-self: center;
+  }
+
+  .player-cover {
+    width: 56px;
+    height: 56px;
+    flex-basis: 56px;
+  }
+
+  .player-title {
+    font-size: 14px;
+  }
+
+  .player-artist {
+    font-size: 11px;
+  }
+
+  .progress-row .time {
+    flex-basis: 38px;
+    font-size: 10px;
+  }
+}
+
+/* Extra-narrow screens:<=560px. Tighter spacing, single-column options. */
 @media (max-width: 560px) {
   .brand-mark {
     width: 34px;
@@ -2571,73 +2710,6 @@ button:focus-visible,
   .quality-options,
   .theme-options {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .player {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    gap: 4px 8px;
-    padding: 8px 10px;
-    align-items: center;
-  }
-
-  .player-now {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .player-right {
-    grid-column: 2;
-    grid-row: 1;
-    gap: 2px;
-  }
-
-  .player-center {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .player-cover {
-    width: 36px;
-    height: 36px;
-    flex-basis: 36px;
-  }
-
-  .player-title {
-    font-size: 12px;
-  }
-
-  .player-artist {
-    font-size: 10px;
-  }
-
-  .player-controls {
-    gap: 0;
-  }
-
-  .player-controls .icon-btn,
-  .player-controls .mode-button {
-    width: 28px;
-    height: 28px;
-  }
-
-  .player-controls .mode-menu {
-    padding-bottom: 28px;
-  }
-
-  .play-button {
-    width: 32px;
-    height: 32px;
-  }
-
-  .progress-row .time {
-    flex-basis: 30px;
-    font-size: 9px;
-  }
-
-  .quality-chip {
-    padding: 0 6px;
-    font-size: 9px;
   }
 
   .lyrics-panel {
@@ -4356,7 +4428,7 @@ button:focus-visible,
 @media (max-width: 900px) {
   :root {
     --sidebar-width: 0px;
-    --player-height: 84px;
+    --player-height: 168px;
   }
 
   .app-shell {
@@ -4501,9 +4573,15 @@ button:focus-visible,
   }
 }
 
+/* 播放条在更窄的宽度下再加高：控制与右侧交互分成两行。 */
+@media (max-width: 720px) {
+  :root {
+    --player-height: 204px;
+  }
+}
+
 @media (max-width: 560px) {
   :root {
-    --player-height: 116px;
     --sidebar-width: 0px;
   }
 
