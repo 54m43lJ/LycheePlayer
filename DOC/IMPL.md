@@ -254,5 +254,5 @@
 
 - 新增 `test/api/vip-status.test.ts`：覆盖绿钻映射、SVIP 优先、已知非会员、接口失败返回 unknown 与 `isVipUser() === null`。
 - 更新歌曲流测试的 user 模块 mock。
-- 使用真实登录态实测 `vip_login_base`：`vip=1`、`HugeVip=0`、`svip=1`、`yearflag=1`、`overdate=2027-03-16`、`userinfo.expire=-1`。账号实际为豪华绿钻、没有超级会员，据此修正此前来自第三方文档的映射：`svip` = 豪华绿钻（已有真实账号确认），`HugeVip` = 超级会员（字段名与 SoundPower 语义推断，待真实超级会员样本验证）；同时修复 `expiresAtMs` 对 `-1` 的回退。
+- 使用真实登录态实测 `vip_login_base`：`vip=1`、`HugeVip=0`、`svip=1`、`yearflag=1`、`overdate=2027-03-16`、`userinfo.expire=-1`。账号实际为豪华绿钻、没有超级会员，据此修正此前来自第三方文档的映射：`svip` = 豪华绿钻，`HugeVip` = 超级会员；随后用同一账号购买 3 个月超级会员复测：`HugeVip` 从 0 变为 1，新增 `HugeVipStart/HugeVipEnd`，`svip` 保持不变，确认映射成立。超级会员到期时间读取 `HugeVipEnd`；同时修复 `expiresAtMs` 对 `-1` 的回退。
 - `npm run typecheck`、`npm test`（47 个测试文件、218 个用例）与 `npm run build` 通过。

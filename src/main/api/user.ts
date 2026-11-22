@@ -62,6 +62,10 @@ interface VipData {
     huge_year_flag?: number
     /** 会员到期展示时间，格式通常为 YYYY-MM-DD HH:mm:ss。 */
     overdate?: string
+    HugeVipStart?: string
+    HugeVipEnd?: string
+    LMStart?: string
+    LMEnd?: string
   }
   userinfo?: {
     expire?: number
@@ -102,8 +106,8 @@ function parseVipOverdate(value: unknown): number | null {
 
 /**
  * 当前登录账号的会员状态；接口失败返回 unknown，不把失败当作非 VIP。
- * 字段映射：vip=绿钻，svip=豪华绿钻（真实账号确认）；
- * HugeVip=超级会员（字段名与 SoundPower is_hugevip 语义推断，尚缺真实超级会员样本）。
+ * 字段映射（已用同一账号购买超级会员前后对比确认）：
+ * vip=绿钻，svip=豪华绿钻，HugeVip=超级会员。
  * 星级等其余标记不参与播放判断。
  */
 export async function getVipStatus(): Promise<VipStatus> {
@@ -131,7 +135,11 @@ export async function getVipStatus(): Promise<VipStatus> {
       isVip: level !== 'none',
       level,
       expiresAtMs:
-        parseVipExpire(data.userinfo?.expire) ?? parseVipOverdate(identity.overdate)
+        (superVip
+          ? parseVipOverdate(identity.HugeVipEnd)
+          : parseVipOverdate(identity.overdate) ?? parseVipOverdate(identity.LMEnd)) ??
+        parseVipExpire(data.userinfo?.expire) ??
+        parseVipOverdate(identity.overdate)
     }
     vipCache = {
       musicid: credential.musicid,

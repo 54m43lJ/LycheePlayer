@@ -52,9 +52,30 @@ describe('getVipStatus', () => {
   })
 
   it('maps HugeVip to 超级会员 and lets it win over 豪华绿钻', async () => {
-    musicuMock.mockResolvedValue({ identity: { vip: 1, HugeVip: 1 }, svip: 1 })
+    musicuMock.mockResolvedValue({
+      identity: {
+        vip: 1,
+        HugeVip: 1,
+        HugeVipEnd: '2027-02-24 00:24:11',
+        overdate: '2027-03-16 10:43:22'
+      },
+      svip: 1
+    })
     const { getVipStatus } = await import('../../src/main/api/user')
-    expect((await getVipStatus()).level).toBe('svip')
+    const status = await getVipStatus()
+    expect(status.level).toBe('svip')
+    expect(status.expiresAtMs).toBe(Date.parse('2027-02-24T00:24:11+08:00'))
+  })
+
+  it('uses overdate for 豪华绿钻 when HugeVip is absent', async () => {
+    musicuMock.mockResolvedValue({
+      identity: { vip: 1, HugeVip: 0, overdate: '2027-03-16 10:43:22' },
+      svip: 1
+    })
+    const { getVipStatus } = await import('../../src/main/api/user')
+    const status = await getVipStatus()
+    expect(status.level).toBe('huge_vip')
+    expect(status.expiresAtMs).toBe(Date.parse('2027-03-16T10:43:22+08:00'))
   })
 
   it('returns known non-vip for a successful non-member response', async () => {

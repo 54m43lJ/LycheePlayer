@@ -979,7 +979,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqVipData</code></td>
     <td><code>identity.vip</code> · <code>identity.huge_vip</code> / <code>HugeVip</code> · <code>svip</code> · <code>identity.overdate</code> · <code>userinfo.expire</code></td>
-    <td>字段映射：<code>identity.vip</code> = 绿钻；<code>svip</code> = 豪华绿钻（真实豪华绿钻账号确认）；<code>identity.HugeVip</code> / <code>huge_vip</code> = 超级会员（字段名与 SoundPower <code>is_hugevip</code> 语义推断，待真实超级会员样本验证）；三者任一为真即会员，<code>VipStatus.level</code> 取最高档（<code>svip</code> &gt; <code>huge_vip</code> &gt; <code>vip</code>）。<code>userinfo.expire</code> 按秒或毫秒时间戳解析；为 <code>-1</code> 或缺失时回退 <code>identity.overdate</code>，仍无法识别时为 <code>null</code>。接口失败映射为 <code>state='unknown'</code>，不能当作非会员。第三方文档曾把 <code>HugeVip</code> 标为豪华绿钻，与实测豪华绿钻账号不符；不再采用。</td>
+    <td>字段映射（同一账号购买超级会员前后对比确认）：<code>identity.vip</code> = 绿钻，<code>svip</code> = 豪华绿钻，<code>identity.HugeVip</code> / <code>huge_vip</code> = 超级会员；三者任一为真即会员，<code>VipStatus.level</code> 取最高档（<code>svip</code> &gt; <code>huge_vip</code> &gt; <code>vip</code>）。<code>userinfo.expire</code> 按秒或毫秒时间戳解析；为 <code>-1</code> 或缺失时回退 <code>identity.overdate</code>，仍无法识别时为 <code>null</code>。接口失败映射为 <code>state='unknown'</code>，不能当作非会员。第三方文档曾把 <code>HugeVip</code> 标为豪华绿钻，与实测不符；不再采用。超级会员到期时间使用 <code>identity.HugeVipEnd</code>。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code></td>
