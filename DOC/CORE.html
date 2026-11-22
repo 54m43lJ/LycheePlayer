@@ -1129,6 +1129,7 @@ export function isVipUser(): Promise&lt;boolean | null&gt;;
 </code></pre>
 <ul class="note">
   <li><code>getVipStatus</code> 通过 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a> 的 VIP 状态接口返回 <code>{ state, isVip, level, expiresAtMs }</code>：<code>vip</code> / 豪华绿钻 / <code>svip</code> 任一为真即 <code>isVip</code>，<code>level</code> 取最高档；接口失败返回 <code>state='unknown'</code>，不能当作非 VIP。未登录返回已知非会员。</li>
+  <li><code>HugeVip</code> / <code>huge_vip</code> 是独立的豪华绿钻标记；超级会员账号可能 <code>svip=1</code> 而 <code>HugeVip=0</code>，仍包含豪华绿钻权益。因此播放判断使用 <code>vip || HugeVip || svip</code> 的并集，不能仅凭 <code>HugeVip</code> 推断界面展示的会员名称。到期时间优先读 <code>userinfo.expire</code>（秒 / 毫秒时间戳），为 <code>-1</code> 或缺失时回退 <code>identity.overdate</code>（北京时间日期字符串）。</li>
   <li>成功结果缓存 <code>VIP_CACHE_MS</code>；未知结果只缓存 <code>VIP_UNKNOWN_CACHE_MS</code>，避免失败时每次调用都重试，同时比正常缓存更快恢复。缓存按 <code>musicid</code> 隔离。</li>
   <li><code>isVipUser()</code> 是兼容包装：已知状态返回布尔值，<code>unknown</code> 返回 <code>null</code>。渲染层经 <code>user.vipStatus</code> 查询；设置页只在 <code>state='known' &amp;&amp; isVip</code> 时显示 <code>VIP</code> / <code>SVIP</code> 徽标，未知时不显示。</li>
 </ul>

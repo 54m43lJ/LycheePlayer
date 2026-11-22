@@ -34,6 +34,17 @@ describe('getVipStatus', () => {
     })
   })
 
+  it('falls back to identity.overdate when userinfo.expire is unavailable', async () => {
+    musicuMock.mockResolvedValue({
+      identity: { vip: 1, overdate: '2027-03-16 10:43:22' },
+      userinfo: { expire: -1 }
+    })
+    const { getVipStatus } = await import('../../src/main/api/user')
+    expect((await getVipStatus()).expiresAtMs).toBe(
+      Date.parse('2027-03-16T10:43:22+08:00')
+    )
+  })
+
   it('prefers svip over huge vip', async () => {
     musicuMock.mockResolvedValue({ identity: { huge_vip: 1 }, svip: 1 })
     const { getVipStatus } = await import('../../src/main/api/user')

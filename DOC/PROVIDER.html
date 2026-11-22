@@ -978,8 +978,8 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqVipData</code></td>
-    <td><code>identity.vip</code> · <code>identity.huge_vip</code> / <code>HugeVip</code> · <code>svip</code> · <code>userinfo.expire</code></td>
-    <td><code>vip</code> / 豪华绿钻 / <code>svip</code> 任一为真即会员，映射为 <code>VipStatus.level</code>（<code>svip</code> &gt; <code>huge_vip</code> &gt; <code>vip</code>）；<code>userinfo.expire</code> 按秒或毫秒时间戳解析，无法识别时为 <code>null</code>。接口失败映射为 <code>state='unknown'</code>，不能当作非会员。</td>
+    <td><code>identity.vip</code> · <code>identity.huge_vip</code> / <code>HugeVip</code> · <code>svip</code> · <code>identity.overdate</code> · <code>userinfo.expire</code></td>
+    <td><code>vip</code> / 豪华绿钻 / <code>svip</code> 任一为真即会员，映射为 <code>VipStatus.level</code>（<code>svip</code> &gt; <code>huge_vip</code> &gt; <code>vip</code>）；<code>userinfo.expire</code> 按秒或毫秒时间戳解析；为 <code>-1</code> 或缺失时回退 <code>identity.overdate</code>，仍无法识别时为 <code>null</code>。超级会员可能 <code>svip=1</code> 而 <code>HugeVip=0</code>，但包含豪华绿钻权益，播放判断取三者并集。接口失败映射为 <code>state='unknown'</code>，不能当作非会员。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code></td>

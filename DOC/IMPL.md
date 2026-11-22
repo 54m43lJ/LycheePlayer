@@ -231,7 +231,7 @@
 **解决方案**：
 
 - 上游 `vip_login_base` 实际提供 `identity.vip`（绿钻）、`identity.huge_vip` / `HugeVip`（豪华绿钻）、`svip`（超级会员）以及 `userinfo.expire` 等字段，不需要另找接口。
-- 新增 `VipStatus`：`state`（known / unknown）、`isVip`、`level`（none / vip / huge_vip / svip）、`expiresAtMs`。
+- 新增 `VipStatus`：`state`（known / unknown）、`isVip`、`level`（none / vip / huge_vip / svip）、`expiresAtMs`；到期时间优先读 `userinfo.expire`，为 `-1` 或缺失时回退 `identity.overdate`。
 - `getVipStatus()` 负责查询、映射与缓存：成功缓存 `VIP_CACHE_MS`，失败缓存 `VIP_UNKNOWN_CACHE_MS` 并返回 `unknown`；未登录返回已知非会员。
 - `isVipUser()` 保留为兼容包装：已知返回布尔值，未知返回 `null`。
 - IPC 由 `user.isVip` 改为 `user.vipStatus`；设置页在已知会员时显示 `VIP` / `SVIP` 徽标，未知或失败时不显示。
@@ -254,4 +254,5 @@
 
 - 新增 `test/api/vip-status.test.ts`：覆盖绿钻映射、SVIP 优先、已知非会员、接口失败返回 unknown 与 `isVipUser() === null`。
 - 更新歌曲流测试的 user 模块 mock。
+- 使用真实登录态实测 `vip_login_base`：`vip=1`、`HugeVip=0`、`svip=1`、`yearflag=1`、`overdate=2027-03-16`、`userinfo.expire=-1`。确认超级会员可能 `HugeVip=0` 但包含豪华绿钻权益，因此播放判断取 `vip || HugeVip || svip` 并集；同时修复 `expiresAtMs` 对 `-1` 的回退。
 - `npm run typecheck`、`npm test`（47 个测试文件、218 个用例）与 `npm run build` 通过。
