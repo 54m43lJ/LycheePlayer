@@ -1,6 +1,58 @@
-# Documentation Guidelines
+# General Rules
 
-Documents per project, in HTML — the development docs split by boundary:
+|   # | Constraint                | Rule                                                                                                                                                                                                                                                                                                  |
+| --: | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|   1 | Single source of truth    | a definition appears once, at the most appropriate spot; everywhere else → hyperlink                                                                                                                                                                                                                  |
+|   2 | Current state only        | each document describes one version; history lives in version control                                                                                                                                                                                                                                 |
+|   3 | `DOC/reference/`          | optional; stores official external documentation as the authoritative source of truth                                                                                                                                                                                                                 |
+|   4 | HTML escaping             | escape `&` `<` `>` as entities in content; inside `<pre>/<code>` this is mandatory — unescaped brackets parse as tags and disappear (`Result<T, E>`, ASCII arrows `<--`)                                                                                                                              |
+|   5 | Notes                     | supplements under diagrams/tables/file trees/call stacks → `<ul class="note"><li>…</li></ul>` (token `--note` in `DOC/style.css`); notes stay in bullet form                                                                                                                                          |
+|   6 | Section layout            | development docs only — opening: qualifying prose (when structure is impossible) · middle: structured content only (code/diagrams/tables) · end: `ul.note` bullets only                                                                                                                               |
+|   7 | Comment budget            | an in-code comment with >3 information points → `ul.note` after its code block; the comment keeps only what the signature/call needs                                                                                                                                                                  |
+|   8 | One block, one flow       | a code block is a single continuous content; disjoint pieces → separate blocks/subsections                                                                                                                                                                                                            |
+|   9 | CONVENTIONS               | a convention joins CONVENTIONS when it affects more than one component and a shared pattern or commonality links them. USER / CORE / PROVIDER each keep one such chapter right after the first chapter (may stay empty); state each convention once there and reference it from the affected sections |
+|  10 | BUILD is downstream       | BUILD is generated from ABOUT / USER / CORE / PROVIDER; those documents stay self-contained, and BUILD links back to them. BUILD joins the doc set once development is complete.                                                                                                                      |
+|  11 | Documentation-first       | documents define the target design and contract first; implementation follows them. Each document records the target design, independent of implementation status.                                                                                                                                    |
+|  12 | Conventions vs exceptions | CONVENTIONS state the shared rule; document each exception in its mechanism / component section and link it from the rule                                                                                                                                                                             |
+
+## Project Structure
+
+```
+project/                      project root
+├── DOC/                      documentation of this project
+├── README.md                 project front page, outside the document set
+├── <code roots>              code, tests, and toolchain metadata, in native paths
+└── child-project/            subproject root; repeats this layout below itself
+```
+
+## Language
+
+- Actual document content can be in any language. It is acceptable for document content to use translation of the terms defined in this documentation. Attached a non-exhaustive table of EN to CN translation for easier coherence.
+
+| EN                                   | CN                   |
+| ------------------------------------ | -------------------- |
+| `[DONE]`                             | `[已解决]`              |
+| `// Recommendation:  15,000`         | `//推荐值：15,000`       |
+| `Internal Process`                   | `内部处理`               |
+| `//See USER §xx.xx`                  | `//见 USER §xx.xx`    |
+| `Add` / `Delete` / `Change` / `None` | `增` / 删 / `改` / `不动` |
+
+## Diagrams: PlantUML
+
+PlantUML is the sole diagram source: Component Diagram, Sequence Diagram, or Activity Diagram with Swimlanes. Other visuals can use actual pictures.
+Sources (`*.puml`) and exports (`*.svg`) live in the owning project's `DOC/diagram/` (one folder per project); embed the SVG via `<img>` with a relative path (`diagram/…`).
+
+1. **Form by complexity** — general architecture: Component Diagram · at most one branch decision (<2 nesting levels): Sequence Diagram · more branching: Activity Diagram with Swimlanes, one swimlane per participant
+2. **Vertical layout** — write branch-heavy flows as a guard-clause cascade: checks run sequentially and each branch ends `stop`
+3. **Labels** — in the documentation language; short messages, details into notes
+4. **Source is authoritative** — edit `*.puml`, re-export (`plantuml -tsvg <project>/DOC/diagram/*.puml`), commit both together; the SVG is a generated artifact
+5. **Embedding** — wrap in `<div class="diagram">`, natural size, horizontal scroll when wider than the page (same mode as `<pre>`)
+6. **Participants** — the project is one participant; draw only boundary-crossing messages; internal processes or components (main/renderer, views, stores, …) belong to CORE; summarize internal processing as one self-loop on the project labeled `Internal Process`
+
+# Spec Guidelines
+
+
+Spec documentation per project, in HTML — the development docs split by boundary:
 
 | # | Document | Boundary | Content | Elsewhere |
 |--:|----------|----------|---------|-----------|
@@ -10,7 +62,7 @@ Documents per project, in HTML — the development docs split by boundary:
 | 4 | [PROVIDER](#provider) | lower — underlying data sources / dependencies (system services, IPC, hardware, daemons, network endpoints, …); present when applicable | protocols · conventions · APIs · workflows | whole-system view → [USER](#user) · internal handling → [CORE](#core) |
 | 5 | [BUILD](#build) | written after development | how to use & build on the project | — |
 
-`README.md` is not part of the project documentation; it serves only as the front page for a general audience.
+`README.md` — the project front page, maintained separately; development work draws on this document set alone.
 
 | Principle | Rule |
 |-----------|------|
@@ -22,22 +74,7 @@ Documents per project, in HTML — the development docs split by boundary:
 
 [↑](#documentation-guidelines)
 
-| # | Constraint | Rule |
-|--:|-----------|------|
-| 1 | Single source of truth | a definition appears once, at the most appropriate spot; everywhere else → hyperlink |
-| 2 | Current state only | each document describes one version; history lives in version control |
-| 3 | `reference/` | optional; stores official external documentation as the authoritative source of truth |
-| 4 | HTML escaping | escape `&` `<` `>` as entities in content; inside `<pre>/<code>` this is mandatory — unescaped brackets parse as tags and disappear (`Result<T, E>`, ASCII arrows `<--`) |
-| 5 | Notes | supplements under diagrams/tables/file trees/call stacks → `<ul class="note"><li>…</li></ul>` (token `--note` in style.css); notes stay in bullet form |
-| 6 | Section layout | development docs only — opening: qualifying prose (when structure is impossible) · middle: structured content only (code/diagrams/tables) · end: `ul.note` bullets only |
-| 7 | Comment budget | an in-code comment with >3 information points → `ul.note` after its code block; the comment keeps only what the signature/call needs |
-| 8 | One block, one flow | a code block is a single continuous content; disjoint pieces → separate blocks/subsections |
-| 9 | CONVENTIONS | a convention joins CONVENTIONS when it affects more than one component and a shared pattern or commonality links them. USER / CORE / PROVIDER each keep one such chapter right after the first chapter (may stay empty); state each convention once there and reference it from the affected sections |
-| 10 | BUILD is downstream | BUILD is generated from ABOUT / USER / CORE / PROVIDER; those documents stay self-contained, and BUILD links back to them. BUILD joins the doc set once development is complete. |
-| 11 | Documentation-first | documents define the target design and contract first; implementation follows them. Each document records the target design, independent of implementation status. |
-| 12 | Conventions vs exceptions | CONVENTIONS state the shared rule; document each exception in its mechanism / component section and link it from the rule |
-
-## About
+## ABOUT
 
 [↑](#documentation-guidelines)
 
@@ -49,7 +86,7 @@ Documents per project, in HTML — the development docs split by boundary:
    - **Form** — file tree with a one-sentence comment per entry, stating its role in the project organization
 4. **Credits** — always present and last; credit the projects used, with stack/license where useful
 
-## User
+## USER
 
 [↑](#documentation-guidelines)
 
@@ -73,17 +110,17 @@ Documents per project, in HTML — the development docs split by boundary:
    - palette — color tokens and their semantic roles
    - visual presentation — the per-component visual contract (geometry, states, styling) stated in prose/code; a prototype illustrates it while the written contract governs; the prototype's numbers are illustrative
 
-## Core
+## CORE
 
 [↑](#documentation-guidelines)
 
 **Rules**
 
-| Topic | Rule |
-|-------|------|
-| Shared symbols | symbols already defined in USER/PROVIDER → one-line declaration with trailing `//见 USER §xx.xx` / `//见 PROVIDER §xx.xx` in the project language; all remaining symbols use syntactically valid project language |
-| Engineering constants | name & purpose in the owning source file's signature subsection · recommended value as a comment (e.g. `// 推荐值 15_000`) · flow-specific literal inline in the call stack where that flow depends on it · UI visual literals in USER's UI chapters (CSS/code is the operational source of truth) · one home per constant: its owning subsection |
-| Naming source | implementation reference (main branch, breadpan, std / GTK APIs) → real names · new contract → drafted names/signatures, with implementation preserving documented semantics and call stacks using the drafted names |
+| Topic                 | Rule                                                                                                                                                                                                                                                                                                                                                       |
+| --------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Shared symbols        | symbols already defined in USER/PROVIDER → one-line declaration with trailing `//See USER §xx.xx` / `//See PROVIDER §xx.xx` in the project language; all remaining symbols use syntactically valid project language                                                                                                                                        |
+| Engineering constants | name & purpose in the owning source file's signature subsection · recommended value as a comment (e.g. `// Recommendation: 15,000`) · flow-specific literal inline in the call stack where that flow depends on it · UI visual literals in USER's UI chapters (CSS/code is the operational source of truth) · one home per constant: its owning subsection |
+| Naming source         | implementation reference (main branch, breadpan, std / GTK APIs) → real names · new contract → drafted names/signatures, with implementation preserving documented semantics and call stacks using the drafted names                                                                                                                                       |
 
 **Chapters**
 1. **File tree** — final code structure; each entry states what the module serves and links to its signatures subsection where one exists; covers source/build/config/assets; documentation artifacts and styling live outside CORE
@@ -101,7 +138,7 @@ Documents per project, in HTML — the development docs split by boundary:
    - at most one trailing comment per call, placed on the call's line; the ancestor spine `│` continues through that line
    - motivations, policies, trade-offs beyond one comment line → prose after the block
 
-## Provider
+## PROVIDER
 
 [↑](#documentation-guidelines)
 
@@ -117,20 +154,6 @@ Documents per project, in HTML — the development docs split by boundary:
    - consumed API specifications — code, or pseudocode for multi-language support
    - message types sent/received on this boundary, incl. errors — pseudocode definition block + table of meaning & suggested action
    - data models — objects crossing this boundary (bare code/pseudocode; the code defines the object) · field table (external spec as authority) · transformations between provider ↔ project data objects (exact names)
-
-## Diagrams: PlantUML
-
-[↑](#documentation-guidelines)
-
-Applies to USER & PROVIDER. PlantUML is the sole diagram source: Component Diagram, Sequence Diagram, or Activity Diagram with Swimlanes. Other visuals use actual pictures.
-Sources (`*.puml`) and exports (`*.svg`) live in the owning project's own `diagram/` (one folder per project); embed the SVG via `<img>` with a relative path (`diagram/…`).
-
-1. **Form by complexity** — general architecture: Component Diagram · at most one branch decision (<2 nesting levels): Sequence Diagram · more branching: Activity Diagram with Swimlanes, one swimlane per participant
-2. **Vertical layout** — write branch-heavy flows as a guard-clause cascade: checks run sequentially and each branch ends `stop`
-3. **Labels** — in the documentation language; short messages, details into notes
-4. **Source is authoritative** — edit `*.puml`, re-export (`plantuml -tsvg <project>/diagram/*.puml`), commit both together; the SVG is a generated artifact
-5. **Embedding** — wrap in `<div class="diagram">`, natural size, horizontal scroll when wider than the page (same mode as `<pre>`)
-6. **Participants** — the project is one participant; draw only boundary-crossing messages; internal processes or components (main/renderer, views, stores, …) belong to CORE; summarize internal processing as one self-loop on the project labeled `内部处理`
 
 ## BUILD
 
@@ -150,3 +173,19 @@ Sources (`*.puml`) and exports (`*.svg`) live in the owning project's own `diagr
    - package manager
    - other distribution channels
 4. **Supplementary notes** — remaining developer-facing details
+# Development Guidelines
+
+[↑](#documentation-guidelines)
+
+- They're all intermediary documentations in Markdown format, and does not follow the Spec Guidelines.
+## TODO
+- A simple list of major changes to the project. Typically: new features, component changes, code logic overhaul.
+- After completion, each entry is marked `[DONE]` for later removal.
+## ISSUE
+- A simple list of minor issues found. Typically: bugs, QoL improvements, interactions.
+- After completion, each entry is marked `[DONE]` for later removal.
+## IMPL
+A record of work done during resolution of TODOs and ISSUEs. Each entry is formatted as:
+  - Description: a paragraph, summarizing the issue/requirement.
+  - Solution: a bulleted list of what to implement.
+  - Document Action: a table with the following fields: Doc name, Section, Action (`Add` / `Delete` /`Change`/`None`, `None` is for when relevant action is completed in another entry, in order to avoid overwriting each other's work), Content (the exact alteration to the text)
