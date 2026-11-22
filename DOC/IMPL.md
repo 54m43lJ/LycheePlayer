@@ -256,3 +256,70 @@
 - 更新歌曲流测试的 user 模块 mock。
 - 使用真实登录态实测 `vip_login_base`：`vip=1`、`HugeVip=0`、`svip=1`、`yearflag=1`、`overdate=2027-03-16`、`userinfo.expire=-1`。账号实际为豪华绿钻、没有超级会员，据此修正此前来自第三方文档的映射：`svip` = 豪华绿钻，`HugeVip` = 超级会员；随后用同一账号购买 3 个月超级会员复测：`HugeVip` 从 0 变为 1，新增 `HugeVipStart/HugeVipEnd`，`svip` 保持不变，确认映射成立。超级会员到期时间读取 `HugeVipEnd`；同时修复 `expiresAtMs` 对 `-1` 的回退。
 - `npm run typecheck`、`npm test`（47 个测试文件、218 个用例）与 `npm run build` 通过。
+
+### 4.24 取消 vkey 批量探测，改为元数据判断可播性
+
+**状态**：设计已定稿，代码与 USER / CORE / PROVIDER 文档待实施。
+
+**描述**：排查 104009 风控后确认，根因是歌单页的可用性探测通过批量申请 vkey 实现：每 50 首一批，逐档请求 `flac → 320k → 128k`，一次打开大歌单可能产生数十次 vkey、数百到数千首歌的媒体授权，形态与批量抓取接近。上游没有“不申请播放链接即可判断当前账号可播性”的独立接口；`file.size_*` 只能说明曲库是否存在某档音质，`status` 与 `pay` 字段只能提供状态与付费条件，最终可播性仍由播放时 vkey 决定。因此取消列表级 vkey 探测，改为基于元数据的前置判断，实际播放失败再由 `NO_STREAM` 流程兜底。
+
+**最终判断逻辑**：
+
+```text
+status = 1 / 2                    → 不可播（覆盖其余判断）
+status = 0 / 3 / 缺失              → 继续
+
+pay_status = 1                    → 可播（已单独购买）
+pay_play = 0 / 缺失                → 可播（免费 / 限免）
+pay_play = 1 且 pay_month = 1
+├── isVip = true                  → 可播（绿钻 / 豪华绿钻 / 超级会员均可）
+├── isVip = false                 → 不可播
+└── VIP = unknown                 → 可播（默认放行）
+pay_play = 1 且 pay_month = 0
+├── 超级会员（HugeVip）= true     → 可播
+├── 超级会员 = false              → 不可播（需单独购买）
+└── 超级会员 = unknown            → 可播（默认放行）
+pay_play = 1 且 pay_month 缺失     → 可播（默认放行）
+```
+
+规则说明：
+
+- `status=3`（仅限部分区域）不直接判可播或不可播，只作为“不阻断”，继续走付费判断；区域允许列表不可得，播放失败后兜底。
+- `pay_month` 的含义按真实账号与接口数据修正：`1` 表示会员包可覆盖；`0` 表示豪华绿钻及以下不能听，仅超级会员或已购买可播。
+- VIP 字段映射：`vip` = 绿钻，`svip` = 豪华绿钻，`HugeVip` = 超级会员；已用同一账号购买超级会员前后对照确认。
+- `price_track` / `price_album` 不作为任何判断依据；`pay_status=0` 只表示“没有单独购买”，不构成阻断。
+- `time_free` 不作为限免判断；实测限免歌 `time_free=0` 且 `pay_play=0`，已由 `pay_play=0` 覆盖。
+- `size_try>0` 不能单独判定只有试听；普通付费歌也带试听片段，只有完整档位全为 0 时才可能只有试听。
+- 所有字段缺失一律默认可播；只有明确负面条件才灰化。
+
+**目标实现范围**：
+
+1. `Song` 内部模型增加 `status`、`pay_play`、`pay_month`、`pay_status`；`toSong()` / `rawSongToSong()` 负责映射，播放历史与歌单缓存同步持久化这些字段。
+2. `shared/validation.ts` 的 `isSong` 同步要求新字段；旧歌单缓存、播放历史、最近歌单按 IMPL 4.22 自动整份清除并重新获取。
+3. 删除列表级探测链路：`useAvailability`、`song.probe` IPC / preload、`api/availability.ts` 的 `probeAvailability`、`PROBE_*` 相关常量；`resolveStreamUrls` 只保留给真实播放与下载。
+4. `PlaylistView` 不再调用 `useAvailability`、`setProbeState`；队列快照不再按 `playable === false` 过滤，`metadataReady()` 不再依赖探测结果。
+5. `SongTable` 的不可播标记、音质角标、播放 / 下载按钮禁用改为读取 `PlaybackPermission`（由 `Song` 元数据派生）；音质角标只表示“曲库最高音质”，不再暗示当前账号一定可取流。
+6. 下载资产状态的 `maxQuality` 改为读取 `file.size_*` 或移除该字段，不再依赖探测缓存。
+7. 播放失败、不可播与区域限制只在播放时处理；保留 `NO_STREAM` 沿队列向后尝试与连续 10 首停止逻辑。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `IMPL.md` | 新增“取消 vkey 批量探测，改为元数据判断可播性” | 增 | 记录根因、最终判断逻辑、目标实现范围与待办文档操作。 |
+| `USER.html` | §5.2.3 / §5.2.4 / §5.2.8 | 改 | 删除列表级“最高可用音质 / 不可播标记”的探测描述；音质角标改为“曲库最高音质”；不可播只在播放时确认并提示。 |
+| `USER.html` | §5.3.1 Toast · 合并 | 改 | 删除“连续不可播跳歌”作为探测结果的表述，保留播放失败时的汇总提示。 |
+| `CORE.html` | §4.39 `SongTable.vue`（`#c4-39`） | 改 | 音质 / 不可播标记改为读取 `PlaybackPermission` 与 `file.size_*`，不再接收 `availability`。 |
+| `CORE.html` | §4.46 `PlaylistView.vue`（`#c4-46`） | 改 | 删除 `useAvailability`、`setProbeState` 与队列快照的探测依赖。 |
+| `CORE.html` | §4.52 `api/availability.ts`（`#c4-52`） | 删 | 删除整个探测模块与 `probeAvailability` / `peekAvailability`。 |
+| `CORE.html` | §4.65 / §4.61 队列快照 | 改 | 删除 `playable !== false` 过滤与 `metadataReady()` 的 availability 门控。 |
+| `CORE.html` | §4.2 `ipc.ts` / §4.50 `constants.ts` | 改 | 删除 `song.probe` IPC 与 `PROBE_*` 常量。 |
+| `CORE.html` | §5.11 歌单可用性检测（`#c5-11`） | 删 | 删除 vkey 探测调用树，改为播放时 `NO_STREAM` 处理说明。 |
+| `CORE.html` | §5.5 播放单曲 / §5.16 下载 | 改 | 明确 vkey 只用于真实播放与下载；列表不申请播放链接。 |
+| `PROVIDER.html` | §4.1 / §4.3 `QqSong` | 改 | 补充 `status`、`pay.pay_play` / `pay_month` / `pay_status`、`file.size_*` 的消费语义；删除“用于候选音质”的探测描述。 |
+| `README.md` / `ABOUT.html` | 歌单 / 歌曲列表行 | 改 | 删除“最高可用音质 / 不可播标记”的承诺，改为播放时确认。 |
+
+**工作记录**：
+
+- 当前只完成设计记录，未删除探测代码，也未修改上述文档；避免在逻辑定稿前破坏现有行为。
+- 实现时先扩展 `Song` 与校验器，再删除探测链路，最后同步文档与测试。
