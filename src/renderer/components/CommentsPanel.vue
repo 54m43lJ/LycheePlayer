@@ -160,7 +160,9 @@ async function jumpToBottom(): Promise<void> {
       pages += 1
     }
     if (request === token && hasMore.value && pages >= COMMENT_LOAD_ALL_PAGE_MAX) {
-      toast.show(`评论较多，已加载前 ${pages * COMMENT_PAGE_SIZE} 条`)
+      toast.show(
+        `评论太多，仅跳过 ${COMMENT_LOAD_ALL_PAGE_MAX * COMMENT_PAGE_SIZE} 条`
+      )
     }
   } finally {
     if (request === token) {
