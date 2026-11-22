@@ -72,7 +72,7 @@ describe('play history store', () => {
     expect(history.entries.map((entry) => entry.song.songMid)).toEqual(['anonymous'])
   })
 
-  it('drops malformed entries when loading', async () => {
+  it('clears the whole cache when any stored entry is malformed', async () => {
     const { useHistoryStore } = await import('../src/renderer/stores/history')
     const key = `${PLAY_HISTORY_STORAGE_PREFIX}anonymous`
     storage.set(
@@ -83,7 +83,21 @@ describe('play history store', () => {
     const history = useHistoryStore()
     history.load()
 
-    expect(history.entries.map((entry) => entry.song.songMid)).toEqual(['ok'])
+    expect(history.entries).toEqual([])
+    expect(storage.has(key)).toBe(false)
+  })
+
+  it('clears the cache when a song no longer matches the current model', async () => {
+    const { useHistoryStore } = await import('../src/renderer/stores/history')
+    const key = `${PLAY_HISTORY_STORAGE_PREFIX}anonymous`
+    const oldSong = { ...song('ok'), pay: undefined }
+    storage.set(key, JSON.stringify([{ song: oldSong, playedAtMs: 1 }]))
+
+    const history = useHistoryStore()
+    history.load()
+
+    expect(history.entries).toEqual([])
+    expect(storage.has(key)).toBe(false)
   })
 
   it('clears both the list and its stored key', async () => {

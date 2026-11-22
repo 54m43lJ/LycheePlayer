@@ -15,6 +15,8 @@ import {
   RECENT_PLAYLIST_VALIDATE_MS
 } from '@shared/constants'
 import { IpcCallError, unwrap } from '../api'
+import { isRecentPlaylist } from '@shared/validation'
+import { readPersistedJson } from '../utils/persisted-cache'
 import { useAuthStore } from './auth'
 import { filterQueueSnapshot } from '../utils/queue'
 import { usePlayerStore } from './player'
@@ -29,6 +31,10 @@ export interface PlaylistFeed {
   stale: boolean
   error: string
   loadToken: number
+}
+
+function isRecentList(value: unknown): value is RecentPlaylist[] {
+  return Array.isArray(value) && value.every(isRecentPlaylist)
 }
 
 export const usePlaylistStore = defineStore('playlist', () => {
@@ -65,16 +71,8 @@ export const usePlaylistStore = defineStore('playlist', () => {
   }
 
   function loadRecent(): void {
-    try {
-      const raw = JSON.parse(localStorage.getItem(recentKey()) ?? '[]') as RecentPlaylist[]
-      recent.value = Array.isArray(raw)
-        ? raw
-            .filter((item) => item && typeof item.id === 'string' && item.id)
-            .slice(0, RECENT_PLAYLIST_LIMIT)
-        : []
-    } catch {
-      recent.value = []
-    }
+    const stored = readPersistedJson(recentKey(), isRecentList)
+    recent.value = stored ? stored.slice(0, RECENT_PLAYLIST_LIMIT) : []
   }
 
   function visit(meta: PlaylistMeta): void {

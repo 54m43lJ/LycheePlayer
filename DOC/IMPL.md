@@ -193,3 +193,33 @@
 **工作记录**：
 
 - `npm run typecheck`、`npm test`（44 个测试文件、203 个用例）与 `npm run build` 通过。
+
+### 4.22 本地缓存结构失效即清除重建 [已解决] 
+
+**描述**：补充健壮性原则：本地缓存的数据结构与应用当前模型不符时，一律视为缓存失效，清除该缓存并重新获取/从空状态恢复，不做旧结构兼容。
+
+**解决方案**：
+
+- 新增 `src/shared/validation.ts`，作为 `Song`、`PlaylistMeta`、`PlaylistSnapshot`、`PlaylistCacheEntry`、`RecentPlaylist` 的结构校验唯一来源，完整检查嵌套字段。
+- 新增 `src/renderer/utils/persisted-cache.ts` 的 `readPersistedJson(key, validate)`：解析失败或校验失败时删除 key 并返回 `null`。
+- 歌单磁盘缓存 `readPlaylistCache` 改用完整校验；失败或 `meta.id` 不匹配时删除文件并返回缺失，触发重新拉取。
+- 播放历史、最近歌单改为整份数组校验；任一条目失效就清除该账号 key，按空状态恢复，不再逐条过滤旧条目。
+- 设置文件与下载索引属于用户持久数据，不属于缓存，不纳入清除规则；仍按各自加载逻辑回退默认值或跳过非法项。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `IMPL.md` | 新增“本地缓存结构失效即清除重建” | 增 | 记录原则与实现范围。 |
+| `CORE.html` | §2 CONVENTIONS · 本地缓存结构校验 | 增 | 声明结构化缓存严格校验、失效清除；设置与下载索引除外。 |
+| `CORE.html` | §1 文件树 · shared / utils | 增 | 新增 `validation.ts`、`persisted-cache.ts` 条目。 |
+| `CORE.html` | §4.57 `cache/playlist.ts`（`#c4-57`） | 改 | 读取时完整校验并删除损坏文件。 |
+| `CORE.html` | §4.61 `stores/playlist.ts`（`#c4-61`） | 改 | 最近歌单整份校验，失败清除 key。 |
+| `CORE.html` | §4.86 `stores/history.ts`（`#c4-86`） | 改 | 播放历史整份校验，失败清除 key。 |
+| `CORE.html` | §4.103 `validation.ts`（`#c4-103`） | 增 | 记录校验函数与职责边界。 |
+| `CORE.html` | §4.104 `persisted-cache.ts`（`#c4-104`） | 增 | 记录 `readPersistedJson` 的失效清除行为。 |
+
+**工作记录**：
+
+- 更新历史 store 测试：损坏条目不再逐条丢弃，而是整份清除；新增结构校验与 `readPersistedJson` 测试。
+- `npm run typecheck`、`npm test`（46 个测试文件、214 个用例）与 `npm run build` 通过。

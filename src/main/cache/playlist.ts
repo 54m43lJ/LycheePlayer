@@ -1,8 +1,9 @@
 import { app } from 'electron'
-import { readFileSync } from 'node:fs'
+import { readFileSync, rmSync } from 'node:fs'
 import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PlaylistCacheEntry } from '../../shared/types'
+import { isPlaylistCacheEntry } from '../../shared/validation'
 import { PLAYLIST_CACHE_MAX_BYTES } from '../../shared/constants'
 import { safeCacheScope } from './scope'
 
@@ -18,25 +19,26 @@ function cachePath(scope: string, id: string): string {
   return join(cacheDir(), `${safeSegment(scope)}-${safeSegment(id)}.json`)
 }
 
-function isEntry(value: unknown): value is PlaylistCacheEntry {
-  if (!value || typeof value !== 'object') return false
-  const entry = value as Record<string, unknown>
-  return (
-    Boolean(entry.meta) &&
-    Array.isArray(entry.songs) &&
-    typeof entry.total === 'number' &&
-    typeof entry.complete === 'boolean' &&
-    typeof entry.fetchedAtMs === 'number'
-  )
-}
-
-/** 同步读取整份歌单缓存；调用方根据 fetchedAtMs 判定是否 stale。 */
+/**
+ * 同步读取整份歌单缓存；结构与应用当前模型不符时删除该文件并返回 null，
+ * 调用方按缓存失效重新获取。fetchedAtMs 只用于判断 stale。
+ */
 export function readPlaylistCache(scope: string, id: string): PlaylistCacheEntry | null {
+  const path = cachePath(scope, id)
   try {
-    const text = readFileSync(cachePath(scope, id), 'utf8')
+    const text = readFileSync(path, 'utf8')
     const parsed: unknown = JSON.parse(text)
-    return isEntry(parsed) ? parsed : null
+    if (!isPlaylistCacheEntry(parsed) || parsed.meta.id !== id) {
+      rmSync(path, { force: true })
+      return null
+    }
+    return parsed
   } catch {
+    try {
+      rmSync(path, { force: true })
+    } catch {
+      // 文件不存在或无法删除时按缓存缺失处理。
+    }
     return null
   }
 }

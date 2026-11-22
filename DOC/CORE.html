@@ -34,6 +34,7 @@
 │   │   ├── <a href="#c4-1">types.ts</a>                      跨进程数据模型
 │   │   ├── <a href="#c4-2">ipc.ts</a>                        主进程 / 渲染进程 API 契约
 │   │   ├── <a href="#c4-50">constants.ts</a>                 工程常量集中声明
+│   │   ├── <a href="#c4-103">validation.ts</a>               持久化缓存结构校验
 │   │   └── <a href="#c4-3">xlogin.ts</a>                     官方 xlogin 组件地址
 │   ├── main/                                 Electron 主进程
 │   │   ├── <a href="#c4-4">index.ts</a>                      应用入口与生命周期
@@ -105,6 +106,7 @@
 │       │   ├── <a href="#c4-88">swipe.ts</a>                  横向拖动方向仲裁
 │       │   ├── <a href="#c4-94">embed-bounds.ts</a>            登录组件占位矩形裁剪
 │       │   ├── <a href="#c4-96">page-jump.ts</a>               长页面跳转显隐判定与固定 400ms 过渡
+│       │   ├── <a href="#c4-104">persisted-cache.ts</a>          localStorage 缓存读取与失效清理
 │       │   └── <a href="#c4-64">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
@@ -243,6 +245,10 @@
   <tr>
     <td>缓存作用域</td>
     <td>账号相关缓存键必须带 <code>musicid</code> 或 <code>anonymous</code>；歌单缓存、音频体缓存、可用性缓存与推荐缓存均按账号隔离，退出登录或认证失败不再清空，由设置页“用户缓存管理”按账号选择性删除。</td>
+  </tr>
+  <tr>
+    <td>本地缓存结构校验</td>
+    <td>结构化持久缓存（歌单缓存文件、播放历史、最近歌单）读取时必须按当前内部模型严格校验；JSON 解析失败、字段缺失、类型不符或旧结构一律视为缓存失效，删除该文件 / 键并从上游或空状态重建，不做“尽量兼容旧结构”。设置文件与下载索引属于用户持久数据，不属于缓存，不按此规则清理；非法字段仍按各自加载逻辑回退默认值或跳过。</td>
   </tr>
   <tr>
     <td>启动参数</td>
@@ -2049,7 +2055,7 @@ export function clearPlaylistCacheForUser(scope: string): Promise&lt;void&gt;;
 export function playlistCacheBytes(): Promise&lt;number&gt;;
 </code></pre>
 <ul class="note">
-  <li>每个歌单只保存一份整份快照：<code>meta</code>、<code>songs</code>、<code>total</code>、<code>complete</code> 与 <code>fetchedAtMs</code>；不保存页级状态。</li>
+  <li>每个歌单只保存一份整份快照：<code>meta</code>、<code>songs</code>、<code>total</code>、<code>complete</code> 与 <code>fetchedAtMs</code>；不保存页级状态。读取时用 <a href="#c4-103">shared/validation</a> 校验完整结构，失败或 <code>meta.id</code> 不匹配时删除文件并按缓存缺失重新获取。</li>
   <li><code>complete=false</code> 表示加载中断或缺页；渲染层只把它当作一次临时快照，并继续重新加载。缓存写入按 <code>PLAYLIST_CACHE_MAX_BYTES</code> 做 mtime LRU 清理。</li>
   <li><code>invalidatePlaylistCache(id)</code> 删除该歌单在所有账号下的缓存；收藏写入成功后调用 <code>liked</code>。</li>
   <li>文件名格式为 <code>&lt;musicid|anonymous&gt;-&lt;playlistId&gt;.json</code>；<code>listPlaylistCacheScopes</code> 从文件名首段提取账号并统计，<code>clearPlaylistCacheForUser</code> 只按账号前缀删除，供设置页按账号管理。</li>
@@ -2247,6 +2253,7 @@ export interface PlaylistFeed {
   <li>队列快照：<code>beginQueueBuild()</code> 标记来源；<code>setProbeState()</code> 在每次探测结果变化后尝试推进。最终快照要求 <code>complete &amp;&amp; !stale</code> 且所有歌曲元数据已就绪；之前只生成一次临时快照（优先整份缓存，其次当前已载入页）。最终快照与临时快照签名相同则保留现有队列（含手动插入歌曲），不同则 <code>replacePlaylistQueue</code> 替换。</li>
   <li><code>removeMembers(id, mids)</code> 在内存 feed 中移除对应歌曲、按移除数量递减 <code>total</code>、<code>sourceTotal</code> 与 <code>meta.songCount</code>，并写回整份缓存快照；不修改播放队列。<code>PlaylistView</code> 在删除确认后先调用它做乐观移除，写入失败时由调用方恢复原数组。</li>
   <li><code>recent</code> 按当前账号持久化到 <code>localStorage</code>（key 前缀见 <a href="#c4-50">§4.50</a>），最多 <code>RECENT_PLAYLIST_LIMIT</code> 条。<code>visit(meta)</code> 在进入歌单页时更新 <code>visitedAtMs</code> 并置顶，超出时淘汰最旧一条；<code>removeRecent</code> 移除条目，不补位。</li>
+  <li>读取最近歌单时通过 <a href="#c4-104">readPersistedJson</a> 校验整个数组；任一条目不符合 <code>RecentPlaylist</code> 结构就删除该账号 key，按空列表恢复，不做逐条兼容。</li>
   <li><code>loadRecent()</code> 在启动、登录态变化与账号切换时加载对应账号的列表；<code>validateRecent()</code> 用 5 秒节流 + 单飞，优先读整份缓存再调用 <code>playlist.get(id, { offset: 0 })</code> 刷新名称 / 封面 / 歌曲数。<code>NO_PERMISSION</code> / <code>AUTH_EXPIRED</code> / <code>UPSTREAM_CHANGED</code> / 歌单不存在时移除条目且不补位；网络 / 超时等其余失败保留条目并标记 <code>stale</code>，展示缓存元数据。</li>
   <li>最近歌单的展示态由视图组合：当前 <code>playlist</code> 路由打开的歌单与正在播放的 <code>queueSource</code> 歌单都高亮；“正在播放”图标仍只由 <code>queueSource</code> 决定。store 本身不读取路由，也不改变 <code>recent</code> 的排序、校验与 <code>visit</code> 逻辑。</li>
 </ul>
@@ -2646,7 +2653,7 @@ interface HistoryStore {
 <ul class="note">
   <li>用户可见的播放历史按账号保存在 <code>localStorage['lychee:play-history:&lt;musicid|anonymous&gt;']</code>，最多 <code>PLAY_HISTORY_LIMIT</code> 条，未登录使用独立的匿名作用域；官方云端最近播放接口不作为本项目契约，理由见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。</li>
   <li><code>record(song)</code> 由 <code>loadAndPlay()</code> 在真正开始播放后调用；按 <code>songMid</code> 去重并移回顶部，同时刷新 <code>playedAtMs</code>，不会因暂停后继续或同一首重载音质产生重复条目。</li>
-  <li><code>load()</code> 在启动、登录态变化与账号切换时读取对应作用域；损坏条目直接丢弃，非数组内容回退为空列表。localStorage 不可用时只保留当前会话内存记录。</li>
+  <li><code>load()</code> 在启动、登录态变化与账号切换时读取对应作用域；通过 <a href="#c4-104">readPersistedJson</a> 校验整个数组，任一条目不符合 <code>PlayHistoryEntry</code> / <code>Song</code> 结构就删除该账号 key，按空历史恢复，不做逐条兼容。localStorage 不可用时只保留当前会话内存记录。</li>
   <li><code>clear()</code> 清空内存列表并移除当前作用域的 key；删除播放历史不影响下载、缓存、播放队列或“上一首”使用的会话历史。</li>
 </ul>
 
@@ -2878,6 +2885,30 @@ const emit = defineEmits&lt;{
   <li><code>showCurrent</code> 只判断当前歌曲是否存在于传入列表（通常是筛选后的展示数组）中，不读取 <code>queueSource</code>；因此从播放历史、其他歌单或其他入口开始播放时，只要当前歌曲出现在该列表里就显示按钮。</li>
   <li><code>scrollToCurrent()</code> 委托 <a href="#c4-96">scrollToSongRow</a> 把当前行滚到内容区中间；列表页只负责把 <code>pageRef</code> 与展示数组传入。</li>
   <li>歌单详情（含“我喜欢”与“今日私享”）与播放历史共用该 composable，不再各自维护显隐条件与滚动逻辑。</li>
+</ul>
+
+<h3 id="c4-103">4.103 src/shared/validation.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function isSong(value: unknown): value is Song;
+export function isPlaylistMeta(value: unknown): value is PlaylistMeta;
+export function isPlaylistSnapshot(value: unknown): value is PlaylistSnapshot;
+export function isPlaylistCacheEntry(value: unknown): value is PlaylistCacheEntry;
+export function isRecentPlaylist(value: unknown): value is RecentPlaylist;
+</code></pre>
+<ul class="note">
+  <li>持久化缓存结构校验的唯一来源：完整检查 <code>Song</code> 的歌手 / 专辑 / pay、<code>PlaylistMeta</code>、<code>PlaylistSnapshot</code>、歌单缓存条目与最近歌单条目；不负责读取文件或 localStorage。</li>
+  <li>校验失败即视为缓存失效；调用方负责删除损坏文件 / 键并从上游或空状态重建。主进程与渲染进程共用同一组校验函数，避免各处只做浅层字段判断。</li>
+</ul>
+
+<h3 id="c4-104">4.104 src/renderer/utils/persisted-cache.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function readPersistedJson&lt;T&gt;(
+  key: string,
+  validate: (value: unknown) =&gt; value is T
+): T | null;
+</code></pre>
+<ul class="note">
+  <li>读取并校验 localStorage 中的结构化缓存；JSON 解析失败或 <code>validate</code> 不通过时删除该 key 并返回 <code>null</code>，调用方按缓存缺失处理。</li>
+  <li>localStorage 不可用时静默返回 <code>null</code>；删除失败不抛出，只保留当前会话状态。</li>
+  <li>播放历史与最近歌单共用该入口；设置、音量、歌词开关等单值偏好不使用该函数。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
