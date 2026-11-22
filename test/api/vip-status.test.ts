@@ -45,8 +45,14 @@ describe('getVipStatus', () => {
     )
   })
 
-  it('prefers svip over huge vip', async () => {
-    musicuMock.mockResolvedValue({ identity: { huge_vip: 1 }, svip: 1 })
+  it('maps svip to 豪华绿钻 without HugeVip', async () => {
+    musicuMock.mockResolvedValue({ identity: { vip: 1, HugeVip: 0 }, svip: 1 })
+    const { getVipStatus } = await import('../../src/main/api/user')
+    expect((await getVipStatus()).level).toBe('huge_vip')
+  })
+
+  it('maps HugeVip to 超级会员 and lets it win over 豪华绿钻', async () => {
+    musicuMock.mockResolvedValue({ identity: { vip: 1, HugeVip: 1 }, svip: 1 })
     const { getVipStatus } = await import('../../src/main/api/user')
     expect((await getVipStatus()).level).toBe('svip')
   })
