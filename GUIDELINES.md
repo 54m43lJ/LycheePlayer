@@ -99,7 +99,7 @@ Spec documentation per project, in HTML — the development docs split by bounda
 - state user-visible behavior; internal mechanism names (cache, probe, queue construction) and engineering constants belong to CORE
 
 **Chapters**
-1. **TERMS** — one canonical term per concept with its full definition; later uses stand alone
+1. **TERMS** — one canonical term per concept with its full definition; later uses stand alone. Should not include design details.
 2. **CONVENTIONS** — shared across interfaces (Global constraints #9)
 3. **DIAGRAMS** — mechanisms are the preferred documentation form
    - general architecture — how the application interacts with others (Component Diagram)
