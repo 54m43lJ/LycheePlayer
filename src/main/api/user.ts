@@ -102,7 +102,9 @@ function parseVipOverdate(value: unknown): number | null {
 
 /**
  * 当前登录账号的会员状态；接口失败返回 unknown，不把失败当作非 VIP。
- * 只把 vip / 豪华绿钻 / svip 视为播放权益，星级等其余标记不参与判断。
+ * 字段映射：vip=绿钻，svip=豪华绿钻（真实账号确认）；
+ * HugeVip=超级会员（字段名与 SoundPower is_hugevip 语义推断，尚缺真实超级会员样本）。
+ * 星级等其余标记不参与播放判断。
  */
 export async function getVipStatus(): Promise<VipStatus> {
   const credential = getCredential()
@@ -121,9 +123,9 @@ export async function getVipStatus(): Promise<VipStatus> {
     const data = await musicu<VipData>('VipLogin.VipLoginInter', 'vip_login_base', {})
     const identity = data.identity ?? {}
     const vip = isFlag(identity.vip)
-    const huge = isFlag(identity.huge_vip ?? identity.HugeVip)
-    const svip = isFlag(data.svip)
-    const level: VipLevel = svip ? 'svip' : huge ? 'huge_vip' : vip ? 'vip' : 'none'
+    const deluxe = isFlag(data.svip)
+    const superVip = isFlag(identity.HugeVip ?? identity.huge_vip)
+    const level: VipLevel = superVip ? 'svip' : deluxe ? 'huge_vip' : vip ? 'vip' : 'none'
     const status: VipStatus = {
       state: 'known',
       isVip: level !== 'none',
