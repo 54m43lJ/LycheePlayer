@@ -140,3 +140,56 @@
 
 - `npm run typecheck`、`npm test`（43 个测试文件、201 个用例）与 `npm run build` 通过。
 - 净减少约 180 行页面接线代码；`DOC/ISSUE.md` 的未提交改动不属于本项，未纳入提交。
+
+### 4.20 跳转到当前歌曲与播放来源解耦 [已解决] 
+
+**描述**：从播放历史播放歌曲后，在歌单详情（如“今日私享”的 30 首）没有看到“跳转到当前歌曲”。原实现把歌单页的按钮绑定在 `queueSource === 当前歌单`，因此只有从该歌单起播时才显示；只要当前歌曲出现在列表里，就应允许定位，与队列由谁构建无关。
+
+**解决方案**：
+
+- 新增 `useCurrentSongJump(rootRef, songs)`：仅判断当前歌曲是否在传入列表（含筛选结果）中，不读取 `queueSource`；定位滚动复用 `scrollToSongRow`。
+- `PlaylistView` 与 `HistoryView` 改用该 composable，删除各自的 `showCurrent` 条件与 `scrollToCurrent` 实现；歌单详情（含普通歌单、我喜欢、今日私享）与播放历史行为一致。
+- “今日私享”仍由 `PlaylistView` 承载，因此自动获得相同能力；`SongListTable` 已在歌单 / 历史 / 今日私享中复用，不新增通用复用规则。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `IMPL.md` | 新增“跳转到当前歌曲与播放来源解耦” | 增 | 记录问题、解耦方式与文档操作。 |
+| `USER.html` | §2 CONVENTIONS · 长页面跳转 | 改 | 去掉“正在播放的歌单”限制，改为当前歌曲在列表中即可定位。 |
+| `USER.html` | §5.2.8 页面结构 · 歌单详情 / 播放历史 | 改 | 明确与播放队列来源无关。 |
+| `CORE.html` | §1 文件树 · composables | 增 | 新增 `current-song-jump.ts` 条目。 |
+| `CORE.html` | §4.46 / §4.87 | 改 | 改用 `useCurrentSongJump`，删除来源判断。 |
+| `CORE.html` | §4.101 `SongListTable.vue`（`#c4-101`） | 改 | 明确歌单详情包含“我喜欢”与“今日私享”。 |
+| `CORE.html` | §4.102 `current-song-jump.ts`（`#c4-102`） | 增 | 记录显隐条件与与播放来源解耦的契约。 |
+| `CORE.html` | §5.23 跳转到当前歌曲（`#c5-23`） | 改 | 移除 `queueSource` 判断，改为列表成员判断。 |
+| `README.md` / `ABOUT.html` | 歌单行 | 改 | “当前歌曲在该歌单列表中时提供”。 |
+
+**工作记录**：
+
+- 新增 `test/current-song-jump.test.ts`：覆盖 `queueSource = null` 时当前歌曲在列表中仍显示，以及列表变化后重新判断。
+- `npm run typecheck`、`npm test` 与 `npm run build` 通过。
+
+### 4.21 歌单重复提示缩短为“已添加” [已解决] 
+
+**描述**：添加到歌单时，已存在歌曲的歌单行与兜底 Toast 使用“已在歌单中”，五个字过长；统一改为“已添加”。
+
+**解决方案**：
+
+- `PlaylistPicker` 的重复行标签与点击兜底 Toast 改为“已添加”。
+- `playlist-edit.addSongs` 在 `changed = false` 时的兜底 Toast 同步改为“已添加”；成功写入仍为“已添加到歌单”。
+- 同步更新 USER / CORE 中的提示文案与 IMPL 记录；80092 业务状态的“歌曲可能已在歌单中”属于错误说明，不在此次改动范围。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `IMPL.md` | 新增“歌单重复提示缩短为‘已添加’” | 增 | 记录文案调整范围。 |
+| `USER.html` | §5.2.4 歌曲列表 · 添加到歌单 | 改 | 行标签与 Toast 改为“已添加”。 |
+| `USER.html` | §5.2.8 页面结构 · 歌单详情 | 改 | 重复添加提示改为“已添加”。 |
+| `USER.html` | §5.3.1 Toast · 失败与无变化 | 改 | 示例改为“已添加”。 |
+| `CORE.html` | §4.55 / §4.77 / §5.14 | 改 | 同步重复预检与 Toast 文案。 |
+
+**工作记录**：
+
+- `npm run typecheck`、`npm test`（44 个测试文件、203 个用例）与 `npm run build` 通过。

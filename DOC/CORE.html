@@ -114,6 +114,7 @@
 │       │   ├── <a href="#c4-65">availability.ts</a>           可用性探测调度
 │       │   ├── <a href="#c4-92">back-navigation.ts</a>         后退优先关闭浮层
 │       │   ├── <a href="#c4-95">page-jump.ts</a>               页面级跳转按钮
+│       │   ├── <a href="#c4-102">current-song-jump.ts</a>          列表内当前歌曲定位
 │       │   └── <a href="#c4-78">revealer-touch.ts</a>          Revealer 触屏手势
 │       ├── components/
 │       │   ├── <a href="#c4-36">AppIcon.vue</a>               图标集
@@ -1756,7 +1757,7 @@ const emit = defineEmits&lt;{
   <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongListTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongListTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>下载按钮由 <code>SongListTable</code> 统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>：已下载时由全局 <a href="#c4-85">DownloadDeleteDialog</a> 询问是否删除本机文件，未下载时加入统一队列；页面不自行判断资产状态或维护确认框。</li>
   <li>歌曲区标题显示 <code>已下载 X / Y 首</code>：<code>X</code> 按 <code>downloadedQuality</code> 统计，不把播放缓存算作已下载；有筛选时前置 <code>筛选 N ·</code>。歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；输入框不显示占位文字，用 <code>aria-label="筛选歌名、歌手或专辑"</code> 保留无障碍名称。只过滤传给 <code>SongListTable</code> 的展示数组，不改变心跳与队列构建。无匹配时显示空结果状态。</li>
-  <li>页面根节点使用 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 取得内容区滚动容器并监听滚动 / 内容尺寸变化；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击以固定 400ms 过渡滚动。当前页面为播放来源且当前歌曲在筛选结果中时，向 <a href="#c4-97">PageJump</a> 传入 <code>showCurrent</code>；<code>scrollToCurrent()</code> 调用 <a href="#c4-96">scrollToSongRow</a> 把 <code>tr[data-song-mid]</code> 行滚到 <code>.main</code> 中间，复用 400ms 过渡。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
+  <li>页面根节点使用 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 取得内容区滚动容器并监听滚动 / 内容尺寸变化；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击以固定 400ms 过渡滚动。只要当前歌曲在筛选结果中，就通过 <a href="#c4-102">useCurrentSongJump</a> 向 <a href="#c4-97">PageJump</a> 传入 <code>showCurrent</code>，不要求本歌单是播放来源；点击调用 <a href="#c4-96">scrollToSongRow</a> 把 <code>tr[data-song-mid]</code> 行滚到 <code>.main</code> 中间，复用 400ms 过渡。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
   <li>筛选后的 <code>SongListTable</code> 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
   <li>歌单头操作按钮文字始终单行：<code>.btn</code> 使用 <code>white-space: nowrap</code>，<code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，按钮自身 <code>flex: 0 0 auto</code>；空间不足时“播放全部 / 下载全部 / 返回”整组换行，不压缩按钮或在按钮内折行。</li>
@@ -2294,8 +2295,8 @@ interface PlaylistEditStore {
   <li><code>loadFavorites</code> 按 <code>IPC_SONG_MIDS_MAX = 100</code> 分批读取收藏状态；读取失败保留当前集合。</li>
   <li><code>toggleFavorite</code> 先乐观更新 <code>favorites</code>；成功后按返回状态校正，递增 <code>favoriteVersion</code>，调用 <code>playlist.invalidate('liked')</code>，若当前正打开“我喜欢”则立即 <code>poll('liked')</code>；失败回滚并提示。</li>
   <li><code>LibraryView</code> 监听 <code>favoriteVersion</code> 重新拉取“我的歌单”卡片；歌单写入失败时保留原状态并提示。</li>
-  <li><code>addSongs</code> / <code>removeSongs</code> 调用 IPC 后统一执行 <code>refreshAfterWrite(id)</code>：先 <code>playlist.invalidate(id)</code>，再 <code>void playlist.poll(id)</code>。当前打开该歌单时立即走已有分页加载流程；未打开时只失效缓存，下次进入再加载。返回 <code>changed</code>；添加成功提示“已添加到歌单”，无变化提示“已在歌单中”；删除成功只依赖刷新后的列表变化，无变化才提示“歌曲不在歌单中”。</li>
-  <li>写 API 不读回成员，添加 / 删除后的最终内容与计数以统一刷新结果为准；<code>PlaylistView</code> 的乐观移除在刷新前保留，失败时恢复行与计数。<code>PlaylistPicker</code> 先用完整缓存做本地重复预检，命中直接提示“已在歌单中”，未命中再调用 <code>addSongs</code>；<code>createAndAdd</code> 复用同一入口。</li>
+  <li><code>addSongs</code> / <code>removeSongs</code> 调用 IPC 后统一执行 <code>refreshAfterWrite(id)</code>：先 <code>playlist.invalidate(id)</code>，再 <code>void playlist.poll(id)</code>。当前打开该歌单时立即走已有分页加载流程；未打开时只失效缓存，下次进入再加载。返回 <code>changed</code>；添加成功提示“已添加到歌单”，无变化提示“已添加”；删除成功只依赖刷新后的列表变化，无变化才提示“歌曲不在歌单中”。</li>
+  <li>写 API 不读回成员，添加 / 删除后的最终内容与计数以统一刷新结果为准；<code>PlaylistView</code> 的乐观移除在刷新前保留，失败时恢复行与计数。<code>PlaylistPicker</code> 先用完整缓存做本地重复预检，命中直接提示“已添加”，未命中再调用 <code>addSongs</code>；<code>createAndAdd</code> 复用同一入口。</li>
   <li><code>create</code> / <code>rename</code> / <code>remove</code> 成功后刷新“我的歌单”并清除对应缓存；所有写入共用 <code>AUTH_EXPIRED</code> / <code>NO_PERMISSION</code> / <code>UPSTREAM_CHANGED</code> 映射，失败保留原状态。</li>
 </ul>
 
@@ -2522,8 +2523,8 @@ const emit = defineEmits&lt;{ close: []; added: [id: string] }&gt;();
 </code></pre>
 <ul class="note">
   <li>列出当前账号可编辑的普通歌单（排除“我喜欢”），提供“新建歌单”；空列表、加载中与错误分别渲染。</li>
-  <li>打开时对每个歌单并行调用 <code>playlist.getCached</code> 做本地成员预检：只有 <code>complete</code> 快照参与判断，当前歌曲（多选时为全部 mid）已存在时该行置灰、<code>disabled</code> 并显示“已在歌单中”。</li>
-  <li>上游没有“一次查询歌曲是否存在于全部歌单”的接口（只有歌单列表与单歌单详情），因此不逐单请求上游；缓存不完整时保持可点击，由写入返回 <code>changed = false</code> 与 Toast“已在歌单中”兜底。</li>
+  <li>打开时对每个歌单并行调用 <code>playlist.getCached</code> 做本地成员预检：只有 <code>complete</code> 快照参与判断，当前歌曲（多选时为全部 mid）已存在时该行置灰、<code>disabled</code> 并显示“已添加”。</li>
+  <li>上游没有“一次查询歌曲是否存在于全部歌单”的接口（只有歌单列表与单歌单详情），因此不逐单请求上游；缓存不完整时保持可点击，由写入返回 <code>changed = false</code> 与 Toast“已添加”兜底。</li>
   <li>选择歌单后直接调用 <code>playlist-edit.addSongs</code>；点击时再次用缓存预检兜底。成功发出 <code>added</code> / <code>close</code>，失败提示；<code>createAndAdd</code> 复用同一入口。</li>
   <li>新建歌单复用 <code>PlaylistEditDialog</code>，创建成功后直接加入当前歌曲；<code>open</code> 关闭时清空临时状态。打开期间通过 <code>useBackDismiss</code> 注册后退关闭。</li>
 </ul>
@@ -2656,7 +2657,7 @@ interface HistoryStore {
   <li>页头只显示标题与“播放全部”“清空历史”，不显示记录数或容量说明；记录为空时“播放全部”和“清空历史”都禁用。清空使用应用内 <a href="#c4-81">ConfirmDialog</a> 危险态，确认后调用 <code>history.clear()</code>。</li>
   <li>搜索只过滤 <code>history.entries</code>，按歌名 / 歌手 / 专辑做不区分大小写的本地匹配，不发上游请求；输入框不显示占位文字，用 <code>aria-label="搜索播放历史"</code> 保留无障碍名称。无关键词时保留全部记录，结果为空时区分“还没有播放历史”和“没有匹配的播放历史”；空状态只提示“播放歌曲后会显示在这里”，不说明容量或保留策略。</li>
   <li>列表复用 <a href="#c4-101">SongListTable</a>；播放由页面提供，下一首播放、收藏与下载由组件统一处理。双击 / 单曲播放以当前过滤结果为新的播放顺序并替换队列。页面挂载时加载一次收藏状态，歌曲记录顺序不因收藏状态变化而改变。</li>
-  <li>当前歌曲仍在过滤结果中时向 <a href="#c4-97">PageJump</a> 传入 <code>showCurrent</code>；点击调用 <a href="#c4-96">scrollToSongRow</a> 把带 <code>data-song-mid</code> 的行滚到内容区中间。历史页不要求播放来源，一首来自其他歌单的当前歌曲只要出现在历史列表里就可以定位。</li>
+  <li>当前歌曲仍在过滤结果中时，通过 <a href="#c4-102">useCurrentSongJump</a> 向 <a href="#c4-97">PageJump</a> 传入 <code>showCurrent</code>；点击把带 <code>data-song-mid</code> 的行滚到内容区中间。与歌单页一致，不要求播放来源。</li>
   <li>播放历史只记录本机播放，不读取账号云端历史，也不提供跨设备同步。</li>
 </ul>
 
@@ -2858,10 +2859,25 @@ const emit = defineEmits&lt;{
 }&gt;();
 </code></pre>
 <ul class="note">
-  <li>歌曲表页面的共用接线：内部渲染 <a href="#c4-39">SongTable</a> 与 <a href="#c4-77">PlaylistPicker</a>，统一处理收藏、下载、下一首播放、添加到歌单与当前行的暂停 / 继续；搜索、歌单详情、歌手、专辑、播放历史只负责传入展示数组并处理 <code>play</code> / <code>remove</code>。</li>
+  <li>歌曲表页面的共用接线：内部渲染 <a href="#c4-39">SongTable</a> 与 <a href="#c4-77">PlaylistPicker</a>，统一处理收藏、下载、下一首播放、添加到歌单与当前行的暂停 / 继续；搜索、歌单详情（含“我喜欢”与“今日私享”）、歌手、专辑、播放历史只负责传入展示数组并处理 <code>play</code> / <code>remove</code>。</li>
   <li>收藏与资产状态直接读取 <code>playlist-edit.favorites</code> / <code>download.assets</code>；<code>addToPlaylist</code> 打开选择器，写入成功后发出 <code>added</code>，供页面失效目标歌单缓存。</li>
   <li><code>play</code> 必须由页面提供：歌单详情需要 <code>startPlaylistPlayback</code> 与队列构建，历史 / 搜索 / 歌手 / 专辑使用 <code>playList</code>；组件不决定队列语义。</li>
   <li><code>removable</code> 仅由歌单详情按可编辑普通歌单传入；<code>canAddToPlaylist</code> 由页面按登录态传入，播放历史保持默认关闭。</li>
+</ul>
+
+<h3 id="c4-102">4.102 src/renderer/composables/current-song-jump.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function useCurrentSongJump(
+  rootRef: Ref&lt;HTMLElement | null&gt;,
+  songs: Ref&lt;Song[]&gt;
+): {
+  showCurrent: ComputedRef&lt;boolean&gt;;
+  scrollToCurrent(): void;
+};
+</code></pre>
+<ul class="note">
+  <li><code>showCurrent</code> 只判断当前歌曲是否存在于传入列表（通常是筛选后的展示数组）中，不读取 <code>queueSource</code>；因此从播放历史、其他歌单或其他入口开始播放时，只要当前歌曲出现在该列表里就显示按钮。</li>
+  <li><code>scrollToCurrent()</code> 委托 <a href="#c4-96">scrollToSongRow</a> 把当前行滚到内容区中间；列表页只负责把 <code>pageRef</code> 与展示数组传入。</li>
+  <li>歌单详情（含“我喜欢”与“今日私享”）与播放历史共用该 composable，不再各自维护显隐条件与滚动逻辑。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>
@@ -3318,10 +3334,10 @@ views/DiscoverView::onBeforeUnmount()
 ├── window.lychee.playlist.getCached(id)                  // 每个可编辑歌单并行读取
 ├── 判断 !cached.complete → 跳过该歌单
 ├── 判断全部 songMid 命中 → 标记 duplicate
-└── 渲染：duplicate 行 disabled + “已在歌单中”
+└── 渲染：duplicate 行 disabled + “已添加”
 </code></pre>
 <pre><code>components/PlaylistPicker::addTo(playlistId)
-├── 判断 duplicate / 点击时缓存命中 → Toast“已在歌单中”并返回
+├── 判断 duplicate / 点击时缓存命中 → Toast“已添加”并返回
 └── stores/playlist-edit::addSongs(playlistId, [songMid])
     └── window.lychee.playlist.addSongs(playlistId, mids)
         └── ipc::handle('playlist.addSongs')
@@ -3585,15 +3601,15 @@ views/HistoryView::startAt(index)
 </ul>
 
 <h3 id="c5-23">5.23 跳转到当前歌曲</h3>
-<pre><code>views/PlaylistView::scrollToCurrent() / views/HistoryView::scrollToCurrent()
-├── 判断当前歌曲存在且仍在 filteredSongs 中
-├── 判断（歌单详情）queueSource 为当前歌单
-└── utils/page-jump::scrollToSongRow(root, mid)
+<pre><code>composables/current-song-jump::useCurrentSongJump(rootRef, songs)
+├── 判断当前歌曲存在且仍在列表（含筛选结果）中
+├── 不读取 queueSource（与播放来源解耦）
+└── scrollToCurrent() → utils/page-jump::scrollToSongRow(root, mid)
     ├── querySelector('tr[data-song-mid="&lt;mid&gt;"]')
     └── utils/page-jump::scrollWithTransition(.main, 行偏移 - (可视高度 - 行高) / 2)
 </code></pre>
 <ul class="note">
-  <li>歌单详情额外要求当前页面是播放来源；播放历史只要求当前歌曲仍在列表（含筛选结果）中，来自其他歌单的歌曲也可以定位。</li>
+  <li>歌单详情与播放历史都只要求当前歌曲仍在列表（含筛选结果）中；从播放历史、其他歌单或其他入口开始播放都不影响按钮，只要当前歌曲出现在当前列表即可定位。</li>
   <li>滚动容器仍是 <code>.main</code>，与顶部 / 底部跳转共用固定 400ms 过渡；重复点击会取消上一段过渡。</li>
 </ul>
 

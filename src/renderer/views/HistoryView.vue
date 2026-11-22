@@ -4,8 +4,8 @@ import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageJump from '../components/PageJump.vue'
 import SongListTable from '../components/SongListTable.vue'
+import { useCurrentSongJump } from '../composables/current-song-jump'
 import { usePageJump } from '../composables/page-jump'
-import { scrollToSongRow } from '../utils/page-jump'
 import { useHistoryStore } from '../stores/history'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
@@ -29,18 +29,10 @@ const filteredSongs = computed(() => {
     return haystack.includes(keyword)
   })
 })
-const showJumpCurrent = computed(
-  () =>
-    Boolean(player.current) &&
-    filteredSongs.value.some((song) => song.songMid === player.current?.songMid)
+const { showCurrent: showJumpCurrent, scrollToCurrent } = useCurrentSongJump(
+  pageRef,
+  filteredSongs
 )
-
-/** 把当前歌曲行滚到内容区可视范围中间。 */
-function scrollToCurrent(): void {
-  const root = pageRef.value
-  const mid = player.current?.songMid
-  if (root && mid) scrollToSongRow(root, mid)
-}
 
 function startAt(index: number): void {
   const song = filteredSongs.value[index]

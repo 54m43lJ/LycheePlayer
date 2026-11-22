@@ -49,7 +49,7 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
     try {
       const result = unwrap(await window.lychee.playlist.addSongs(id, mids))
       refreshAfterWrite(id)
-      toast.show(result.changed ? '已添加到歌单' : '已在歌单中')
+      toast.show(result.changed ? '已添加到歌单' : '已添加')
       return result.changed
     } finally {
       busy.value = false

@@ -8,8 +8,8 @@ import PageJump from '../components/PageJump.vue'
 import SongListTable from '../components/SongListTable.vue'
 import { describeError } from '../api'
 import { useAvailability } from '../composables/availability'
+import { useCurrentSongJump } from '../composables/current-song-jump'
 import { usePageJump } from '../composables/page-jump'
-import { scrollToSongRow } from '../utils/page-jump'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
@@ -63,6 +63,10 @@ const filteredSongs = computed(() => {
     return haystack.includes(keyword)
   })
 })
+const { showCurrent: showJumpCurrent, scrollToCurrent } = useCurrentSongJump(
+  pageRef,
+  filteredSongs
+)
 
 const loading = computed(
   () => feed.value?.status === 'loading' && feed.value.songs.length === 0
@@ -73,24 +77,6 @@ const error = computed(() =>
 const removable = computed(
   () => Boolean(meta.value && meta.value.editable && meta.value.kind === 'normal')
 )
-const currentSongInList = computed(
-  () =>
-    Boolean(player.current) &&
-    filteredSongs.value.some((song) => song.songMid === player.current?.songMid)
-)
-const showJumpCurrent = computed(
-  () =>
-    player.queueSource?.kind === 'playlist' &&
-    player.queueSource.id === id.value &&
-    currentSongInList.value
-)
-
-/** 把当前歌曲行滚到内容区可视范围中间。 */
-function scrollToCurrent(): void {
-  const root = pageRef.value
-  const mid = player.current?.songMid
-  if (root && mid) scrollToSongRow(root, mid)
-}
 const playableSongs = computed(() =>
   songs.value.filter((song) => availability.value[song.songMid]?.playable !== false)
 )

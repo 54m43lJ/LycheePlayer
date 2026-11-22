@@ -88,7 +88,7 @@ async function addTo(id: string): Promise<void> {
   submittingId.value = id
   try {
     if (duplicateIds.value.has(id) || (await isDuplicate(id))) {
-      toast.show('已在歌单中')
+      toast.show('已添加')
       return
     }
     const changed = await playlistEdit.addSongs(id, props.songMids)
@@ -173,7 +173,7 @@ watch(
                 <span class="picker-name">{{ playlist.name }}</span>
                 <span class="picker-sub">{{ playlistSubtitle(playlist) }}</span>
               </span>
-              <span v-if="duplicateIds.has(playlist.id)" class="picker-dup">已在歌单中</span>
+              <span v-if="duplicateIds.has(playlist.id)" class="picker-dup">已添加</span>
               <span v-else-if="submittingId === playlist.id" class="spinner" />
               <AppIcon v-else name="chevron-right" :size="15" />
             </button>
