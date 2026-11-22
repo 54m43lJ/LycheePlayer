@@ -486,6 +486,7 @@
   <li>歌曲评论单页实测上限 25 条（26 起返回业务码 <code>10000</code>），因此应用固定使用 25 条。未登录时匿名发送，登录后携带 Cookie 以读取 <code>IsPraised</code>。评论区只读取最新评论，通过 <code>LastCommentSeqNo</code> 游标翻页，不提供“最旧”排序。</li>
   <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。上游单次最多返回 100 首，应用固定 50 首/页。</li>
   <li>推荐、歌单写入与 MV 的方法 / 参数已按真实请求固定；内部调用路径与错误处理见 <a href="CORE.html#c4-53">CORE §4.53</a> / <a href="CORE.html#c4-55">§4.55</a> / <a href="CORE.html#c4-56">§4.56</a>。fixture 只覆盖部分映射，具体覆盖范围与未覆盖字段见 <a href="#p4-3">§4.3</a>；接口真实可用性以实际请求结果为准。</li>
+  <li>已消费接口中没有“一次查询歌曲是否存在于当前账号全部歌单”的入口：<code>GetPlaylistByUin</code> 只返回歌单元数据，<code>CgiGetDiss</code> 按单个歌单读取。跨歌单成员判断只能逐单读取或使用应用本地缓存；当前采用后者，见 <a href="CORE.html#c4-77">CORE §4.77</a>。</li>
 </ul>
 
 <h3 id="p4-2">4.2 消息与错误</h3>

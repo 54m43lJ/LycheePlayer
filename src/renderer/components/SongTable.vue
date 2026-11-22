@@ -146,6 +146,7 @@ onBeforeUnmount(() => {
         v-for="(song, index) in songs"
         :key="`${song.songMid}-${index}`"
         class="song-row"
+        :data-song-mid="song.songMid"
         :class="{
           active: song.songMid === activeMid,
           unavailable: availability[song.songMid]?.playable === false

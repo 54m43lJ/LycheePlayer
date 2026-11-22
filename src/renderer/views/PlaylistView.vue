@@ -11,6 +11,7 @@ import { describeError } from '../api'
 import { useAvailability } from '../composables/availability'
 import { useDownloadAction } from '../composables/download-action'
 import { usePageJump } from '../composables/page-jump'
+import { scrollWithTransition } from '../utils/page-jump'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
@@ -77,6 +78,32 @@ const error = computed(() =>
 const removable = computed(
   () => Boolean(meta.value && meta.value.editable && meta.value.kind === 'normal')
 )
+const currentSongInList = computed(
+  () =>
+    Boolean(player.current) &&
+    filteredSongs.value.some((song) => song.songMid === player.current?.songMid)
+)
+const showJumpCurrent = computed(
+  () =>
+    player.queueSource?.kind === 'playlist' &&
+    player.queueSource.id === id.value &&
+    currentSongInList.value
+)
+
+/** 把当前歌曲行滚到内容区可视范围中间，复用 400ms 跳转过渡。 */
+function scrollToCurrent(): void {
+  const root = pageRef.value
+  const main = root?.closest<HTMLElement>('.main')
+  const mid = player.current?.songMid
+  if (!root || !main || !mid) return
+  const row = root.querySelector<HTMLElement>(`tr[data-song-mid="${CSS.escape(mid)}"]`)
+  if (!row) return
+  const mainRect = main.getBoundingClientRect()
+  const rowRect = row.getBoundingClientRect()
+  const top =
+    main.scrollTop + rowRect.top - mainRect.top - (main.clientHeight - rowRect.height) / 2
+  scrollWithTransition(main, top)
+}
 const playableSongs = computed(() =>
   songs.value.filter((song) => availability.value[song.songMid]?.playable !== false)
 )
@@ -378,7 +405,9 @@ onBeforeUnmount(() => {
     <PageJump
       :show-top="showJumpTop"
       :show-bottom="showJumpBottom"
+      :show-current="showJumpCurrent"
       @top="scrollToTop"
+      @current="scrollToCurrent"
       @bottom="scrollToBottom"
     />
 

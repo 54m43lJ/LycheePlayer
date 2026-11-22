@@ -71,3 +71,41 @@
 
 - 用 Electron 离屏截图核对 1280 / 900 / 760 / 721 / 700 / 560 / 430px：宽屏布局不变；760 / 721 为信息与交互同行、进度一行、控制单独一行；≤720 信息与交互拆成两行，进度与控制依次排在下面；深色与浅色均正常。
 - `npm run typecheck`、`npm test`（43 个测试文件、199 个用例）与 `npm run build` 通过。
+
+### 4.18 歌单选择器去重与跳转到当前歌曲 [已解决] 
+
+**描述**：TODO 第三项要求优化歌单交互：添加到歌单时预检歌曲是否已在某个歌单中，命中则将该歌单置灰、不可点击，并保留“已在歌单中”的 Toast 兜底；检测机制需先调查上游是否存在单次跨歌单查询接口；正在播放的歌单在顶部 / 底部跳转按钮之间增加“跳转到当前歌曲”，使用圆点准星图标。
+
+**解决方案**：
+
+- 检测机制调查结论：已消费接口中没有“一次查询歌曲是否存在于当前账号全部歌单”的入口；`GetPlaylistByUin` 只返回歌单元数据，`CgiGetDiss` 按单个歌单读取，跨歌单只能逐单请求。为避免打开选择器时向上游发起 N 次请求，采用本地完整歌单缓存预检。
+- `PlaylistPicker` 打开时对 `listMine()` 返回的可编辑普通歌单并行调用 `playlist.getCached`；仅 `complete` 快照参与判断，当前歌曲（多选时为全部 mid）命中时将该行置灰、`disabled` 并显示“已在歌单中”。
+- 缓存不完整或检测尚未完成时保持可点击；点击仍先查本地缓存，再由 `addSongs` 的 `changed = false` 与 `playlist-edit` 的 Toast“已在歌单中”兜底。
+- `PageJump` 新增 `showCurrent` prop 与 `current` 事件，按钮顺序固定为顶部、当前歌曲、底部；新增 `locate` 圆点准星图标。
+- `SongTable` 数据行增加 `data-song-mid`；`PlaylistView` 在当前页面为播放来源且当前歌曲在筛选结果中时显示按钮，点击按 `tr[data-song-mid]` 定位并把该行滚到内容区中间，复用 `scrollWithTransition` 的 400ms 过渡。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 3 项“歌单交互优化” | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“歌单选择器去重与跳转到当前歌曲” | 增 | 记录需求、调查结论、实现思路与本次文档操作。 |
+| `USER.html` | §2 CONVENTIONS · 长页面跳转 | 改 | 增加歌单详情的“跳转到当前歌曲”按钮与居中滚动行为。 |
+| `USER.html` | §5.2.4 歌曲列表 · 添加到歌单 | 改 | 增加选择器预检、置灰与 Toast 兜底。 |
+| `USER.html` | §5.2.8 页面结构 · 歌单详情 | 改 | 补充当前歌曲按钮与滚动定位。 |
+| `CORE.html` | §4.36 `AppIcon.vue`（`#c4-36`） | 改 | 记录 `locate` 圆点准星图标。 |
+| `CORE.html` | §4.39 `SongTable.vue`（`#c4-39`） | 改 | 记录数据行的 `data-song-mid` 定位属性。 |
+| `CORE.html` | §4.46 `PlaylistView.vue`（`#c4-46`） | 改 | 记录 `showCurrent` 条件与 `scrollToCurrent()` 的居中滚动。 |
+| `CORE.html` | §4.77 `PlaylistPicker.vue`（`#c4-77`） | 改 | 记录本地缓存预检、置灰行、上游无跨歌单接口与 Toast 兜底。 |
+| `CORE.html` | §4.97 `PageJump.vue`（`#c4-97`） | 改 | 更新 props / emits 与三按钮顺序、`locate` 图标。 |
+| `CORE.html` | §5.14 收藏与歌单编辑（`#c5-14`） | 改 | 补 `detectDuplicates()` 与 `addTo()` 的本地预检调用链。 |
+| `CORE.html` | §5.23 跳转到当前歌曲（`#c5-23`） | 增 | 记录按钮显隐条件与 400ms 居中滚动。 |
+| `PROVIDER.html` | §4.1 接口 · 说明 | 增 | 注明没有单次跨歌单成员查询接口，成员判断使用本地缓存。 |
+| `README.md` | §2 用户交互 · 歌单 / 收藏管理行 | 改 | 补充添加歌单去重与当前歌曲跳转。 |
+| `ABOUT.html` | 用户交互 · 歌单 / 收藏管理行 | 改 | 与 README 同步。 |
+
+**工作记录**：
+
+- `npm run typecheck`、`npm test`（43 个测试文件、201 个用例）与 `npm run build` 通过；新增 `PageJump` 三按钮顺序与单独显示的 SSR 测试。
+- 未登录真实账号环境，选择器与当前歌曲跳转的上游行为未做端到端验收；缓存预检逻辑按 `getCached` 返回的 `complete` 与成员集合判断。
+- 已存在的未提交 `DOC/ISSUE.md` 改动不属于本项，未纳入提交。

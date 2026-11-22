@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import AppIcon from './AppIcon.vue'
 
-defineProps<{ showTop: boolean; showBottom: boolean }>()
-const emit = defineEmits<{ top: []; bottom: [] }>()
+defineProps<{ showTop: boolean; showBottom: boolean; showCurrent?: boolean }>()
+const emit = defineEmits<{ top: []; bottom: []; current: [] }>()
 </script>
 
 <template>
-  <div v-if="showTop || showBottom" class="page-jump">
+  <div v-if="showTop || showBottom || showCurrent" class="page-jump">
     <button
       v-if="showTop"
       type="button"
@@ -16,6 +16,16 @@ const emit = defineEmits<{ top: []; bottom: [] }>()
       @click="emit('top')"
     >
       <AppIcon name="to-top" :size="17" />
+    </button>
+    <button
+      v-if="showCurrent"
+      type="button"
+      class="page-jump-btn"
+      title="跳转到当前歌曲"
+      aria-label="跳转到当前歌曲"
+      @click="emit('current')"
+    >
+      <AppIcon name="locate" :size="17" />
     </button>
     <button
       v-if="showBottom"

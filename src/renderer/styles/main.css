@@ -4385,6 +4385,16 @@ button:focus-visible,
   opacity: 0.55;
 }
 
+.picker-row.duplicate:hover {
+  background: transparent;
+}
+
+.picker-dup {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+}
+
 .picker-text {
   display: flex;
   flex: 1;
