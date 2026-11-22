@@ -824,3 +824,31 @@
 | `USER.html` | §5.2.8 搜索页 | 改 | 补充歌手 24 条、上游可能少返回与 MV 静态封面现状。 |
 | `CORE.html` | §4.44 `SearchView` / §4.56 `mv.ts` | 改 | 记录上游过滤行为、`hasMore` 与静态封面事实。 |
 | `README.md` / `ABOUT.html` | 用户交互 · 搜索行 | 改 | 同步末行可能不满与动态封面说明。 |
+
+### 3.30 长页面跳转沿用浏览器平滑滚动，过渡时长随距离增长
+
+**问题描述**：所有长页面的“跳转到顶部 / 底部”按钮都调用 `scrollTo({ behavior: 'smooth' })`，实际时长由 Chromium 按滚动距离决定，页面越长过渡越慢，长列表需要一秒以上才停稳；评论区的“跳转到底部”又直接写 `scrollTop`，与顶部按钮不一致。需求是过渡时长固定为 `JUMP_TRANSITION=400ms`，做不到才取消过渡。
+
+**解决方法**：
+
+- `utils/page-jump.ts` 新增 `JUMP_TRANSITION_MS = 400`、`jumpProgress()`、`scrollWithTransition()` 与 `cancelJumpScroll()`：用 `requestAnimationFrame` 逐帧写入 `scrollTop`，进度采用缓出三次曲线，固定 400ms 结束，不依赖滚动距离。
+- 目标位置先夹在 `[0, scrollHeight - clientHeight]`；起止位置相同或时长非正时直接落位。新的跳转先取消上一段过渡，页面卸载时按滚动容器取消，避免残留动画继续写位置。
+- `usePageJump` 的 `scrollToTop()` / `scrollToBottom()` 改调 `scrollWithTransition()`；评论面板的顶部与底部按钮同样接入，跳转到底部在补拉完成后也走 400ms 过渡。
+- 歌词自动回中仍使用 `scrollIntoView({ behavior: 'smooth' })`，它跟随播放位置而不是用户跳转，不在本次固定时长范围内。
+- 扩展 `test/page-jump.test.ts`：覆盖固定 400ms 进度端点、目标夹紧、过渡结束落位与重复跳转取消上一段。
+
+**修订建议**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUES.md` | 第 1 项“跳转到底部/顶部时过渡时间太长” | 改 | 行尾追加 ` [已解决] `。 |
+| `USER.html` | §2 CONVENTIONS · 长页面跳转（`#u2`） | 改 | 两个按钮点击后固定 400ms 过渡滚动，不随距离变长。 |
+| `USER.html` | §5.2.5 歌词与评论（`#u5-2-5`） | 改 | 评论顶部 / 底部跳转统一固定 400ms，补拉完成后同样过渡。 |
+| `USER.html` | §5.2.8 页面结构 · 歌单详情（`#u5-2-8`） | 改 | “点击平滑滚动”改为“点击后固定 400ms 过渡滚动”。 |
+| `CORE.html` | §1 文件树 · `utils/page-jump.ts` | 改 | 说明同时承载显隐判定与固定 400ms 过渡。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 顶部 / 底部按钮改调 `scrollWithTransition`，补拉完成后也走 400ms。 |
+| `CORE.html` | §4.46 `PlaylistView.vue`（`#c4-46`） | 改 | 歌单详情跳转改为固定 400ms 过渡。 |
+| `CORE.html` | §4.95 `page-jump.ts`（composable）（`#c4-95`） | 改 | 点击改调 `scrollWithTransition`，卸载时取消进行中的过渡。 |
+| `CORE.html` | §4.96 `utils/page-jump.ts`（`#c4-96`） | 改 | 增加 `JUMP_TRANSITION_MS`、`jumpProgress`、`scrollWithTransition`、`cancelJumpScroll` 签名与夹紧 / 取消规则。 |
+| `CORE.html` | §4.97 `PageJump.vue`（`#c4-97`） | 改 | 事件接到固定 400ms 过渡函数，不再称为平滑滚动。 |
+| `test/page-jump.test.ts` | — | 增 | 覆盖固定时长进度、目标夹紧、结束落位与重复跳转取消。 |
