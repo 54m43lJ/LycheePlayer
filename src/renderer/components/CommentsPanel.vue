@@ -13,6 +13,7 @@ import { useAuthStore } from '../stores/auth'
 import { usePlayerStore } from '../stores/player'
 import { useToast } from '../composables/toast'
 import { formatCount } from '../utils/format'
+import { scrollWithTransition } from '../utils/page-jump'
 
 const player = usePlayerStore()
 const auth = useAuthStore()
@@ -59,13 +60,14 @@ function updateJumpControls(): void {
 }
 
 function scrollToTop(): void {
-  listRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+  const el = listRef.value
+  if (el) scrollWithTransition(el, 0)
 }
 
 function scrollToBottom(): void {
   const el = listRef.value
   if (!el) return
-  el.scrollTop = el.scrollHeight
+  scrollWithTransition(el, el.scrollHeight)
   updateJumpControls()
 }
 

@@ -1,5 +1,5 @@
 import { onBeforeUnmount, onMounted, ref, type Ref } from 'vue'
-import { jumpVisibility } from '../utils/page-jump'
+import { cancelJumpScroll, jumpVisibility, scrollWithTransition } from '../utils/page-jump'
 
 /** 页面级“跳转到顶部 / 底部”按钮：跟随 .main 滚动容器与内容尺寸变化。 */
 export function usePageJump(rootRef: Ref<HTMLElement | null>): {
@@ -26,12 +26,13 @@ export function usePageJump(rootRef: Ref<HTMLElement | null>): {
   }
 
   function scrollToTop(): void {
-    scrollRoot?.scrollTo({ top: 0, behavior: 'smooth' })
+    const el = scrollRoot
+    if (el) scrollWithTransition(el, 0)
   }
 
   function scrollToBottom(): void {
     const el = scrollRoot
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    if (el) scrollWithTransition(el, el.scrollHeight)
   }
 
   onMounted(() => {
@@ -45,6 +46,7 @@ export function usePageJump(rootRef: Ref<HTMLElement | null>): {
   })
 
   onBeforeUnmount(() => {
+    if (scrollRoot) cancelJumpScroll(scrollRoot)
     scrollRoot?.removeEventListener('scroll', update)
     scrollRoot = null
     contentObserver?.disconnect()

@@ -104,7 +104,7 @@
 │       │   ├── <a href="#c4-100">cache-users.ts</a>            按账号枚举与清理本地缓存记录
 │       │   ├── <a href="#c4-88">swipe.ts</a>                  横向拖动方向仲裁
 │       │   ├── <a href="#c4-94">embed-bounds.ts</a>            登录组件占位矩形裁剪
-│       │   ├── <a href="#c4-96">page-jump.ts</a>               长页面跳转按钮显隐判定
+│       │   ├── <a href="#c4-96">page-jump.ts</a>               长页面跳转显隐判定与固定 400ms 过渡
 │       │   └── <a href="#c4-64">qrc.ts</a>                    QRC 解密与逐字解析
 │       ├── composables/
 │       │   ├── <a href="#c4-34">lyrics.ts</a>                 歌词加载与缓存
@@ -1694,7 +1694,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li><a href="#c4-72">LyricsOverlay</a> 右列的评论区；监听当前歌曲，存在数字歌曲 ID 时加载评论，支持手动刷新与失败重试。</li>
   <li>顶部只显示“评论”标题、总数与刷新入口，不再提供“最新 / 最旧”排序切换。刷新只重载评论，不触发歌词重载。</li>
-  <li>分页每页 25 条，滚动到底且 <code>hasMore=true</code> 时按游标追加下一页；组件使用 <code>cursor</code> 状态保存 <code>nextCursor</code>，不保留 <code>pageNo</code>。右下角按滚动位置显示独立圆形“跳转到顶部 / 底部”按钮：顶部按钮在 <code>scrollTop &gt; 120</code> 时出现；底部按钮在仍有下一页或未滚到底时出现。点击“跳转到顶部”平滑回顶；点击“跳转到底部”先串行补拉剩余评论（最多 <code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 页 / 约 1000 条），再直接滚到底部。补拉期间按钮显示 spinner；组件卸载、切歌或刷新时通过 token 立即取消后续页。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
+  <li>分页每页 25 条，滚动到底且 <code>hasMore=true</code> 时按游标追加下一页；组件使用 <code>cursor</code> 状态保存 <code>nextCursor</code>，不保留 <code>pageNo</code>。右下角按滚动位置显示独立圆形“跳转到顶部 / 底部”按钮：顶部按钮在 <code>scrollTop &gt; 120</code> 时出现；底部按钮在仍有下一页或未滚到底时出现。点击“跳转到顶部”以固定 400ms 过渡回顶；点击“跳转到底部”先串行补拉剩余评论（最多 <code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 页 / 约 1000 条），完成后同样以 400ms 过渡滚到底部。补拉期间按钮显示 spinner；组件卸载、切歌或刷新时通过 token 立即取消后续页。加载中、空评论与加载失败分别渲染 spinner / 空状态 / 错误重试。</li>
   <li>追加下一页前用现有评论的 <code>id</code> 集合去重，只插入未出现过的评论；顺序完全沿用上游“最新”顺序，不按 <code>createdAtMs</code> 本地重排，刷新与翻页重叠不会产生重复行。</li>
   <li>评论行两行布局：第一行头像 + 昵称 + 正文（完整展示，不截断），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。正文按纯文本渲染，第一个 <code>U+FFFC</code> 占位替换为 <code>emojiUrl</code> 表情图，其余占位显示加载失败图标；没有占位符时表情追加在正文末尾；没有表情也没有附图时，<code>U+FFFC</code> 同样显示失败图标。<code>imageUrl</code> 附图始终显示在正文下方，不消费占位符。只有图片或表情、正文为空的评论照常显示。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
   <li>表情或附图的 <code>img</code> 触发 <code>error</code> 时按 URL 记入 <code>failedMedia</code>，改渲染 <code>file-broken</code> 小占位（折角纸张 + 右下角 X）：表情占位保持 20px 行内尺寸，附图占位为 56×42px；刷新评论或切歌时清空失败记录并重新尝试加载。附图加载成功后点击打开 <a href="#c4-93">ImageLightbox</a>，表情不提供查看大图。</li>
@@ -1743,7 +1743,7 @@ const emit = defineEmits&lt;{
   <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>下载按钮统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>：已下载时由全局 <a href="#c4-85">DownloadDeleteDialog</a> 询问是否删除本机文件，未下载时加入统一队列；页面不自行判断资产状态或维护确认框。</li>
   <li>歌曲区标题显示 <code>已下载 X / Y 首</code>：<code>X</code> 按 <code>downloadedQuality</code> 统计，不把播放缓存算作已下载；有筛选时前置 <code>筛选 N ·</code>。歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；输入框不显示占位文字，用 <code>aria-label="筛选歌名、歌手或专辑"</code> 保留无障碍名称。只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。无匹配时显示空结果状态。</li>
-  <li>页面根节点使用 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 取得内容区滚动容器并监听滚动 / 内容尺寸变化；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击平滑滚动。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
+  <li>页面根节点使用 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 取得内容区滚动容器并监听滚动 / 内容尺寸变化；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击以固定 400ms 过渡滚动。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
   <li>歌单头操作按钮文字始终单行：<code>.btn</code> 使用 <code>white-space: nowrap</code>，<code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，按钮自身 <code>flex: 0 0 auto</code>；空间不足时“播放全部 / 下载全部 / 返回”整组换行，不压缩按钮或在按钮内折行。</li>
@@ -2745,11 +2745,19 @@ export function installBackNavigation(fallback: () =&gt; void): () =&gt; void;
 <ul class="note">
   <li>挂载时从 <code>rootRef</code> 通过 <code>closest('.main')</code> 取得内容区滚动容器，注册 passive <code>scroll</code> 监听；用 <code>ResizeObserver</code> 观察页面根节点，内容高度变化时重新计算。</li>
   <li>显隐判定委托 <a href="#c4-96">utils/page-jump::jumpVisibility</a>：距顶 / 距底超过 120px 才显示对应按钮；内容不足一屏时都不显示。</li>
-  <li>点击按钮调用滚动容器的 <code>scrollTo({ behavior: 'smooth' })</code>；卸载时移除监听并断开 observer。接入页面为 <code>LibraryView</code> / <code>PlaylistView</code> / <code>ArtistView</code> / <code>AlbumView</code> / <code>HistoryView</code> / <code>DownloadsView</code>，按钮模板复用 <a href="#c4-97">PageJump</a>。评论弹层保留自己的补拉逻辑；发现、搜索、设置、登录与 MV 页不接入。</li>
+  <li>点击按钮通过 <a href="#c4-96">utils/page-jump::scrollWithTransition</a> 以固定 400ms 过渡滚动，不走浏览器默认的 <code>behavior: 'smooth'</code>；卸载时取消仍在进行的过渡、移除监听并断开 observer。接入页面为 <code>LibraryView</code> / <code>PlaylistView</code> / <code>ArtistView</code> / <code>AlbumView</code> / <code>HistoryView</code> / <code>DownloadsView</code>，按钮模板复用 <a href="#c4-97">PageJump</a>。评论弹层保留自己的补拉逻辑；发现、搜索、设置、登录与 MV 页不接入。</li>
 </ul>
 
 <h3 id="c4-96">4.96 src/renderer/utils/page-jump.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export const PAGE_JUMP_THRESHOLD = 120;
+export const JUMP_TRANSITION_MS = 400;
+export function jumpProgress(elapsedMs: number, duration?: number): number;
+export function scrollWithTransition(
+  el: HTMLElement,
+  top: number,
+  duration?: number
+): void;
+export function cancelJumpScroll(el?: HTMLElement): void;
 export function jumpVisibility(
   scrollTop: number,
   clientHeight: number,
@@ -2759,6 +2767,8 @@ export function jumpVisibility(
 </code></pre>
 <ul class="note">
   <li><code>top = scrollTop &gt; threshold</code>，<code>bottom = scrollTop + clientHeight &lt; scrollHeight - threshold</code>；不读取 DOM，测试见 <code>test/page-jump.test.ts</code>。</li>
+  <li><code>scrollWithTransition</code> 用 <code>requestAnimationFrame</code> 在固定 <code>JUMP_TRANSITION_MS = 400</code> 内写入 <code>scrollTop</code>，不调用浏览器默认平滑滚动；进度用缓出三次曲线 <code>1 - (1 - t)³</code>。目标值先夹在 <code>[0, scrollHeight - clientHeight]</code> 内，起止位置相同或时长非正时直接落位。</li>
+  <li>同一时间只保留一段过渡：新的跳转先取消上一段；<code>cancelJumpScroll(el)</code> 只取消该元素的过渡，供页面卸载时清理。</li>
 </ul>
 
 <h3 id="c4-97">4.97 src/renderer/components/PageJump.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -2766,7 +2776,7 @@ export function jumpVisibility(
 // emits: top, bottom
 </code></pre>
 <ul class="note">
-  <li>统一渲染右下角 <code>.page-jump</code> 两个圆形按钮；只按传入的显隐状态渲染，不自行读取滚动位置。点击分别发出 <code>top</code> / <code>bottom</code>，由页面把事件接到 <a href="#c4-95">usePageJump</a> 的平滑滚动函数。</li>
+  <li>统一渲染右下角 <code>.page-jump</code> 两个圆形按钮；只按传入的显隐状态渲染，不自行读取滚动位置。点击分别发出 <code>top</code> / <code>bottom</code>，由页面把事件接到 <a href="#c4-95">usePageJump</a> 的固定 400ms 过渡函数。</li>
   <li>按钮使用 <code>to-top</code> / <code>to-bottom</code> 图标，位置由 <code>main.css</code> 的 <code>.page-jump</code> 固定在播放条上方；页面不再各自复制按钮模板。</li>
 </ul>
 
