@@ -43,7 +43,12 @@ vi.mock('../../src/main/media/audio-protocol', () => ({
 }))
 
 vi.mock('../../src/main/api/user', () => ({
-  isVipUser: async () => false
+  getVipStatus: async () => ({
+    state: 'known',
+    isVip: false,
+    level: 'none',
+    expiresAtMs: null
+  })
 }))
 
 beforeEach(() => {

@@ -178,6 +178,8 @@ export const LOGIN_ALLOWED_DOMAINS = ['qq.com', 'gtimg.cn', 'weixin.qq.com'] as 
 export const FAVORITE_STATUS_CACHE_MS = 30_000
 /** VIP 状态缓存时长。推荐值 5 × 60_000 ms。 */
 export const VIP_CACHE_MS = 5 * 60_000
+/** VIP 接口失败后的未知状态缓存时长。推荐值 60_000 ms。 */
+export const VIP_UNKNOWN_CACHE_MS = 60_000
 /** 评论单页条数；上游上限 25。 */
 /** 上游实测 PageSize 上限：25 成功，26 起返回业务码 10000。 */
 export const COMMENT_PAGE_SIZE = 25

@@ -40,7 +40,8 @@ import type {
   UpstreamBlockedEvent,
   UrlResult,
   UserCacheInfo,
-  UserProfile
+  UserProfile,
+  VipStatus
 } from './types'
 
 export interface LycheeApi {
@@ -142,8 +143,8 @@ export interface LycheeApi {
   }
   user: {
     getProfile(): Promise<IpcResult<UserProfile>>
-    /** 当前账号是否具有 VIP 权益；未登录或接口失败返回 false。 */
-    isVip(): Promise<IpcResult<boolean>>
+    /** 当前账号会员状态；unknown 表示接口失败，不能当作非 VIP。 */
+    vipStatus(): Promise<IpcResult<VipStatus>>
   }
   lyric: {
     get(songId: string): Promise<IpcResult<Lyric>>

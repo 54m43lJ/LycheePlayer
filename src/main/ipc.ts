@@ -50,7 +50,7 @@ import { getArtist, getArtistAlbums, getArtistSongs } from './api/artist'
 import { getAlbum } from './api/album'
 import { getStreamUrls } from './api/song'
 import { probeAvailability, clearAvailabilityCache } from './api/availability'
-import { getProfile, isVipUser } from './api/user'
+import { getProfile, getVipStatus } from './api/user'
 import { toIpcError, setUpstreamBlockNotifier } from './api/client'
 import {
   clearCredential,
@@ -498,7 +498,7 @@ export function registerIpc(): void {
 
   // ---------- account / metadata ----------
   handle('user.getProfile', async () => getProfile())
-  handle('user.isVip', async () => isVipUser())
+  handle('user.vipStatus', async () => getVipStatus())
   handle('lyric.get', async (songId: unknown) => getLyric(stringArg(songId, '歌曲 ID')))
   handle('comment.get', async (songId: unknown, cursor: unknown) =>
     getComments(String(songId), typeof cursor === 'string' ? cursor : '')

@@ -223,3 +223,35 @@
 
 - 更新历史 store 测试：损坏条目不再逐条丢弃，而是整份清除；新增结构校验与 `readPersistedJson` 测试。
 - `npm run typecheck`、`npm test`（46 个测试文件、214 个用例）与 `npm run build` 通过。
+
+### 4.23 VIP 状态从布尔值改为结构化三态 [已解决] 
+
+**描述**：补充点 6 指出 `isVipUser()` 只返回布尔值，接口失败时与“确实不是 VIP”无法区分；需要确认 QQ 音乐是否提供会员等级信息，并提供后再改进内部 API。
+
+**解决方案**：
+
+- 上游 `vip_login_base` 实际提供 `identity.vip`（绿钻）、`identity.huge_vip` / `HugeVip`（豪华绿钻）、`svip`（超级会员）以及 `userinfo.expire` 等字段，不需要另找接口。
+- 新增 `VipStatus`：`state`（known / unknown）、`isVip`、`level`（none / vip / huge_vip / svip）、`expiresAtMs`。
+- `getVipStatus()` 负责查询、映射与缓存：成功缓存 `VIP_CACHE_MS`，失败缓存 `VIP_UNKNOWN_CACHE_MS` 并返回 `unknown`；未登录返回已知非会员。
+- `isVipUser()` 保留为兼容包装：已知返回布尔值，未知返回 `null`。
+- IPC 由 `user.isVip` 改为 `user.vipStatus`；设置页在已知会员时显示 `VIP` / `SVIP` 徽标，未知或失败时不显示。
+- `getStreamUrls` 的 `NO_STREAM` 文案区分已知 VIP、已知非 VIP 与 unknown，不再把查询失败当作非 VIP。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `IMPL.md` | 新增“VIP 状态从布尔值改为结构化三态” | 增 | 记录调查结论与 API 调整。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | 新增 `VipLevel` / `VipStatus` 定义。 |
+| `CORE.html` | §4.2 `ipc.ts`（`#c4-2`） | 改 | `user.isVip` 改为 `user.vipStatus`。 |
+| `CORE.html` | §4.13 `api/user.ts`（`#c4-13`） | 改 | 记录 `getVipStatus()`、`isVipUser()` 兼容包装与缓存策略。 |
+| `CORE.html` | §4.48 `SettingsView.vue`（`#c4-48`） | 改 | 徽标改为读取 `vipStatus`，未知不显示。 |
+| `CORE.html` | §4.50 `constants.ts`（`#c4-50`） | 改 | 新增 `VIP_UNKNOWN_CACHE_MS`。 |
+| `CORE.html` | §5.5 播放单曲调用树 | 改 | 无可用 result 时回退 `getVipStatus()`。 |
+| `PROVIDER.html` | §4.1 VIP 状态行 / 数据模型 `QqVipData` | 改 | 记录会员字段、等级映射与 `expire` 解析。 |
+
+**工作记录**：
+
+- 新增 `test/api/vip-status.test.ts`：覆盖绿钻映射、SVIP 优先、已知非会员、接口失败返回 unknown 与 `isVipUser() === null`。
+- 更新歌曲流测试的 user 模块 mock。
+- `npm run typecheck`、`npm test`（47 个测试文件、218 个用例）与 `npm run build` 通过。

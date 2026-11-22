@@ -719,6 +719,15 @@ export interface UserProfile {
   avatarUrl: string;
 }
 
+export type VipLevel = 'none' | 'vip' | 'huge_vip' | 'svip';
+
+export interface VipStatus {
+  state: 'known' | 'unknown';
+  isVip: boolean;
+  level: VipLevel;
+  expiresAtMs: number | null;
+}
+
 export interface EmbedRect {
   x: number;
   y: number;
@@ -849,7 +858,7 @@ export interface FlagsFile {
   };
   user: {
     getProfile(): Promise&lt;IpcResult&lt;UserProfile&gt;&gt;;
-    isVip(): Promise&lt;IpcResult&lt;boolean&gt;&gt;;
+    vipStatus(): Promise&lt;IpcResult&lt;VipStatus&gt;&gt;;
   };
   lyric: {
     get(songId: string): Promise&lt;IpcResult&lt;Lyric&gt;&gt;;
@@ -1075,7 +1084,7 @@ function buildStreamUrl(purl: string): string;
   <li><code>getStreamUrls</code> 是全应用唯一拼装播放链接的位置；回退规则见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。返回的 <code>url</code> 是主进程 <code>lychee-audio://stream/&lt;token&gt;</code> 代理地址，不是上游原始链接。</li>
   <li><code>requestQuality</code> 按 <code>PROBE_VKEY_BATCH = 50</code> 分块请求 vkey；单次 IPC 的歌曲上限仍为 <code>IPC_SONG_MIDS_MAX = 100</code>，因此 <code>song.getUrls</code> 单批 100 首时内部会拆成 50 + 50 两次 vkey 请求。每首歌的 <code>midurlinfo[].result</code> 与音质档位一起保留，供全批量失败时判定原因。</li>
   <li>vkey 请求先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>；若响应或 <code>data.retcode</code> 为 <code>104009</code>，再以相同 filename 尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
-  <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>isVipUser()</code> 通用文案。</li>
+  <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>getVipStatus()</code> 通用文案。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
   <li><code>fetchTrackBatch</code> 按 <code>SONG_DETAIL_BATCH = 50</code> 分块调用 <code>music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo</code>（<code>mids</code> / <code>types</code> / <code>modify_stamp</code> / <code>ctx</code> / <code>client</code>），按 <code>mid</code> 建索引；<code>fetchTracksById</code> 先走批量详情，仅对缺失歌曲用 <code>PROBE_DETAIL_CONCURRENCY = 2</code> 单曲兜底；<code>getDetail</code> 与 <code>resolveStreams</code> 共用该入口。</li>
   <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。播放取源优先级固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”，与 <a href="#c4-59">§4.59</a> 的 <code>handleStream</code> 顺序一致。</li>
@@ -1114,11 +1123,14 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 
 <h3 id="c4-13">4.13 src/main/api/user.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getProfile(): Promise&lt;UserProfile&gt;;
-export function isVipUser(): Promise&lt;boolean&gt;;
+export function getVipStatus(): Promise&lt;VipStatus&gt;;
+export function isVipUser(): Promise&lt;boolean | null&gt;;
 
 </code></pre>
 <ul class="note">
-  <li><code>isVipUser</code> 通过 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a> 的 VIP 状态接口查询当前账号权益；未登录、接口失败均按非 VIP 处理。渲染层经 <code>user.isVip</code> 查询，设置页只在结果为真时显示 VIP 徽标；失败或无法检测时不显示。</li>
+  <li><code>getVipStatus</code> 通过 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a> 的 VIP 状态接口返回 <code>{ state, isVip, level, expiresAtMs }</code>：<code>vip</code> / 豪华绿钻 / <code>svip</code> 任一为真即 <code>isVip</code>，<code>level</code> 取最高档；接口失败返回 <code>state='unknown'</code>，不能当作非 VIP。未登录返回已知非会员。</li>
+  <li>成功结果缓存 <code>VIP_CACHE_MS</code>；未知结果只缓存 <code>VIP_UNKNOWN_CACHE_MS</code>，避免失败时每次调用都重试，同时比正常缓存更快恢复。缓存按 <code>musicid</code> 隔离。</li>
+  <li><code>isVipUser()</code> 是兼容包装：已知状态返回布尔值，<code>unknown</code> 返回 <code>null</code>。渲染层经 <code>user.vipStatus</code> 查询；设置页只在 <code>state='known' &amp;&amp; isVip</code> 时显示 <code>VIP</code> / <code>SVIP</code> 徽标，未知时不显示。</li>
 </ul>
 
 <h3 id="c4-14">4.14 src/main/api/lyric.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1789,7 +1801,7 @@ const emit = defineEmits&lt;{
   <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
   <li>“用户缓存管理”打开 <a href="#c4-99">CacheManagerDialog</a>：调用 <code>cache.listUsers()</code>，与 <a href="#c4-100">utils/cache-users.ts</a> 枚举的 localStorage 记录合并，按账号展示播放缓存、歌单缓存与本地记录占用；删除时调用 <code>cache.clearUser(musicid)</code> 并清理对应 local key，随后刷新统计与缓存占用。删除当前账号时重新加载最近歌单与播放历史，不触发上游请求。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
-  <li>账号区展示昵称、登录方式、<code>musicid</code> 与到期时间，不显示“已登录”徽标；<code>user.isVip</code> 为真时在右侧显示 <code>VIP</code> 徽标，失败或无法检测时不显示。登录态或 <code>musicid</code> 变化时重新查询，避免跨账号复用。登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>账号区展示昵称、登录方式、<code>musicid</code> 与到期时间，不显示“已登录”徽标；<code>user.vipStatus</code> 返回已知会员时在右侧显示 <code>VIP</code> / <code>SVIP</code> 徽标，<code>unknown</code> 或失败时不显示。登录态或 <code>musicid</code> 变化时重新查询，避免跨账号复用。登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
   <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。“播放缓存”标题也不再附加“不影响已下载”等括号说明。</li>
 </ul>
 
@@ -1905,6 +1917,7 @@ export declare const OAUTH_TIMEOUT_MS: number;              // 15_000 ms
 export declare const LOGIN_ALLOWED_DOMAINS: readonly string[]; // qq.com / gtimg.cn / weixin.qq.com
 export declare const FAVORITE_STATUS_CACHE_MS: number;      // 30_000 ms
 export declare const VIP_CACHE_MS: number;                  // 5 × 60_000 ms
+export declare const VIP_UNKNOWN_CACHE_MS: number;         // 60_000 ms
 export declare const COMMENT_PAGE_SIZE: number;             // 25；上游实测上限
 export declare const COMMENT_LOAD_ALL_PAGE_MAX: number;     // 40；跳转底部最多补拉 1000 条
 export declare const COMMENT_CONTENT_MAX: number;            // 300；发表评论正文上限
@@ -3060,7 +3073,7 @@ views/LoginView::selectMethod(next)
             │           ├── 判断 result 全为 104004 → 抛出 UPSTREAM_NETWORK
             │           ├── 判断 result 全为 104013 → 抛出 NO_PERMISSION
             │           ├── 判断 result 全为 104003 → 按登录态 / VIP / 数字专辑生成 NO_STREAM
-            │           ├── 判断无可用 result → api/user::isVipUser()
+            │           ├── 判断无可用 result → api/user::getVipStatus()
             │           ├── 判断 VIP → 抛出 NO_STREAM（通用下架 / 授权提示）
             │           ├── api/song::buildStreamUrl(purl)
             │           └── media/audio-protocol::audioStreamUrl(url, mid, quality)

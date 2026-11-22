@@ -395,6 +395,20 @@ export interface UserProfile {
   avatarUrl: string
 }
 
+export type VipLevel = 'none' | 'vip' | 'huge_vip' | 'svip'
+
+/**
+ * 当前账号会员状态。known 表示接口成功；unknown 表示接口失败，
+ * 不能当作非 VIP，调用方应避免据此显示“非会员”结论。
+ */
+export interface VipStatus {
+  state: 'known' | 'unknown'
+  isVip: boolean
+  level: VipLevel
+  /** 账号会员到期时间（毫秒）；接口未提供或无法解析时为 null。 */
+  expiresAtMs: number | null
+}
+
 export interface EmbedRect {
   x: number
   y: number

@@ -9,7 +9,7 @@ import { getCredential } from '../credential'
 import { resolveDownloadedAudio } from '../download/registry'
 import { audioStreamUrl } from '../media/audio-protocol'
 import { mapUpstreamCode, tripUpstreamBlock, UpstreamError, getGuid, musicu } from './client'
-import { isVipUser } from './user'
+import { getVipStatus } from './user'
 
 interface RawSong {
   id?: number | string
@@ -394,19 +394,31 @@ export async function getStreamUrls(mids: string[], quality: Quality): Promise<U
       if (albumOnly) {
         throw new UpstreamError('NO_STREAM', '数字专辑需要购买后才能播放')
       }
-      const vip = await isVipUser()
-      if (vip) {
+      const vip = await getVipStatus()
+      if (vip.state === 'known' && vip.isVip) {
         throw new UpstreamError(
           'NO_STREAM',
           '播放授权异常（104003）：登录可能已失效或触发风控，请重新登录后重试'
         )
       }
+      if (vip.state === 'unknown') {
+        throw new UpstreamError(
+          'NO_STREAM',
+          '当前内容无法播放（104003）：账号权益状态未知，可能需要 VIP / 购买或已下架'
+        )
+      }
       throw new UpstreamError('NO_STREAM', '当前内容需要 VIP 或购买（104003）')
     }
-    const vip = await isVipUser()
+    const vip = await getVipStatus()
+    if (vip.state === 'unknown') {
+      throw new UpstreamError(
+        'NO_STREAM',
+        '无法获取播放链接（可能已下架、需要 VIP 或登录授权异常）'
+      )
+    }
     throw new UpstreamError(
       'NO_STREAM',
-      vip
+      vip.isVip
         ? '无法获取播放链接（可能已下架或登录授权异常）'
         : '当前内容不可播放（可能需要 VIP 或已下架）'
     )

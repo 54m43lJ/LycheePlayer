@@ -41,7 +41,8 @@ import type {
   UpstreamBlockedEvent,
   UrlResult,
   UserCacheInfo,
-  UserProfile
+  UserProfile,
+  VipStatus
 } from '../shared/types'
 
 const invoke = <T>(channel: string, ...args: unknown[]): Promise<IpcResult<T>> =>
@@ -161,7 +162,7 @@ const api: LycheeApi = {
   },
   user: {
     getProfile: () => invoke<UserProfile>('user.getProfile'),
-    isVip: () => invoke<boolean>('user.isVip')
+    vipStatus: () => invoke<VipStatus>('user.vipStatus')
   },
   lyric: {
     get: (songId: string) => invoke<Lyric>('lyric.get', songId),

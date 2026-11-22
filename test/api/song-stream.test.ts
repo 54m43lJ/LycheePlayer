@@ -49,7 +49,17 @@ vi.mock('../../src/main/api/client', () => {
   }
 })
 
-vi.mock('../../src/main/api/user', () => ({ isVipUser: vipMock }))
+vi.mock('../../src/main/api/user', () => ({
+  getVipStatus: async () => {
+    const isVip = await vipMock()
+    return {
+      state: 'known',
+      isVip,
+      level: isVip ? 'vip' : 'none',
+      expiresAtMs: null
+    }
+  }
+}))
 
 vi.mock('../../src/main/credential', () => ({
   getCredential: () => credentialState.value
