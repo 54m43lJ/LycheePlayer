@@ -270,22 +270,21 @@
 status ∈ {1, 2} → 不可播，结束
 
 pay_play == 1:
-  ├── pay_status == 1 → 已单独购买，跳过后续判断，最终可播
-  ├── pay_month == 1:
-  │   └── VIP.state != known 或 VIP.isVip == false → 不可播
-  ├── pay_month == 0:
-  │   └── VIP.state != known 或 VIP.level != 'svip' → 不可播
-  └── pay_month 缺失 → 无阻断
+  ├── pay_month == 1 且 VIP 确认有效（known && isVip）→ 可播，结束
+  ├── pay_month == 0 且 超级会员确认有效（known && level == 'svip'）→ 可播，结束
+  └── 最后检查 pay_status == 0 → 不可播
 
 全部通过 → 可播
 ```
 
 规则说明：
 
-- `pay_status` 只在 `pay_play=1` 时检查；`pay_play=0` / 缺失时直接跳过付费判断。
-- `pay_play=1 & pay_month=1 & VIP=unknown` 判不可播：默认按访客处理，未知不视为会员。
-- `pay_play=1 & pay_month=0` 只有确认的超级会员（`HugeVip=1`，内部 `level='svip'`）可通过；豪华绿钻、绿钻或 unknown 都判不可播。
-- `pay_status=1` 是唯一“已购买”信号，命中后不再检查 `pay_month` / VIP；`pay_status=0` 或缺失只表示没有单独购买，继续后续判断。
+- `pay_status` 只在 `pay_play=1` 的最后一步检查；`pay_play=0` / 缺失时直接跳过整个付费判断。
+- 会员权益足够时直接判可播，不再检查 `pay_status`。
+- 会员权益不满足时，才看最终兜底：`pay_status == 0` 表示没有单独购买，判不可播；`pay_status == 1` 表示已购买，继续落到默认可播。
+- `pay_status` 缺失不等于 0，不产生阻断，最终默认可播。
+- `pay_play=1 & pay_month=1 & VIP=unknown`：不会命中“VIP 确认有效”，最终由 `pay_status` 决定；若 `pay_status=0` 则不可播，若缺失则默认可播。
+- `pay_play=1 & pay_month=0` 只有确认的超级会员（`HugeVip=1`，内部 `level='svip'`）可直接通过；豪华绿钻、绿钻、unknown 都落到最终 `pay_status` 判断。
 - `status=3`（仅限部分区域）不阻断，继续走付费判断；区域允许列表不可得，播放失败后兜底。
 - VIP 字段映射：`vip` = 绿钻，`svip` = 豪华绿钻，`HugeVip` = 超级会员；已用同一账号购买超级会员前后对照确认。
 - `price_track` / `price_album` 不作为任何判断依据。
@@ -301,7 +300,7 @@ pay_play == 1:
 4. `PlaylistView` 不再调用 `useAvailability`、`setProbeState`；队列快照不再按 `playable === false` 过滤，`metadataReady()` 不再依赖探测结果。
 5. `SongTable` 的不可播标记、音质角标、播放 / 下载按钮禁用改为读取 `PlaybackPermission`（由 `Song` 元数据派生）；音质角标只表示“曲库最高音质”，不再暗示当前账号一定可取流。
 6. 下载资产状态的 `maxQuality` 改为读取 `file.size_*` 或移除该字段，不再依赖探测缓存。
-7. 播放权限判断按“阻断条件级联”实现：命中不可播立即返回，未命中阻断则默认可播；不维护可播条件列表。VIP 查询失败按访客处理，不视为会员。
+7. 播放权限判断按“阻断条件级联”实现：先看会员权益，最后检查 `pay_status == 0`；命中不可播立即返回，未命中阻断则默认可播。不维护可播条件列表。
 8. 播放失败、不可播与区域限制只在播放时处理；保留 `NO_STREAM` 沿队列向后尝试与连续 10 首停止逻辑。
 
 **文档操作**：
