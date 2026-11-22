@@ -13,10 +13,8 @@ import AppIcon from '../components/AppIcon.vue'
 import CatalogDescription from '../components/CatalogDescription.vue'
 import CoverArt from '../components/CoverArt.vue'
 import PageJump from '../components/PageJump.vue'
-import PlaylistPicker from '../components/PlaylistPicker.vue'
-import SongTable from '../components/SongTable.vue'
+import SongListTable from '../components/SongListTable.vue'
 import { describeError, unwrap } from '../api'
-import { useDownloadAction } from '../composables/download-action'
 import { usePageJump } from '../composables/page-jump'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
@@ -32,7 +30,6 @@ const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
 const toast = useToast()
-const { requestDownload } = useDownloadAction()
 
 const SONG_SORTS: Array<{ value: ArtistSongSort; label: string }> = [
   { value: 'hot', label: '最热' },
@@ -66,8 +63,6 @@ const albumsLoading = ref(false)
 const albumError = ref('')
 const albumSort = ref<ArtistAlbumSort>('hot')
 const albumFilter = ref<AlbumFilter>('all')
-const pickerOpen = ref(false)
-const pickerIndex = ref(-1)
 const pageRef = ref<HTMLElement | null>(null)
 const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
 const SCROLL_LOAD_THRESHOLD = 160
@@ -86,12 +81,6 @@ const albumFilterOptions = computed(() =>
     (item) => item.value === 'all' || albums.value.some((album) => album.kind === item.value)
   )
 )
-const favoriteMids = computed(() => [...playlistEdit.favorites])
-const pickerMids = computed(() => {
-  const song = songs.value[pickerIndex.value]
-  return song ? [song.songMid] : []
-})
-const pickerName = computed(() => songs.value[pickerIndex.value]?.name ?? '')
 
 async function load(reset = true): Promise<void> {
   const id = mid.value
@@ -253,26 +242,6 @@ function playAt(index: number): void {
   player.playList(songs.value, index)
 }
 
-function addNextAt(index: number): void {
-  const song = songs.value[index]
-  if (song) player.addNext(song)
-}
-
-async function toggleFavorite(index: number): Promise<void> {
-  const song = songs.value[index]
-  if (song) await playlistEdit.toggleFavorite(song.songMid)
-}
-
-async function downloadAt(index: number): Promise<void> {
-  const song = songs.value[index]
-  if (song) await requestDownload(song, player.requestedQuality)
-}
-
-function openPicker(index: number): void {
-  pickerIndex.value = index
-  pickerOpen.value = true
-}
-
 watch(
   mid,
   () => {
@@ -377,19 +346,12 @@ onBeforeUnmount(() => {
           <span class="spinner lg" />
           正在加载歌曲
         </div>
-        <SongTable
+        <SongListTable
           v-else-if="songs.length > 0"
           :songs="songs"
           :active-mid="player.current?.songMid"
-          :favorite-mids="favoriteMids"
-          :asset-states="download.assets"
           :can-add-to-playlist="auth.loggedIn"
           @play="playAt"
-          @play-next="addNextAt"
-          @toggle="player.toggle()"
-          @favorite="toggleFavorite"
-          @download="downloadAt"
-          @add-to-playlist="openPicker"
         />
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="music" :size="25" /></div>
@@ -473,14 +435,6 @@ onBeforeUnmount(() => {
         :show-bottom="showBottom"
         @top="scrollToTop"
         @bottom="scrollToBottom"
-      />
-
-      <PlaylistPicker
-        :open="pickerOpen"
-        :song-mids="pickerMids"
-        :song-name="pickerName"
-        @close="pickerOpen = false"
-        @added="() => undefined"
       />
     </template>
   </div>

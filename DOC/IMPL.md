@@ -113,3 +113,30 @@
 - 按追加需求把“跳转到当前歌曲”扩展到播放历史：历史页不要求播放来源，只要当前歌曲仍在列表（含筛选）中就显示；定位逻辑抽到 `scrollToSongRow` 供两个页面共用。
 - 未登录真实账号环境，选择器与当前歌曲跳转的上游行为未做端到端验收；缓存预检逻辑按 `getCached` 返回的 `complete` 与成员集合判断。
 - 已存在的未提交 `DOC/ISSUE.md` 改动不属于本项，未纳入提交。
+
+### 4.19 歌曲列表页面接线复用 [已解决] 
+
+**描述**：检查播放历史与“我喜欢”页的代码复用情况。`SongTable` 本身已复用，但搜索、歌单详情、歌手、专辑、播放历史五个页面各自重复维护收藏状态、资产状态、下一首播放、收藏、下载、加入歌单选择器与 SongTable 事件接线；要求把歌曲列表相关逻辑收敛为共用实现。
+
+**解决方案**：
+
+- 新增 `SongListTable.vue`：内部渲染 `SongTable` 与 `PlaylistPicker`，统一读取 `playlist-edit.favorites` / `download.assets`，处理下一首播放、收藏、下载与添加到歌单，并透传 `play` / `remove` / `added`。
+- “我喜欢”页不是独立页面，而是 `PlaylistView` 的 `kind === 'favorites'` 分支；复用该组件后与普通歌单共用同一套列表接线。
+- 五个页面只保留数据加载、筛选、页面级播放语义（歌单详情构建队列、其余使用 `playList`）、删除确认与页面头部操作；不再各自持有选择器状态或收藏 / 下载处理函数。
+- `PlaylistView` 继续保留下载计数、整单下载与心跳；`HistoryView` 继续在挂载时加载收藏状态。用户可见行为不变。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `IMPL.md` | 新增“歌曲列表页面接线复用” | 增 | 记录复用范围、实现方式与文档操作。 |
+| `CORE.html` | §1 文件树 · components | 增 | 新增 `SongListTable.vue` 条目。 |
+| `CORE.html` | §4.39 `SongTable.vue`（`#c4-39`） | 改 | 明确 SongTable 只负责展示与事件，选择器与操作接线由 `SongListTable` 统一处理。 |
+| `CORE.html` | §4.101 `SongListTable.vue`（`#c4-101`） | 增 | 记录 props / emits、内部接线与队列语义由页面提供的边界。 |
+| `CORE.html` | §4.44 / §4.46 / §4.73 / §4.74 / §4.87 | 改 | 各页面改为复用 `SongListTable`，移除“页面直接调用 requestDownload / 打开 PlaylistPicker”的旧描述。 |
+| `CORE.html` | §5.14 / §5.16 调用树 | 改 | 收藏、下载与删除入口改为 `SongListTable`。 |
+
+**工作记录**：
+
+- `npm run typecheck`、`npm test`（43 个测试文件、201 个用例）与 `npm run build` 通过。
+- 净减少约 180 行页面接线代码；`DOC/ISSUE.md` 的未提交改动不属于本项，未纳入提交。

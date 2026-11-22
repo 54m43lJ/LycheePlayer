@@ -5,11 +5,9 @@ import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
 import PageJump from '../components/PageJump.vue'
-import PlaylistPicker from '../components/PlaylistPicker.vue'
-import SongTable from '../components/SongTable.vue'
+import SongListTable from '../components/SongListTable.vue'
 import { describeError } from '../api'
 import { useAvailability } from '../composables/availability'
-import { useDownloadAction } from '../composables/download-action'
 import { usePageJump } from '../composables/page-jump'
 import { scrollToSongRow } from '../utils/page-jump'
 import { useToast } from '../composables/toast'
@@ -29,7 +27,6 @@ const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
 const toast = useToast()
-const { requestDownload } = useDownloadAction()
 
 const id = computed(() => String(route.params.id ?? ''))
 const feed = computed(() => playlist.feed)
@@ -44,8 +41,6 @@ watch(
   ([value, loading]) => playlist.setProbeState(value, loading),
   { immediate: true, flush: 'sync' }
 )
-const favoriteMids = computed(() => [...playlistEdit.favorites])
-const assetStates = computed(() => download.assets)
 const downloadedCount = computed(
   () =>
     songs.value.filter((song) => Boolean(download.assets[song.songMid]?.downloadedQuality))
@@ -118,21 +113,6 @@ function playAll(): void {
   if (start >= 0) startAt(start)
 }
 
-function addNextAt(index: number): void {
-  const song = filteredSongs.value[index]
-  if (song) player.addNext(song)
-}
-
-async function toggleFavorite(index: number): Promise<void> {
-  const song = filteredSongs.value[index]
-  if (song) await playlistEdit.toggleFavorite(song.songMid)
-}
-
-async function downloadAt(index: number): Promise<void> {
-  const song = filteredSongs.value[index]
-  if (song) await requestDownload(song, player.requestedQuality)
-}
-
 async function downloadAll(): Promise<void> {
   if (!meta.value || playableSongs.value.length === 0) return
   try {
@@ -182,19 +162,6 @@ async function confirmRemove(): Promise<void> {
     }
     toast.error(describeError(err))
   }
-}
-
-const pickerOpen = ref(false)
-const pickerIndex = ref(-1)
-const pickerMids = computed(() => {
-  const song = filteredSongs.value[pickerIndex.value]
-  return song ? [song.songMid] : []
-})
-const pickerName = computed(() => filteredSongs.value[pickerIndex.value]?.name ?? '')
-
-function openPicker(index: number): void {
-  pickerIndex.value = index
-  pickerOpen.value = true
 }
 
 function onPickerAdded(playlistId: string): void {
@@ -342,23 +309,16 @@ onBeforeUnmount(() => {
         <button v-if="filterText" class="btn ghost small" @click="filterText = ''">清除</button>
       </div>
 
-      <SongTable
+      <SongListTable
         v-if="filteredSongs.length > 0"
         :songs="filteredSongs"
         :active-mid="player.current?.songMid"
         :availability="availability"
-        :favorite-mids="favoriteMids"
-        :asset-states="assetStates"
-        :downloadable="true"
         :removable="removable"
         :can-add-to-playlist="auth.loggedIn"
         @play="startAt"
-        @play-next="addNextAt"
-        @toggle="player.toggle()"
-        @favorite="toggleFavorite"
-        @download="downloadAt"
         @remove="removeAt"
-        @add-to-playlist="openPicker"
+        @added="onPickerAdded"
       />
       <div v-else-if="filterText" class="empty compact">
         <div class="empty-icon"><AppIcon name="search" :size="22" /></div>
@@ -384,14 +344,6 @@ onBeforeUnmount(() => {
           <button class="btn ghost small" @click="retry()">重试</button>
         </template>
       </div>
-
-      <PlaylistPicker
-        :open="pickerOpen"
-        :song-mids="pickerMids"
-        :song-name="pickerName"
-        @close="pickerOpen = false"
-        @added="onPickerAdded"
-      />
     </template>
 
     <PageJump

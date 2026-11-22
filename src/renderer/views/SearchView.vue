@@ -5,10 +5,8 @@ import type { SearchRequest, SearchResult } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import CardPlayButton from '../components/CardPlayButton.vue'
 import CoverArt from '../components/CoverArt.vue'
-import SongTable from '../components/SongTable.vue'
-import PlaylistPicker from '../components/PlaylistPicker.vue'
+import SongListTable from '../components/SongListTable.vue'
 import { describeError, unwrap } from '../api'
-import { useDownloadAction } from '../composables/download-action'
 import { usePlaylistPlay } from '../composables/playlist-play'
 import { useToast } from '../composables/toast'
 import { usePlayerStore } from '../stores/player'
@@ -27,7 +25,6 @@ const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
 const toast = useToast()
-const { requestDownload } = useDownloadAction()
 const { playingId, playPlaylist, isSourcePlaying, isSourcePaused, toggleSource } =
   usePlaylistPlay()
 
@@ -63,21 +60,6 @@ const albums = computed(() => result.value?.albums ?? [])
 const playlists = computed(() => result.value?.playlists ?? [])
 const mvs = computed(() => result.value?.mvs ?? [])
 const total = computed(() => result.value?.total ?? 0)
-const favoriteMids = computed(() => [...playlistEdit.favorites])
-const assetStates = computed(() => download.assets)
-const pickerOpen = ref(false)
-const pickerIndex = ref(-1)
-const pickerMids = computed(() => {
-  const song = songs.value[pickerIndex.value]
-  return song ? [song.songMid] : []
-})
-const pickerName = computed(() => songs.value[pickerIndex.value]?.name ?? '')
-
-function openPicker(index: number): void {
-  pickerIndex.value = index
-  pickerOpen.value = true
-}
-
 const moreAvailable = ref(false)
 const hasMore = computed(() => searched.value && moreAvailable.value)
 
@@ -181,21 +163,6 @@ function playSongAt(index: number): void {
   player.playList(songs.value, index)
 }
 
-function playNextAt(index: number): void {
-  const song = songs.value[index]
-  if (song) player.addNext(song)
-}
-
-async function toggleFavorite(index: number): Promise<void> {
-  const song = songs.value[index]
-  if (song) await playlistEdit.toggleFavorite(song.songMid)
-}
-
-async function downloadAt(index: number): Promise<void> {
-  const song = songs.value[index]
-  if (song) await requestDownload(song, player.requestedQuality)
-}
-
 function openArtist(mid: string): void {
   if (mid) void router.push(`/artist/${mid}`)
 }
@@ -264,19 +231,12 @@ function openPlaylist(id: string): void {
           <span>单曲</span>
           <span class="count">{{ total > 0 ? `${formatCount(total)} 个结果` : `${songs.length} 个结果` }}</span>
         </div>
-        <SongTable
+        <SongListTable
           v-if="songs.length > 0"
           :songs="songs"
           :active-mid="player.current?.songMid"
-          :favorite-mids="favoriteMids"
-          :asset-states="assetStates"
           :can-add-to-playlist="auth.loggedIn"
           @play="playSongAt"
-          @play-next="playNextAt"
-          @toggle="player.toggle()"
-          @favorite="toggleFavorite"
-          @download="downloadAt"
-          @add-to-playlist="openPicker"
         />
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
@@ -401,13 +361,5 @@ function openPlaylist(id: string): void {
       <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
       <h3>开始探索</h3>
     </div>
-
-    <PlaylistPicker
-      :open="pickerOpen"
-      :song-mids="pickerMids"
-      :song-name="pickerName"
-      @close="pickerOpen = false"
-      @added="() => undefined"
-    />
   </div>
 </template>
