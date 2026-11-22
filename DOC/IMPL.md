@@ -1015,6 +1015,29 @@
 - `ISSUE.md` 第 1 项已标记 `[已解决]`；其余文档落点均已存在，无需改动。
 - 其余文档操作已逐项核对，无需改动。
 
+### 3.31 歌曲表操作列在超窄屏回退到 96px [已解决] 
+
+**描述**：歌曲表操作列宽屏为 160px，≤900px 收窄为 40px；但 40px 放不下 11px 的“操作”表头，表头会换成两行。同时 `@media (max-width: 560px)` 里还留着旧的 `.song-table .song-action { width: 96px !important; }`，它特异性更高且带 `!important`，在超窄屏把已经收成一个“…”按钮的操作列重新撑到 96px。另有一条被后续规则覆盖的 `.song-action { width: 128px; }` 死规则。
+
+**解决方案**：
+
+- 删除 `.song-action` 的 `width: 128px`，保留 `text-align: left !important`。
+- 删除 `@media (max-width: 560px)` 中 `.song-table .song-action { width: 96px !important; }`。
+- 将 `@media (max-width: 900px)` 的 `.song-action` 宽度统一为 44px：11px 字号 + 0.08em 字距的“操作”约 23.77px，加左右各 10px 内边距约 43.77px，44px 是刚好不换行的整数列宽。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `CORE.html` | §4.39 `SongTable.vue`（`#c4-39`） | 改 | 操作列宽屏 160px，≤900px 收窄到 44px，注明刚好容纳“操作”表头不换行。 |
+
+**工作记录**：
+
+- `src/renderer/styles/main.css`：删除 `.song-action` 的 `width: 128px` 与 560px 下的 96px `!important` 规则；900px 下的宽度由 40px 改为 44px。
+- 用实际字体测量“操作”两字（11px、`letter-spacing: 0.08em`、左右各 10px padding）约 43.77px；44px 时表头保持单行，43px 时换行。
+- 保留 `.song-action { text-align: left !important; }`，避免丢失表头对齐。
+- `npm run build` 通过（typecheck + electron-vite build）。
+
 ## 4. 需求演进记录
 
 按功能条目记录描述、解决方案与当时的文档操作；前三组记录开发中发现的问题，本节记录已推进的需求变更。

@@ -845,7 +845,6 @@ button:focus-visible,
 }
 
 .song-action {
-  width: 128px;
   text-align: left !important;
 }
 
@@ -2525,10 +2524,6 @@ button:focus-visible,
   .song-table .song-duration-col,
   .song-table .song-duration {
     width: 48px !important;
-  }
-
-  .song-table .song-action {
-    width: 96px !important;
   }
 
   .song-action-inner {
@@ -4545,7 +4540,7 @@ button:focus-visible,
 
 @media (max-width: 900px) {
   .song-action {
-    width: 40px;
+    width: 44px;
   }
 }
 
