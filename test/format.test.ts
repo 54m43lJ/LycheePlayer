@@ -10,7 +10,12 @@ function song(singers: Song['singers'], name = 'Song'): Song {
     singers,
     album: { mid: 'a1', name: 'Album' },
     durationMs: 0,
-    pay: { free: true, vip: false, album: false }
+    pay: { free: true, vip: false, album: false },
+    status: null,
+    pay_play: null,
+    pay_month: null,
+    pay_status: null,
+    maxQuality: null
   }
 }
 

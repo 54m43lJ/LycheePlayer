@@ -54,7 +54,12 @@ vi.mock('../../src/main/api/playlist', () => ({
       singers: [],
       album: { mid: '', name: '' },
       durationMs: 0,
-      pay: { free: true, vip: false, album: false }
+      pay: { free: true, vip: false, album: false },
+      status: null,
+      pay_play: null,
+      pay_month: null,
+      pay_status: null,
+      maxQuality: null
     })),
     offset,
     total: state.members.length,

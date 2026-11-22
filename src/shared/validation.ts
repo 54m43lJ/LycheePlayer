@@ -14,6 +14,14 @@ function isFiniteNumber(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value)
 }
 
+function isNumberOrNull(value: unknown): value is number | null {
+  return value === null || isFiniteNumber(value)
+}
+
+function isQualityOrNull(value: unknown): boolean {
+  return value === null || value === '128k' || value === '320k' || value === 'flac'
+}
+
 /** 当前 Song 内部模型的结构校验；用于持久化缓存读取。 */
 export function isSong(value: unknown): value is Song {
   if (!isRecord(value)) return false
@@ -40,7 +48,12 @@ export function isSong(value: unknown): value is Song {
     isRecord(pay) &&
     typeof pay.free === 'boolean' &&
     typeof pay.vip === 'boolean' &&
-    typeof pay.album === 'boolean'
+    typeof pay.album === 'boolean' &&
+    isNumberOrNull(value.status) &&
+    isNumberOrNull(value.pay_play) &&
+    isNumberOrNull(value.pay_month) &&
+    isNumberOrNull(value.pay_status) &&
+    isQualityOrNull(value.maxQuality)
   )
 }
 

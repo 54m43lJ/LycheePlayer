@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, toRaw } from 'vue'
 import type { Song } from '@shared/types'
 import { PLAY_HISTORY_LIMIT, PLAY_HISTORY_STORAGE_PREFIX } from '@shared/constants'
 import { isSong } from '@shared/validation'
@@ -39,9 +39,17 @@ export const useHistoryStore = defineStore('history', () => {
     return `${PLAY_HISTORY_STORAGE_PREFIX}${scope()}`
   }
 
+  /** 序列化前逐层取出原始对象，避免大列表每个字段都穿过响应式代理。 */
+  function plainEntries(): PlayHistoryEntry[] {
+    return toRaw(entries.value).map((entry) => {
+      const raw = toRaw(entry)
+      return { song: toRaw(raw.song), playedAtMs: raw.playedAtMs }
+    })
+  }
+
   function persist(): void {
     try {
-      localStorage.setItem(storageKey(), JSON.stringify(entries.value))
+      localStorage.setItem(storageKey(), JSON.stringify(plainEntries()))
     } catch {
       // localStorage 不可用时仅保留当前会话。
     }

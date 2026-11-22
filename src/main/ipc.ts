@@ -8,7 +8,6 @@ import type {
   MprisCommand,
   PlayerState,
   PlaylistSnapshot,
-  ProbeOptions,
   Quality,
   SearchRequest,
   Settings
@@ -16,8 +15,7 @@ import type {
 import {
   COMMENT_CONTENT_MAX,
   DOWNLOAD_QUEUE_MAX,
-  IPC_SONG_MIDS_MAX,
-  PROBE_MIDS_MAX
+  IPC_SONG_MIDS_MAX
 } from '../shared/constants'
 import {
   getRefreshState,
@@ -49,7 +47,6 @@ import { searchByType } from './api/search'
 import { getArtist, getArtistAlbums, getArtistSongs } from './api/artist'
 import { getAlbum } from './api/album'
 import { getStreamUrls } from './api/song'
-import { probeAvailability, clearAvailabilityCache } from './api/availability'
 import { getProfile, getVipStatus } from './api/user'
 import { toIpcError, setUpstreamBlockNotifier } from './api/client'
 import {
@@ -264,12 +261,10 @@ export function registerIpc(): void {
     const credential = await openWebLogin(method)
     await saveCredential(credential)
     resetRefreshState()
-    clearAvailabilityCache(credential.musicid)
     return currentAuthStatus()
   })
   handle('login.refreshSession', async () => {
     await refreshSession()
-    clearAvailabilityCache(getCredential()?.musicid)
     return currentAuthStatus()
   })
   handle('login.logout', async () => {
@@ -325,15 +320,6 @@ export function registerIpc(): void {
 
   handle('song.getUrls', async (mids: unknown, quality: unknown) =>
     getStreamUrls(midArray(mids), qualityArg(quality))
-  )
-  handle(
-    'song.probe',
-    async (mids: unknown, options: unknown) => {
-      const list = midArray(mids, PROBE_MIDS_MAX)
-      return probeAvailability(list, (options ?? {}) as ProbeOptions)
-    },
-    // 背景可用性探测失败时渲染层会静默处理，不输出易误导的 IPC 错误日志。
-    { silent: true }
   )
 
   handle('playlist.get', async (id: unknown, options: unknown) => {

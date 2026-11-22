@@ -28,7 +28,6 @@ import type {
   PlaylistMutationResult,
   PlaylistPage,
   PlaylistSnapshot,
-  ProbeOptions,
   Quality,
   RecommendFeed,
   SearchRequest,
@@ -36,7 +35,6 @@ import type {
   Settings,
   Song,
   SongAssetState,
-  SongAvailability,
   UpstreamBlockedEvent,
   UrlResult,
   UserCacheInfo,
@@ -88,7 +86,6 @@ export interface LycheeApi {
   }
   song: {
     getUrls(mids: string[], quality: Quality): Promise<IpcResult<UrlResult[]>>
-    probe(mids: string[], options?: ProbeOptions): Promise<IpcResult<SongAvailability[]>>
   }
   playlist: {
     get(id: string, options?: { offset?: number }): Promise<IpcResult<PlaylistPage>>

@@ -37,7 +37,6 @@ import type {
   Settings,
   Song,
   SongAssetState,
-  SongAvailability,
   UpstreamBlockedEvent,
   UrlResult,
   UserCacheInfo,
@@ -98,9 +97,7 @@ const api: LycheeApi = {
   },
   song: {
     getUrls: (mids: string[], quality: Quality) =>
-      invoke<UrlResult[]>('song.getUrls', mids, quality),
-    probe: (mids: string[], options) =>
-      invoke<SongAvailability[]>('song.probe', mids, options)
+      invoke<UrlResult[]>('song.getUrls', mids, quality)
   },
   playlist: {
     get: (id: string, options) => invoke<PlaylistPage>('playlist.get', id, options),

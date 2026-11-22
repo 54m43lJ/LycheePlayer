@@ -49,6 +49,23 @@ export interface Song {
   album: Album
   durationMs: number
   pay: PayInfo
+  /** 上游歌曲状态；1 / 2 为不可播阻断，缺失为 null。 */
+  status: number | null
+  /** 上游 pay.pay_play；1 表示需要会员或购买，缺失为 null。 */
+  pay_play: number | null
+  /** 上游 pay.pay_month；0 / 1 以外的值（含缺失）按未知处理。 */
+  pay_month: number | null
+  /** 上游 pay.pay_status；0 表示未单独购买，缺失为 null。 */
+  pay_status: number | null
+  /** 曲库存在的最高音质档位，不代表当前账号一定可取流。 */
+  maxQuality: Quality | null
+}
+
+/** 由 Song 元数据与账号会员状态派生的播放权限。 */
+export interface PlaybackPermission {
+  playable: boolean
+  /** 曲库最高音质；只用于展示，不代表当前账号一定可取流。 */
+  maxQuality: Quality | null
 }
 
 export type PlaylistKind = 'normal' | 'favorites'
@@ -145,17 +162,6 @@ export interface CommentPage {
 export interface CommentPostResult {
   /** 上游新增评论 ID；响应未返回时为空字符串，调用方以重新拉取结果为准。 */
   commentId: string
-}
-
-export interface SongAvailability {
-  songMid: string
-  playable: boolean
-  maxQuality: Quality | null
-  checkedAtMs: number
-}
-
-export interface ProbeOptions {
-  force?: boolean
 }
 
 export interface PlaylistSnapshot {
@@ -295,12 +301,11 @@ export interface DownloadTask {
   source: DownloadSource
 }
 
-/** 每首歌的本机资产状态：缓存档位、下载档位、最高可用档与当前任务。 */
+/** 每首歌的本机资产状态：缓存档位、下载档位与当前任务。 */
 export interface SongAssetState {
   songMid: string
   cachedQuality: Quality | null
   downloadedQuality: Quality | null
-  maxQuality: Quality | null
   taskStatus: DownloadTask['status'] | null
 }
 

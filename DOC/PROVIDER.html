@@ -158,7 +158,7 @@
   </tr>
   <tr>
     <td>限速</td>
-    <td>应用侧所有主动发出的上游请求共用一个全局令牌桶（持续速率与突发容量见 <a href="CORE.html#c4-50">CORE §4.50</a>），OAuth authorize 与收藏签名写入同样受控；批量探测按批串行，不并发轰炸。</td>
+    <td>应用侧所有主动发出的上游请求共用一个全局令牌桶（持续速率与突发容量见 <a href="CORE.html#c4-50">CORE §4.50</a>），OAuth authorize 与收藏签名写入同样受控；批量请求按批串行，不并发轰炸。</td>
   </tr>
   <tr>
     <td>重试</td>
@@ -298,7 +298,7 @@
   <tr><td>歌手专辑</td><td><code>music.musichallAlbum.AlbumListServer / GetAlbumList</code></td><td>按 <code>singerMid</code> 分页获取专辑；<code>order=1</code> 为最热、<code>order=0</code> 及其它值等价于最新；单页最多 80 张；<code>albumType</code> 提供录音室专辑 / EP / 演唱会 / Single 等版本信息。</td></tr>
   <tr><td>专辑详情</td><td><code>music.musichallAlbum.AlbumInfoServer / GetAlbumDetail</code></td><td>按 <code>albumMid</code> 获取专辑名、发行日期、简介与歌手。</td></tr>
   <tr><td>专辑歌曲</td><td><code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code></td><td>按 <code>albumMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
-  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。上游 <code>104009</code> 主要出现在 vkey / 播放链接请求；整单可用性探测按 50 首分批，会放大触发概率。</td></tr>
+  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。上游 <code>104009</code> 主要出现在 vkey / 播放链接请求；列表不再批量申请 vkey，只有实际播放与下载触发取流。</td></tr>
   <tr><td>收藏状态</td><td><code>music.musicasset.SongFavRead / IsSongFanByMid</code></td><td>按 <code>v_songMid</code> 批量读取 <code>m_fan</code> 红心状态。</td></tr>
   <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-3">§3.3</a>。</td></tr>
   <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表；<code>song_num</code> 单次可返回约 1 万首，大歌单会静默省略少量不可用曲目，分页须用固定 <code>song_begin</code> 递增。歌单不存在 / 已失效时 <code>req_0.code</code> 仍为 <code>0</code>，失效码位于顶层 <code>data.code = -100006</code>，且 <code>dirinfo</code> 为空壳、<code>songlist</code> 为空；不能只看 <code>retcode</code>。</td></tr>
@@ -574,9 +574,15 @@ interface QqLoginRequest {
   version?: number;
   tag?: number;
   interval?: number;
+  status?: number;
   singer?: Array&lt;{ mid?: string; name?: string }&gt;;
   album?: { mid?: string; name?: string };
-  pay?: { pay_play?: number; price_album?: number };
+  pay?: {
+    pay_play?: number;
+    pay_month?: number;
+    pay_status?: number;
+    price_album?: number;
+  };
   file?: {
     media_mid?: string;
     size_128mp3?: number;
@@ -923,8 +929,8 @@ interface QqLoginPayload {
   <tr><th>对象</th><th>消费字段</th><th>说明</th></tr>
   <tr>
     <td><code>QqSong</code></td>
-    <td><code>id</code> · <code>mid</code> · <code>name</code> / <code>title</code> · <code>interval</code> · <code>singer[]</code> · <code>album</code> · <code>pay</code> · <code>file.media_mid</code> · <code>file.size_*</code></td>
-    <td><code>interval</code> 单位为秒；<code>pay.pay_play</code> 与 <code>price_album</code> 用于权限角标；<code>file.size_*</code> 仅在 fixture 验证后用于候选音质。</td>
+    <td><code>id</code> · <code>mid</code> · <code>name</code> / <code>title</code> · <code>interval</code> · <code>status</code> · <code>singer[]</code> · <code>album</code> · <code>pay</code> · <code>file.media_mid</code> · <code>file.size_*</code></td>
+    <td><code>interval</code> 单位为秒；<code>status</code>、<code>pay.pay_play</code> / <code>pay_month</code> / <code>pay_status</code> 与 <code>file.size_*</code> 一起供列表派生不可播标记与曲库最高音质，不申请播放链接；实际可播性仍由 vkey 决定。</td>
   </tr>
   <tr>
     <td><code>QqVkeyData</code></td>
@@ -1002,15 +1008,15 @@ interface QqLoginPayload {
   <tr><th>转换</th><th>规则</th></tr>
   <tr>
     <td><code>QqSong</code> → <code>Song</code></td>
-    <td><code>mid → songMid</code>；<code>id</code> 转字符串 → <code>songId</code>；<code>name ?? title → name</code>；<code>interval × 1000 → durationMs</code>；<code>singer[]</code> 取 <code>mid</code> / <code>name</code>：只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空，仅丢弃 <code>name</code> 为空的成员；<code>album</code> 取 <code>mid</code> / <code>name</code>；<code>pay</code> 映射为 <code>PayInfo</code>。</td>
+    <td><code>mid → songMid</code>；<code>id</code> 转字符串 → <code>songId</code>；<code>name ?? title → name</code>；<code>interval × 1000 → durationMs</code>；<code>singer[]</code> 取 <code>mid</code> / <code>name</code>：只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空，仅丢弃 <code>name</code> 为空的成员；<code>album</code> 取 <code>mid</code> / <code>name</code>；<code>pay</code> 映射为 <code>PayInfo</code>；<code>status</code> 与 <code>pay.pay_play</code> / <code>pay_month</code> / <code>pay_status</code> 原值映射，缺失为 <code>null</code>；<code>file.size_*</code> 映射为 <code>maxQuality</code>。</td>
   </tr>
   <tr>
     <td><code>QqSong.pay</code> → <code>PayInfo</code></td>
     <td><code>price_album &gt; 0 → album</code>；否则 <code>pay_play === 1 → vip</code>；<code>pay_play === 0 → free</code>。</td>
   </tr>
   <tr>
-    <td><code>QqSong.file.size_*</code> → 候选最高档</td>
-    <td><code>size_flac &gt; 0 → flac</code>；否则 <code>size_320mp3 &gt; 0 → 320k</code>；否则 <code>128k</code>；字段缺失时由 CORE 逐档探测。</td>
+    <td><code>QqSong.file.size_*</code> → <code>Song.maxQuality</code></td>
+    <td><code>size_flac &gt; 0 → flac</code>；否则 <code>size_320mp3 &gt; 0 → 320k</code>；否则 <code>size_128mp3 &gt; 0 → 128k</code>；全部缺失为 <code>null</code>。该值只表示曲库存在该档文件，不代表当前账号可取流；播放时仍按 <code>flac → 320k → 128k</code> 申请 vkey。</td>
   </tr>
   <tr>
     <td><code>Quality</code> → vkey <code>filename</code></td>

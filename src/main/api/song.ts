@@ -1,9 +1,9 @@
 import type { PayInfo, Quality, Song, UrlResult } from '../../shared/types'
 import {
   IPC_SONG_MIDS_MAX,
-  PROBE_DETAIL_CONCURRENCY,
-  PROBE_VKEY_BATCH,
-  SONG_DETAIL_BATCH
+  SONG_DETAIL_BATCH,
+  SONG_DETAIL_CONCURRENCY,
+  VKEY_BATCH_SIZE
 } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { resolveDownloadedAudio } from '../download/registry'
@@ -17,10 +17,12 @@ interface RawSong {
   name?: string
   title?: string
   interval?: number
+  status?: number
   singer?: Array<{ mid?: string; name?: string }>
   album?: { mid?: string; name?: string }
   pay?: {
     pay_play?: number
+    pay_month?: number
     price_album?: number
     pay_status?: number
   }
@@ -80,6 +82,20 @@ function qualityAttempts(requested: Quality): Quality[] {
 
 const trackMetaCache = new Map<string, TrackMeta>()
 
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/** 曲库最高音质：只说明存在哪一档文件，不代表当前账号可取流。 */
+function libraryMaxQuality(file: RawSong['file']): Song['maxQuality'] {
+  if ((file?.size_flac ?? 0) > 0) return 'flac'
+  if ((file?.size_320mp3 ?? 0) > 0) return '320k'
+  if ((file?.size_128mp3 ?? 0) > 0) return '128k'
+  return null
+}
+
 function toSong(raw: RawSong): Song {
   const pay = raw.pay ?? {}
   const albumOnly = Number(pay.price_album ?? 0) > 0
@@ -101,7 +117,12 @@ function toSong(raw: RawSong): Song {
       free: pay.pay_play === 0 && !albumOnly,
       vip,
       album: albumOnly
-    }
+    },
+    status: numberOrNull(raw.status),
+    pay_play: numberOrNull(pay.pay_play),
+    pay_month: numberOrNull(pay.pay_month),
+    pay_status: numberOrNull(pay.pay_status),
+    maxQuality: libraryMaxQuality(raw.file)
   }
 }
 
@@ -162,7 +183,7 @@ async function fetchTracksById(mids: string[]): Promise<Map<string, RawTrackInfo
   const result = await fetchTrackBatch(unique)
   const missing = unique.filter((mid) => !result.has(mid))
   if (missing.length > 0) {
-    const fallback = await mapLimit(missing, PROBE_DETAIL_CONCURRENCY, fetchTrack)
+    const fallback = await mapLimit(missing, SONG_DETAIL_CONCURRENCY, fetchTrack)
     missing.forEach((mid, index) => result.set(mid, fallback[index]))
   }
   return result
@@ -212,8 +233,8 @@ async function requestQuality(
   const { prefix, ext } = QUALITY_FILE[quality]
   const urls = new Map<string, string>()
   const results = new Map<string, number>()
-  for (let start = 0; start < tracks.length; start += PROBE_VKEY_BATCH) {
-    const batch = tracks.slice(start, start + PROBE_VKEY_BATCH)
+  for (let start = 0; start < tracks.length; start += VKEY_BATCH_SIZE) {
+    const batch = tracks.slice(start, start + VKEY_BATCH_SIZE)
     const songmid = batch.map((track) => track.songMid)
     const songtype = batch.map(() => 0)
     const filename = batch.map((track) => `${prefix}${track.mediaMid}${ext}`)

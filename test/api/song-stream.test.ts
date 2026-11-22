@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { PROBE_VKEY_BATCH } from '../../src/shared/constants'
+import { VKEY_BATCH_SIZE } from '../../src/shared/constants'
 import type { Credential } from '../../src/shared/types'
 
 vi.mock('electron', () => ({
@@ -228,7 +228,7 @@ describe('api/song stream failures', () => {
   })
 
   it('requests a 50-song vkey batch in one upstream call', async () => {
-    const mids = Array.from({ length: PROBE_VKEY_BATCH }, (_, index) => `mid-${index}`)
+    const mids = Array.from({ length: VKEY_BATCH_SIZE }, (_, index) => `mid-${index}`)
     const vkeyParams: Array<{ songmid: string[]; filename: string[] }> = []
     musicuMock.mockImplementation(
       async (module: string, _method: string, param: Record<string, unknown>) => {
@@ -263,10 +263,10 @@ describe('api/song stream failures', () => {
 
     const results = await getStreamUrls(mids, 'flac')
 
-    expect(results).toHaveLength(PROBE_VKEY_BATCH)
+    expect(results).toHaveLength(VKEY_BATCH_SIZE)
     expect(vkeyParams).toHaveLength(1)
-    expect(vkeyParams[0].songmid).toHaveLength(PROBE_VKEY_BATCH)
-    expect(vkeyParams[0].filename).toHaveLength(PROBE_VKEY_BATCH)
+    expect(vkeyParams[0].songmid).toHaveLength(VKEY_BATCH_SIZE)
+    expect(vkeyParams[0].filename).toHaveLength(VKEY_BATCH_SIZE)
     expect(results.every((result) => result.url !== null)).toBe(true)
   })
 })

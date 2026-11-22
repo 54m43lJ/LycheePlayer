@@ -61,37 +61,22 @@ export const PLAYLIST_POLL_INTERVAL_MS = 15_000
 export const PLAYLIST_REFRESH_RETRY_MS = 5 * 60_000
 /** 歌单缓存字节上限。推荐值 64 × 1024 × 1024。 */
 export const PLAYLIST_CACHE_MAX_BYTES = 64 * 1024 * 1024
-
-// ---------- 可用性探测 ----------
-
-/**
- * 单次探测的歌曲上限。推荐值 50。
- * 约束：与 PLAYLIST_PAGE_SIZE 对齐（一个 50 首歌单页一次探测），且不超过 IPC_SONG_MIDS_MAX。
- */
-export const PROBE_MIDS_MAX = 50
-/** 歌曲详情并发（批量详情缺失时的单曲兜底）。推荐值 2。 */
-export const PROBE_DETAIL_CONCURRENCY = 2
-/** 批量歌曲详情单次请求上限。推荐值 50。 */
-export const SONG_DETAIL_BATCH = 50
-/**
- * vkey 批量大小。推荐值 50。
- * 约束：与 PROBE_MIDS_MAX 对齐（一批探测一次 vkey），且不超过 IPC_SONG_MIDS_MAX。
- */
-export const PROBE_VKEY_BATCH = 50
-/** 可用性缓存 TTL。推荐值 10 × 60_000 ms。 */
-export const PROBE_CACHE_TTL_MS = 10 * 60_000
-/** 可用性缓存的最大歌曲数；由 PLAYLIST_PAGE_SIZE × PLAYLIST_PAGE_MAX 派生。 */
-export const PROBE_MAX_SONGS = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX
-/** 可用性探测空闲调度超时。推荐值 2000 ms。 */
-export const PROBE_IDLE_TIMEOUT_MS = 2000
-/** 无 requestIdleCallback 时的探测延迟。推荐值 300 ms。 */
-export const PROBE_IDLE_FALLBACK_MS = 300
-/** 连续整批不可播的批次数上限；达到后停止本轮探测。推荐值 2。 */
-export const PROBE_EMPTY_BATCH_LIMIT = 2
 /** 最近歌单数量上限。 */
 export const RECENT_PLAYLIST_LIMIT = 5
 /** 最近歌单校验节流。推荐值 5000 ms。 */
 export const RECENT_PLAYLIST_VALIDATE_MS = 5000
+
+// ---------- 歌曲详情与播放链接 ----------
+
+/** 歌曲详情并发（批量详情缺失时的单曲兜底）。推荐值 2。 */
+export const SONG_DETAIL_CONCURRENCY = 2
+/** 批量歌曲详情单次请求上限。推荐值 50。 */
+export const SONG_DETAIL_BATCH = 50
+/**
+ * vkey 批量大小。推荐值 50。
+ * 约束：不超过 IPC_SONG_MIDS_MAX。
+ */
+export const VKEY_BATCH_SIZE = 50
 
 /** 雷达 / 猜你喜欢分区缓存时长；每日推荐按上海自然日 0 点过期，不使用该 TTL。推荐值 24 小时。 */
 export const RECOMMEND_CACHE_TTL_MS = 24 * 60 * 60_000
@@ -142,7 +127,7 @@ export const PREVIOUS_RESTART_THRESHOLD_MS = 3000
 export const NO_STREAM_SKIP_LIMIT = 10
 // ---------- IPC ----------
 
-/** song.getUrls / song.probe 单次批量上限。推荐值 100。 */
+/** song.getUrls 单次批量上限。推荐值 100。 */
 export const IPC_SONG_MIDS_MAX = 100
 
 // ---------- 登录与会话 ----------

@@ -7,7 +7,6 @@ import CoverArt from '../components/CoverArt.vue'
 import PageJump from '../components/PageJump.vue'
 import SongListTable from '../components/SongListTable.vue'
 import { describeError } from '../api'
-import { useAvailability } from '../composables/availability'
 import { useCurrentSongJump } from '../composables/current-song-jump'
 import { usePageJump } from '../composables/page-jump'
 import { useToast } from '../composables/toast'
@@ -17,6 +16,7 @@ import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { usePlaylistStore } from '../stores/playlist'
 import { PLAYLIST_POLL_INTERVAL_MS } from '@shared/constants'
+import { playbackPermission } from '@shared/permission'
 import { dailyPlaylistName, singerNames } from '../utils/format'
 
 const route = useRoute()
@@ -35,12 +35,6 @@ const displayName = computed(() =>
   dailyPlaylistName(meta.value?.name ?? '', auth.profile?.nickname ?? '')
 )
 const songs = computed(() => feed.value?.songs ?? [])
-const { availability, loading: availabilityLoading } = useAvailability(songs)
-watch(
-  [availability, availabilityLoading],
-  ([value, loading]) => playlist.setProbeState(value, loading),
-  { immediate: true, flush: 'sync' }
-)
 const downloadedCount = computed(
   () =>
     songs.value.filter((song) => Boolean(download.assets[song.songMid]?.downloadedQuality))
@@ -78,7 +72,7 @@ const removable = computed(
   () => Boolean(meta.value && meta.value.editable && meta.value.kind === 'normal')
 )
 const playableSongs = computed(() =>
-  songs.value.filter((song) => availability.value[song.songMid]?.playable !== false)
+  songs.value.filter((song) => playbackPermission(song, auth.vip).playable)
 )
 
 function source(): { kind: 'playlist'; id: string } {
@@ -94,7 +88,7 @@ function startAt(index: number): void {
 
 function playAll(): void {
   const start = filteredSongs.value.findIndex(
-    (song) => availability.value[song.songMid]?.playable !== false
+    (song) => playbackPermission(song, auth.vip).playable
   )
   if (start >= 0) startAt(start)
 }
@@ -299,7 +293,6 @@ onBeforeUnmount(() => {
         v-if="filteredSongs.length > 0"
         :songs="filteredSongs"
         :active-mid="player.current?.songMid"
-        :availability="availability"
         :removable="removable"
         :can-add-to-playlist="auth.loggedIn"
         @play="startAt"

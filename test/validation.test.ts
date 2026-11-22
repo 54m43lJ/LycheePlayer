@@ -14,7 +14,12 @@ function song(mid: string): Song {
     singers: [{ mid: 's', name: 'S' }],
     album: { mid: 'a', name: 'A' },
     durationMs: 180000,
-    pay: { free: true, vip: false, album: false }
+    pay: { free: true, vip: false, album: false },
+    status: null,
+    pay_play: null,
+    pay_month: null,
+    pay_status: null,
+    maxQuality: null
   }
 }
 
@@ -34,6 +39,12 @@ describe('cache validators', () => {
 
   it('rejects a Song missing a required nested field', () => {
     const old = { ...song('1'), pay: { free: true } }
+    expect(isSong(old)).toBe(false)
+  })
+
+  it('rejects a Song from the pre-permission cache shape', () => {
+    const old = song('1') as Partial<Song>
+    delete old.pay_month
     expect(isSong(old)).toBe(false)
   })
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import type { Song, SongAvailability } from '@shared/types'
+import type { Song } from '@shared/types'
 import PlaylistPicker from './PlaylistPicker.vue'
 import SongTable from './SongTable.vue'
 import { useDownloadAction } from '../composables/download-action'
@@ -17,7 +17,6 @@ const props = withDefaults(
     songs: Song[]
     activeMid?: string | null
     showAlbum?: boolean
-    availability?: Record<string, SongAvailability>
     removable?: boolean
     canAddToPlaylist?: boolean
     downloadable?: boolean
@@ -25,7 +24,6 @@ const props = withDefaults(
   {
     activeMid: null,
     showAlbum: true,
-    availability: () => ({}),
     removable: false,
     canAddToPlaylist: false,
     downloadable: true
@@ -84,7 +82,6 @@ function onAdded(id: string): void {
     :songs="songs"
     :active-mid="activeMid"
     :show-album="showAlbum"
-    :availability="availability"
     :favorite-mids="favoriteMids"
     :asset-states="assetStates"
     :downloadable="downloadable"

@@ -22,7 +22,6 @@ import { getCredential } from '../credential'
 import { getSettings } from '../settings'
 import { UpstreamError, upstreamBlockRemainingMs } from '../api/client'
 import { getDetail, resolveStreamUrls } from '../api/song'
-import { peekAvailability } from '../api/availability'
 import { getCachedAudio, getCachedAudioInfo, copyCachedAudio } from '../cache/audio'
 import { setDownloadedAudioResolver } from './registry'
 
@@ -375,8 +374,6 @@ export async function listDownloads(): Promise<DownloadTask[]> {
 export async function assetStates(songMids: string[]): Promise<SongAssetState[]> {
   await ensureScope()
   const unique = [...new Set(songMids.filter(Boolean))]
-  // 只读可用性缓存：列表探测已经填充；这里不再为上架状态额外打上游。
-  const maxQualities = peekAvailability(unique)
   return unique.map((songMid) => {
     const done = [...tasks.values()]
       .map((item) => item.task)
@@ -396,7 +393,6 @@ export async function assetStates(songMids: string[]): Promise<SongAssetState[]>
       songMid,
       cachedQuality: getCachedAudioInfo(songMid),
       downloadedQuality: done?.quality ?? null,
-      maxQuality: maxQualities.get(songMid)?.maxQuality ?? null,
       taskStatus: active?.status ?? null
     }
   })

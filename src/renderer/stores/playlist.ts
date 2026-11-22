@@ -5,8 +5,7 @@ import type {
   PlaylistMeta,
   PlaylistSnapshot,
   RecentPlaylist,
-  Song,
-  SongAvailability
+  Song
 } from '@shared/types'
 import {
   PLAYLIST_REFRESH_RETRY_MS,
@@ -18,7 +17,6 @@ import { IpcCallError, unwrap } from '../api'
 import { isRecentPlaylist } from '@shared/validation'
 import { readPersistedJson } from '../utils/persisted-cache'
 import { useAuthStore } from './auth'
-import { filterQueueSnapshot } from '../utils/queue'
 import { usePlayerStore } from './player'
 
 export interface PlaylistFeed {
@@ -40,11 +38,9 @@ function isRecentList(value: unknown): value is RecentPlaylist[] {
 export const usePlaylistStore = defineStore('playlist', () => {
   const feed = ref<PlaylistFeed | null>(null)
   const recent = ref<RecentPlaylist[]>([])
-  const availability = ref<Record<string, SongAvailability>>({})
-  const availabilityLoading = ref(false)
   let requestedId = ''
   let generation = 0
-  // idle → temporary（未加载/未探测完时只顶替一次）→ final（完整歌单与元数据就绪后替换）。
+  // idle → temporary（未完整加载时只顶替一次）→ final（完整歌单且非 stale 后替换）。
   let cachedSnapshot: PlaylistCacheEntry | null = null
   let queueSourceId = ''
   let queuePhase: 'idle' | 'temporary' | 'final' = 'idle'
@@ -157,8 +153,6 @@ export const usePlaylistStore = defineStore('playlist', () => {
     clearRetry()
     cancelActiveRefresh()
     feed.value = null
-    availability.value = {}
-    availabilityLoading.value = false
     requestedId = ''
     generation += 1
     cachedSnapshot = null
@@ -183,7 +177,7 @@ export const usePlaylistStore = defineStore('playlist', () => {
     const current = feed.value
     const song = currentQueueSong()
     if (!current || !song || current.songs.length === 0) return []
-    return filterQueueSnapshot(current.songs, availability.value, song.songMid)
+    return current.songs
   }
 
   /** 临时快照优先使用整份缓存歌单；缓存没有当前曲时退回当前已载入页。 */
@@ -198,28 +192,13 @@ export const usePlaylistStore = defineStore('playlist', () => {
       cachedSnapshot.songs.some((item) => item.songMid === song.songMid)
         ? cachedSnapshot.songs
         : null
-    return filterQueueSnapshot(cachedSongs ?? current.songs, availability.value, song.songMid)
+    return cachedSongs ?? current.songs
   }
 
-  /** 歌单页、VIP 与音质/可用性探测都完成后，才允许生成最终快照。 */
-  function metadataReady(): boolean {
-    const current = feed.value
-    if (!current || current.songs.length === 0 || availabilityLoading.value) return false
-    return current.songs.every((song) => {
-      if (!song.songMid) return true
-      const item = availability.value[song.songMid]
-      return Boolean(item) && (item.playable === false || item.maxQuality !== null)
-    })
-  }
-
+  /** 完整歌单与元数据就绪后生成最终快照；不再等待列表级探测结果。 */
   function finalSnapshotReady(): boolean {
     const current = feed.value
-    return Boolean(
-      current?.meta &&
-        current.status === 'complete' &&
-        !current.stale &&
-        metadataReady()
-    )
+    return Boolean(current?.meta && current.status === 'complete' && !current.stale)
   }
 
   function snapshotSignature(songs: Song[]): string {
@@ -272,12 +251,6 @@ export const usePlaylistStore = defineStore('playlist', () => {
     queuePhase = 'idle'
     temporarySignature = ''
     temporaryMids = new Set()
-    maybeFinalizeQueue()
-  }
-
-  function setProbeState(next: Record<string, SongAvailability>, loading: boolean): void {
-    availability.value = next
-    availabilityLoading.value = loading
     maybeFinalizeQueue()
   }
 
@@ -532,7 +505,6 @@ export const usePlaylistStore = defineStore('playlist', () => {
     removeMembers,
     reset,
     requestedId,
-    beginQueueBuild,
-    setProbeState
+    beginQueueBuild
   }
 })
