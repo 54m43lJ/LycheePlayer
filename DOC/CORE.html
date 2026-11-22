@@ -1589,6 +1589,10 @@ export function useToast(): {
 };
 
 </code></pre>
+<ul class="note">
+  <li><code>show()</code> 加入队列后按 <code>TOAST_DURATION_MS</code> 自动移除；<code>error()</code> 以 <code>kind = 'error'</code> 调用 <code>show()</code>，仅影响样式。</li>
+  <li>何时使用 Toast 的统一契约见 <a href="USER.html#u5-3-1">USER §5.3.1</a>。</li>
+</ul>
 
 <h3 id="c4-36">4.36 src/renderer/components/AppIcon.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const props = withDefaults(defineProps&lt;{ name: string; size?: number }&gt;(), { size: 20 });
@@ -2286,7 +2290,7 @@ interface PlaylistEditStore {
   <li><code>loadFavorites</code> 按 <code>IPC_SONG_MIDS_MAX = 100</code> 分批读取收藏状态；读取失败保留当前集合。</li>
   <li><code>toggleFavorite</code> 先乐观更新 <code>favorites</code>；成功后按返回状态校正，递增 <code>favoriteVersion</code>，调用 <code>playlist.invalidate('liked')</code>，若当前正打开“我喜欢”则立即 <code>poll('liked')</code>；失败回滚并提示。</li>
   <li><code>LibraryView</code> 监听 <code>favoriteVersion</code> 重新拉取“我的歌单”卡片；歌单写入失败时保留原状态并提示。</li>
-  <li><code>addSongs</code> / <code>removeSongs</code> 调用 IPC 后统一执行 <code>refreshAfterWrite(id)</code>：先 <code>playlist.invalidate(id)</code>，再 <code>void playlist.poll(id)</code>。当前打开该歌单时立即走已有分页加载流程；未打开时只失效缓存，下次进入再加载。返回 <code>changed</code>，并提示“已添加到歌单 / 已从歌单移除”或“已在歌单中 / 歌曲不在歌单中”。</li>
+  <li><code>addSongs</code> / <code>removeSongs</code> 调用 IPC 后统一执行 <code>refreshAfterWrite(id)</code>：先 <code>playlist.invalidate(id)</code>，再 <code>void playlist.poll(id)</code>。当前打开该歌单时立即走已有分页加载流程；未打开时只失效缓存，下次进入再加载。返回 <code>changed</code>；添加成功提示“已添加到歌单”，无变化提示“已在歌单中”；删除成功只依赖刷新后的列表变化，无变化才提示“歌曲不在歌单中”。</li>
   <li>写 API 不读回成员，添加 / 删除后的最终内容与计数以统一刷新结果为准；<code>PlaylistView</code> 的乐观移除在刷新前保留，失败时恢复行与计数。<code>PlaylistPicker</code> 先用完整缓存做本地重复预检，命中直接提示“已在歌单中”，未命中再调用 <code>addSongs</code>；<code>createAndAdd</code> 复用同一入口。</li>
   <li><code>create</code> / <code>rename</code> / <code>remove</code> 成功后刷新“我的歌单”并清除对应缓存；所有写入共用 <code>AUTH_EXPIRED</code> / <code>NO_PERMISSION</code> / <code>UPSTREAM_CHANGED</code> 映射，失败保留原状态。</li>
 </ul>
@@ -2603,8 +2607,8 @@ export function useDownloadAction(): {
 };
 </code></pre>
 <ul class="note">
-  <li>所有下载按钮的唯一行为入口：<code>requestDownload</code> 先读 <code>download.assets[songMid].downloadedQuality</code>，已下载时只把 <code>pendingDelete</code> 置为目标歌曲，不调用入队；未下载时调用 <code>download.start(request, quality)</code>，请求由当前歌曲对象直接取出歌名 / 歌手 / 专辑，并提示“已加入下载任务”；不额外请求上游补标题。</li>
-  <li><code>confirmDownloadDelete</code> 调用 <code>download.removeSong(songMid)</code> 并提示“已删除下载”；失败走统一错误提示。取消只清空 <code>pendingDelete</code>。</li>
+  <li>所有下载按钮的唯一行为入口：<code>requestDownload</code> 先读 <code>download.assets[songMid].downloadedQuality</code>，已下载时只把 <code>pendingDelete</code> 置为目标歌曲，不调用入队；未下载时调用 <code>download.start(request, quality)</code>，请求由当前歌曲对象直接取出歌名 / 歌手 / 专辑，不额外请求上游补标题；入队成功不弹 Toast，由下载按钮的“正在下载”状态反映。</li>
+  <li><code>confirmDownloadDelete</code> 调用 <code>download.removeSong(songMid)</code>；成功不弹 Toast，由按钮恢复下载态反映，失败走统一错误提示。取消只清空 <code>pendingDelete</code>。</li>
   <li><code>pendingDelete</code> 为模块级单例，<code>App.vue</code> 只渲染一个 <code>DownloadDeleteDialog</code>；歌曲表页面与 <code>PlayerBar</code> 只调用 <code>requestDownload</code>，不各自维护确认状态或删除逻辑。</li>
   <li>返回的 <code>pendingDelete</code> 是顶层 <code>Ref</code>：调用方必须在 <code>setup</code> 顶层解构后再交给模板，不能整体保存 <code>useDownloadAction()</code> 的返回值再从对象属性访问，否则模板不会自动解包。</li>
 </ul>

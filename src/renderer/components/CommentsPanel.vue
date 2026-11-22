@@ -233,7 +233,6 @@ async function submitComment(): Promise<void> {
   posting.value = true
   try {
     unwrap(await window.lychee.comment.post(id, content))
-    toast.show('评论已发表')
     if (songId.value === id) {
       draft.value = ''
       await load()

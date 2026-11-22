@@ -53,7 +53,6 @@ async function logout(): Promise<void> {
   try {
     await auth.logout()
     playlists.value = []
-    toast.show('已退出登录')
   } catch (err) {
     toast.error(describeError(err))
   }

@@ -140,9 +140,6 @@ async function chooseQuality(quality: Settings['defaultQuality']): Promise<void>
   if (quality === settings.settings.defaultQuality) return
   try {
     await player.updateDefaultQuality(quality)
-    toast.show(
-      `默认音质已切换为 ${QUALITY_PREFERENCE_OPTIONS.find((item) => item.value === quality)?.label}`
-    )
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -151,7 +148,6 @@ async function chooseQuality(quality: Settings['defaultQuality']): Promise<void>
 async function toggleCloseToTray(): Promise<void> {
   try {
     await settings.update({ closeToTray: !settings.settings.closeToTray })
-    toast.show(settings.settings.closeToTray ? '关闭窗口时隐藏到托盘' : '关闭窗口时退出应用')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -192,7 +188,6 @@ async function saveCacheLimit(): Promise<void> {
   try {
     await settings.update({ audioCacheMaxBytes: step.bytes })
     await loadStorage()
-    toast.show(`播放缓存上限已调整为 ${step.label}`)
   } catch (err) {
     cacheLimitIndex.value = cacheLimitIndexFor(settings.settings.audioCacheMaxBytes)
     toast.error(describeError(err))
@@ -203,7 +198,6 @@ async function chooseTheme(theme: Settings['theme']): Promise<void> {
   if (theme === settings.settings.theme) return
   try {
     await settings.update({ theme })
-    toast.show(theme === 'light' ? '已切换到浅色模式' : '已切换到深色模式')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -213,7 +207,6 @@ async function clearCache(): Promise<void> {
   try {
     unwrap(await window.lychee.download.clearCache())
     await loadStorage()
-    toast.show('播放缓存已清空')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -246,7 +239,6 @@ async function removeUserCache(musicid: string): Promise<void> {
     }
     await loadCacheUsers()
     await loadStorage()
-    toast.show('该账号的缓存与本地记录已删除')
   } catch (err) {
     toast.error(describeError(err))
   } finally {
@@ -260,7 +252,6 @@ async function chooseDownloadDir(): Promise<void> {
     if (!path) return
     await settings.update({ downloadDir: path })
     await loadStorage()
-    toast.show('下载目录已更新')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -282,7 +273,6 @@ async function confirmClearDownloadDir(): Promise<void> {
   try {
     await downloads.clearDirectory()
     await loadStorage()
-    toast.show('下载目录已清空')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -291,7 +281,6 @@ async function confirmClearDownloadDir(): Promise<void> {
 async function logout(): Promise<void> {
   try {
     await auth.logout()
-    toast.show('已退出登录')
     void router.push('/login')
   } catch (err) {
     toast.error(describeError(err))
@@ -302,7 +291,6 @@ async function refreshSession(): Promise<void> {
   sessionRefreshing.value = true
   try {
     await auth.refreshSession()
-    toast.show('会话已续期')
   } catch (err) {
     // auth-failed 由全局重新登录弹层提示，不再重复 Toast。
     if (!(err instanceof IpcCallError && err.code === 'AUTH_EXPIRED')) {

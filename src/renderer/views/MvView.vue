@@ -32,7 +32,6 @@ async function load(): Promise<void> {
     }
   } catch (err) {
     error.value = describeError(err)
-    toast.error(error.value)
   }
 }
 

@@ -135,7 +135,6 @@ async function search(page = 1, append = false): Promise<void> {
       toast.error(describeError(err))
     } else {
       error.value = describeError(err)
-      toast.error(error.value)
     }
   } finally {
     if (currentRequest === requestId) {
