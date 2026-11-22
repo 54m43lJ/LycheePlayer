@@ -43,7 +43,7 @@ import {
   renamePlaylist
 } from './api/playlist-write'
 import { getFavoriteStates, toggleFavorite } from './api/favorite'
-import { fetchGuessBatch, fetchRecommendFeed, clearRecommendCache } from './api/recommend'
+import { fetchGuessBatch, fetchRecommendFeed } from './api/recommend'
 import { getMvDetail, getMvStream, searchMv } from './api/mv'
 import { searchByType } from './api/search'
 import { getArtist, getArtistAlbums, getArtistSongs } from './api/artist'
@@ -62,8 +62,9 @@ import {
 import { getSettings, saveSettings } from './settings'
 import { publishState } from './integration/mpris'
 import { updateTray } from './integration/tray'
-import { clearPlaylistCache, invalidatePlaylistCache } from './cache/playlist'
+import { invalidatePlaylistCache } from './cache/playlist'
 import { audioCacheStats, clearAudioCache, enforceAudioCacheLimit } from './cache/audio'
+import { clearUserCache, listUserCaches } from './cache/user'
 import { readFlagsFile, writeFlagsFile } from './startup-flags'
 import {
   assetStates,
@@ -131,6 +132,13 @@ function numberArg(value: unknown, name: string): number {
   const parsed = Number(value)
   if (!Number.isFinite(parsed)) throw new Error(`${name} 无效`)
   return parsed
+}
+
+/** 缓存作用域只接受 musicid 或 anonymous，避免把路径片段带进缓存目录。 */
+function cacheScopeArg(value: unknown): string {
+  const scope = stringArg(value, '用户 ID', 64)
+  if (!/^[A-Za-z0-9_]+$/.test(scope)) throw new Error('用户 ID 无效')
+  return scope
 }
 
 function midArray(value: unknown, max = IPC_SONG_MIDS_MAX): string[] {
@@ -256,19 +264,17 @@ export function registerIpc(): void {
     const credential = await openWebLogin(method)
     await saveCredential(credential)
     resetRefreshState()
-    clearAvailabilityCache()
+    clearAvailabilityCache(credential.musicid)
     return currentAuthStatus()
   })
   handle('login.refreshSession', async () => {
     await refreshSession()
-    clearAvailabilityCache()
+    clearAvailabilityCache(getCredential()?.musicid)
     return currentAuthStatus()
   })
   handle('login.logout', async () => {
+    // 退出只移除凭证与续期状态；各账号缓存与本地配置保留，由设置页按账号管理。
     await clearCredential()
-    await clearPlaylistCache()
-    clearAvailabilityCache()
-    clearRecommendCache()
     resetRefreshState()
     return null
   })
@@ -480,6 +486,13 @@ export function registerIpc(): void {
   })
   handle('download.clearCache', async () => {
     await clearAudioCache()
+    return null
+  })
+
+  // ---------- cache management ----------
+  handle('cache.listUsers', async () => listUserCaches())
+  handle('cache.clearUser', async (musicid: unknown) => {
+    await clearUserCache(cacheScopeArg(musicid))
     return null
   })
 

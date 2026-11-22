@@ -61,7 +61,9 @@
 │   │   │   └── <a href="#c4-56">mv.ts</a>                    MV 搜索 / 详情 / 取流
 │   │   ├── cache/
 │   │   │   ├── <a href="#c4-57">playlist.ts</a>              歌单缓存
-│   │   │   └── <a href="#c4-58">audio.ts</a>                 音频体缓存
+│   │   │   ├── <a href="#c4-58">audio.ts</a>                 音频体缓存
+│   │   │   ├── <a href="#c4-98">scope.ts</a>                  账号缓存作用域
+│   │   │   └── <a href="#c4-98">user.ts</a>                   按账号汇总与删除缓存
 │   │   ├── media/
 │   │   │   └── <a href="#c4-59">audio-protocol.ts</a>        本地音频协议
 │   │   ├── download/
@@ -99,6 +101,7 @@
 │       │   ├── <a href="#c4-79">download-state.ts</a>        下载按钮三态解析
 │       │   ├── <a href="#c4-80">download-progress.ts</a>     下载中心整体进度计算
 │       │   ├── <a href="#c4-83">download-filter.ts</a>       下载中心纯本地搜索匹配
+│       │   ├── <a href="#c4-100">cache-users.ts</a>            按账号枚举与清理本地缓存记录
 │       │   ├── <a href="#c4-88">swipe.ts</a>                  横向拖动方向仲裁
 │       │   ├── <a href="#c4-94">embed-bounds.ts</a>            登录组件占位矩形裁剪
 │       │   ├── <a href="#c4-96">page-jump.ts</a>               长页面跳转按钮显隐判定
@@ -130,6 +133,7 @@
 │       │   ├── <a href="#c4-93">ImageLightbox.vue</a>          评论图片查看器
 │       │   ├── <a href="#c4-91">ReauthDialog.vue</a>           全局重新登录弹层
 │       │   ├── <a href="#c4-85">DownloadDeleteDialog.vue</a>  删除下载确认框
+│       │   ├── <a href="#c4-99">CacheManagerDialog.vue</a>    按账号管理缓存弹窗
 │       │   └── <a href="#c4-82">CatalogDescription.vue</a>     歌手 / 专辑简介折叠
 │       ├── views/
 │       │   ├── <a href="#c4-44">SearchView.vue</a>            搜索页
@@ -151,6 +155,8 @@
 │   │   ├── playlist-cache.test.ts            整份歌单缓存与 complete 标记
 │   │   └── search.test.ts                    搜索映射与空关键词
 │   ├── auth-store.test.ts                    重新登录弹层与续期状态展示
+│   ├── cache-management.test.ts              按账号统计与删除播放 / 歌单缓存
+│   ├── cache-users.test.ts                   本地记录合并与按账号清理
 │   ├── back-navigation.test.ts               后退关闭浮层的栈顺序
 │   ├── credential-store.test.ts              v1 凭证清空与失效原因
 │   ├── embed-bounds.test.ts                  登录占位矩形裁剪
@@ -234,7 +240,7 @@
   </tr>
   <tr>
     <td>缓存作用域</td>
-    <td>账号相关缓存键必须带 <code>musicid</code> 或 <code>anonymous</code>；退出登录清空歌单缓存与可用性缓存，音频体缓存按账号隔离保留。</td>
+    <td>账号相关缓存键必须带 <code>musicid</code> 或 <code>anonymous</code>；歌单缓存、音频体缓存、可用性缓存与推荐缓存均按账号隔离，退出登录或认证失败不再清空，由设置页“用户缓存管理”按账号选择性删除。</td>
   </tr>
   <tr>
     <td>启动参数</td>
@@ -605,6 +611,15 @@ export interface AudioCacheStats {
   files: number;
 }
 
+/** 设置页按账号管理缓存时使用的一行统计；未登录作用域为 anonymous。 */
+export interface UserCacheInfo {
+  musicid: string;
+  audioBytes: number;
+  audioFiles: number;
+  playlistBytes: number;
+  playlistFiles: number;
+}
+
 /** 主进程收到 104009 后进入全局上游截断窗口的通知。 */
 export interface UpstreamBlockedEvent {
   untilMs: number;
@@ -796,6 +811,10 @@ export interface FlagsFile {
   audioCache: {
     onProgress(callback: (progress: AudioCacheProgress) =&gt; void): () =&gt; void;
   };
+  cache: {
+    listUsers(): Promise&lt;IpcResult&lt;UserCacheInfo[]&gt;&gt;;
+    clearUser(musicid: string): Promise&lt;IpcResult&lt;null&gt;&gt;;
+  };
   artist: {
     get(
       mid: string,
@@ -901,6 +920,8 @@ function handle(
   <li><code>playlist.getSnapshot</code> / <code>playlist.cancelSnapshot</code> 按歌单 ID 保存 <code>{ token, AbortController }</code>；只允许匹配 token 的取消操作中止对应请求，新请求会先中止同歌单的旧请求。取消后当前网络请求立即中止，快照不会替换内容或写缓存。</li>
   <li><code>registerIpc</code> 注册 <code>setUpstreamBlockNotifier</code>，104009 首次进入截断窗口时通过 <code>broadcast('upstream:blocked', event)</code> 通知所有窗口；preload 暴露 <code>window.lychee.upstream.onBlocked</code>，同一窗口内只发送一次。</li>
   <li><code>login.openWebLogin</code> 只接受 <code>qq</code> / <code>wechat</code>；登录、续期、退出后的 <code>AuthStatus</code> 都带当前 <code>method</code>，渲染层据此展示登录方式。</li>
+  <li><code>login.logout</code> 只移除凭证并重置续期状态，不再删除歌单缓存、可用性缓存或推荐缓存；各账号缓存与 localStorage 记录保留。登录 / 续期后的可用性缓存清理只作用于当前 <code>musicid</code>。</li>
+  <li><code>cache.listUsers</code> 只读扫描音频缓存目录与歌单缓存文件名，返回每个账号的占用；<code>cache.clearUser</code> 校验参数后只删除目标账号的两类主进程缓存，渲染层再清理该账号的最近歌单与播放历史 key。</li>
   <li><code>currentAuthStatus</code> 从 <code>credential.getReauthReason()</code> 读取 <code>reauthReason</code>，从 <code>login.getRefreshState()</code> 读取 <code>refreshState</code>；两者都只用于界面状态，不在 IPC 内清空凭证。</li>
   <li><code>registerIpc</code> 通过 <code>setAuthStatusNotifier</code> 注册 <code>broadcast('login:status', currentAuthStatus())</code>；登录、续期、退出后实时同步，渲染层通过 preload 的 <code>login.onStatus</code> 订阅。</li>
 </ul>
@@ -1259,7 +1280,7 @@ export function destroyTray(): void;
   <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
   <li>全局只挂载一个 <a href="#c4-85">DownloadDeleteDialog</a>，读取 <a href="#c4-84">useDownloadAction</a> 的模块级 <code>pendingDelete</code>；播放条与各歌曲表页面不再各自持有删除下载确认框。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；tooltip / <code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
-  <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后重置 playlist / recommend，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
+  <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后只重置 playlist / recommend / download 的内存视图，不再清空最近歌单 local key，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
   <li>播放队列筛选输入框不显示占位文字，用 <code>aria-label="筛选队列中的歌曲"</code> 保留无障碍名称；输入值、清除按钮与过滤逻辑不变。</li>
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
@@ -1746,6 +1767,7 @@ const emit = defineEmits&lt;{
   <li>音质选项复用 <code>stores/settings.ts</code> 的 <code>QUALITY_PREFERENCE_OPTIONS</code>，选择调用 <code>player.updateDefaultQuality()</code>，与播放条共用 <code>Settings.defaultQuality</code> 并即时联动；组件内不维护本地选项常量。</li>
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
   <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
+  <li>“用户缓存管理”打开 <a href="#c4-99">CacheManagerDialog</a>：调用 <code>cache.listUsers()</code>，与 <a href="#c4-100">utils/cache-users.ts</a> 枚举的 localStorage 记录合并，按账号展示播放缓存、歌单缓存与本地记录占用；删除时调用 <code>cache.clearUser(musicid)</code> 并清理对应 local key，随后刷新统计与缓存占用。删除当前账号时重新加载最近歌单与播放历史，不触发上游请求。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
   <li>账号区展示昵称、登录方式、<code>musicid</code> 与到期时间，不显示“已登录”徽标；<code>user.isVip</code> 为真时在右侧显示 <code>VIP</code> 徽标，失败或无法检测时不显示。登录态或 <code>musicid</code> 变化时重新查询，避免跨账号复用。登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
   <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。“播放缓存”标题也不再附加“不影响已下载”等括号说明。</li>
@@ -1843,6 +1865,7 @@ export declare const PLAYER_STATE_THROTTLE_MS: number;      // 900 ms
 export declare const PLAY_HISTORY_MAX: number;              // 100；上一首回退
 export declare const PLAY_HISTORY_LIMIT: number;            // 1000；用户可见历史
 export declare const PLAY_HISTORY_STORAGE_PREFIX: string;   // 'lychee:play-history:'
+export declare const RECENT_PLAYLIST_STORAGE_PREFIX: string; // 'lychee:recent-playlists:'
 export declare const TOAST_DURATION_MS: number;             // 3600 ms
 export declare const PREVIOUS_RESTART_THRESHOLD_MS: number; // 3000 ms
 export declare const NO_STREAM_SKIP_LIMIT: number;          // 10
@@ -1925,8 +1948,8 @@ export function clearAvailabilityCache(musicid?: string): void;
   <li><code>peekAvailability</code> 只读现有可用性缓存，不探测、不写缓存；只返回已探测且未过期的条目。未探测过的歌曲不会出现在结果中，调用方按 <code>maxQuality: null</code> / 未知状态处理。</li>
   <li><code>download.assetStates</code> 用 <code>peekAvailability</code> 补 <code>maxQuality</code>；列表页由 <code>useAvailability</code> 按需探测，因此资产查询不会额外打上游。</li>
   <li><code>song.probe</code> 单次上限为 <code>PROBE_MIDS_MAX = 50</code>，与一个 50 首歌单页对齐；渲染层按 50 分批，探测内部固定按 <code>flac</code> 逐档解析最高可用音质。</li>
-  <li><code>PROBE_MAX_SONGS</code> 与页大小/页上限共用 <a href="#c4-50">§4.50</a> 的派生常量；缓存按账号隔离，退出登录时清空。</li>
-  <li>登录成功后主进程清空可用性缓存，避免沿用旧会话留下的“不可播”结果；探测请求与其他上游请求共享全局限速。</li>
+  <li><code>PROBE_MAX_SONGS</code> 与页大小/页上限共用 <a href="#c4-50">§4.50</a> 的派生常量；缓存按账号隔离，退出登录时保留，登录 / 续期时只清当前账号。</li>
+  <li>登录成功后主进程清空当前账号的可用性缓存，避免沿用旧会话留下的“不可播”结果；探测请求与其他上游请求共享全局限速。</li>
 </ul>
 
 <h3 id="c4-53">4.53 src/main/api/recommend.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1946,7 +1969,7 @@ export function clearRecommendCache(): void;
   <li>每日推荐：<code>music.recommend.RecommendFeed / get_recommend_feed</code>，参数 <code>{ direction: 0, page: 1, v_cache: [], v_uniq: [], s_num: 0 }</code>；在返回的 <code>v_shelf[].v_niche[].v_card[]</code> 中取唯一 <code>subtype === 510</code> 且日期为上海当天的卡片，再用 <code>music.srfDissInfo.DissInfo / CgiGetDiss</code> 读取完整歌单，固定 30 首。</li>
   <li>专属雷达：<code>music.recommend.TrackRelationServer / GetRadarSong</code>，参数 <code>{ Page, NeedNum, EntranceSongs: [], extra_info: {} }</code>；返回 <code>VecSongs[].Track</code>，按 <code>Page</code> 翻页并以 <code>HasMore</code> 判断，最多 4 页凑够 30 首。</li>
   <li>猜你喜欢：<code>mb_track_radio_svr / get_radio_track</code>（顶层节点 <code>songlist</code>），参数 <code>{ id: 99, firstplay: 1, page, pageNo, page_num, offset, num }</code>；返回 <code>data.tracks[]</code> 扁平歌曲，按 mid 去重。发现页只取第 1 页 5 首作为伪歌单封面与连续队列首批；<code>fetchGuessBatch(page, size = GUESS_RADIO_BATCH_SIZE)</code> 按页返回单批歌曲，供播放器续接。</li>
-  <li>缓存是进程内 <code>Map</code>，不落盘；按 <code>RecommendSection.expiresAtMs</code> 判断失效。每日推荐使用上海自然日：下一个 0 点过期，<code>force</code> 不能绕过仍在有效期内的当天日推；雷达 / 猜你喜欢使用 <code>RECOMMEND_CACHE_TTL_MS = 24 小时</code>，<code>force</code> 可绕过。传 <code>sectionId</code> 时只加载并返回该分区，渲染层按分区 id 替换；省略时串行加载全部分区。</li>
+  <li>缓存是进程内按 <code>musicid</code> 分层的 <code>Map</code>，不落盘；按 <code>RecommendSection.expiresAtMs</code> 判断失效。每日推荐使用上海自然日：下一个 0 点过期，<code>force</code> 不能绕过仍在有效期内的当天日推；雷达 / 猜你喜欢使用 <code>RECOMMEND_CACHE_TTL_MS = 24 小时</code>，<code>force</code> 可绕过。传 <code>sectionId</code> 时只加载并返回该分区，渲染层按分区 id 替换；省略时串行加载全部分区。退出登录不再全局清空，切换账号读取各自缓存。</li>
   <li>每日推荐按自然日而非滚动 24 小时：上游卡片 <code>time</code> 与日历封面（<code>calendar/MMDD_300.jpg</code>）都以日期为单位。读歌单期间若跨过 0 点，立即把 <code>expiresAtMs</code> 标为当前时间，避免把昨天的日推缓存到今天。</li>
   <li>单区失败时，有旧缓存则保留旧 section，没有旧缓存则返回合法空分区；空分区不抛错，由 UI 显示空状态。未登录直接返回空分区，由渲染层显示登录引导。<code>AUTH_EXPIRED</code> 继续抛出；调用方取消后抛出中止错误，不继续填充后续分区，也不吞掉中止错误。</li>
   <li><code>signal</code> 透传到每个 <code>musicu</code> 与 <code>CgiGetDiss</code> 请求。</li>
@@ -2004,12 +2027,17 @@ export function getMvStream(mvId: string, quality: MvStream['quality']): Promise
 export function writePlaylistCache(scope: string, entry: PlaylistCacheEntry): Promise&lt;void&gt;;
 export function invalidatePlaylistCache(id: string): Promise&lt;void&gt;;
 export function clearPlaylistCache(): Promise&lt;void&gt;;
+export function listPlaylistCacheScopes(): Promise&lt;
+  Array&lt;{ musicid: string; bytes: number; files: number }&gt;
+&gt;;
+export function clearPlaylistCacheForUser(scope: string): Promise&lt;void&gt;;
 export function playlistCacheBytes(): Promise&lt;number&gt;;
 </code></pre>
 <ul class="note">
   <li>每个歌单只保存一份整份快照：<code>meta</code>、<code>songs</code>、<code>total</code>、<code>complete</code> 与 <code>fetchedAtMs</code>；不保存页级状态。</li>
   <li><code>complete=false</code> 表示加载中断或缺页；渲染层只把它当作一次临时快照，并继续重新加载。缓存写入按 <code>PLAYLIST_CACHE_MAX_BYTES</code> 做 mtime LRU 清理。</li>
   <li><code>invalidatePlaylistCache(id)</code> 删除该歌单在所有账号下的缓存；收藏写入成功后调用 <code>liked</code>。</li>
+  <li>文件名格式为 <code>&lt;musicid|anonymous&gt;-&lt;playlistId&gt;.json</code>；<code>listPlaylistCacheScopes</code> 从文件名首段提取账号并统计，<code>clearPlaylistCacheForUser</code> 只按账号前缀删除，供设置页按账号管理。</li>
 </ul>
 
 <h3 id="c4-58">4.58 src/main/cache/audio.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -2019,13 +2047,17 @@ export function getCachedAudioInfo(
 ): Array&lt;{ quality: Quality; filePath: string; bytes: number }&gt;;
 export function putCachedAudio(songMid: string, quality: Quality, filePath: string): Promise&lt;void&gt;;
 export function clearAudioCache(): Promise&lt;void&gt;;
+export function listAudioCacheScopes(): Promise&lt;
+  Array&lt;{ musicid: string; bytes: number; files: number }&gt;
+&gt;;
+export function clearAudioCacheForUser(scope: string): Promise&lt;void&gt;;
 export function enforceAudioCacheLimit(): Promise&lt;void&gt;;
 export function audioCacheStats(): Promise&lt;{ bytes: number; files: number }&gt;;
 </code></pre>
 <ul class="note">
   <li><code>getCachedAudioInfo</code> 返回该歌曲已存在的全部缓存档位，供资产状态与下载前的本地转移判断；只读本地文件，不触发网络请求。</li>
   <li>目录结构为 <code>userData/cache/audio/&lt;musicid|anonymous&gt;/&lt;quality&gt;/&lt;songMid&gt;.&lt;mp3|flac&gt;</code>，同曲不同音质互不覆盖。</li>
-  <li>缓存按账号隔离；上限读取 <code>getSettings().audioCacheMaxBytes</code>，超出时按文件 mtime 做 LRU 清理。写入缓存后自动调用 <code>enforceAudioCacheLimit()</code>；设置页下调上限时也立即调用。统计递归扫描全部账号目录。</li>
+  <li>缓存按账号隔离；上限读取 <code>getSettings().audioCacheMaxBytes</code>，超出时按文件 mtime 做 LRU 清理。写入缓存后自动调用 <code>enforceAudioCacheLimit()</code>；设置页下调上限时也立即调用。统计递归扫描全部账号目录；<code>listAudioCacheScopes</code> 按第一级账号目录分别统计，<code>clearAudioCacheForUser</code> 只删除目标账号目录。</li>
   <li>缓存文件由 <a href="#c4-59">§4.59</a> 的 <code>file</code> 分支按 Range 手工切片返回 200 / 206；命中缓存时不需要重新取 vkey，也不经过上游。</li>
   <li>关闭播放缓存时不再读取或写入音频体；清理操作删除整个 <code>cache/audio</code>。</li>
 </ul>
@@ -2736,6 +2768,42 @@ export function jumpVisibility(
 <ul class="note">
   <li>统一渲染右下角 <code>.page-jump</code> 两个圆形按钮；只按传入的显隐状态渲染，不自行读取滚动位置。点击分别发出 <code>top</code> / <code>bottom</code>，由页面把事件接到 <a href="#c4-95">usePageJump</a> 的平滑滚动函数。</li>
   <li>按钮使用 <code>to-top</code> / <code>to-bottom</code> 图标，位置由 <code>main.css</code> 的 <code>.page-jump</code> 固定在播放条上方；页面不再各自复制按钮模板。</li>
+</ul>
+
+<h3 id="c4-98">4.98 src/main/cache/user.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export function listUserCaches(): Promise&lt;UserCacheInfo[]&gt;;
+export function clearUserCache(musicid: string): Promise&lt;void&gt;;
+</code></pre>
+<ul class="note">
+  <li><code>listUserCaches</code> 合并 <code>cache/audio</code> 与 <code>cache/playlist</code> 的按账号统计，返回播放缓存、歌单缓存的字节数与文件数；没有缓存的账号不生成空行，<code>anonymous</code> 与其他账号同等处理。</li>
+  <li><code>clearUserCache</code> 同时调用 <code>clearAudioCacheForUser</code> 与 <code>clearPlaylistCacheForUser</code>，只删除目标账号；下载文件、其他账号与全局设置不受影响。localStorage 记录由渲染层 <a href="#c4-100">§4.100</a> 清理。</li>
+  <li><code>scope.ts</code> 统一缓存目录 / 文件名的账号作用域转换：未知字符替换为下划线，空值回退 <code>anonymous</code>；IPC 层还会拒绝非法账号参数。</li>
+</ul>
+
+<h3 id="c4-99">4.99 src/renderer/components/CacheManagerDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// props: open: boolean; users: UserCacheRow[]; currentMusicid: string | null;
+//        loading?: boolean; deleting?: string | null
+// emits: close, refresh, remove(musicid: string)
+</code></pre>
+<ul class="note">
+  <li>使用统一 <code>.dialog-backdrop</code> / <code>.dialog</code>，限宽 560px；列表行显示账号标签、总占用、播放缓存、歌单缓存与本地记录明细，<code>anonymous</code> 显示为“未登录 / 匿名”，当前账号带前缀标记。</li>
+  <li>删除按钮首次点击切换为“确认删除”，再次点击才发出 <code>remove</code>；删除中显示 spinner 并禁用，其他行切换确认目标时自动重置。无数据时显示“暂无缓存数据”，加载中显示“正在统计…”。</li>
+  <li>只读取 props，不自行请求 IPC；关闭、点击遮罩、Esc 或系统后退都发出 <code>close</code>，刷新按钮发出 <code>refresh</code> 由设置页重新拉取统计。</li>
+</ul>
+
+<h3 id="c4-100">4.100 src/renderer/utils/cache-users.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export interface UserCacheRow extends UserCacheInfo {
+  localBytes: number;
+  localEntries: number;
+}
+export function localCacheUsage(): Map&lt;string, { bytes: number; entries: number }&gt;;
+export function mergeUserCaches(remote: UserCacheInfo[]): UserCacheRow[];
+export function clearLocalUserCache(musicid: string): void;
+</code></pre>
+<ul class="note">
+  <li>只扫描 <code>lychee:recent-playlists:</code> 与 <code>lychee:play-history:</code> 前缀的 localStorage key，按后缀 <code>musicid</code> 聚合；全局主题、音量与歌词开关不纳入账号缓存。</li>
+  <li><code>mergeUserCaches</code> 合并主进程统计与本地记录，按总占用降序、相同时按 musicid 排序；仅存在于 localStorage 的账号也会生成一行，便于单独清理。</li>
+  <li><code>clearLocalUserCache</code> 只删除目标账号的两个 key，不影响其他账号或全局配置；localStorage 不可用时静默忽略。</li>
 </ul>
 
 <h2 id="c5">5. Call stack tree</h2>

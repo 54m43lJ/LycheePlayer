@@ -3021,6 +3021,61 @@ button:focus-visible,
   white-space: pre-line;
 }
 
+.cache-dialog {
+  width: min(560px, 100%);
+}
+
+.cache-intro {
+  margin: 0 0 14px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.cache-empty {
+  padding: 22px 0;
+  color: var(--faint);
+  font-size: 13px;
+  text-align: center;
+}
+
+.cache-user-list {
+  display: flex;
+  flex-direction: column;
+  max-height: min(52vh, 420px);
+  overflow-y: auto;
+}
+
+.cache-user-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--subtle-bg);
+}
+
+.cache-user-row:first-child {
+  padding-top: 0;
+}
+
+.cache-user-row:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.cache-user-main {
+  min-width: 0;
+}
+
+.cache-user-main .setting-desc {
+  margin-top: 3px;
+}
+
+.cache-user-row .btn {
+  flex: 0 0 auto;
+}
+
 .dialog-foot {
   justify-content: flex-end;
   border-top: 1px solid var(--border);

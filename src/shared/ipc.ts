@@ -39,6 +39,7 @@ import type {
   SongAvailability,
   UpstreamBlockedEvent,
   UrlResult,
+  UserCacheInfo,
   UserProfile
 } from './types'
 
@@ -157,6 +158,12 @@ export interface LycheeApi {
   }
   audioCache: {
     onProgress(callback: (progress: AudioCacheProgress) => void): () => void
+  }
+  cache: {
+    /** 列出各账号可管理的缓存占用；未登录作用域为 anonymous。 */
+    listUsers(): Promise<IpcResult<UserCacheInfo[]>>
+    /** 删除指定账号的歌单缓存与播放缓存，不影响其他账号与下载文件。 */
+    clearUser(musicid: string): Promise<IpcResult<null>>
   }
   settings: {
     get(): Promise<IpcResult<Settings>>

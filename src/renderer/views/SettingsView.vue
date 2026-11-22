@@ -4,19 +4,25 @@ import { useRouter } from 'vue-router'
 import type { FlagsFile, Settings } from '@shared/types'
 import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
+import CacheManagerDialog from '../components/CacheManagerDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import { describeError, IpcCallError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
+import { useHistoryStore } from '../stores/history'
 import { usePlayerStore } from '../stores/player'
+import { usePlaylistStore } from '../stores/playlist'
 import { useSettingsStore, QUALITY_PREFERENCE_OPTIONS } from '../stores/settings'
+import { clearLocalUserCache, mergeUserCaches, type UserCacheRow } from '../utils/cache-users'
 import { formatBytes } from '../utils/format'
 
 const settings = useSettingsStore()
 const auth = useAuthStore()
 const downloads = useDownloadStore()
+const history = useHistoryStore()
 const player = usePlayerStore()
+const playlistStore = usePlaylistStore()
 const router = useRouter()
 const toast = useToast()
 const sessionRefreshing = ref(false)
@@ -29,6 +35,10 @@ const flags = ref<FlagsFile | null>(null)
 const flagsDraft = ref('')
 const flagsSaving = ref(false)
 const storage = ref<{ directory: string; bytes: number; freeBytes: number; cacheBytes?: number; cacheFiles?: number } | null>(null)
+const cacheManagerOpen = ref(false)
+const cacheUsers = ref<UserCacheRow[]>([])
+const cacheLoading = ref(false)
+const cacheDeleting = ref<string | null>(null)
 
 const expiryText = computed(() => {
   if (!auth.loggedIn) return '未登录'
@@ -206,6 +216,41 @@ async function clearCache(): Promise<void> {
     toast.show('播放缓存已清空')
   } catch (err) {
     toast.error(describeError(err))
+  }
+}
+
+async function loadCacheUsers(): Promise<void> {
+  cacheLoading.value = true
+  try {
+    cacheUsers.value = mergeUserCaches(unwrap(await window.lychee.cache.listUsers()))
+  } catch (err) {
+    toast.error(describeError(err))
+  } finally {
+    cacheLoading.value = false
+  }
+}
+
+function openCacheManager(): void {
+  cacheManagerOpen.value = true
+  void loadCacheUsers()
+}
+
+async function removeUserCache(musicid: string): Promise<void> {
+  cacheDeleting.value = musicid
+  try {
+    unwrap(await window.lychee.cache.clearUser(musicid))
+    clearLocalUserCache(musicid)
+    if ((auth.musicid ?? 'anonymous') === musicid) {
+      playlistStore.loadRecent()
+      history.load()
+    }
+    await loadCacheUsers()
+    await loadStorage()
+    toast.show('该账号的缓存与本地记录已删除')
+  } catch (err) {
+    toast.error(describeError(err))
+  } finally {
+    cacheDeleting.value = null
   }
 }
 
@@ -387,6 +432,13 @@ onBeforeUnmount(() => {
                 />
               </div>
             </div>
+            <div class="setting-row">
+              <div>
+                <div class="setting-name">用户缓存管理</div>
+                <div class="setting-desc">按账号查看并删除歌单缓存、播放缓存与本地记录</div>
+              </div>
+              <button class="btn ghost small" @click="openCacheManager()">管理</button>
+            </div>
             <div class="setting-row cache-limit-row">
               <div class="cache-limit-body">
                 <div class="cache-limit-head">
@@ -514,6 +566,17 @@ onBeforeUnmount(() => {
       danger
       @confirm="confirmClearDownloadDir()"
       @cancel="confirmClearDir = false"
+    />
+
+    <CacheManagerDialog
+      :open="cacheManagerOpen"
+      :users="cacheUsers"
+      :current-musicid="auth.musicid ?? 'anonymous'"
+      :loading="cacheLoading"
+      :deleting="cacheDeleting"
+      @close="cacheManagerOpen = false"
+      @refresh="loadCacheUsers()"
+      @remove="removeUserCache($event)"
     />
   </div>
 </template>

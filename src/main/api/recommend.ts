@@ -35,9 +35,19 @@ interface RadioData {
   songlist?: { tracks?: unknown[] } | unknown[]
 }
 
-const cache = new Map<RecommendSection['id'], RecommendSection>()
+const cache = new Map<string, Map<RecommendSection['id'], RecommendSection>>()
 
 const TITLES = RECOMMEND_SECTION_TITLES
+
+/** 推荐缓存按账号隔离，退出登录或切换账号时无需清空其他账号。 */
+function accountCache(musicid: string): Map<RecommendSection['id'], RecommendSection> {
+  let entry = cache.get(musicid)
+  if (!entry) {
+    entry = new Map()
+    cache.set(musicid, entry)
+  }
+  return entry
+}
 
 function emptySection(id: RecommendSection['id']): RecommendSection {
   const now = Date.now()
@@ -213,8 +223,9 @@ async function buildFeed(
 
   const ids: RecommendSection['id'][] = only ? [only] : [...RECOMMEND_SECTION_IDS]
   const sections: RecommendSection[] = []
+  const store = accountCache(credential.musicid)
   for (const id of ids) {
-    const hit = cache.get(id)
+    const hit = store.get(id)
     // 每日推荐按上海自然日过期，force 不能绕过仍在有效期内的当天日推。
     const forceThisSection = force && id !== 'daily'
     if (!forceThisSection && hit && Date.now() < hit.expiresAtMs) {
@@ -223,7 +234,7 @@ async function buildFeed(
     }
     try {
       const section = await loadSection(id, signal)
-      cache.set(id, section)
+      store.set(id, section)
       sections.push(section)
     } catch (err) {
       // 页面取消后不再吞掉中止错误，避免继续填充占位分区。

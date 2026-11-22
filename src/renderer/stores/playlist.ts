@@ -11,6 +11,7 @@ import type {
 import {
   PLAYLIST_REFRESH_RETRY_MS,
   RECENT_PLAYLIST_LIMIT,
+  RECENT_PLAYLIST_STORAGE_PREFIX,
   RECENT_PLAYLIST_VALIDATE_MS
 } from '@shared/constants'
 import { IpcCallError, unwrap } from '../api'
@@ -52,7 +53,7 @@ export const usePlaylistStore = defineStore('playlist', () => {
 
   function recentKey(): string {
     const auth = useAuthStore()
-    return `lychee:recent-playlists:${auth.musicid ?? 'anonymous'}`
+    return `${RECENT_PLAYLIST_STORAGE_PREFIX}${auth.musicid ?? 'anonymous'}`
   }
 
   function persistRecent(): void {

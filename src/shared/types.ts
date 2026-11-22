@@ -419,6 +419,15 @@ export interface AudioCacheStats {
   files: number
 }
 
+/** 设置页按账号管理缓存时使用的一行统计；未登录作用域为 anonymous。 */
+export interface UserCacheInfo {
+  musicid: string
+  audioBytes: number
+  audioFiles: number
+  playlistBytes: number
+  playlistFiles: number
+}
+
 export interface DownloadStorageInfo {
   directory: string
   bytes: number

@@ -4,13 +4,14 @@ import { mkdir, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PlaylistCacheEntry } from '../../shared/types'
 import { PLAYLIST_CACHE_MAX_BYTES } from '../../shared/constants'
+import { safeCacheScope } from './scope'
 
 function cacheDir(): string {
   return join(app.getPath('userData'), 'cache', 'playlist')
 }
 
 function safeSegment(value: string): string {
-  return value.replace(/[^A-Za-z0-9_-]/g, '_') || 'anonymous'
+  return safeCacheScope(value)
 }
 
 function cachePath(scope: string, id: string): string {
@@ -103,6 +104,49 @@ export async function invalidatePlaylistCache(id: string): Promise<void> {
 export async function clearPlaylistCache(): Promise<void> {
   try {
     await rm(cacheDir(), { recursive: true, force: true })
+  } catch {
+    // 目录不存在时无需处理。
+  }
+}
+
+/** 按账号统计歌单缓存；文件名格式为 `<scope>-<playlistId>.json`。 */
+export async function listPlaylistCacheScopes(): Promise<
+  Array<{ musicid: string; bytes: number; files: number }>
+> {
+  const result = new Map<string, { musicid: string; bytes: number; files: number }>()
+  try {
+    const files = await readdir(cacheDir())
+    for (const file of files) {
+      if (!file.endsWith('.json')) continue
+      const separator = file.indexOf('-')
+      if (separator <= 0) continue
+      const musicid = file.slice(0, separator)
+      try {
+        const info = await stat(join(cacheDir(), file))
+        const item = result.get(musicid) ?? { musicid, bytes: 0, files: 0 }
+        item.bytes += info.size
+        item.files += 1
+        result.set(musicid, item)
+      } catch {
+        // 文件在扫描期间被删除时忽略。
+      }
+    }
+  } catch {
+    // 缓存目录不存在时返回空列表。
+  }
+  return [...result.values()]
+}
+
+/** 删除指定账号的歌单缓存，不影响其他账号。 */
+export async function clearPlaylistCacheForUser(scope: string): Promise<void> {
+  const prefix = `${safeSegment(scope)}-`
+  try {
+    const files = await readdir(cacheDir())
+    await Promise.all(
+      files
+        .filter((file) => file.startsWith(prefix) && file.endsWith('.json'))
+        .map((file) => rm(join(cacheDir(), file), { force: true }))
+    )
   } catch {
     // 目录不存在时无需处理。
   }

@@ -6,6 +6,7 @@ import type { Quality } from '../../shared/types'
 import { AUDIO_CACHE_DIR } from '../../shared/constants'
 import { getSettings } from '../settings'
 import { getCredential } from '../credential'
+import { safeCacheScope } from './scope'
 
 function cacheRoot(): string {
   return join(app.getPath('userData'), 'cache', AUDIO_CACHE_DIR)
@@ -54,30 +55,36 @@ export async function copyCachedAudio(
   return source
 }
 
-async function totalBytes(): Promise<number> {
+async function directoryStats(dir: string): Promise<{ bytes: number; files: number }> {
   let bytes = 0
-  async function walk(dir: string): Promise<void> {
+  let files = 0
+  async function walk(current: string): Promise<void> {
     let entries
     try {
-      entries = await readdir(dir, { withFileTypes: true })
+      entries = await readdir(current, { withFileTypes: true })
     } catch {
       return
     }
     for (const entry of entries) {
-      const path = join(dir, entry.name)
+      const path = join(current, entry.name)
       if (entry.isDirectory()) {
         await walk(path)
       } else {
         try {
           bytes += (await stat(path)).size
+          files += 1
         } catch {
           // 文件已删除。
         }
       }
     }
   }
-  await walk(cacheRoot())
-  return bytes
+  await walk(dir)
+  return { bytes, files }
+}
+
+async function totalBytes(): Promise<number> {
+  return (await directoryStats(cacheRoot())).bytes
 }
 
 async function enforceLimit(): Promise<void> {
@@ -138,25 +145,31 @@ export async function clearAudioCache(): Promise<void> {
 }
 
 export async function audioCacheStats(): Promise<{ bytes: number; files: number }> {
-  let files = 0
-  async function walk(dir: string): Promise<void> {
-    let entries
-    try {
-      entries = await readdir(dir, { withFileTypes: true })
-    } catch {
-      return
-    }
+  return directoryStats(cacheRoot())
+}
+
+/** 按账号统计播放缓存；目录第一级即账号作用域。 */
+export async function listAudioCacheScopes(): Promise<
+  Array<{ musicid: string; bytes: number; files: number }>
+> {
+  try {
+    const entries = await readdir(cacheRoot(), { withFileTypes: true })
+    const result: Array<{ musicid: string; bytes: number; files: number }> = []
     for (const entry of entries) {
-      const path = join(dir, entry.name)
-      if (entry.isDirectory()) {
-        await walk(path)
-      } else {
-        files += 1
-      }
+      if (!entry.isDirectory()) continue
+      const stats = await directoryStats(join(cacheRoot(), entry.name))
+      result.push({ musicid: entry.name, ...stats })
     }
+    return result
+  } catch {
+    // 缓存目录不存在时返回空列表。
+    return []
   }
-  await walk(cacheRoot())
-  return { bytes: await totalBytes(), files }
+}
+
+/** 删除指定账号的播放缓存，不影响其他账号。 */
+export async function clearAudioCacheForUser(scope: string): Promise<void> {
+  await rm(join(cacheRoot(), safeCacheScope(scope)), { recursive: true, force: true })
 }
 
 export { cacheRoot as audioCacheRoot }

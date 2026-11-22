@@ -40,6 +40,7 @@ import type {
   SongAvailability,
   UpstreamBlockedEvent,
   UrlResult,
+  UserCacheInfo,
   UserProfile
 } from '../shared/types'
 
@@ -183,6 +184,10 @@ const api: LycheeApi = {
       ipcRenderer.on('audioCache:progress', listener)
       return () => ipcRenderer.removeListener('audioCache:progress', listener)
     }
+  },
+  cache: {
+    listUsers: () => invoke<UserCacheInfo[]>('cache.listUsers'),
+    clearUser: (musicid: string) => invoke<null>('cache.clearUser', musicid)
   },
   settings: {
     get: () => invoke<Settings>('settings.get'),

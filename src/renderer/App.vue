@@ -65,8 +65,8 @@ let offLoginStatus: (() => void) | null = null
 let offBackNavigation: (() => void) | null = null
 
 function onLogout(): void {
+  // 只重置内存视图；各账号的最近歌单、播放历史与磁盘缓存保留，设置页可按账号清理。
   playlistStore.reset()
-  playlistStore.clearRecent()
   recommend.reset()
   download.reset()
 }

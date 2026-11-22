@@ -468,3 +468,43 @@
 | `USER.html` | §5.3 错误与通知（`#u5-3`） | 改 | `AUTH_EXPIRED` 区分 auth-failed 全局弹层与 temp-failed 静默重试。 |
 | `README.md` | §2 用户交互 · 登录行 | 改 | 补充续期失败按状态处理与登录态实时同步。 |
 | `ABOUT.html` | 用户交互 · 登录行 | 改 | 与 README 同步。 |
+
+## 15. 登出保留用户缓存与按账号缓存管理
+
+**需求**：退出登录、认证失败等流程不再清空该用户的歌单缓存、播放缓存与本地记录；设置页新增“用户缓存管理”，弹窗按账号列出播放缓存、歌单缓存与本地记录占用，可选择性删除任意账号的缓存，不影响其他账号与下载文件。
+
+**实现思路**：
+
+- `login.logout` 只清理凭证与续期状态，移除 `clearPlaylistCache()`、`clearAvailabilityCache()`、`clearRecommendCache()` 调用；登录 / 续期时也只清理当前账号的可用性缓存。
+- 推荐缓存改为按 `musicid` 分层，退出或切换账号不再依赖全局清空；音频缓存与歌单缓存继续按账号目录 / 文件名隔离。
+- `App.vue` 的 `lychee:logout` 只重置内存 playlist / recommend / download 视图，不再调用 `clearRecent()`；最近歌单与播放历史的 localStorage key 按账号保留。
+- 新增 `UserCacheInfo` 与 `cache.listUsers` / `cache.clearUser` IPC；主进程 `cache/user.ts` 汇总 `cache/audio/<musicid>` 与 `cache/playlist/<musicid>-*.json`，按账号删除两类缓存。
+- 新增渲染层 `utils/cache-users.ts`：枚举 `lychee:recent-playlists:<musicid>` 与 `lychee:play-history:<musicid>`，与主进程统计合并；删除账号时一并清理这两类本地 key。
+- 设置页“缓存与下载”增加“用户缓存管理”入口；新增 `CacheManagerDialog` 列出账号、总占用、播放缓存 / 歌单缓存 / 本地记录明细，删除按钮二次确认，删除后刷新列表与缓存占用。
+- 新增 `test/cache-management.test.ts` 与 `test/cache-users.test.ts`，覆盖按账号统计、仅删除目标账号、保留 anonymous 与其他账号、localStorage 只删目标账号。
+
+**文档操作**：
+
+| 文档 | 章节 | 操作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 4 项“登出保留用户缓存与按账号缓存管理” | 改 | 行尾追加 ` [已解决]`。 |
+| `EVOLVE.md` | 新增“登出保留用户缓存与按账号缓存管理” | 增 | 记录需求、实现思路与本次文档操作。 |
+| `USER.html` | §1 TERMS · 歌单（`#u1`） | 改 | 退出登录不再清空本机歌单缓存与最近列表。 |
+| `USER.html` | §5.2.7 设置页（`#u5-2-7`） | 改 | 增加“用户缓存管理”入口与弹窗说明：按账号查看 / 删除播放缓存、歌单缓存与本地记录。 |
+| `USER.html` | §5.2.8 页面结构 · 侧栏最近歌单（`#u5-2-8`） | 改 | 退出登录保留当前账号最近列表，切换账号加载对应列表。 |
+| `CORE.html` | §1 文件树（`#c1`） | 改 | 增加 `cache/scope.ts`、`cache/user.ts`、`components/CacheManagerDialog.vue` 与 `utils/cache-users.ts`。 |
+| `CORE.html` | §1 CONVENTIONS · 缓存作用域（`#c1`） | 改 | 退出登录不再清空歌单 / 可用性缓存；缓存由设置页按账号管理。 |
+| `CORE.html` | §4.1 `src/shared/types.ts`（`#c4-1`） | 改 | 增加 `UserCacheInfo`。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 增加 `cache.listUsers` / `cache.clearUser`。 |
+| `CORE.html` | §4.5 `src/main/ipc.ts`（`#c4-5`） | 改 | 退出只清凭证与续期状态；新增缓存管理 IPC；登录 / 续期只清当前账号可用性缓存。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 退出登录只重置内存视图，不再清空最近歌单。 |
+| `CORE.html` | §4.48 `SettingsView.vue`（`#c4-48`） | 改 | 增加用户缓存管理入口、统计刷新与按账号删除流程。 |
+| `CORE.html` | §4.50 `src/shared/constants.ts`（`#c4-50`） | 改 | 增加最近歌单 localStorage key 前缀。 |
+| `CORE.html` | §4.53 `api/recommend.ts`（`#c4-53`） | 改 | 推荐缓存改为按账号分层，退出登录不再全局清空。 |
+| `CORE.html` | §4.57 `cache/playlist.ts`（`#c4-57`） | 改 | 增加按账号统计与删除歌单缓存的函数。 |
+| `CORE.html` | §4.58 `cache/audio.ts`（`#c4-58`） | 改 | 增加按账号统计与删除播放缓存的函数。 |
+| `CORE.html` | §4.98 `cache/user.ts`（`#c4-98`） | 增 | 新增按账号汇总与删除两类缓存的说明。 |
+| `CORE.html` | §4.99 `components/CacheManagerDialog.vue`（`#c4-99`） | 增 | 新增用户缓存管理弹窗的 props、emits 与二次确认行为。 |
+| `CORE.html` | §4.100 `utils/cache-users.ts`（`#c4-100`） | 增 | 新增本地记录枚举、合并统计与按账号删除函数。 |
+| `README.md` | §2 用户交互 · 设置行 | 改 | 补充按账号管理缓存的入口。 |
+| `ABOUT.html` | 用户交互 · 设置行 | 改 | 与 README 同步。 |
