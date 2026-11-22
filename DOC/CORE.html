@@ -1754,7 +1754,7 @@ const emit = defineEmits&lt;{
   <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>下载按钮统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>：已下载时由全局 <a href="#c4-85">DownloadDeleteDialog</a> 询问是否删除本机文件，未下载时加入统一队列；页面不自行判断资产状态或维护确认框。</li>
   <li>歌曲区标题显示 <code>已下载 X / Y 首</code>：<code>X</code> 按 <code>downloadedQuality</code> 统计，不把播放缓存算作已下载；有筛选时前置 <code>筛选 N ·</code>。歌曲表上方提供筛选输入框，按歌名 / 歌手 / 专辑做本地不区分大小写匹配；输入框不显示占位文字，用 <code>aria-label="筛选歌名、歌手或专辑"</code> 保留无障碍名称。只过滤传给 <code>SongTable</code> 的展示数组，不改变心跳与队列构建。无匹配时显示空结果状态。</li>
-  <li>页面根节点使用 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 取得内容区滚动容器并监听滚动 / 内容尺寸变化；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击以固定 400ms 过渡滚动。当前页面为播放来源且当前歌曲在筛选结果中时，向 <a href="#c4-97">PageJump</a> 传入 <code>showCurrent</code>；<code>scrollToCurrent()</code> 用 <code>tr[data-song-mid]</code> 定位行，计算它在 <code>.main</code> 中的偏移并居中，复用 <code>scrollWithTransition</code> 的 400ms 过渡。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
+  <li>页面根节点使用 <code>pageRef</code>，通过 <a href="#c4-95">usePageJump</a> 取得内容区滚动容器并监听滚动 / 内容尺寸变化；<code>scrollTop &gt; 120</code> 显示“跳转到顶部”，距底部超过 120px 显示“跳转到底部”，点击以固定 400ms 过渡滚动。当前页面为播放来源且当前歌曲在筛选结果中时，向 <a href="#c4-97">PageJump</a> 传入 <code>showCurrent</code>；<code>scrollToCurrent()</code> 调用 <a href="#c4-96">scrollToSongRow</a> 把 <code>tr[data-song-mid]</code> 行滚到 <code>.main</code> 中间，复用 400ms 过渡。<code>.page-jump</code> 固定在右下角并避开播放条；卸载时移除监听、断开 observer 并调用 <code>playlist.stop(id)</code>。</li>
   <li>筛选后的 <code>SongTable</code> emit 使用展示数组下标：播放、下一首、收藏、下载、删除与加入歌单都先用 <code>filteredSongs[index]</code> 解析出歌曲对象，再调用对应 API，不能把筛选下标传给全量 <code>songs</code> 或队列操作。删除按解析出的 <code>songMid</code> 调用 <code>removeSongs</code>，乐观移除与失败恢复也基于该歌曲对象。</li>
   <li>“播放全部”和单曲播放只在筛选结果中定位起始曲；<code>startPlaylistPlayback</code> 只接收歌曲对象，后续队列仍由 playlist store 用完整 <code>songs</code> 快照构建。筛选不重建播放队列、不改变随机顺序或队列快照。</li>
   <li>歌单头操作按钮文字始终单行：<code>.btn</code> 使用 <code>white-space: nowrap</code>，<code>.playlist-actions</code> 始终 <code>flex-wrap: wrap</code>，按钮自身 <code>flex: 0 0 auto</code>；空间不足时“播放全部 / 下载全部 / 返回”整组换行，不压缩按钮或在按钮内折行。</li>
@@ -2654,6 +2654,7 @@ interface HistoryStore {
   <li>页头只显示标题与“播放全部”“清空历史”，不显示记录数或容量说明；记录为空时“播放全部”和“清空历史”都禁用。清空使用应用内 <a href="#c4-81">ConfirmDialog</a> 危险态，确认后调用 <code>history.clear()</code>。</li>
   <li>搜索只过滤 <code>history.entries</code>，按歌名 / 歌手 / 专辑做不区分大小写的本地匹配，不发上游请求；输入框不显示占位文字，用 <code>aria-label="搜索播放历史"</code> 保留无障碍名称。无关键词时保留全部记录，结果为空时区分“还没有播放历史”和“没有匹配的播放历史”；空状态只提示“播放歌曲后会显示在这里”，不说明容量或保留策略。</li>
   <li>列表复用 <a href="#c4-39">SongTable</a>，支持播放、下一首播放、收藏与共用下载入口；双击 / 单曲播放以当前过滤结果为新的播放顺序并替换队列。页面挂载时加载一次收藏状态，歌曲记录顺序不因收藏状态变化而改变。</li>
+  <li>当前歌曲仍在过滤结果中时向 <a href="#c4-97">PageJump</a> 传入 <code>showCurrent</code>；点击调用 <a href="#c4-96">scrollToSongRow</a> 把带 <code>data-song-mid</code> 的行滚到内容区中间。历史页不要求播放来源，一首来自其他歌单的当前歌曲只要出现在历史列表里就可以定位。</li>
   <li>播放历史只记录本机播放，不读取账号云端历史，也不提供跨设备同步。</li>
 </ul>
 
@@ -2780,11 +2781,13 @@ export function jumpVisibility(
   scrollHeight: number,
   threshold?: number
 ): { top: boolean; bottom: boolean };
+export function scrollToSongRow(root: HTMLElement, songMid: string): void;
 </code></pre>
 <ul class="note">
   <li><code>top = scrollTop &gt; threshold</code>，<code>bottom = scrollTop + clientHeight &lt; scrollHeight - threshold</code>；不读取 DOM，测试见 <code>test/page-jump.test.ts</code>。</li>
   <li><code>scrollWithTransition</code> 用 <code>requestAnimationFrame</code> 在固定 <code>JUMP_TRANSITION_MS = 400</code> 内写入 <code>scrollTop</code>，不调用浏览器默认平滑滚动；进度用缓出三次曲线 <code>1 - (1 - t)³</code>。目标值先夹在 <code>[0, scrollHeight - clientHeight]</code> 内，起止位置相同或时长非正时直接落位。</li>
   <li>同一时间只保留一段过渡：新的跳转先取消上一段；<code>cancelJumpScroll(el)</code> 只取消该元素的过渡，供页面卸载时清理。</li>
+  <li><code>scrollToSongRow</code> 在页面根节点内查找 <code>tr[data-song-mid]</code>，按行与 <code>.main</code> 的相对位置计算居中目标，再交给 <code>scrollWithTransition</code>；歌单详情与播放历史共用，找不到行时静默返回。</li>
 </ul>
 
 <h3 id="c4-97">4.97 src/renderer/components/PageJump.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -3554,14 +3557,15 @@ views/HistoryView::startAt(index)
 </ul>
 
 <h3 id="c5-23">5.23 跳转到当前歌曲</h3>
-<pre><code>views/PlaylistView::scrollToCurrent()
-├── 判断 queueSource.kind === 'playlist' &amp;&amp; queueSource.id === 当前歌单
-├── 判断当前歌曲仍在 filteredSongs 中
-├── querySelector('tr[data-song-mid="&lt;mid&gt;"]')
-└── utils/page-jump::scrollWithTransition(.main, 行偏移 - (可视高度 - 行高) / 2)
+<pre><code>views/PlaylistView::scrollToCurrent() / views/HistoryView::scrollToCurrent()
+├── 判断当前歌曲存在且仍在 filteredSongs 中
+├── 判断（歌单详情）queueSource 为当前歌单
+└── utils/page-jump::scrollToSongRow(root, mid)
+    ├── querySelector('tr[data-song-mid="&lt;mid&gt;"]')
+    └── utils/page-jump::scrollWithTransition(.main, 行偏移 - (可视高度 - 行高) / 2)
 </code></pre>
 <ul class="note">
-  <li>按钮只在“当前页面正是播放来源且当前歌曲在筛选结果中”时显示；筛选把当前歌曲排除后按钮隐藏，避免跳到不存在的行。</li>
+  <li>歌单详情额外要求当前页面是播放来源；播放历史只要求当前歌曲仍在列表（含筛选结果）中，来自其他歌单的歌曲也可以定位。</li>
   <li>滚动容器仍是 <code>.main</code>，与顶部 / 底部跳转共用固定 400ms 过渡；重复点击会取消上一段过渡。</li>
 </ul>
 

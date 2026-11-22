@@ -6,6 +6,7 @@ import PageJump from '../components/PageJump.vue'
 import SongTable from '../components/SongTable.vue'
 import { useDownloadAction } from '../composables/download-action'
 import { usePageJump } from '../composables/page-jump'
+import { scrollToSongRow } from '../utils/page-jump'
 import { useDownloadStore } from '../stores/download'
 import { useHistoryStore } from '../stores/history'
 import { usePlayerStore } from '../stores/player'
@@ -34,6 +35,18 @@ const filteredSongs = computed(() => {
 })
 const favoriteMids = computed(() => [...playlistEdit.favorites])
 const assetStates = computed(() => download.assets)
+const showJumpCurrent = computed(
+  () =>
+    Boolean(player.current) &&
+    filteredSongs.value.some((song) => song.songMid === player.current?.songMid)
+)
+
+/** 把当前歌曲行滚到内容区可视范围中间。 */
+function scrollToCurrent(): void {
+  const root = pageRef.value
+  const mid = player.current?.songMid
+  if (root && mid) scrollToSongRow(root, mid)
+}
 
 function startAt(index: number): void {
   const song = filteredSongs.value[index]
@@ -141,7 +154,9 @@ onMounted(() => {
     <PageJump
       :show-top="showTop"
       :show-bottom="showBottom"
+      :show-current="showJumpCurrent"
       @top="scrollToTop"
+      @current="scrollToCurrent"
       @bottom="scrollToBottom"
     />
 

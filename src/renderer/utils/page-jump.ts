@@ -48,6 +48,22 @@ export function scrollWithTransition(
   active = { el, frame: requestAnimationFrame(step) }
 }
 
+/**
+ * 把带 `data-song-mid` 的歌曲行滚到内容区可视范围中间。
+ * 页面根节点需位于 `.main` 滚动容器内；找不到行时不做处理。
+ */
+export function scrollToSongRow(root: HTMLElement, songMid: string): void {
+  const main = root.closest<HTMLElement>('.main')
+  if (!main) return
+  const row = root.querySelector<HTMLElement>(`tr[data-song-mid="${CSS.escape(songMid)}"]`)
+  if (!row) return
+  const mainRect = main.getBoundingClientRect()
+  const rowRect = row.getBoundingClientRect()
+  const top =
+    main.scrollTop + rowRect.top - mainRect.top - (main.clientHeight - rowRect.height) / 2
+  scrollWithTransition(main, top)
+}
+
 /** 按滚动位置判断是否显示顶部 / 底部跳转按钮。 */
 export function jumpVisibility(
   scrollTop: number,
