@@ -255,6 +255,10 @@
     <td>只在“歌单快照 → 队列”边界按 <code>playable !== false</code> 过滤；队列本身不做检测或清理。完整加载、非 stale 且元数据探测完成后生成最终快照；之前只允许一次临时快照顶替。</td>
   </tr>
   <tr>
+    <td>下载按钮行为</td>
+    <td>所有下载入口共用 <code>useDownloadAction().requestDownload(song, quality)</code>，不各自判断已下载状态；已下载时由全局 <code>DownloadDeleteDialog</code> 确认，未下载时加入统一队列；磁盘删除由主进程执行。见 <a href="#c4-84">§4.84</a>、<a href="#c4-85">§4.85</a>。</td>
+  </tr>
+  <tr>
     <td>可用性探测</td>
     <td>探测只更新歌单歌曲元数据，不修改播放队列或当前播放；单次批量 <code>PROBE_MIDS_MAX = 50</code>，与歌单页大小对齐。</td>
   </tr>
@@ -2599,6 +2603,7 @@ export function useDownloadAction(): {
   <li>所有下载按钮的唯一行为入口：<code>requestDownload</code> 先读 <code>download.assets[songMid].downloadedQuality</code>，已下载时只把 <code>pendingDelete</code> 置为目标歌曲，不调用入队；未下载时调用 <code>download.start(request, quality)</code>，请求由当前歌曲对象直接取出歌名 / 歌手 / 专辑，并提示“已加入下载任务”；不额外请求上游补标题。</li>
   <li><code>confirmDownloadDelete</code> 调用 <code>download.removeSong(songMid)</code> 并提示“已删除下载”；失败走统一错误提示。取消只清空 <code>pendingDelete</code>。</li>
   <li><code>pendingDelete</code> 为模块级单例，<code>App.vue</code> 只渲染一个 <code>DownloadDeleteDialog</code>；歌曲表页面与 <code>PlayerBar</code> 只调用 <code>requestDownload</code>，不各自维护确认状态或删除逻辑。</li>
+  <li>返回的 <code>pendingDelete</code> 是顶层 <code>Ref</code>：调用方必须在 <code>setup</code> 顶层解构后再交给模板，不能整体保存 <code>useDownloadAction()</code> 的返回值再从对象属性访问，否则模板不会自动解包。</li>
 </ul>
 
 <h3 id="c4-85">4.85 src/renderer/components/DownloadDeleteDialog.vue <a class="backlink" href="#c1">文件树</a></h3>

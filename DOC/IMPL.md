@@ -41,7 +41,7 @@
 | `USER.html` | §5.2.8 页面结构 · 歌单详情（`#u5-2-8`） | 改 | 删除“按钮显示完成 / 总数 / 失败，全部完成显示已全部下载，部分失败提示到下载中心重试”，改为“不显示完成 / 总数 / 失败；入队后 Toast 提示‘已加入下载队列’”。 |
 | `CORE.html` | §4.60 `download/manager.ts` / §5.16 下载（`#c4-60` / `#c5-16`） | 不动 | 已完整描述单队列、串行下载与无批次语义，作为模型来源。 |
 
-### 1.3 下载调用树只记录歌曲表一个入口
+### 1.3 下载调用树只记录歌曲表一个入口 [已解决] 
 
 **问题描述**：CORE §5.16 原先只画了 `SongTable::emit('download') → download.start`，播放条的实际下载入口没有出现在调用树里。结果是“已下载时确认删除”先只加到了歌单页，播放条继续走旧入队逻辑，文档也没有暴露这个缺口。
 
@@ -51,14 +51,14 @@
 - `PlayerBar` 与所有歌曲表页面只负责把歌曲对象和音质传给该入口，不再各自判断资产状态。
 - 调用树改为 `SongTable / PlayerBar → requestDownload → 入队或删除分支`，并新增全局 `DownloadDeleteDialog`。
 
-**修订建议**：
+**实际文档操作**：
 
 | 文档 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §5.16 下载（`#c5-16`） | 改 | 把单入口调用树改为 `SongTable` / `PlayerBar → requestDownload`，并补已下载时的删除分支。 |
-| `CORE.html` | §4.84 `composables/download-action.ts`（`#c4-84`） | 增 | 记录共用下载入口、`pendingDelete`、确认 / 取消函数，以及返回的 ref 需在调用方顶层解构。 |
-| `CORE.html` | §4.85 `components/DownloadDeleteDialog.vue`（`#c4-85`） | 增 | 记录全局唯一删除下载确认框及挂载位置。 |
-| `CORE.html` | §2 CONVENTIONS（`#c2`） | 增 | 增加“下载按钮行为”约定：所有入口共用 `requestDownload`，不各自判断已下载状态；磁盘删除由主进程执行。 |
+| `CORE.html` | §5.16 下载（`#c5-16`） | 不动 | 调用树已含 `SongTable` / `PlayerBar → requestDownload`，并覆盖已下载时的删除分支。 |
+| `CORE.html` | §4.84 `composables/download-action.ts`（`#c4-84`） | 增 | 补记返回的 `pendingDelete` 需在调用方 `setup` 顶层解构，避免模板不自动解包。 |
+| `CORE.html` | §4.85 `components/DownloadDeleteDialog.vue`（`#c4-85`） | 不动 | 已记录全局唯一确认框及 `App.vue` 挂载位置。 |
+| `CORE.html` | §2 CONVENTIONS（`#c2`） | 增 | 新增“下载按钮行为”：所有入口共用 `requestDownload`，不各自判断已下载状态；磁盘删除由主进程执行。 |
 | `USER.html` | §5.2.3 播放条 / §5.2.4 歌曲列表 | 不动 | 已声明所有歌曲表与播放条共用同一行为，避免与本节重复。 |
 
 ## 2. 开发中发现文档没写明的细节
