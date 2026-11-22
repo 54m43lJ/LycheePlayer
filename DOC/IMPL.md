@@ -301,7 +301,7 @@
 | `README.md` | §2 用户交互 | 不动 | 键盘焦点是通用交互细节，不作为首页能力条目重复列出。 |
 | `ABOUT.html` | 用户交互 | 不动 | 与 README 同步保持现状。 |
 
-### 3.7 发现页歌单卡片 hover 上移后被滚动容器裁掉顶边
+### 3.7 发现页歌单卡片 hover 上移后被滚动容器裁掉顶边 [已解决] 
 
 **描述**：`.card:hover` 使用 `transform: translateY(-2px)` 制造上浮反馈，卡片本身不参与布局重排。`.discover-playlists` 用 `overflow-x: auto` 提供横向滚动，且顶部没有内边距；卡片上移 2px 后，顶部 1px 边框与上浮后的背景落到滚动容器裁剪区之外，表现为悬停时顶边消失。3.6 的焦点环内收只能解决键盘描边，无法覆盖 hover 位移。
 
@@ -318,6 +318,10 @@
 | `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 补 `.discover-playlists` 的 `margin-top: 6px` 与 `padding-top: 4px`，说明为 `.card:hover` 的 `translateY(-2px)` 预留空间。 |
 | `USER.html` | §5.2.8 页面结构 · 发现（`#u5-2-8`） | 不动 | 悬停上浮属于样式细节，由 §4.49 记录；页面结构描述不重复。 |
 | `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 不动 | 组件结构不变，只由样式文件提供裁剪余量。 |
+
+**工作记录**：
+
+- 核对 `CORE §4.49`：`.discover-playlists` 的 `margin-top: 6px`、`padding-top: 4px` 与为上浮预留空间的说明均已存在，无需改动。
 
 ### 3.8 上游日推歌单名缺少账号昵称前缀
 
