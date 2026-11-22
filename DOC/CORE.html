@@ -880,6 +880,7 @@ export interface FlagsFile {
   <li>该接口经 preload 暴露为 <code>window.lychee</code>；返回取消订阅函数的方法是推送订阅。</li>
   <li><code>login.setEmbedBounds</code> 与 <code>player.sendState</code> 是单向 IPC，不返回信封；<code>navigation.onBack</code> 只订阅主进程推送，渲染层不回传导航结果。</li>
   <li><code>flags</code> 读取 / 保存当前 flags 文件；<code>download</code> 的 <code>storage</code> / <code>openFolder</code> / <code>chooseFolder</code> / <code>clearCache</code> 服务设置页与下载页；<code>start</code> 返回缓存转移或新建任务的结果，<code>list</code> 只返回任务列表。</li>
+  <li><code>download.remove(id)</code> 按任务 ID 删除下载中心单行；<code>download.removeSong(songMid)</code> 按歌曲删除该曲全部 <code>done</code> 任务，供播放条与歌曲表在只有 <code>songMid</code> 时使用，不依赖渲染层是否已加载任务列表。</li>
   <li><code>lyric.decryptQrc</code> 是同步方法，在 preload 内用 Node crypto + zlib 完成解密；主进程只透传密文，接口细节见 <a href="#c4-64">§4.64</a>。</li>
   <li><code>recommend.get</code> / <code>recommend.refresh</code> 在已登录时传 <code>sectionId</code> 只加载并返回该分区，<code>null</code> 才返回完整 feed；未登录直接返回完整空分区用于登录引导。<code>token</code> 用于按请求取消，<code>recommend.cancel</code> 只中止匹配 token 的请求。</li>
   <li><code>recommend.guess(page)</code> 按页拉取猜你喜欢连续队列的一批歌曲，返回 <code>Song[]</code>；<code>page</code> 从 1 开始，主进程只负责单批读取，队列续接由播放器控制。</li>
@@ -2404,7 +2405,7 @@ interface DownloadStore {
 <ul class="note">
   <li><code>load</code> 读取任务列表；目录用量只在下载页可见时刷新；资产状态只刷新状态发生变化的任务，避免大批量下载时每轮全量查询。页面不可见时若有活动任务仍轮询任务状态以更新歌曲表图标，全部结束后停止；<code>remove</code> 刷新该曲资产，<code>clearDirectory</code> / <code>reset</code> 清空资产与状态记录。</li>
   <li><code>start</code> 复用 <code>startMany</code>；<code>startMany</code> 不自动打开下载页，有活动任务时启动轮询以更新歌曲表图标。任务按数组倒序展示，不改变主进程队列顺序。</li>
-  <li><code>removeSong</code> 调用 <code>download.removeSong</code>，从本地任务快照中移除该曲的 <code>done</code> 任务并刷新该曲资产状态；主进程负责删除文件与记录，渲染层不直接操作磁盘。</li>
+  <li><code>removeSong</code> 调用 <code>download.removeSong</code>，从本地任务快照中移除该曲的 <code>done</code> 任务并刷新该曲资产状态；即使 <code>tasks</code> 尚未加载，也由主进程按 <code>songMid</code> 完成删除，渲染层不直接操作磁盘。</li>
   <li>没有批次状态或批次控制；<code>clearCompleted</code> 只清记录，<code>clearDirectory</code> 清空下载目录内容与记录，<code>reset</code> 在页面可见时立即重新加载。</li>
 </ul>
 

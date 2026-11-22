@@ -82,7 +82,7 @@
 | `CORE.html` | §4.83 `utils/download-filter.ts`（`#c4-83`） | 不动 | 已记录 `matchesDownloadKeyword()` 的字段集合、大小写规则与空关键词行为。 |
 | `CORE.html` | §4.1 `DownloadTask`（`#c4-1`） | 不动 | 已声明 `singers` / `albumName` 的用途，搜索规则只放在 §4.83，避免重复。 |
 
-### 2.2 删除下载的 IPC 粒度与清理范围未写明
+### 2.2 删除下载的 IPC 粒度与清理范围未写明 [已解决] 
 
 **问题描述**：文档只有按任务 ID 的 `download.remove(id)`，没有回答“歌曲已经下载，但当前页面只有 `songMid`、没有任务 ID”时如何删除。也没有说明同一歌曲存在多条 `done` 任务时删哪条，以及是否清理 `.part` 和下载封面。
 
@@ -92,13 +92,13 @@
 - 删除该歌曲全部 `done` 任务，同时移除音频、残留 `.part` 与下载封面，并保存索引。
 - 保留 `download.remove(id)` 供下载中心按行删除单任务；渲染层使用按歌曲接口，避免依赖任务列表是否加载。
 
-**修订建议**：
+**实际文档操作**：
 
 | 文档 | 章节 | 动作 | 内容 |
 |---|---|---|---|
-| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 增加 `download.removeSong(songMid)`，并说明与 `remove(id)` 的分工。 |
-| `CORE.html` | §4.60 `download/manager.ts`（`#c4-60`） | 改 | 增加 `removeDownloadedSong` 签名，写明删除全部 `done` 任务、音频、`.part` 与封面；同一小节并入旧索引字段归一化，见 §3.1。 |
-| `CORE.html` | §4.71 `stores/download.ts`（`#c4-71`） | 改 | 增加 `removeSong` 签名，说明本地快照更新、资产刷新，以及不依赖 `tasks` 是否已加载。 |
+| `CORE.html` | §4.2 `src/shared/ipc.ts`（`#c4-2`） | 改 | 补记 `remove(id)` 按任务删除下载中心单行，`removeSong(songMid)` 按歌曲删除全部 `done` 任务且不依赖任务列表已加载。 |
+| `CORE.html` | §4.60 `download/manager.ts`（`#c4-60`） | 不动 | 已记录 `removeDownloadedSong` 签名、删除范围与旧索引字段归一化。 |
+| `CORE.html` | §4.71 `stores/download.ts`（`#c4-71`） | 改 | 补记即使 `tasks` 未加载也由主进程按 `songMid` 删除；本地只移除已加载的 `done` 任务并刷新资产。 |
 | `USER.html` | §5.2.4 歌曲列表 / §5.2.8 歌单详情 | 不动 | 已描述用户可见的删除确认流程，API 粒度与文件清理只留在 CORE。 |
 
 ### 2.3 窗口标题的格式、回退与维护位置未定义
