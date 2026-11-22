@@ -2345,6 +2345,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
   <li>两张卡片封面中心均叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示。每日推荐卡片调用 <a href="#c4-90">usePlaylistPlay().toggleSource</a> 播放 / 暂停整单；猜你喜欢卡片以 <code>radio / guess</code> 来源调用同一 <code>toggleSource</code>，首次点击执行 <code>startRadioQueue(section.songs)</code>，之后随当前队列状态暂停 / 继续。播放按钮阻止冒泡，不触发卡片本身的跳转 / 起播行为。</li>
   <li>猜你喜欢卡片只渲染标题，不再显示“连续推荐 · 顺序播放”副标题；每日推荐仍显示歌曲数副标题。</li>
   <li><code>listSections</code> 为其余分区（当前仅专属雷达），保留 <code>section-title</code>、计数与单区刷新按钮，继续渲染固定宽度歌曲条目，每区固定高度显示 3 行，超出横向滚动。</li>
+  <li><code>showsSongStrip(section)</code> 只在分区不是每日推荐 / 猜你喜欢、没有歌单入口且 <code>songs</code> 非空时返回真，渲染歌曲条目；每日推荐与猜你喜欢只渲染伪歌单卡片。骨架按分区传参：首行两张卡片使用 <code>songs=0</code> / <code>playlists=1</code>，其余列表分区使用 <code>songs=30</code> / <code>playlists=0</code>；<code>songs=0</code> 时不输出空的 <code>.discover-strip</code>。</li>
   <li>页面挂载后启动 60 秒定时器调用 <code>recommend.refreshDailyIfExpired()</code>，跨过上海 0 点后自动重取日推；卸载时清除定时器。页面不再提供整体“换一批”入口，专属雷达保留自己的单区刷新按钮，日推由自然日过期自动更新。</li>
   <li>页面先渲染三块骨架：首行两张歌单卡片占位，专属雷达渲染 30 条歌曲条目占位；再按 <code>daily → radar → guess</code> 逐块异步填充，未完成的分区不阻塞其他内容。</li>
   <li>条目为封面图标 + 上方歌名、下方歌手，文字溢出走跑马灯；点击歌曲单曲播放，歌手 / 专辑按 <code>mid</code> 链接。</li>
