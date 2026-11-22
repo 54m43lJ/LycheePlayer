@@ -36,6 +36,10 @@ project/                      project root
 | `Internal Process`                   | `内部处理`               |
 | `//See USER §xx.xx`                  | `//见 USER §xx.xx`    |
 | `Add` / `Delete` / `Change` / `None` | `增` / 删 / `改` / `不动` |
+| `Description`                        | `描述`                 |
+| `Solution`                           | `解决方案`               |
+| `Spec Changes`                       | `文档操作`               |
+| `Work Notes`                         | `工作记录`               |
 
 ## Diagrams: PlantUML
 
@@ -95,7 +99,7 @@ Spec documentation per project, in HTML — the development docs split by bounda
 - state user-visible behavior; internal mechanism names (cache, probe, queue construction) and engineering constants belong to CORE
 
 **Chapters**
-1. **TERMS** — one canonical term per concept with its full definition; later uses stand alone
+1. **TERMS** — one canonical term per concept with its full definition; later uses stand alone. Should not include design details.
 2. **CONVENTIONS** — shared across interfaces (Global constraints #9)
 3. **DIAGRAMS** — mechanisms are the preferred documentation form
    - general architecture — how the application interacts with others (Component Diagram)
@@ -185,7 +189,8 @@ Spec documentation per project, in HTML — the development docs split by bounda
 - A simple list of minor issues found. Typically: bugs, QoL improvements, interactions.
 - After completion, each entry is marked `[DONE]` for later removal.
 ## IMPL
-A record of work done during resolution of TODOs and ISSUEs. Each entry is formatted as:
-  - Description: a paragraph, summarizing the issue/requirement.
-  - Solution: a bulleted list of what to implement.
-  - Document Action: a table with the following fields: Doc name, Section, Action (`Add` / `Delete` /`Change`/`None`, `None` is for when relevant action is completed in another entry, in order to avoid overwriting each other's work), Content (the exact alteration to the text)
+A record of work done to the specs during resolution of TODOs and ISSUEs. Each entry is formatted as:
+  - `Description`: a paragraph, summarizing the issue/requirement.
+  - `Solution`: a bulleted list of what to implement.
+  - `Spec Changes `: a table with the following fields: Doc name, Section, Action (` Add ` / ` Delete ` / ` Change ` / ` None `, ` None ` is for when relevant action is completed in another entry, in order to avoid overwriting each other's work), Content (the exact alteration to the text)
+  - `Work Notes` (Optional): bulleted list of additional records of the actual work done to the specs. Useful when the Spec Changes differs from the real specs, and has to be amended.

@@ -255,6 +255,10 @@
     <td>只在“歌单快照 → 队列”边界按 <code>playable !== false</code> 过滤；队列本身不做检测或清理。完整加载、非 stale 且元数据探测完成后生成最终快照；之前只允许一次临时快照顶替。</td>
   </tr>
   <tr>
+    <td>下载按钮行为</td>
+    <td>所有下载入口共用 <code>useDownloadAction().requestDownload(song, quality)</code>，不各自判断已下载状态；已下载时由全局 <code>DownloadDeleteDialog</code> 确认，未下载时加入统一队列；磁盘删除由主进程执行。见 <a href="#c4-84">§4.84</a>、<a href="#c4-85">§4.85</a>。</td>
+  </tr>
+  <tr>
     <td>可用性探测</td>
     <td>探测只更新歌单歌曲元数据，不修改播放队列或当前播放；单次批量 <code>PROBE_MIDS_MAX = 50</code>，与歌单页大小对齐。</td>
   </tr>
@@ -876,6 +880,7 @@ export interface FlagsFile {
   <li>该接口经 preload 暴露为 <code>window.lychee</code>；返回取消订阅函数的方法是推送订阅。</li>
   <li><code>login.setEmbedBounds</code> 与 <code>player.sendState</code> 是单向 IPC，不返回信封；<code>navigation.onBack</code> 只订阅主进程推送，渲染层不回传导航结果。</li>
   <li><code>flags</code> 读取 / 保存当前 flags 文件；<code>download</code> 的 <code>storage</code> / <code>openFolder</code> / <code>chooseFolder</code> / <code>clearCache</code> 服务设置页与下载页；<code>start</code> 返回缓存转移或新建任务的结果，<code>list</code> 只返回任务列表。</li>
+  <li><code>download.remove(id)</code> 按任务 ID 删除下载中心单行；<code>download.removeSong(songMid)</code> 按歌曲删除该曲全部 <code>done</code> 任务，供播放条与歌曲表在只有 <code>songMid</code> 时使用，不依赖渲染层是否已加载任务列表。</li>
   <li><code>lyric.decryptQrc</code> 是同步方法，在 preload 内用 Node crypto + zlib 完成解密；主进程只透传密文，接口细节见 <a href="#c4-64">§4.64</a>。</li>
   <li><code>recommend.get</code> / <code>recommend.refresh</code> 在已登录时传 <code>sectionId</code> 只加载并返回该分区，<code>null</code> 才返回完整 feed；未登录直接返回完整空分区用于登录引导。<code>token</code> 用于按请求取消，<code>recommend.cancel</code> 只中止匹配 token 的请求。</li>
   <li><code>recommend.guess(page)</code> 按页拉取猜你喜欢连续队列的一批歌曲，返回 <code>Song[]</code>；<code>page</code> 从 1 开始，主进程只负责单批读取，队列续接由播放器控制。</li>
@@ -1647,7 +1652,7 @@ const emit = defineEmits&lt;{
   <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态；下载按钮三态由 <code>resolveDownloadState</code> 派生为唯一状态（已下载 / 已缓存 / 普通），class、图标与 tooltip 共用该状态。已缓存与已下载互斥，下载优先；即使资产同时带两个档位也只显示已下载，tooltip 只显示当前状态。状态框固定 24px，按钮点击热区不变。</li>
   <li>专辑列与歌手行渲染为链接：歌手 <code>mid</code> 非空链接到 <code>/artist/:mid</code>，专辑 <code>mid</code> 非空链接到 <code>/album/:mid</code>，点击不触发行播放；<code>mid</code> 为空时按纯文本展示，名称为空不渲染。标题、歌手、专辑统一使用 <code>MarqueeText</code>，仅在溢出时滚动；≤900px 隐藏专辑列。</li>
   <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：窄窗口优先省略歌名，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与 tooltip。</li>
-  <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。操作列宽屏 160px，≤900px 收窄到 40px，五个图标按钮在单元格内横向排列。</li>
+  <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。操作列宽屏 160px，≤900px 收窄到 44px，刚好容纳表头“操作”两字不换行，五个图标按钮在单元格内横向排列。</li>
   <li>行的 <code>dblclick</code> 只绑定在 <code>tr</code> 上；歌手 / 专辑链接与操作列按钮统一使用 <code>@click.stop</code>，把点击事件截在子元素内，不触发整行播放。</li>
   <li>操作列基础结构为收藏、下载、下一首播放（<code>play-next</code>）、添加到歌单（<code>playlist-add</code>）、从歌单删除五个图标按钮。<code>addable</code> 为真时渲染“添加到歌单”，点击发出 <code>addToPlaylist(index)</code>；删除按钮仅在 <code>removable</code> 为真时渲染，由 <code>PlaylistView</code> 按 <code>PlaylistMeta.editable</code> 且非“我喜欢”传入；点击发出 <code>remove(index)</code>，不触发行播放。</li>
   <li><code>SongTable</code> 不弹确认框，也不调用 <code>window.confirm</code>；<code>remove</code> 只发出事件，由页面使用 <a href="#c4-81">ConfirmDialog</a> 确认后再调用删除 API。</li>
@@ -1667,7 +1672,8 @@ const emit = defineEmits&lt;{
   <li>播放进度条为单轨结构：<code>.progress-track</code> 背景轨上叠加 <code>.progress-buffer</code> 缓冲层与 <code>.progress-played</code> 播放层，透明 <code>.progress-range</code> 覆盖在轨道上只负责拖动与点击定位。缓冲宽度取 <code>max(cachePercent, bufferedPercent)</code>：缓存进度按当前 <code>songMid + quality</code> 匹配，已下载歌曲按 100%；HTML5 <code>audio.buffered</code> 由 <code>onBufferChange</code> 上报，切歌清空。tooltip 在已下载 / 缓存完成时显示“已下载到本机” / “缓存完成”，否则显示“缓冲 N%”；无歌曲或缓冲为 0 时只保留灰轨，不渲染 overlay。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
   <li>播放模式按钮本身即当前模式：<code>.mode-button</code> 默认透明背景与 <code>--muted</code> 图标，悬停时使用 <code>--accent</code> 34% 混合背景，图标由 <code>MODE_ICON</code> 映射，其中 <code>sequence</code> 使用专用向下长箭头图标；点击按 <code>sequence → repeat-all → repeat-one → shuffle</code> 固定顺序循环切换（不展开菜单）。悬停 120ms / 离开 200ms 打开或关闭向上弹出的仅图标菜单，菜单只渲染 <code>otherModes</code>（当前模式之外的其余三项，保持固定顺序），不重复显示当前模式，顺序播放项同样使用 <code>sequence</code> 图标；<code>mode-wrap.open</code> 期间按钮保持 <code>--accent-strong</code> 图标与 <code>--accent-soft</code> 背景，持续高亮当前模式；悬停时沿用普通 hover 的 <code>--accent</code> 34% 混合背景，图标仍保持高亮。键盘焦点可打开，Esc、外部点击与选择后关闭，选择项调用 <code>player.setMode()</code>，不弹 Toast。猜你喜欢连续队列激活时 <code>player.modeLocked</code> 为真：按钮 <code>disabled</code>、保持 <code>sequence</code> 图标并显示“猜你喜欢队列仅支持顺序播放”tooltip，<code>openModeMenu</code> / 循环与选择入口全部提前返回；监听 <code>modeLocked</code> 关闭已打开菜单。</li>
-  <li>播放模式菜单用 <code>modeOpenTimer</code> / <code>modeCloseTimer</code> 分别管理 120ms 打开与 200ms 延迟关闭；Esc 走 <code>closeMenus()</code>，会清空模式、音质与音量的待执行定时器。挂载时注册 document 的 <code>click</code>（捕获阶段）与 <code>keydown</code>，<code>onBeforeUnmount</code> 清除模式打开 / 关闭定时器并移除这两个监听，避免卸载后回调操作旧 ref 或重复注册。</li>
+  <li>播放模式菜单用 <code>modeOpenTimer</code> / <code>modeCloseTimer</code> 分别管理 120ms 打开与 200ms 延迟关闭；Esc 走 <code>closeMenus()</code>，会清空模式、音质、收藏与音量的待执行定时器。挂载时注册 document 的 <code>click</code>（捕获阶段）与 <code>keydown</code>，<code>onBeforeUnmount</code> 清除模式打开 / 关闭定时器并移除这两个监听，避免卸载后回调操作旧 ref 或重复注册。</li>
+  <li>音质、收藏与音量菜单共用 <code>closeMenus()</code>：点击外部、Esc 或选择后立即关闭并清空对应定时器；菜单包裹层负责 <code>mouseenter</code> / <code>mouseleave</code>，移入菜单本身不会触发关闭。</li>
   <li>音质 revealer：按钮显示 <code>qualityPreference</code> 的短名称（<code>AUTO / 128K / 320K / FLAC</code>），点击调用 <code>player.cycleQualityPreference()</code> 按同一固定顺序循环；悬停 120ms 打开、离开 200ms 关闭，弹层只渲染除当前偏好外的其它档位，顺序与 <code>QUALITY_PREFERENCE_OPTIONS</code> 一致。选择调用 <code>player.updateDefaultQuality()</code>；弹层与播放模式 / 音量弹层互斥。交互与呈现遵循 <a href="USER.html#u2">USER §2</a> 的 Revealer 统一约定。</li>
   <li>收藏按钮为特殊 revealer：点击按钮调用 <code>playlist-edit.toggleFavorite()</code>；<code>likeWrap</code> 悬停 / 聚焦 120ms 打开、离开 200ms 关闭，弹层只有一个“加入歌单”图标按钮，点击后通过 <code>Teleport</code> 渲染 <code>PlaylistPicker</code> 并传入当前曲目 mid；没有模式切换。</li>
   <li><code>useRevealerTouch</code> 为播放模式、音质与收藏三个 revealer 提供触屏手势：从按钮开始纵向滑动超过 8px 才打开弹层并捕获指针，按选项中点与手指 Y 距离高亮最近项；松开确认，取消则关闭；滑动后的 click 在容器捕获阶段抑制。轻点不触发手势，保留原有 click 行为。</li>
@@ -2340,6 +2346,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
   <li>两张卡片封面中心均叠放 <a href="#c4-89">CardPlayButton</a>，悬停 / 键盘聚焦时显示。每日推荐卡片调用 <a href="#c4-90">usePlaylistPlay().toggleSource</a> 播放 / 暂停整单；猜你喜欢卡片以 <code>radio / guess</code> 来源调用同一 <code>toggleSource</code>，首次点击执行 <code>startRadioQueue(section.songs)</code>，之后随当前队列状态暂停 / 继续。播放按钮阻止冒泡，不触发卡片本身的跳转 / 起播行为。</li>
   <li>猜你喜欢卡片只渲染标题，不再显示“连续推荐 · 顺序播放”副标题；每日推荐仍显示歌曲数副标题。</li>
   <li><code>listSections</code> 为其余分区（当前仅专属雷达），保留 <code>section-title</code>、计数与单区刷新按钮，继续渲染固定宽度歌曲条目，每区固定高度显示 3 行，超出横向滚动。</li>
+  <li><code>showsSongStrip(section)</code> 只在分区不是每日推荐 / 猜你喜欢、没有歌单入口且 <code>songs</code> 非空时返回真，渲染歌曲条目；每日推荐与猜你喜欢只渲染伪歌单卡片。骨架按分区传参：首行两张卡片使用 <code>songs=0</code> / <code>playlists=1</code>，其余列表分区使用 <code>songs=30</code> / <code>playlists=0</code>；<code>songs=0</code> 时不输出空的 <code>.discover-strip</code>。</li>
   <li>页面挂载后启动 60 秒定时器调用 <code>recommend.refreshDailyIfExpired()</code>，跨过上海 0 点后自动重取日推；卸载时清除定时器。页面不再提供整体“换一批”入口，专属雷达保留自己的单区刷新按钮，日推由自然日过期自动更新。</li>
   <li>页面先渲染三块骨架：首行两张歌单卡片占位，专属雷达渲染 30 条歌曲条目占位；再按 <code>daily → radar → guess</code> 逐块异步填充，未完成的分区不阻塞其他内容。</li>
   <li>条目为封面图标 + 上方歌名、下方歌手，文字溢出走跑马灯；点击歌曲单曲播放，歌手 / 专辑按 <code>mid</code> 链接。</li>
@@ -2400,7 +2407,7 @@ interface DownloadStore {
 <ul class="note">
   <li><code>load</code> 读取任务列表；目录用量只在下载页可见时刷新；资产状态只刷新状态发生变化的任务，避免大批量下载时每轮全量查询。页面不可见时若有活动任务仍轮询任务状态以更新歌曲表图标，全部结束后停止；<code>remove</code> 刷新该曲资产，<code>clearDirectory</code> / <code>reset</code> 清空资产与状态记录。</li>
   <li><code>start</code> 复用 <code>startMany</code>；<code>startMany</code> 不自动打开下载页，有活动任务时启动轮询以更新歌曲表图标。任务按数组倒序展示，不改变主进程队列顺序。</li>
-  <li><code>removeSong</code> 调用 <code>download.removeSong</code>，从本地任务快照中移除该曲的 <code>done</code> 任务并刷新该曲资产状态；主进程负责删除文件与记录，渲染层不直接操作磁盘。</li>
+  <li><code>removeSong</code> 调用 <code>download.removeSong</code>，从本地任务快照中移除该曲的 <code>done</code> 任务并刷新该曲资产状态；即使 <code>tasks</code> 尚未加载，也由主进程按 <code>songMid</code> 完成删除，渲染层不直接操作磁盘。</li>
   <li>没有批次状态或批次控制；<code>clearCompleted</code> 只清记录，<code>clearDirectory</code> 清空下载目录内容与记录，<code>reset</code> 在页面可见时立即重新加载。</li>
 </ul>
 
@@ -2599,6 +2606,7 @@ export function useDownloadAction(): {
   <li>所有下载按钮的唯一行为入口：<code>requestDownload</code> 先读 <code>download.assets[songMid].downloadedQuality</code>，已下载时只把 <code>pendingDelete</code> 置为目标歌曲，不调用入队；未下载时调用 <code>download.start(request, quality)</code>，请求由当前歌曲对象直接取出歌名 / 歌手 / 专辑，并提示“已加入下载任务”；不额外请求上游补标题。</li>
   <li><code>confirmDownloadDelete</code> 调用 <code>download.removeSong(songMid)</code> 并提示“已删除下载”；失败走统一错误提示。取消只清空 <code>pendingDelete</code>。</li>
   <li><code>pendingDelete</code> 为模块级单例，<code>App.vue</code> 只渲染一个 <code>DownloadDeleteDialog</code>；歌曲表页面与 <code>PlayerBar</code> 只调用 <code>requestDownload</code>，不各自维护确认状态或删除逻辑。</li>
+  <li>返回的 <code>pendingDelete</code> 是顶层 <code>Ref</code>：调用方必须在 <code>setup</code> 顶层解构后再交给模板，不能整体保存 <code>useDownloadAction()</code> 的返回值再从对象属性访问，否则模板不会自动解包。</li>
 </ul>
 
 <h3 id="c4-85">4.85 src/renderer/components/DownloadDeleteDialog.vue <a class="backlink" href="#c1">文件树</a></h3>
