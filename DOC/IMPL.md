@@ -326,3 +326,39 @@
 - 代码实现：新增 `src/shared/permission.ts` 与 `test/permission.test.ts`；`Song` 增加权限字段与 `maxQuality`；删除 `src/main/api/availability.ts`、`src/renderer/composables/availability.ts`、`src/renderer/utils/queue.ts` 及其测试；`SongAssetState.maxQuality` 移除。
 - 校验器要求新字段，旧歌单缓存、播放历史与最近歌单按 4.22 整份清除重建；播放历史持久化改为先取原始对象再序列化，避免 1000 条列表逐字段穿过响应式代理导致测试超时。
 - `npm run typecheck`、`npm test`（47 个测试文件、226 个用例）与 `npm run build` 通过。
+
+### 4.25 全局快捷键与设置页改键 [已解决] 
+
+**描述**：TODO 第 4 项要求窗口内支持空格播放 / 暂停、`Ctrl + ←` / `Ctrl + →` 上一首 / 下一首、`Ctrl + D` 喜欢当前歌曲、`Ctrl + S` 收藏当前歌曲到歌单，并在设置页提供快捷键配置。
+
+**解决方案**：
+
+- 新增 `shared/shortcuts.ts`：集中定义 `DEFAULT_SHORTCUTS`、动作顺序与标签、结构校验、按键匹配、录制转换与显示格式化；`ShortcutKeyInput` 只声明按键与修饰键，避免主进程编译单元依赖 DOM 类型。
+- `Settings` 增加 `shortcuts`；主进程 `settings.ts` 逐项校验，缺失或非法项回退默认；渲染层 `defaultSettings()` 提供同一份默认值。
+- `App.vue` 的全局 `keydown` 先处理 Esc，再按 `Settings.shortcuts` 匹配动作；输入框 / 文本域 / 可编辑区域、`event.repeat`、输入法组合中与已打开弹窗不响应，空格在按钮 / 链接上保留原生激活行为，命中后 `preventDefault`。
+- 动作直接复用现有入口：`player.toggle()`、`player.previous()`、`player.playNext()`、`playlistEdit.toggleFavorite()`、`ui.openSongPicker()`。
+- `ui` store 新增全局 `songPicker` 请求；`PlayerBar` 的收藏弹层与 `Ctrl + S` 共用同一选择器，Esc / 选择完成 / 关闭统一清理。
+- 设置页新增“快捷键”面板：点击进入录制态，window 捕获阶段拦截按键并阻止全局快捷键；只按修饰键不生效，Esc 取消，冲突时提示占用，保存即时写盘，“恢复默认”重置全部动作。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 4 项“窗口内支持基本的播放控制” | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“全局快捷键与设置页改键” | 增 | 记录需求、实现方案与文档操作。 |
+| `USER.html` | §2 CONVENTIONS · 全局快捷键 | 增 | 记录默认键位、输入框 / 弹窗边界与可改键。 |
+| `USER.html` | §5.2.3 播放条 | 改 | 播放控制与喜欢 / 收藏到歌单同时绑定全局快捷键。 |
+| `USER.html` | §5.2.7 设置页 | 改 | 原型增加快捷键面板；记录录制、冲突、Esc 取消与恢复默认；`Settings.shortcuts` 持久化字段。 |
+| `CORE.html` | §1 文件树 / §4.1 `types.ts` | 改 | 新增 `shared/shortcuts.ts`；`Settings` 增加 `shortcuts`，新增 `ShortcutAction` / `ShortcutBinding` / `Shortcuts`。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 记录全局 keydown 的匹配顺序、可编辑目标与弹窗边界。 |
+| `CORE.html` | §4.31 `stores/ui.ts`（`#c4-31`） | 改 | 新增全局 `songPicker` 与开关方法。 |
+| `CORE.html` | §4.48 `SettingsView.vue`（`#c4-48`） | 改 | 记录快捷键面板、录制拦截与保存行为。 |
+| `CORE.html` | §4.106 `shortcuts.ts`（`#c4-106`） | 增 | 记录默认值、校验、匹配、录制与格式化接口。 |
+| `CORE.html` | §5.24 全局快捷键（`#c5-24`） | 增 | 记录 keydown → 动作 → 现有播放 / 收藏 / 选择器入口的调用树。 |
+| `README.md` / `ABOUT.html` | 用户交互 · 快捷键行 | 增 | 记录默认键位与设置页可改键。 |
+
+**工作记录**：
+
+- 新增 `test/shortcuts.test.ts`、`test/ui-store.test.ts` 与设置持久化用例，覆盖默认键位格式化、修饰键精确匹配、录制归一化、非法绑定回退、改键落盘与全局选择器开关。
+- `npm run typecheck`、`npm test`（49 个测试文件、236 个用例）与 `npm run build` 通过。
+- 键盘交互未做真实 GUI 自动化验收；共享匹配函数与设置持久化由单测覆盖，全局事件链路由类型检查与实现审阅确认。

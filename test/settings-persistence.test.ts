@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -38,5 +38,39 @@ describe('settings persistence', () => {
     )
     saveSettings({ ...createDefaultSettings(), audioCacheMaxBytes: 700 * MiB })
     expect(loadSettings().audioCacheMaxBytes).toBe(512 * MiB)
+  })
+
+  it('persists shortcut overrides and fills missing actions with defaults', async () => {
+    const { createDefaultSettings, saveSettings, loadSettings } = await import(
+      '../src/main/settings'
+    )
+    const { DEFAULT_SHORTCUTS, copyShortcuts } = await import('../src/shared/shortcuts')
+    const shortcuts = copyShortcuts(DEFAULT_SHORTCUTS)
+    shortcuts.favorite = { key: 'f', ctrl: true, alt: false, shift: false, meta: false }
+    saveSettings({ ...createDefaultSettings(), shortcuts })
+
+    const loaded = loadSettings()
+    expect(loaded.shortcuts.favorite).toEqual({
+      key: 'f',
+      ctrl: true,
+      alt: false,
+      shift: false,
+      meta: false
+    })
+    expect(loaded.shortcuts.previous).toEqual(DEFAULT_SHORTCUTS.previous)
+  })
+
+  it('falls back to the default binding when a persisted shortcut is malformed', async () => {
+    const { createDefaultSettings, loadSettings } = await import('../src/main/settings')
+    const { DEFAULT_SHORTCUTS } = await import('../src/shared/shortcuts')
+    writeFileSync(
+      join(state.dir, 'settings.json'),
+      JSON.stringify({
+        ...createDefaultSettings(),
+        shortcuts: { favorite: { key: 'Control', ctrl: true } }
+      })
+    )
+
+    expect(loadSettings().shortcuts.favorite).toEqual(DEFAULT_SHORTCUTS.favorite)
   })
 })

@@ -1353,6 +1353,16 @@ button:focus-visible,
   font-weight: 600;
 }
 
+.shortcut-button {
+  min-width: 104px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcut-button.recording {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
 .setting-desc {
   margin-top: 4px;
   color: var(--faint);

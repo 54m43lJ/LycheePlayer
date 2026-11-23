@@ -47,9 +47,6 @@ const qualityWrap = ref<HTMLElement | null>(null)
 const volumeWrap = ref<HTMLElement | null>(null)
 const modeWrap = ref<HTMLElement | null>(null)
 const likeWrap = ref<HTMLElement | null>(null)
-const pickerOpen = ref(false)
-const pickerMids = computed(() => (current.value ? [current.value.songMid] : []))
-const pickerName = computed(() => current.value?.name ?? '')
 const lastVolume = ref(0.8)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 let modeOpenTimer: number | null = null
@@ -356,7 +353,7 @@ function scheduleCloseLikeMenu(): void {
 function openSongPicker(): void {
   closeMenus()
   if (!current.value) return
-  pickerOpen.value = true
+  ui.openSongPicker([current.value.songMid], current.value.name)
 }
 
 async function downloadCurrent(): Promise<void> {
@@ -488,7 +485,9 @@ function onDocumentClick(event: MouseEvent): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') closeMenus()
+  if (event.key !== 'Escape') return
+  closeMenus()
+  if (ui.songPicker) ui.closeSongPicker()
 }
 
 const {
@@ -862,11 +861,11 @@ watch(
 
     <Teleport to="body">
       <PlaylistPicker
-        :open="pickerOpen"
-        :song-mids="pickerMids"
-        :song-name="pickerName"
-        @close="pickerOpen = false"
-        @added="() => undefined"
+        :open="ui.songPicker !== null"
+        :song-mids="ui.songPicker?.songMids ?? []"
+        :song-name="ui.songPicker?.songName ?? ''"
+        @close="ui.closeSongPicker()"
+        @added="ui.closeSongPicker()"
       />
     </Teleport>
   </footer>

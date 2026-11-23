@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { Settings } from '@shared/types'
 import { AUDIO_CACHE_DEFAULT_BYTES } from '@shared/constants'
+import { DEFAULT_SHORTCUTS, copyShortcuts } from '@shared/shortcuts'
 import { unwrap } from '../api'
 
 export function defaultSettings(): Settings {
@@ -10,7 +11,8 @@ export function defaultSettings(): Settings {
     closeToTray: true,
     theme: 'dark',
     audioCacheEnabled: true,
-    audioCacheMaxBytes: AUDIO_CACHE_DEFAULT_BYTES
+    audioCacheMaxBytes: AUDIO_CACHE_DEFAULT_BYTES,
+    shortcuts: copyShortcuts(DEFAULT_SHORTCUTS)
   }
 }
 

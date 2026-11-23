@@ -349,6 +349,28 @@ export interface UrlResult {
   quality: Quality
 }
 
+/** 快捷键动作；默认绑定见 shared/shortcuts.ts。 */
+export type ShortcutAction =
+  | 'togglePlay'
+  | 'previous'
+  | 'next'
+  | 'favorite'
+  | 'addToPlaylist'
+
+/**
+ * 单个快捷键绑定。key 使用 KeyboardEvent.key 的归一化形式：
+ * 单字符转小写，其余键名保持原样（如 Space 存为 ' '、方向键存为 'ArrowLeft'）。
+ */
+export interface ShortcutBinding {
+  key: string
+  ctrl: boolean
+  alt: boolean
+  shift: boolean
+  meta: boolean
+}
+
+export type Shortcuts = Record<ShortcutAction, ShortcutBinding>
+
 export interface Settings {
   defaultQuality: 'auto' | Quality
   closeToTray: boolean
@@ -358,6 +380,8 @@ export interface Settings {
   audioCacheMaxBytes: number
   /** 下载目录；缺省为 ~/Music/Lychee Player。 */
   downloadDir?: string
+  /** 全局快捷键；非法或缺省项回退默认绑定。 */
+  shortcuts: Shortcuts
 }
 
 export type ReauthReason = 'v1' | 'auth-failed'

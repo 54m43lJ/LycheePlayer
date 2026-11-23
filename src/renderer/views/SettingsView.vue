@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import type { FlagsFile, Settings, VipStatus } from '@shared/types'
+import type { FlagsFile, Settings, ShortcutAction, ShortcutBinding, VipStatus } from '@shared/types'
 import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
+import {
+  DEFAULT_SHORTCUTS,
+  SHORTCUT_ACTIONS,
+  copyShortcuts,
+  formatShortcut,
+  matchesShortcut,
+  shortcutFromEvent
+} from '@shared/shortcuts'
 import AppIcon from '../components/AppIcon.vue'
 import CacheManagerDialog from '../components/CacheManagerDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -27,6 +35,7 @@ const router = useRouter()
 const toast = useToast()
 const sessionRefreshing = ref(false)
 const vipStatus = ref<VipStatus | null>(null)
+const recordingShortcut = ref<ShortcutAction | null>(null)
 let vipRequest = 0
 const appVersion = __APP_VERSION__
 const appLicense = __APP_LICENSE__
@@ -105,6 +114,63 @@ watch(
   },
   { immediate: true }
 )
+
+const shortcuts = computed(() => settings.settings.shortcuts ?? DEFAULT_SHORTCUTS)
+const shortcutRows = computed(() =>
+  SHORTCUT_ACTIONS.map((action) => ({
+    id: action.id,
+    label: action.label,
+    value: formatShortcut(shortcuts.value[action.id])
+  }))
+)
+
+function startShortcutCapture(action: ShortcutAction): void {
+  recordingShortcut.value = recordingShortcut.value === action ? null : action
+}
+
+async function saveShortcut(action: ShortcutAction, binding: ShortcutBinding): Promise<void> {
+  try {
+    await settings.update({
+      shortcuts: { ...copyShortcuts(shortcuts.value), [action]: binding }
+    })
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
+
+/** 捕获阶段拦截按键：按 Esc 取消，按下完整组合键后保存并退出录制。 */
+function onShortcutCapture(event: KeyboardEvent): void {
+  const action = recordingShortcut.value
+  if (!action) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  if (event.key === 'Escape') {
+    recordingShortcut.value = null
+    return
+  }
+  const binding = shortcutFromEvent(event)
+  if (!binding) return
+  const conflict = SHORTCUT_ACTIONS.find(
+    (item) => item.id !== action && matchesShortcut(event, shortcuts.value[item.id])
+  )
+  if (conflict) {
+    toast.error(`快捷键已被「${conflict.label}」占用`)
+    recordingShortcut.value = null
+    return
+  }
+  recordingShortcut.value = null
+  void saveShortcut(action, binding)
+}
+
+async function resetShortcuts(): Promise<void> {
+  recordingShortcut.value = null
+  try {
+    await settings.update({ shortcuts: copyShortcuts(DEFAULT_SHORTCUTS) })
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
 
 async function loadFlags(): Promise<void> {
   try {
@@ -306,11 +372,13 @@ function quitApp(): void {
 }
 
 onMounted(() => {
+  window.addEventListener('keydown', onShortcutCapture, true)
   void loadFlags()
   void loadStorage()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onShortcutCapture, true)
   if (cacheLimitSaveTimer !== null) {
     window.clearTimeout(cacheLimitSaveTimer)
     cacheLimitSaveTimer = null
@@ -343,6 +411,28 @@ onBeforeUnmount(() => {
               >
                 <strong>{{ quality.label }}</strong>
               </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>快捷键</h2>
+            <span class="faint">点击后按下组合键，Esc 取消</span>
+          </div>
+          <div class="panel-body">
+            <div v-for="row in shortcutRows" :key="row.id" class="setting-row">
+              <div><div class="setting-name">{{ row.label }}</div></div>
+              <button
+                class="btn small shortcut-button"
+                :class="{ recording: recordingShortcut === row.id }"
+                @click="startShortcutCapture(row.id)"
+              >
+                {{ recordingShortcut === row.id ? '按下组合键…' : row.value }}
+              </button>
+            </div>
+            <div class="panel-actions">
+              <button class="btn ghost small" @click="resetShortcuts()">恢复默认</button>
             </div>
           </div>
         </section>

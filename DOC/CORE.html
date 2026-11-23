@@ -35,6 +35,7 @@
 │   │   ├── <a href="#c4-2">ipc.ts</a>                        主进程 / 渲染进程 API 契约
 │   │   ├── <a href="#c4-50">constants.ts</a>                 工程常量集中声明
 │   │   ├── <a href="#c4-105">permission.ts</a>                播放权限派生（阻断判定栈）
+│   │   ├── <a href="#c4-106">shortcuts.ts</a>                 快捷键默认值与匹配/格式化
 │   │   ├── <a href="#c4-103">validation.ts</a>               持久化缓存结构校验
 │   │   └── <a href="#c4-3">xlogin.ts</a>                     官方 xlogin 组件地址
 │   ├── main/                                 Electron 主进程
@@ -671,6 +672,24 @@ export interface UrlResult {
   quality: Quality;
 }
 
+export type ShortcutAction =
+  | 'togglePlay'
+  | 'previous'
+  | 'next'
+  | 'favorite'
+  | 'addToPlaylist';
+
+/** key 使用 KeyboardEvent.key 的归一化形式：单字符小写，其余保持原样。 */
+export interface ShortcutBinding {
+  key: string;
+  ctrl: boolean;
+  alt: boolean;
+  shift: boolean;
+  meta: boolean;
+}
+
+export type Shortcuts = Record&lt;ShortcutAction, ShortcutBinding&gt;;
+
 export interface Settings {
   defaultQuality: 'auto' | Quality;
   closeToTray: boolean;
@@ -680,6 +699,8 @@ export interface Settings {
   downloadDir?: string;
   /** 播放缓存上限；限定为 AUDIO_CACHE_LIMIT_STEPS_BYTES 的 6 个档位。 */
   audioCacheMaxBytes: number;
+  /** 全局快捷键；缺失或非法项逐项回退 DEFAULT_SHORTCUTS。 */
+  shortcuts: Shortcuts;
 }
 
 export type ReauthReason = 'v1' | 'auth-failed';
@@ -1303,6 +1324,7 @@ export function destroyTray(): void;
 </code></pre>
 <ul class="note">
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
+  <li>全局 <code>keydown</code> 先处理 Esc（歌词 / 侧栏 / 歌单选择器逐层关闭），再按 <code>Settings.shortcuts</code> 匹配动作：空格 → <code>player.toggle()</code>，上一首 / 下一首 → <code>player.previous()</code> / <code>player.playNext()</code>，喜欢 → <code>playlistEdit.toggleFavorite()</code>，收藏到歌单 → <code>ui.openSongPicker()</code>。输入框、文本域、可编辑区域、按钮 / 链接上的空格以及已打开弹窗都不响应；命中的组合键会 <code>preventDefault</code>。</li>
   <li>全局只挂载一个 <a href="#c4-91">ReauthDialog</a>，由 <code>auth.reauthReason</code> 控制显示；当前路由为 <code>/login</code> 时不显示。点击“重新登录”由 <code>App.vue</code> 关闭弹层并路由到登录页。</li>
   <li>挂载时安装 <a href="#c4-92">back-navigation</a> 的后退分发：播放队列与窄屏侧栏在打开期间注册关闭；没有浮层打开时调用 <code>router.back()</code>。浮层自身的注册与注销由组件负责。</li>
   <li>监听 <code>player.current</code> 并立即执行一次，把 <code>appTitle(current)</code> 写入 <code>document.title</code>；Electron 默认将页面标题同步到窗口 / 任务栏，切歌即时更新，无歌曲时回退应用名。</li>
@@ -1522,6 +1544,9 @@ interface UiStore {
   readonly queueOpen: boolean;
   readonly lyricsOpen: boolean;
   readonly sidebarOpen: boolean;
+  readonly songPicker: { songMids: string[]; songName: string } | null;
+  openSongPicker(songMids: string[], songName: string): void;
+  closeSongPicker(): void;
   toggleQueue(): void;
   closeQueue(): void;
   toggleLyrics(): void;
@@ -1535,6 +1560,7 @@ interface UiStore {
   <li>播放队列面板、窄屏侧栏抽屉与歌词 / 评论弹出层都由界面状态控制；<code>lyricsOpen</code> 与当前歌曲驱动歌词 / 评论，不占路由。</li>
   <li>下载中心是 <code>/downloads</code> 路由页，不进入 ui store，也不参与播放队列 / 侧栏抽屉互斥。</li>
   <li><code>sidebarOpen</code> 只影响 ≤900px 的抽屉；宽屏固定侧栏忽略该状态，路由切换时自动关闭抽屉。</li>
+  <li><code>songPicker</code> 是全局“添加到歌单”请求，播放条的收藏弹层与 <code>Ctrl + S</code> 共用；<code>PlayerBar</code> 按它渲染 <a href="#c4-77">PlaylistPicker</a>，Esc / 选择完成 / 关闭都调用 <code>closeSongPicker()</code>。</li>
 </ul>
 
 <h3 id="c4-32">4.32 src/renderer/utils/format.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1807,6 +1833,7 @@ const emit = defineEmits&lt;{
   <li>启动参数区展示当前 flags 文件路径与内容，提供编辑入口；保存后提示“下次启动生效”，不提供路径选择。</li>
   <li>缓存区提供开关、当前占用与清理；播放缓存开关下方提供带 6 个节点的上限滑杆（128M / 256M / 512M / 1G / 1.5G / 2G，默认 2G），右侧显示当前档位。拖动时立即预览并安排 200ms 防抖保存，<code>change</code> 立即 flush，卸载时若有待保存值也立即保存；失败回退原档位并提示。下载区提供目录、容量与剩余空间提示；清空下载目录使用 <a href="#c4-81">ConfirmDialog</a> 危险态确认，展示实际目录与影响范围，Esc / 点击遮罩取消。</li>
   <li>“用户缓存管理”打开 <a href="#c4-99">CacheManagerDialog</a>：调用 <code>cache.listUsers()</code>，与 <a href="#c4-100">utils/cache-users.ts</a> 枚举的 localStorage 记录合并，按账号展示播放缓存、歌单缓存与本地记录占用；删除时调用 <code>cache.clearUser(musicid)</code> 并清理对应 local key，随后刷新统计与缓存占用。删除当前账号时重新加载最近歌单与播放历史，不触发上游请求。</li>
+  <li>快捷键区按 <a href="#c4-106">§4.106</a> 的 <code>SHORTCUT_ACTIONS</code> 固定顺序渲染五项，显示 <code>formatShortcut()</code> 结果；点击进入录制态，window 捕获阶段监听 <code>keydown</code> 并用 <code>stopImmediatePropagation()</code> 阻止全局快捷键与页面行为。只按修饰键不生效，Esc 取消，与其它动作冲突时提示占用并放弃；保存调用 <code>settings.update({ shortcuts })</code>，“恢复默认”写回 <code>DEFAULT_SHORTCUTS</code>。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
   <li>账号区展示昵称、登录方式、<code>musicid</code> 与到期时间，不显示“已登录”徽标；<code>user.vipStatus</code> 返回已知会员时在右侧显示 <code>VIP</code> / <code>SVIP</code> 徽标，<code>unknown</code> 或失败时不显示。登录态或 <code>musicid</code> 变化时重新查询，避免跨账号复用。登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
   <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。“播放缓存”标题也不再附加“不影响已下载”等括号说明。</li>
@@ -2900,6 +2927,24 @@ export function isRecentPlaylist(value: unknown): value is RecentPlaylist;
   <li>返回的 <code>maxQuality</code> 原样取自 <code>Song.maxQuality</code>，即使不可播也保留，供音质角标展示曲库最高档。</li>
 </ul>
 
+<h3 id="c4-106">4.106 src/shared/shortcuts.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export const SHORTCUT_ACTIONS: Array&lt;{ id: ShortcutAction; label: string }&gt;;
+export const SHORTCUT_LABELS: Record&lt;ShortcutAction, string&gt;;
+export const DEFAULT_SHORTCUTS: Shortcuts;
+export function normalizeShortcutKey(key: string): string;
+export function isShortcutBinding(value: unknown): value is ShortcutBinding;
+export function copyShortcuts(source: Shortcuts): Shortcuts;
+export function matchesShortcut(event: ShortcutKeyInput, binding: ShortcutBinding): boolean;
+export function shortcutFromEvent(event: ShortcutKeyInput): ShortcutBinding | null;
+export function formatShortcutKey(key: string): string;
+export function formatShortcut(binding: ShortcutBinding): string;
+</code></pre>
+<ul class="note">
+  <li>快捷键默认值与匹配 / 录制 / 展示的唯一来源：空格、<code>Ctrl + ← / →</code>、<code>Ctrl + D</code>、<code>Ctrl + S</code>；主进程 <code>settings.ts</code> 与渲染层设置页共用。</li>
+  <li><code>ShortcutKeyInput</code> 只声明 <code>key</code> 与四个修饰键，避免主进程编译单元引用 DOM 的 <code>KeyboardEvent</code>；匹配时单字符键统一转小写，修饰键必须完全一致。</li>
+  <li><code>isShortcutBinding</code> 拒绝空键、单独修饰键、超长键名与非布尔修饰键；<code>settings.ts</code> 按动作逐项校验，非法项回退默认。<code>formatShortcut</code> 把空格、方向键等转换为界面标签（空格 / ← / →），其余单字符转大写。</li>
+</ul>
+
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
 
@@ -3637,6 +3682,27 @@ views/HistoryView::startAt(index)
 <ul class="note">
   <li>歌单详情与播放历史都只要求当前歌曲仍在列表（含筛选结果）中；从播放历史、其他歌单或其他入口开始播放都不影响按钮，只要当前歌曲出现在当前列表即可定位。</li>
   <li>滚动容器仍是 <code>.main</code>，与顶部 / 底部跳转共用固定 400ms 过渡；重复点击会取消上一段过渡。</li>
+</ul>
+
+<h3 id="c5-24">5.24 全局快捷键</h3>
+<pre><code>views/App::onKeydown(event)
+├── 判断 event.key === 'Escape' → views/App::closeTopLayer()
+├── 判断 可编辑目标 / event.repeat / isComposing → return
+├── 判断 document.querySelector('.dialog-backdrop') → return
+├── shared/shortcuts::matchesShortcut(event, Settings.shortcuts[action])
+├── 判断 action === 'togglePlay' && 目标为按钮 / 链接 → return
+├── event.preventDefault()
+└── views/App::runShortcut(action)
+    ├── 判断 togglePlay → stores/player::toggle()
+    ├── 判断 previous → stores/player::previous()
+    ├── 判断 next → stores/player::playNext()
+    ├── 判断 favorite → stores/playlist-edit::toggleFavorite(mid)
+    └── 判断 addToPlaylist → stores/ui::openSongPicker([mid], name)
+        └── components/PlayerBar::render(PlaylistPicker)
+</code></pre>
+<ul class="note">
+  <li>设置页录制态在 window 捕获阶段调用 <code>stopImmediatePropagation()</code>，按键不会到达该调用树。</li>
+  <li>快捷键只调用现有动作入口，不新增 IPC 或队列语义；未登录点喜欢 / 收藏到歌单时由现有登录提示兜底。</li>
 </ul>
 
 </body>

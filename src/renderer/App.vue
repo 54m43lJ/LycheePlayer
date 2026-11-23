@@ -21,6 +21,8 @@ import { useUiStore } from './stores/ui'
 import { useToast } from './composables/toast'
 import { appTitle, dailyPlaylistName, singerNames, songCover } from './utils/format'
 import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
+import { SHORTCUT_ACTIONS, matchesShortcut } from '@shared/shortcuts'
+import type { ShortcutAction } from '@shared/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -153,13 +155,83 @@ function onPointerCancel(): void {
   dragStartX = null
 }
 
-function onKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return
-  if (ui.lyricsOpen) {
-    ui.closeLyrics()
+function isEditableTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  if (!element) return false
+  const tag = element.tagName
+  return (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    element.isContentEditable
+  )
+}
+
+/** 空格在按钮 / 链接上保留原生激活行为，不被全局播放 / 暂停吞掉。 */
+function spaceActivatesTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  return Boolean(
+    element?.closest('button, a, [role="button"], input, textarea, select, [contenteditable="true"]')
+  )
+}
+
+function shortcutFor(event: KeyboardEvent): ShortcutAction | null {
+  const shortcuts = settings.settings.shortcuts
+  if (!shortcuts) return null
+  for (const action of SHORTCUT_ACTIONS) {
+    if (matchesShortcut(event, shortcuts[action.id])) return action.id
+  }
+  return null
+}
+
+function runShortcut(action: ShortcutAction): void {
+  if (action === 'togglePlay') {
+    player.toggle()
     return
   }
-  if (ui.sidebarOpen) ui.closeSidebar()
+  if (action === 'previous') {
+    player.previous()
+    return
+  }
+  if (action === 'next') {
+    player.playNext()
+    return
+  }
+  const song = player.current
+  if (!song) return
+  if (action === 'favorite') {
+    void playlistEdit.toggleFavorite(song.songMid)
+    return
+  }
+  if (!auth.loggedIn) {
+    toast.error('请先登录')
+    return
+  }
+  ui.openSongPicker([song.songMid], song.name)
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    if (ui.lyricsOpen) {
+      ui.closeLyrics()
+      return
+    }
+    if (ui.sidebarOpen) {
+      ui.closeSidebar()
+      return
+    }
+    if (ui.songPicker) ui.closeSongPicker()
+    return
+  }
+  if (event.defaultPrevented || event.isComposing || event.repeat) return
+  if (isEditableTarget(event.target)) return
+  // 弹窗打开时不响应全局快捷键，避免在确认 / 选择流程中误触播放。
+  if (document.querySelector('.dialog-backdrop')) return
+  const action = shortcutFor(event)
+  if (!action) return
+  if (action === 'togglePlay' && spaceActivatesTarget(event.target)) return
+  event.preventDefault()
+  runShortcut(action)
 }
 
 onMounted(() => {
