@@ -46,6 +46,22 @@ describe('歌词译文按行序附加', () => {
     expect(lines[0]?.trans).toBe('')
   })
 
+  it('忽略原文不存在的空译文时间戳，避免后续译文整体错位', () => {
+    const lines = parseLyric(
+      '[00:10.00]First\n[00:16.12]Second\n[00:20.89]Third',
+      '[00:10.00]第一句\n[00:15.54]\n[00:16.12]第二句\n[00:20.08]\n[00:20.89]第三句'
+    )
+    expect(lines.map((line) => line.trans)).toEqual(['第一句', '第二句', '第三句'])
+  })
+
+  it('保留与原文时间戳接近的空译文占位行', () => {
+    const lines = parseLyric(
+      '[00:10.00]First\n[00:20.00]Second',
+      '[00:10.05]\n[00:20.00]第二句'
+    )
+    expect(lines.map((line) => line.trans)).toEqual(['', '第二句'])
+  })
+
   it('QRC 译文附加到对应原文行并共享活动行', () => {
     const lines = parseQrcLyric('[12345,1000]Hello', '[00:12.34]你好')
     expect(lines).toHaveLength(1)

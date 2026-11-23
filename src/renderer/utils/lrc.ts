@@ -66,12 +66,25 @@ function parseTranslationEntries(trans: string | null): TranslationEntry[] {
   return untimedTexts(trans).map((text) => ({ timeMs: null, text: normalizeTranslationText(text) }))
 }
 
+/** 空译文行与原文时间戳的容差；在此范围内视为同一行的占位译文。 */
+const TRANSLATION_EMPTY_TIME_TOLERANCE_MS = 100
+
 /**
  * 译文按行序附加到原文，而不是按时间戳匹配：
  * 译文行数通常与原文一致，时间戳的小幅差异不会影响配对；超出原文行数的译文忽略。
+ * 但上游译文可能夹带原文不存在的空行时间戳（常见于分段换行），这些空行不占原文行位，
+ * 直接参与行序配对会把后续译文整体推后，因此只保留能与原文时间戳对应上的空行。
  */
 export function withTranslations(lines: LyricLine[], trans: string | null): LyricLine[] {
-  const texts = parseTranslationEntries(trans).map((entry) => entry.text)
+  const entries = parseTranslationEntries(trans)
+  if (entries.length === 0) return lines
+  const texts = entries
+    .filter((entry) => {
+      if (entry.text.length > 0 || entry.timeMs === null) return true
+      const timeMs = entry.timeMs
+      return lines.some((line) => Math.abs(line.timeMs - timeMs) <= TRANSLATION_EMPTY_TIME_TOLERANCE_MS)
+    })
+    .map((entry) => entry.text)
   if (texts.length === 0) return lines
   return lines.map((line, index) => ({ ...line, trans: texts[index] ?? null }))
 }
