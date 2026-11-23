@@ -5,11 +5,9 @@ import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
 import PageJump from '../components/PageJump.vue'
-import PlaylistPicker from '../components/PlaylistPicker.vue'
-import SongTable from '../components/SongTable.vue'
+import SongListTable from '../components/SongListTable.vue'
 import { describeError } from '../api'
-import { useAvailability } from '../composables/availability'
-import { useDownloadAction } from '../composables/download-action'
+import { useCurrentSongJump } from '../composables/current-song-jump'
 import { usePageJump } from '../composables/page-jump'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
@@ -18,6 +16,7 @@ import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { usePlaylistStore } from '../stores/playlist'
 import { PLAYLIST_POLL_INTERVAL_MS } from '@shared/constants'
+import { playbackPermission } from '@shared/permission'
 import { dailyPlaylistName, singerNames } from '../utils/format'
 
 const route = useRoute()
@@ -28,7 +27,6 @@ const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
 const toast = useToast()
-const { requestDownload } = useDownloadAction()
 
 const id = computed(() => String(route.params.id ?? ''))
 const feed = computed(() => playlist.feed)
@@ -37,14 +35,6 @@ const displayName = computed(() =>
   dailyPlaylistName(meta.value?.name ?? '', auth.profile?.nickname ?? '')
 )
 const songs = computed(() => feed.value?.songs ?? [])
-const { availability, loading: availabilityLoading } = useAvailability(songs)
-watch(
-  [availability, availabilityLoading],
-  ([value, loading]) => playlist.setProbeState(value, loading),
-  { immediate: true, flush: 'sync' }
-)
-const favoriteMids = computed(() => [...playlistEdit.favorites])
-const assetStates = computed(() => download.assets)
 const downloadedCount = computed(
   () =>
     songs.value.filter((song) => Boolean(download.assets[song.songMid]?.downloadedQuality))
@@ -67,6 +57,10 @@ const filteredSongs = computed(() => {
     return haystack.includes(keyword)
   })
 })
+const { showCurrent: showJumpCurrent, scrollToCurrent } = useCurrentSongJump(
+  pageRef,
+  filteredSongs
+)
 
 const loading = computed(
   () => feed.value?.status === 'loading' && feed.value.songs.length === 0
@@ -78,7 +72,7 @@ const removable = computed(
   () => Boolean(meta.value && meta.value.editable && meta.value.kind === 'normal')
 )
 const playableSongs = computed(() =>
-  songs.value.filter((song) => availability.value[song.songMid]?.playable !== false)
+  songs.value.filter((song) => playbackPermission(song, auth.vip).playable)
 )
 
 function source(): { kind: 'playlist'; id: string } {
@@ -94,24 +88,9 @@ function startAt(index: number): void {
 
 function playAll(): void {
   const start = filteredSongs.value.findIndex(
-    (song) => availability.value[song.songMid]?.playable !== false
+    (song) => playbackPermission(song, auth.vip).playable
   )
   if (start >= 0) startAt(start)
-}
-
-function addNextAt(index: number): void {
-  const song = filteredSongs.value[index]
-  if (song) player.addNext(song)
-}
-
-async function toggleFavorite(index: number): Promise<void> {
-  const song = filteredSongs.value[index]
-  if (song) await playlistEdit.toggleFavorite(song.songMid)
-}
-
-async function downloadAt(index: number): Promise<void> {
-  const song = filteredSongs.value[index]
-  if (song) await requestDownload(song, player.requestedQuality)
 }
 
 async function downloadAll(): Promise<void> {
@@ -163,19 +142,6 @@ async function confirmRemove(): Promise<void> {
     }
     toast.error(describeError(err))
   }
-}
-
-const pickerOpen = ref(false)
-const pickerIndex = ref(-1)
-const pickerMids = computed(() => {
-  const song = filteredSongs.value[pickerIndex.value]
-  return song ? [song.songMid] : []
-})
-const pickerName = computed(() => filteredSongs.value[pickerIndex.value]?.name ?? '')
-
-function openPicker(index: number): void {
-  pickerIndex.value = index
-  pickerOpen.value = true
 }
 
 function onPickerAdded(playlistId: string): void {
@@ -323,23 +289,15 @@ onBeforeUnmount(() => {
         <button v-if="filterText" class="btn ghost small" @click="filterText = ''">清除</button>
       </div>
 
-      <SongTable
+      <SongListTable
         v-if="filteredSongs.length > 0"
         :songs="filteredSongs"
         :active-mid="player.current?.songMid"
-        :availability="availability"
-        :favorite-mids="favoriteMids"
-        :asset-states="assetStates"
-        :downloadable="true"
         :removable="removable"
         :can-add-to-playlist="auth.loggedIn"
         @play="startAt"
-        @play-next="addNextAt"
-        @toggle="player.toggle()"
-        @favorite="toggleFavorite"
-        @download="downloadAt"
         @remove="removeAt"
-        @add-to-playlist="openPicker"
+        @added="onPickerAdded"
       />
       <div v-else-if="filterText" class="empty compact">
         <div class="empty-icon"><AppIcon name="search" :size="22" /></div>
@@ -365,20 +323,14 @@ onBeforeUnmount(() => {
           <button class="btn ghost small" @click="retry()">重试</button>
         </template>
       </div>
-
-      <PlaylistPicker
-        :open="pickerOpen"
-        :song-mids="pickerMids"
-        :song-name="pickerName"
-        @close="pickerOpen = false"
-        @added="onPickerAdded"
-      />
     </template>
 
     <PageJump
       :show-top="showJumpTop"
       :show-bottom="showJumpBottom"
+      :show-current="showJumpCurrent"
       @top="scrollToTop"
+      @current="scrollToCurrent"
       @bottom="scrollToBottom"
     />
 

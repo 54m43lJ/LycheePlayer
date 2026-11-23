@@ -28,7 +28,6 @@ import type {
   PlaylistMutationResult,
   PlaylistPage,
   PlaylistSnapshot,
-  ProbeOptions,
   Quality,
   RecommendFeed,
   SearchRequest,
@@ -36,11 +35,11 @@ import type {
   Settings,
   Song,
   SongAssetState,
-  SongAvailability,
   UpstreamBlockedEvent,
   UrlResult,
   UserCacheInfo,
-  UserProfile
+  UserProfile,
+  VipStatus
 } from './types'
 
 export interface LycheeApi {
@@ -87,7 +86,8 @@ export interface LycheeApi {
   }
   song: {
     getUrls(mids: string[], quality: Quality): Promise<IpcResult<UrlResult[]>>
-    probe(mids: string[], options?: ProbeOptions): Promise<IpcResult<SongAvailability[]>>
+    /** 查询歌曲绑定的 MV vid；无绑定返回空字符串。 */
+    getMvId(mid: string): Promise<IpcResult<string>>
   }
   playlist: {
     get(id: string, options?: { offset?: number }): Promise<IpcResult<PlaylistPage>>
@@ -142,8 +142,8 @@ export interface LycheeApi {
   }
   user: {
     getProfile(): Promise<IpcResult<UserProfile>>
-    /** 当前账号是否具有 VIP 权益；未登录或接口失败返回 false。 */
-    isVip(): Promise<IpcResult<boolean>>
+    /** 当前账号会员状态；unknown 表示接口失败，不能当作非 VIP。 */
+    vipStatus(): Promise<IpcResult<VipStatus>>
   }
   lyric: {
     get(songId: string): Promise<IpcResult<Lyric>>
@@ -152,7 +152,16 @@ export interface LycheeApi {
   }
   comment: {
     get(songId: string, cursor?: string): Promise<IpcResult<CommentPage>>
+    getMv(mvId: string, cursor?: string): Promise<IpcResult<CommentPage>>
+    getReplies(commentId: string, cursor?: string): Promise<IpcResult<CommentPage>>
     post(songId: string, content: string): Promise<IpcResult<CommentPostResult>>
+    postMv(mvId: string, content: string): Promise<IpcResult<CommentPostResult>>
+    postReply(
+      targetType: 'song' | 'mv',
+      targetId: string,
+      commentId: string,
+      content: string
+    ): Promise<IpcResult<CommentPostResult>>
     like(commentId: string): Promise<IpcResult<CommentLikeResult>>
     unlike(commentId: string): Promise<IpcResult<CommentLikeResult>>
   }
@@ -176,6 +185,8 @@ export interface LycheeApi {
   navigation: {
     /** 订阅系统后退手势（鼠标侧键等）；返回取消订阅函数。 */
     onBack(callback: () => void): () => void
+    /** 订阅系统前进手势（鼠标侧键等）；返回取消订阅函数。 */
+    onForward(callback: () => void): () => void
   }
   upstream: {
     /** 收到 104009 进入全局截断窗口时通知渲染层展示提示。 */

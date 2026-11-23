@@ -49,6 +49,25 @@ export interface Song {
   album: Album
   durationMs: number
   pay: PayInfo
+  /** 上游歌曲状态；1 / 2 为不可播阻断，缺失为 null。 */
+  status: number | null
+  /** 上游 pay.pay_play；1 表示需要会员或购买，缺失为 null。 */
+  pay_play: number | null
+  /** 上游 pay.pay_month；0 / 1 以外的值（含缺失）按未知处理。 */
+  pay_month: number | null
+  /** 上游 pay.pay_status；0 表示未单独购买，缺失为 null。 */
+  pay_status: number | null
+  /** 曲库存在的最高音质档位，不代表当前账号一定可取流。 */
+  maxQuality: Quality | null
+  /** 上游绑定的 MV vid；无绑定或未提供时为空字符串。 */
+  mvId: string
+}
+
+/** 由 Song 元数据与账号会员状态派生的播放权限。 */
+export interface PlaybackPermission {
+  playable: boolean
+  /** 曲库最高音质；只用于展示，不代表当前账号一定可取流。 */
+  maxQuality: Quality | null
 }
 
 export type PlaylistKind = 'normal' | 'favorites'
@@ -117,6 +136,13 @@ export interface Comment {
   replyCount: number
   createdAtMs: number
   liked?: boolean
+  /** 上游 State=2：评论已删除，只显示占位，不展示正文与互动入口。 */
+  deleted?: boolean
+  /**
+   * 回复所针对的评论昵称（上游 RepliedComments[0].Nick）。
+   * 无被回复对象时为 undefined；被回复对象昵称为空时保留空字符串。
+   */
+  replyToNickname?: string
 }
 
 /** 歌手歌曲排序：上游 order=1 为最热，其余值均为最新。 */
@@ -136,6 +162,8 @@ export interface CommentLikeResult {
 
 export interface CommentPage {
   comments: Comment[]
+  /** 首屏回复热评：按点赞数降序、最多 COMMENT_HOT_REPLY_LIMIT 条；仅回复首屏返回。 */
+  hotReplies?: Comment[]
   total: number
   hasMore: boolean
   /** 下一页游标（上游 LastCommentSeqNo）；为空表示没有下一页。 */
@@ -145,17 +173,6 @@ export interface CommentPage {
 export interface CommentPostResult {
   /** 上游新增评论 ID；响应未返回时为空字符串，调用方以重新拉取结果为准。 */
   commentId: string
-}
-
-export interface SongAvailability {
-  songMid: string
-  playable: boolean
-  maxQuality: Quality | null
-  checkedAtMs: number
-}
-
-export interface ProbeOptions {
-  force?: boolean
 }
 
 export interface PlaylistSnapshot {
@@ -253,6 +270,8 @@ export interface MvSummary {
   mvId: string
   name: string
   singerName: string
+  /** 歌手列表；带 mid 时渲染为可点击链接。 */
+  singers: Singer[]
   coverUrl: string
 }
 
@@ -295,12 +314,11 @@ export interface DownloadTask {
   source: DownloadSource
 }
 
-/** 每首歌的本机资产状态：缓存档位、下载档位、最高可用档与当前任务。 */
+/** 每首歌的本机资产状态：缓存档位、下载档位与当前任务。 */
 export interface SongAssetState {
   songMid: string
   cachedQuality: Quality | null
   downloadedQuality: Quality | null
-  maxQuality: Quality | null
   taskStatus: DownloadTask['status'] | null
 }
 
@@ -344,6 +362,28 @@ export interface UrlResult {
   quality: Quality
 }
 
+/** 快捷键动作；默认绑定见 shared/shortcuts.ts。 */
+export type ShortcutAction =
+  | 'togglePlay'
+  | 'previous'
+  | 'next'
+  | 'favorite'
+  | 'addToPlaylist'
+
+/**
+ * 单个快捷键绑定。key 使用 KeyboardEvent.key 的归一化形式：
+ * 单字符转小写，其余键名保持原样（如 Space 存为 ' '、方向键存为 'ArrowLeft'）。
+ */
+export interface ShortcutBinding {
+  key: string
+  ctrl: boolean
+  alt: boolean
+  shift: boolean
+  meta: boolean
+}
+
+export type Shortcuts = Record<ShortcutAction, ShortcutBinding>
+
 export interface Settings {
   defaultQuality: 'auto' | Quality
   closeToTray: boolean
@@ -353,6 +393,8 @@ export interface Settings {
   audioCacheMaxBytes: number
   /** 下载目录；缺省为 ~/Music/Lychee Player。 */
   downloadDir?: string
+  /** 全局快捷键；非法或缺省项回退默认绑定。 */
+  shortcuts: Shortcuts
 }
 
 export type ReauthReason = 'v1' | 'auth-failed'
@@ -393,6 +435,20 @@ export interface PlayerState {
 export interface UserProfile {
   nickname: string
   avatarUrl: string
+}
+
+export type VipLevel = 'none' | 'vip' | 'deluxe' | 'super'
+
+/**
+ * 当前账号会员状态。known 表示接口成功；unknown 表示接口失败，
+ * 不能当作非 VIP，调用方应避免据此显示“非会员”结论。
+ */
+export interface VipStatus {
+  state: 'known' | 'unknown'
+  isVip: boolean
+  level: VipLevel
+  /** 账号会员到期时间（毫秒）；接口未提供或无法解析时为 null。 */
+  expiresAtMs: number | null
 }
 
 export interface EmbedRect {

@@ -1,11 +1,20 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import type { FlagsFile, Settings } from '@shared/types'
+import type { FlagsFile, Settings, ShortcutAction, ShortcutBinding } from '@shared/types'
 import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
+import {
+  DEFAULT_SHORTCUTS,
+  SHORTCUT_ACTIONS,
+  copyShortcuts,
+  formatShortcut,
+  matchesShortcut,
+  shortcutFromEvent
+} from '@shared/shortcuts'
 import AppIcon from '../components/AppIcon.vue'
 import CacheManagerDialog from '../components/CacheManagerDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import MemberBadge from '../components/MemberBadge.vue'
 import { describeError, IpcCallError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
@@ -26,8 +35,7 @@ const playlistStore = usePlaylistStore()
 const router = useRouter()
 const toast = useToast()
 const sessionRefreshing = ref(false)
-const isVip = ref(false)
-let vipRequest = 0
+const recordingShortcut = ref<ShortcutAction | null>(null)
 const appVersion = __APP_VERSION__
 const appLicense = __APP_LICENSE__
 
@@ -83,28 +91,62 @@ watch(
 
 let cacheLimitSaveTimer: number | null = null
 
-/** VIP 权益只用于账号区徽标；未登录或上游失败时保持隐藏。 */
-async function loadVip(): Promise<void> {
-  const request = ++vipRequest
-  if (!auth.loggedIn) {
-    isVip.value = false
-    return
-  }
+const shortcuts = computed(() => settings.settings.shortcuts ?? DEFAULT_SHORTCUTS)
+const shortcutRows = computed(() =>
+  SHORTCUT_ACTIONS.map((action) => ({
+    id: action.id,
+    label: action.label,
+    value: formatShortcut(shortcuts.value[action.id])
+  }))
+)
+
+function startShortcutCapture(action: ShortcutAction): void {
+  recordingShortcut.value = recordingShortcut.value === action ? null : action
+}
+
+async function saveShortcut(action: ShortcutAction, binding: ShortcutBinding): Promise<void> {
   try {
-    const value = unwrap(await window.lychee.user.isVip())
-    if (request === vipRequest) isVip.value = value
-  } catch {
-    if (request === vipRequest) isVip.value = false
+    await settings.update({
+      shortcuts: { ...copyShortcuts(shortcuts.value), [action]: binding }
+    })
+    if (document.activeElement instanceof HTMLElement) document.activeElement.blur()
+  } catch (err) {
+    toast.error(describeError(err))
   }
 }
 
-watch(
-  () => [auth.loggedIn, auth.musicid] as const,
-  () => {
-    void loadVip()
-  },
-  { immediate: true }
-)
+/** 捕获阶段拦截按键：按 Esc 取消，按下完整组合键后保存并退出录制。 */
+function onShortcutCapture(event: KeyboardEvent): void {
+  const action = recordingShortcut.value
+  if (!action) return
+  event.preventDefault()
+  event.stopImmediatePropagation()
+  if (event.key === 'Escape') {
+    recordingShortcut.value = null
+    return
+  }
+  const binding = shortcutFromEvent(event)
+  if (!binding) return
+  const conflict = SHORTCUT_ACTIONS.find(
+    (item) => item.id !== action && matchesShortcut(event, shortcuts.value[item.id])
+  )
+  if (conflict) {
+    toast.error(`快捷键已被「${conflict.label}」占用`)
+    recordingShortcut.value = null
+    return
+  }
+  recordingShortcut.value = null
+  void saveShortcut(action, binding)
+}
+
+async function resetShortcuts(): Promise<void> {
+  recordingShortcut.value = null
+  try {
+    await settings.update({ shortcuts: copyShortcuts(DEFAULT_SHORTCUTS) })
+  } catch (err) {
+    toast.error(describeError(err))
+  }
+}
 
 async function loadFlags(): Promise<void> {
   try {
@@ -140,9 +182,6 @@ async function chooseQuality(quality: Settings['defaultQuality']): Promise<void>
   if (quality === settings.settings.defaultQuality) return
   try {
     await player.updateDefaultQuality(quality)
-    toast.show(
-      `默认音质已切换为 ${QUALITY_PREFERENCE_OPTIONS.find((item) => item.value === quality)?.label}`
-    )
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -151,7 +190,6 @@ async function chooseQuality(quality: Settings['defaultQuality']): Promise<void>
 async function toggleCloseToTray(): Promise<void> {
   try {
     await settings.update({ closeToTray: !settings.settings.closeToTray })
-    toast.show(settings.settings.closeToTray ? '关闭窗口时隐藏到托盘' : '关闭窗口时退出应用')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -192,7 +230,6 @@ async function saveCacheLimit(): Promise<void> {
   try {
     await settings.update({ audioCacheMaxBytes: step.bytes })
     await loadStorage()
-    toast.show(`播放缓存上限已调整为 ${step.label}`)
   } catch (err) {
     cacheLimitIndex.value = cacheLimitIndexFor(settings.settings.audioCacheMaxBytes)
     toast.error(describeError(err))
@@ -203,7 +240,6 @@ async function chooseTheme(theme: Settings['theme']): Promise<void> {
   if (theme === settings.settings.theme) return
   try {
     await settings.update({ theme })
-    toast.show(theme === 'light' ? '已切换到浅色模式' : '已切换到深色模式')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -213,7 +249,6 @@ async function clearCache(): Promise<void> {
   try {
     unwrap(await window.lychee.download.clearCache())
     await loadStorage()
-    toast.show('播放缓存已清空')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -246,7 +281,6 @@ async function removeUserCache(musicid: string): Promise<void> {
     }
     await loadCacheUsers()
     await loadStorage()
-    toast.show('该账号的缓存与本地记录已删除')
   } catch (err) {
     toast.error(describeError(err))
   } finally {
@@ -260,7 +294,6 @@ async function chooseDownloadDir(): Promise<void> {
     if (!path) return
     await settings.update({ downloadDir: path })
     await loadStorage()
-    toast.show('下载目录已更新')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -282,7 +315,6 @@ async function confirmClearDownloadDir(): Promise<void> {
   try {
     await downloads.clearDirectory()
     await loadStorage()
-    toast.show('下载目录已清空')
   } catch (err) {
     toast.error(describeError(err))
   }
@@ -291,7 +323,6 @@ async function confirmClearDownloadDir(): Promise<void> {
 async function logout(): Promise<void> {
   try {
     await auth.logout()
-    toast.show('已退出登录')
     void router.push('/login')
   } catch (err) {
     toast.error(describeError(err))
@@ -302,7 +333,6 @@ async function refreshSession(): Promise<void> {
   sessionRefreshing.value = true
   try {
     await auth.refreshSession()
-    toast.show('会话已续期')
   } catch (err) {
     // auth-failed 由全局重新登录弹层提示，不再重复 Toast。
     if (!(err instanceof IpcCallError && err.code === 'AUTH_EXPIRED')) {
@@ -318,11 +348,13 @@ function quitApp(): void {
 }
 
 onMounted(() => {
+  window.addEventListener('keydown', onShortcutCapture, true)
   void loadFlags()
   void loadStorage()
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onShortcutCapture, true)
   if (cacheLimitSaveTimer !== null) {
     window.clearTimeout(cacheLimitSaveTimer)
     cacheLimitSaveTimer = null
@@ -355,6 +387,28 @@ onBeforeUnmount(() => {
               >
                 <strong>{{ quality.label }}</strong>
               </button>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="panel-head">
+            <h2>快捷键</h2>
+            <span class="faint">点击后按下组合键，Esc 取消</span>
+          </div>
+          <div class="panel-body">
+            <div v-for="row in shortcutRows" :key="row.id" class="setting-row">
+              <div><div class="setting-name">{{ row.label }}</div></div>
+              <button
+                class="btn small shortcut-button"
+                :class="{ recording: recordingShortcut === row.id }"
+                @click="startShortcutCapture(row.id)"
+              >
+                {{ recordingShortcut === row.id ? '按下组合键…' : row.value }}
+              </button>
+            </div>
+            <div class="panel-actions shortcut-actions">
+              <button class="btn ghost small" @click="resetShortcuts()">恢复默认</button>
             </div>
           </div>
         </section>
@@ -503,7 +557,7 @@ onBeforeUnmount(() => {
                     {{ auth.method === 'wechat' ? '微信' : 'QQ' }} · musicid {{ auth.musicid }}
                   </div>
                 </div>
-                <span v-if="isVip" class="pay-badge">VIP</span>
+                <MemberBadge :status="auth.vip" show-label :size="16" />
               </div>
               <div class="setting-row">
                 <div>

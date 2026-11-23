@@ -49,7 +49,6 @@ async function startEmbedLogin(loginMethod: LoginMethod = method.value): Promise
   try {
     await auth.openWebLogin(loginMethod)
     if (seq !== loginSeq) return
-    toast.show('扫码登录成功')
     void router.replace('/library')
   } catch (err) {
     if (seq !== loginSeq) return

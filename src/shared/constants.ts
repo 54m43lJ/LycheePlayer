@@ -15,10 +15,6 @@ export const UPSTREAM_NETWORK_BACKOFF_MS = 400
 export const UPSTREAM_QUOTA_BACKOFF_MS = 600
 /** 瞬时繁忙码（2001 / 104604）重试的基础退避。推荐值 500 ms。 */
 export const MUSICU_BUSY_BACKOFF_MS = 500
-/** 上游请求持续速率上限（每秒）。推荐值 4。 */
-export const UPSTREAM_RATE_LIMIT_PER_SECOND = 4
-/** 上游请求突发令牌容量。推荐值 8。 */
-export const UPSTREAM_RATE_LIMIT_BURST = 8
 /** 收到 104009 后全局截断上游请求的时长。推荐值 60_000 ms。 */
 export const UPSTREAM_BLOCK_MS = 60_000
 
@@ -61,37 +57,19 @@ export const PLAYLIST_POLL_INTERVAL_MS = 15_000
 export const PLAYLIST_REFRESH_RETRY_MS = 5 * 60_000
 /** 歌单缓存字节上限。推荐值 64 × 1024 × 1024。 */
 export const PLAYLIST_CACHE_MAX_BYTES = 64 * 1024 * 1024
-
-// ---------- 可用性探测 ----------
-
-/**
- * 单次探测的歌曲上限。推荐值 50。
- * 约束：与 PLAYLIST_PAGE_SIZE 对齐（一个 50 首歌单页一次探测），且不超过 IPC_SONG_MIDS_MAX。
- */
-export const PROBE_MIDS_MAX = 50
-/** 歌曲详情并发（批量详情缺失时的单曲兜底）。推荐值 2。 */
-export const PROBE_DETAIL_CONCURRENCY = 2
-/** 批量歌曲详情单次请求上限。推荐值 50。 */
-export const SONG_DETAIL_BATCH = 50
-/**
- * vkey 批量大小。推荐值 50。
- * 约束：与 PROBE_MIDS_MAX 对齐（一批探测一次 vkey），且不超过 IPC_SONG_MIDS_MAX。
- */
-export const PROBE_VKEY_BATCH = 50
-/** 可用性缓存 TTL。推荐值 10 × 60_000 ms。 */
-export const PROBE_CACHE_TTL_MS = 10 * 60_000
-/** 可用性缓存的最大歌曲数；由 PLAYLIST_PAGE_SIZE × PLAYLIST_PAGE_MAX 派生。 */
-export const PROBE_MAX_SONGS = PLAYLIST_PAGE_SIZE * PLAYLIST_PAGE_MAX
-/** 可用性探测空闲调度超时。推荐值 2000 ms。 */
-export const PROBE_IDLE_TIMEOUT_MS = 2000
-/** 无 requestIdleCallback 时的探测延迟。推荐值 300 ms。 */
-export const PROBE_IDLE_FALLBACK_MS = 300
-/** 连续整批不可播的批次数上限；达到后停止本轮探测。推荐值 2。 */
-export const PROBE_EMPTY_BATCH_LIMIT = 2
 /** 最近歌单数量上限。 */
 export const RECENT_PLAYLIST_LIMIT = 5
 /** 最近歌单校验节流。推荐值 5000 ms。 */
 export const RECENT_PLAYLIST_VALIDATE_MS = 5000
+
+// ---------- 歌曲详情与播放链接 ----------
+
+/** 歌曲详情并发（批量详情缺失时的单曲兜底）。推荐值 2。 */
+export const SONG_DETAIL_CONCURRENCY = 2
+/** 批量歌曲详情单次请求上限。推荐值 50。 */
+export const SONG_DETAIL_BATCH = 50
+/** 相邻两次 vkey 请求的最小间隔；一次 vkey 请求只取一首歌。推荐值 300 ms。 */
+export const VKEY_MIN_INTERVAL_MS = 300
 
 /** 雷达 / 猜你喜欢分区缓存时长；每日推荐按上海自然日 0 点过期，不使用该 TTL。推荐值 24 小时。 */
 export const RECOMMEND_CACHE_TTL_MS = 24 * 60 * 60_000
@@ -142,7 +120,7 @@ export const PREVIOUS_RESTART_THRESHOLD_MS = 3000
 export const NO_STREAM_SKIP_LIMIT = 10
 // ---------- IPC ----------
 
-/** song.getUrls / song.probe 单次批量上限。推荐值 100。 */
+/** song.getUrls 单次批量上限。推荐值 100。 */
 export const IPC_SONG_MIDS_MAX = 100
 
 // ---------- 登录与会话 ----------
@@ -178,6 +156,8 @@ export const LOGIN_ALLOWED_DOMAINS = ['qq.com', 'gtimg.cn', 'weixin.qq.com'] as 
 export const FAVORITE_STATUS_CACHE_MS = 30_000
 /** VIP 状态缓存时长。推荐值 5 × 60_000 ms。 */
 export const VIP_CACHE_MS = 5 * 60_000
+/** VIP 接口失败后的未知状态缓存时长。推荐值 60_000 ms。 */
+export const VIP_UNKNOWN_CACHE_MS = 60_000
 /** 评论单页条数；上游上限 25。 */
 /** 上游实测 PageSize 上限：25 成功，26 起返回业务码 10000。 */
 export const COMMENT_PAGE_SIZE = 25
@@ -185,6 +165,16 @@ export const COMMENT_PAGE_SIZE = 25
 export const COMMENT_LOAD_ALL_PAGE_MAX = 40
 /** 发表评论正文长度上限；上游限制 300 字。 */
 export const COMMENT_CONTENT_MAX = 300
+/** 回复单页条数；上游默认 10。 */
+export const COMMENT_REPLY_PAGE_SIZE = 10
+/** 回复折叠时默认展示的条数。 */
+export const COMMENT_REPLY_PREVIEW = 3
+/** 每条评论取点赞数最高的前几条回复作为回复热评置顶。推荐值 3。 */
+export const COMMENT_HOT_REPLY_LIMIT = 3
+/** 回复热评的最低点赞数；点赞数不超过该值的回复不纳入热评。推荐值 3。 */
+export const COMMENT_HOT_REPLY_MIN_LIKES = 3
+/** 回复分页一次最多展示的邻近页码数。 */
+export const COMMENT_REPLY_PAGE_LINK_MAX = 10
 /** 音频缓存上限的最高档位，也是旧版本沿用的默认值（2 GiB）。 */
 export const AUDIO_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
 /** 播放缓存上限的可选档位：128M / 256M / 512M / 1G / 1.5G / 2G。 */

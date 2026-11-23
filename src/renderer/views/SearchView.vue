@@ -1,14 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import type { SearchRequest, SearchResult } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import CardPlayButton from '../components/CardPlayButton.vue'
 import CoverArt from '../components/CoverArt.vue'
-import SongTable from '../components/SongTable.vue'
-import PlaylistPicker from '../components/PlaylistPicker.vue'
+import MarqueeText from '../components/MarqueeText.vue'
+import SongListTable from '../components/SongListTable.vue'
 import { describeError, unwrap } from '../api'
-import { useDownloadAction } from '../composables/download-action'
 import { usePlaylistPlay } from '../composables/playlist-play'
 import { useToast } from '../composables/toast'
 import { usePlayerStore } from '../stores/player'
@@ -27,7 +26,6 @@ const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
 const toast = useToast()
-const { requestDownload } = useDownloadAction()
 const { playingId, playPlaylist, isSourcePlaying, isSourcePaused, toggleSource } =
   usePlaylistPlay()
 
@@ -63,21 +61,6 @@ const albums = computed(() => result.value?.albums ?? [])
 const playlists = computed(() => result.value?.playlists ?? [])
 const mvs = computed(() => result.value?.mvs ?? [])
 const total = computed(() => result.value?.total ?? 0)
-const favoriteMids = computed(() => [...playlistEdit.favorites])
-const assetStates = computed(() => download.assets)
-const pickerOpen = ref(false)
-const pickerIndex = ref(-1)
-const pickerMids = computed(() => {
-  const song = songs.value[pickerIndex.value]
-  return song ? [song.songMid] : []
-})
-const pickerName = computed(() => songs.value[pickerIndex.value]?.name ?? '')
-
-function openPicker(index: number): void {
-  pickerIndex.value = index
-  pickerOpen.value = true
-}
-
 const moreAvailable = ref(false)
 const hasMore = computed(() => searched.value && moreAvailable.value)
 
@@ -135,7 +118,6 @@ async function search(page = 1, append = false): Promise<void> {
       toast.error(describeError(err))
     } else {
       error.value = describeError(err)
-      toast.error(error.value)
     }
   } finally {
     if (currentRequest === requestId) {
@@ -180,21 +162,6 @@ function useKeyword(term: string): void {
 
 function playSongAt(index: number): void {
   player.playList(songs.value, index)
-}
-
-function playNextAt(index: number): void {
-  const song = songs.value[index]
-  if (song) player.addNext(song)
-}
-
-async function toggleFavorite(index: number): Promise<void> {
-  const song = songs.value[index]
-  if (song) await playlistEdit.toggleFavorite(song.songMid)
-}
-
-async function downloadAt(index: number): Promise<void> {
-  const song = songs.value[index]
-  if (song) await requestDownload(song, player.requestedQuality)
 }
 
 function openArtist(mid: string): void {
@@ -265,19 +232,12 @@ function openPlaylist(id: string): void {
           <span>单曲</span>
           <span class="count">{{ total > 0 ? `${formatCount(total)} 个结果` : `${songs.length} 个结果` }}</span>
         </div>
-        <SongTable
+        <SongListTable
           v-if="songs.length > 0"
           :songs="songs"
           :active-mid="player.current?.songMid"
-          :favorite-mids="favoriteMids"
-          :asset-states="assetStates"
           :can-add-to-playlist="auth.loggedIn"
           @play="playSongAt"
-          @play-next="playNextAt"
-          @toggle="player.toggle()"
-          @favorite="toggleFavorite"
-          @download="downloadAt"
-          @add-to-playlist="openPicker"
         />
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
@@ -373,16 +333,33 @@ function openPlaylist(id: string): void {
           <span class="count">{{ total > 0 ? `${formatCount(total)} 个` : `${mvs.length} 个` }}</span>
         </div>
         <div v-if="mvs.length > 0" class="card-grid search-grid search-grid-mv">
-          <button
+          <div
             v-for="item in mvs"
             :key="item.mvId"
-            class="card"
+            class="card mv-card"
+            role="button"
+            tabindex="0"
             @click="router.push(`/mv/${item.mvId}`)"
+            @keydown.enter="router.push(`/mv/${item.mvId}`)"
           >
             <CoverArt :src="item.coverUrl" image-class="card-cover mv-cover" :icon-size="30" />
-            <div class="card-name">{{ item.name }}</div>
-            <div class="card-sub">{{ item.singerName }}</div>
-          </button>
+            <MarqueeText class="card-name" :text="item.name" />
+            <MarqueeText v-if="item.singers.length > 0" class="card-sub mv-singers">
+              <template v-for="(singer, index) in item.singers" :key="`${singer.mid}-${index}`">
+                <RouterLink
+                  v-if="singer.mid"
+                  class="inline-link"
+                  :to="`/artist/${singer.mid}`"
+                  @click.stop
+                  @keydown.stop
+                  >{{ singer.name }}</RouterLink
+                >
+                <span v-else>{{ singer.name }}</span>
+                <span v-if="index < item.singers.length - 1" class="singer-sep"> / </span>
+              </template>
+            </MarqueeText>
+            <div v-else class="card-sub">{{ item.singerName }}</div>
+          </div>
         </div>
         <div v-else class="empty">
           <div class="empty-icon"><AppIcon name="video" :size="25" /></div>
@@ -402,13 +379,5 @@ function openPlaylist(id: string): void {
       <div class="empty-icon"><AppIcon name="search" :size="25" /></div>
       <h3>开始探索</h3>
     </div>
-
-    <PlaylistPicker
-      :open="pickerOpen"
-      :song-mids="pickerMids"
-      :song-name="pickerName"
-      @close="pickerOpen = false"
-      @added="() => undefined"
-    />
   </div>
 </template>

@@ -1,7 +1,9 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, toRaw } from 'vue'
 import type { Song } from '@shared/types'
 import { PLAY_HISTORY_LIMIT, PLAY_HISTORY_STORAGE_PREFIX } from '@shared/constants'
+import { isSong } from '@shared/validation'
+import { readPersistedJson } from '../utils/persisted-cache'
 import { useAuthStore } from './auth'
 
 /** 播放历史条目：歌曲快照与最近一次实际开始播放的时间。 */
@@ -10,27 +12,18 @@ export interface PlayHistoryEntry {
   playedAtMs: number
 }
 
-function isSong(value: unknown): value is Song {
-  if (!value || typeof value !== 'object') return false
-  const song = value as Record<string, unknown>
-  return (
-    typeof song.songMid === 'string' &&
-    song.songMid.length > 0 &&
-    typeof song.songId === 'string' &&
-    typeof song.name === 'string' &&
-    Array.isArray(song.singers) &&
-    Boolean(song.album) &&
-    typeof song.album === 'object' &&
-    typeof song.durationMs === 'number' &&
-    Boolean(song.pay) &&
-    typeof song.pay === 'object'
-  )
-}
-
 function isEntry(value: unknown): value is PlayHistoryEntry {
   if (!value || typeof value !== 'object') return false
   const entry = value as Record<string, unknown>
-  return isSong(entry.song) && typeof entry.playedAtMs === 'number'
+  return (
+    isSong(entry.song) &&
+    typeof entry.playedAtMs === 'number' &&
+    Number.isFinite(entry.playedAtMs)
+  )
+}
+
+function isEntryList(value: unknown): value is PlayHistoryEntry[] {
+  return Array.isArray(value) && value.every(isEntry)
 }
 
 export const useHistoryStore = defineStore('history', () => {
@@ -46,25 +39,27 @@ export const useHistoryStore = defineStore('history', () => {
     return `${PLAY_HISTORY_STORAGE_PREFIX}${scope()}`
   }
 
+  /** 序列化前逐层取出原始对象，避免大列表每个字段都穿过响应式代理。 */
+  function plainEntries(): PlayHistoryEntry[] {
+    return toRaw(entries.value).map((entry) => {
+      const raw = toRaw(entry)
+      return { song: toRaw(raw.song), playedAtMs: raw.playedAtMs }
+    })
+  }
+
   function persist(): void {
     try {
-      localStorage.setItem(storageKey(), JSON.stringify(entries.value))
+      localStorage.setItem(storageKey(), JSON.stringify(plainEntries()))
     } catch {
       // localStorage 不可用时仅保留当前会话。
     }
   }
 
-  /** 按当前账号读取本地历史；损坏条目直接丢弃。 */
+  /** 按当前账号读取本地历史；结构不符时视为缓存失效，整份清除。 */
   function load(): void {
     loadedScope = scope()
-    try {
-      const raw: unknown = JSON.parse(localStorage.getItem(storageKey()) ?? '[]')
-      entries.value = Array.isArray(raw)
-        ? raw.filter(isEntry).slice(0, PLAY_HISTORY_LIMIT)
-        : []
-    } catch {
-      entries.value = []
-    }
+    const stored = readPersistedJson(storageKey(), isEntryList)
+    entries.value = stored ? stored.slice(0, PLAY_HISTORY_LIMIT) : []
   }
 
   function ensureLoaded(): void {

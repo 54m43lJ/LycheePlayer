@@ -81,10 +81,9 @@ function sourceLabel(task: DownloadTask): string {
   return task.source === 'cache' ? '缓存转移' : '网络下载'
 }
 
-async function run(action: () => Promise<void>, message?: string): Promise<void> {
+async function run(action: () => Promise<void>): Promise<void> {
   try {
     await action()
-    if (message) toast.show(message)
   } catch (err) {
     toast.error(err instanceof Error ? err.message : String(err))
   }
@@ -111,12 +110,12 @@ function confirmRemoveTask(task: DownloadTask): void {
     title: '删除下载',
     message: `删除「${task.name}」及其下载文件？`,
     confirmLabel: '删除',
-    action: () => void run(() => downloads.remove(task.id), '下载已删除')
+    action: () => void run(() => downloads.remove(task.id))
   }
 }
 
 function confirmClearCompleted(): void {
-  void run(() => downloads.clearCompleted(), '已清除完成记录')
+  void run(() => downloads.clearCompleted())
 }
 
 function confirmClearTasks(): void {
@@ -126,7 +125,7 @@ function confirmClearTasks(): void {
     title: '清空任务',
     message: `确定清空当前显示的 ${ids.length} 个任务？已下载的文件会保留在本机，仅移除任务记录。`,
     confirmLabel: '清空',
-    action: () => void run(() => downloads.clearTasks(ids), '下载任务已清空')
+    action: () => void run(() => downloads.clearTasks(ids))
   }
 }
 
@@ -148,7 +147,7 @@ function confirmClearDirectory(): void {
     title: '清空下载目录',
     message: `确定清空下载目录「${directory}」？\n将删除目录内的全部文件与下载记录（包括其他账号在同目录的下载）；播放缓存不受影响。`,
     confirmLabel: '清空',
-    action: () => void run(() => downloads.clearDirectory(), '下载目录已清空')
+    action: () => void run(() => downloads.clearDirectory())
   }
 }
 

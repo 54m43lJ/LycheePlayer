@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { RouterLink } from 'vue-router'
 import type { AudioCacheProgress, Settings } from '@shared/types'
+import { unwrap } from '../api'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
+import MvButton from './MvButton.vue'
 import PlaylistPicker from './PlaylistPicker.vue'
 import { usePlayerStore, PLAY_MODE_LABEL, type PlayMode } from '../stores/player'
 import { QUALITY_PREFERENCE_OPTIONS } from '../stores/settings'
@@ -47,9 +50,6 @@ const qualityWrap = ref<HTMLElement | null>(null)
 const volumeWrap = ref<HTMLElement | null>(null)
 const modeWrap = ref<HTMLElement | null>(null)
 const likeWrap = ref<HTMLElement | null>(null)
-const pickerOpen = ref(false)
-const pickerMids = computed(() => (current.value ? [current.value.songMid] : []))
-const pickerName = computed(() => current.value?.name ?? '')
 const lastVolume = ref(0.8)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 let modeOpenTimer: number | null = null
@@ -73,6 +73,32 @@ const cache = ref<AudioCacheProgress | null>(null)
 
 const cover = computed(() => songCover(current.value, 300))
 const hasSong = computed(() => Boolean(current.value))
+const resolvedMvId = ref('')
+let mvRequest = 0
+
+/**
+ * 列表未携带 mvId 时（搜索 / 推荐等）按歌曲详情补查。
+ * 等取流结束再查，复用 getStreamUrls 已缓存的详情，避免同曲详情并发请求。
+ */
+watch(
+  () => [current.value?.songMid ?? '', current.value?.mvId ?? '', player.loading] as const,
+  ([mid, boundMvId, loading]) => {
+    const request = ++mvRequest
+    resolvedMvId.value = boundMvId
+    if (!mid || boundMvId || loading) return
+    void (async () => {
+      try {
+        const mvId = unwrap(await window.lychee.song.getMvId(mid))
+        if (request === mvRequest) resolvedMvId.value = mvId
+      } catch {
+        if (request === mvRequest) resolvedMvId.value = ''
+      }
+    })()
+  },
+  { immediate: true }
+)
+
+const mvId = computed(() => current.value?.mvId || resolvedMvId.value)
 const lyricsTitle = computed(() => {
   if (!hasSong.value) return ''
   return ui.lyricsOpen ? '关闭歌词与评论' : '歌词与评论'
@@ -110,12 +136,6 @@ const bufferedPercent = computed(() => {
 const bufferPercent = computed(() => Math.max(cachePercent.value, bufferedPercent.value))
 const bufferStyle = computed(() => ({ width: `${bufferPercent.value}%` }))
 const bufferVisible = computed(() => hasSong.value && bufferPercent.value > 0)
-const bufferLabel = computed(() => {
-  if (!bufferVisible.value) return ''
-  if (asset.value?.downloadedQuality) return '已下载到本机'
-  if (cacheForCurrent.value?.complete) return '缓存完成'
-  return `缓冲 ${Math.round(bufferPercent.value)}%`
-})
 
 const qualityOptions: Array<{ value: Settings['defaultQuality']; label: string; short: string }> =
   QUALITY_PREFERENCE_OPTIONS
@@ -356,7 +376,7 @@ function scheduleCloseLikeMenu(): void {
 function openSongPicker(): void {
   closeMenus()
   if (!current.value) return
-  pickerOpen.value = true
+  ui.openSongPicker([current.value.songMid], current.value.name)
 }
 
 async function downloadCurrent(): Promise<void> {
@@ -488,7 +508,9 @@ function onDocumentClick(event: MouseEvent): void {
 }
 
 function onKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Escape') closeMenus()
+  if (event.key !== 'Escape') return
+  closeMenus()
+  if (ui.songPicker) ui.closeSongPicker()
 }
 
 const {
@@ -597,7 +619,7 @@ watch(
     <div class="player-now">
       <button
         class="player-cover-button"
-        :title="lyricsTitle"
+        :aria-label="lyricsTitle"
         :disabled="!hasSong"
         @click="toggleLyrics()"
       >
@@ -608,7 +630,8 @@ watch(
         <div class="player-title-row">
           <MarqueeText v-if="hasSong" class="player-title" :text="current?.name ?? ''" />
           <span v-else class="player-title">&nbsp;</span>
-          <span v-if="hasSong" class="quality-mark" title="实际音质（降档后）">{{ qualityLabel }}</span>
+          <span v-if="hasSong" class="quality-mark">{{ qualityLabel }}</span>
+          <MvButton v-if="hasSong && mvId" :mv-id="mvId" />
         </div>
         <div v-if="hasSong" class="player-artist">
           <template v-for="(singer, index) in visibleSingers()" :key="`${singer.mid}-${index}`">
@@ -647,7 +670,7 @@ watch(
         >
           <button
             class="mode-button"
-            :title="player.modeLocked ? '猜你喜欢队列仅支持顺序播放' : PLAY_MODE_LABEL[mode]"
+            :aria-label="player.modeLocked ? '猜你喜欢队列仅支持顺序播放' : PLAY_MODE_LABEL[mode]"
             aria-haspopup="true"
             :aria-expanded="modeMenu"
             :disabled="player.modeLocked"
@@ -666,32 +689,32 @@ watch(
               class="mode-option"
               :class="{ 'touch-active': modeHighlighted === index }"
               data-revealer-option
-              :title="PLAY_MODE_LABEL[item]"
+              :aria-label="PLAY_MODE_LABEL[item]"
               @click="chooseMode(item)"
             >
               <AppIcon :name="MODE_ICON[item]" :size="16" />
             </button>
           </div>
         </div>
-        <button class="icon-btn" title="上一首" :disabled="!hasSong" @click="player.previous()">
+        <button class="icon-btn" aria-label="上一首" :disabled="!hasSong" @click="player.previous()">
           <AppIcon name="previous" :size="17" />
         </button>
         <button
           class="play-button"
-          :title="status === 'playing' ? '暂停' : '播放'"
+          :aria-label="status === 'playing' ? '暂停' : '播放'"
           :disabled="!hasSong || player.loading || !player.canPlay"
           @click="player.toggle()"
         >
           <span v-if="player.loading" class="spinner" />
           <AppIcon v-else :name="status === 'playing' ? 'pause' : 'play'" :size="17" />
         </button>
-        <button class="icon-btn" title="下一首" :disabled="!hasSong" @click="player.playNext()">
+        <button class="icon-btn" aria-label="下一首" :disabled="!hasSong" @click="player.playNext()">
           <AppIcon name="next" :size="17" />
         </button>
         <button
           class="icon-btn"
           :class="{ active: ui.queueOpen }"
-          title="播放队列"
+          aria-label="播放队列"
           @click="ui.toggleQueue()"
         >
           <AppIcon name="list" :size="17" />
@@ -699,7 +722,7 @@ watch(
       </div>
       <div class="progress-row">
         <span class="time">{{ hasSong ? formatDuration(positionMs) : '0:00' }}</span>
-        <div class="progress-stack" :title="bufferLabel">
+        <div class="progress-stack">
           <div class="progress-track" :class="{ 'progress-disabled': !hasSong }" aria-hidden="true">
             <span
               v-if="bufferVisible"
@@ -738,7 +761,7 @@ watch(
         <button
           class="icon-btn like-button"
           :class="{ active: favorited }"
-          :title="favorited ? '取消收藏' : '收藏'"
+          :aria-label="favorited ? '取消收藏' : '收藏'"
           :disabled="!hasSong"
           @click.stop="toggleFavorite()"
           @pointerdown="onLikePointerDown"
@@ -753,7 +776,7 @@ watch(
             class="like-option"
             :class="{ 'touch-active': likeHighlighted === 0 }"
             data-revealer-option
-            title="加入歌单"
+            aria-label="加入歌单"
             :disabled="!hasSong"
             @click="openSongPicker()"
           >
@@ -764,7 +787,7 @@ watch(
       <button
         class="icon-btn"
         :class="downloadState === 'none' ? null : downloadState"
-        :title="downloadTitle"
+        :aria-label="downloadTitle"
         :disabled="!hasSong"
         @click.stop="downloadCurrent()"
       >
@@ -782,7 +805,7 @@ watch(
       >
         <button
           class="quality-chip"
-          :title="qualityTitle"
+          :aria-label="qualityTitle"
           aria-haspopup="true"
           :aria-expanded="qualityMenu"
           @click.stop="cycleQuality()"
@@ -799,7 +822,7 @@ watch(
             :key="option.value"
             :class="{ 'touch-active': qualityHighlighted === index }"
             data-revealer-option
-            :title="option.label"
+            :aria-label="option.label"
             @click="chooseQuality(option.value)"
           >
             {{ option.short }}
@@ -826,7 +849,6 @@ watch(
               max="1"
               step="0.01"
               :value="volume"
-              :title="`音量 ${Math.round(volume * 100)}%`"
               aria-label="音量"
               @input="player.setVolume(Number(($event.target as HTMLInputElement).value))"
             />
@@ -834,7 +856,7 @@ watch(
         </div>
         <button
           class="icon-btn volume-button"
-          :title="volume > 0 ? '静音' : '恢复音量'"
+          :aria-label="volume > 0 ? '静音' : '恢复音量'"
           aria-haspopup="true"
           :aria-expanded="volumeOpen"
           @click.stop="toggleMute()"
@@ -862,11 +884,11 @@ watch(
 
     <Teleport to="body">
       <PlaylistPicker
-        :open="pickerOpen"
-        :song-mids="pickerMids"
-        :song-name="pickerName"
-        @close="pickerOpen = false"
-        @added="() => undefined"
+        :open="ui.songPicker !== null"
+        :song-mids="ui.songPicker?.songMids ?? []"
+        :song-name="ui.songPicker?.songName ?? ''"
+        @close="ui.closeSongPicker()"
+        @added="ui.closeSongPicker()"
       />
     </Teleport>
   </footer>

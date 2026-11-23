@@ -31,7 +31,7 @@ function submit(): void {
     <section class="dialog">
       <header class="dialog-head">
         <h2>{{ playlist ? '重命名歌单' : '新建歌单' }}</h2>
-        <button class="icon-btn" title="关闭" @click="emit('close')">
+        <button class="icon-btn" aria-label="关闭" @click="emit('close')">
           <AppIcon name="close" :size="17" />
         </button>
       </header>

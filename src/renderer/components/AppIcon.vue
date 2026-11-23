@@ -78,13 +78,25 @@ const ICONS: Record<string, string[]> = {
   plus: ['M12 5v14', 'M5 12h14'],
   trash: ['M5 7h14', 'M9 7V5h6v2', 'M7 7l1 13h8l1-13', 'M10 11v5', 'M14 11v5'],
   folder: ['M4 6h6l2 2h8v10H4z'],
-  'file-broken': ['M6 3h8l4 4v14H6z', 'M14 3v4h4', 'M13 15l4 4', 'M17 15l-4 4'],
+  'paper-torn': [
+    'M5 3h9l4 4v4l-6.5 4L5 11z',
+    'M5 22v-8l6.5 4 6.5-4v8z',
+    'M14 3v4h4'
+  ],
   video: ['M4 6h11v12H4z', 'M15 10l5-3v10l-5-3'],
   fullscreen: ['M4 9V4h5', 'M20 9V4h-5', 'M4 15v5h5', 'M20 15v5h-5'],
   edit: ['M4 20h4l11-11-4-4L4 16v4z', 'M13.5 6.5l4 4'],
   speed: ['M12 20a8 8 0 1 1 8-8', 'M12 12l4-4', 'M4 20h16'],
   'to-top': ['M5 4h14', 'M12 19V8', 'M7 12l5-5 5 5'],
   'to-bottom': ['M5 20h14', 'M12 5v11', 'M7 11l5 5 5-5'],
+  locate: [
+    'M12 3v3',
+    'M12 18v3',
+    'M3 12h3',
+    'M18 12h3',
+    'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
+    'M12 11.5a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1z'
+  ],
   sun: [
     'M12 4v2',
     'M12 18v2',

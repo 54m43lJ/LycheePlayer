@@ -36,7 +36,6 @@ describe('下载按钮共用机制', () => {
         songMid: 'mid',
         cachedQuality: null,
         downloadedQuality: 'flac',
-        maxQuality: 'flac',
         taskStatus: null
       }
     }
@@ -68,7 +67,6 @@ describe('下载按钮共用机制', () => {
         songMid: 'mid',
         cachedQuality: null,
         downloadedQuality: null,
-        maxQuality: null,
         taskStatus: null
       }
     }

@@ -23,6 +23,7 @@ describe('api/catalog', () => {
     expect(detail.mvId).toBe('w0026q7f01a')
     expect(detail.name).toBe('晴天')
     expect(detail.singerName).toBe('周杰伦')
+    expect(detail.singers).toEqual([{ mid: '0025NhlN2yWrP4', name: '周杰伦' }])
     expect(detail.coverUrl.startsWith('https://')).toBe(true)
     expect(detail.publishDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
   })

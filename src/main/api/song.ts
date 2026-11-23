@@ -1,15 +1,11 @@
 import type { PayInfo, Quality, Song, UrlResult } from '../../shared/types'
-import {
-  IPC_SONG_MIDS_MAX,
-  PROBE_DETAIL_CONCURRENCY,
-  PROBE_VKEY_BATCH,
-  SONG_DETAIL_BATCH
-} from '../../shared/constants'
+import { IPC_SONG_MIDS_MAX, SONG_DETAIL_BATCH, SONG_DETAIL_CONCURRENCY } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { resolveDownloadedAudio } from '../download/registry'
 import { audioStreamUrl } from '../media/audio-protocol'
-import { mapUpstreamCode, tripUpstreamBlock, UpstreamError, getGuid, musicu } from './client'
-import { isVipUser } from './user'
+import { UpstreamError, musicu } from './client'
+import { fetchVkey } from './vkey'
+import { getVipStatus } from './user'
 
 interface RawSong {
   id?: number | string
@@ -17,10 +13,14 @@ interface RawSong {
   name?: string
   title?: string
   interval?: number
+  status?: number
+  vid?: string
+  mv?: { id?: number | string; vid?: string; name?: string; title?: string }
   singer?: Array<{ mid?: string; name?: string }>
   album?: { mid?: string; name?: string }
   pay?: {
     pay_play?: number
+    pay_month?: number
     price_album?: number
     pay_status?: number
   }
@@ -36,19 +36,10 @@ interface RawTrackInfo extends RawSong {
   file?: RawSong['file']
 }
 
-interface VkeyData {
-  retcode?: number
-  msg?: string
-  midurlinfo?: Array<{
-    songmid?: string
-    purl?: string
-    result?: number
-  }>
-}
-
 interface TrackMeta {
   mediaMid: string
   pay: PayInfo
+  mvId: string
 }
 
 interface PendingTrack extends TrackMeta {
@@ -80,6 +71,20 @@ function qualityAttempts(requested: Quality): Quality[] {
 
 const trackMetaCache = new Map<string, TrackMeta>()
 
+function numberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+/** 曲库最高音质：只说明存在哪一档文件，不代表当前账号可取流。 */
+function libraryMaxQuality(file: RawSong['file']): Song['maxQuality'] {
+  if ((file?.size_flac ?? 0) > 0) return 'flac'
+  if ((file?.size_320mp3 ?? 0) > 0) return '320k'
+  if ((file?.size_128mp3 ?? 0) > 0) return '128k'
+  return null
+}
+
 function toSong(raw: RawSong): Song {
   const pay = raw.pay ?? {}
   const albumOnly = Number(pay.price_album ?? 0) > 0
@@ -101,14 +106,22 @@ function toSong(raw: RawSong): Song {
       free: pay.pay_play === 0 && !albumOnly,
       vip,
       album: albumOnly
-    }
+    },
+    status: numberOrNull(raw.status),
+    pay_play: numberOrNull(pay.pay_play),
+    pay_month: numberOrNull(pay.pay_month),
+    pay_status: numberOrNull(pay.pay_status),
+    maxQuality: libraryMaxQuality(raw.file),
+    mvId: (raw.mv?.vid ?? raw.vid ?? '').trim()
   }
 }
 
 function trackMeta(raw: RawTrackInfo, fallbackMid: string): TrackMeta {
+  const song = toSong(raw)
   return {
     mediaMid: raw.file?.media_mid ?? fallbackMid,
-    pay: toSong(raw).pay
+    pay: song.pay,
+    mvId: song.mvId
   }
 }
 
@@ -124,7 +137,7 @@ async function fetchTrack(mid: string): Promise<RawTrackInfo> {
   }
   const mediaMid = data.track_info.file?.media_mid
   if (mediaMid) {
-    trackMetaCache.set(mid, { mediaMid, pay: toSong(data.track_info).pay })
+    trackMetaCache.set(mid, trackMeta(data.track_info, mid))
   }
   return data.track_info
 }
@@ -162,7 +175,7 @@ async function fetchTracksById(mids: string[]): Promise<Map<string, RawTrackInfo
   const result = await fetchTrackBatch(unique)
   const missing = unique.filter((mid) => !result.has(mid))
   if (missing.length > 0) {
-    const fallback = await mapLimit(missing, PROBE_DETAIL_CONCURRENCY, fetchTrack)
+    const fallback = await mapLimit(missing, SONG_DETAIL_CONCURRENCY, fetchTrack)
     missing.forEach((mid, index) => result.set(mid, fallback[index]))
   }
   return result
@@ -184,6 +197,23 @@ async function mapLimit<T, R>(
   })
   await Promise.all(runners)
   return results
+}
+
+/**
+ * 查询歌曲绑定的 MV vid；优先复用播放取流已缓存的详情，未命中时单曲补拉。
+ * 无绑定或上游未提供时返回空字符串。
+ */
+export async function getMvId(mid: string): Promise<string> {
+  const id = mid.trim()
+  if (!id) return ''
+  const cached = trackMetaCache.get(id)
+  if (cached) return cached.mvId
+  const tracks = await fetchTracksById([id])
+  const raw = tracks.get(id)
+  if (!raw) return ''
+  const meta = trackMeta(raw, id)
+  trackMetaCache.set(id, meta)
+  return meta.mvId
 }
 
 /** 按 songMid 批量取详情，供歌单/播放器补齐非搜索来源的歌曲。 */
@@ -212,70 +242,16 @@ async function requestQuality(
   const { prefix, ext } = QUALITY_FILE[quality]
   const urls = new Map<string, string>()
   const results = new Map<string, number>()
-  for (let start = 0; start < tracks.length; start += PROBE_VKEY_BATCH) {
-    const batch = tracks.slice(start, start + PROBE_VKEY_BATCH)
-    const songmid = batch.map((track) => track.songMid)
-    const songtype = batch.map(() => 0)
-    const filename = batch.map((track) => `${prefix}${track.mediaMid}${ext}`)
-    const uin = getCredential()?.musicid ?? '0'
-
-    let data: VkeyData
-    try {
-      data = await musicu<VkeyData>(
-        'vkey.GetVkeyServer',
-        'CgiGetVkey',
-        {
-          guid: getGuid(),
-          songmid,
-          songtype,
-          filename,
-          uin,
-          loginflag: 1,
-          platform: '20'
-        },
-        { deferBlock: true }
-      )
-      // 有些响应把具体错误放在 data.retcode，而 req_0.code 为 0。
-      const retcode = Number(data.retcode)
-      if (Number.isFinite(retcode) && retcode !== 0) {
-        throw mapUpstreamCode(retcode, 'vkey.GetVkeyServer.CgiGetVkey')
-      }
-    } catch (err) {
-      // 经典接口返回 104009 invalidq 时，尝试当前维护的 UrlGetVkey 接口。
-      if (!(err instanceof UpstreamError) || err.upstreamCode !== 104009) throw err
-      try {
-        data = await musicu<VkeyData>(
-          'music.vkey.GetVkey',
-          'UrlGetVkey',
-          {
-            uin,
-            filename,
-            guid: getGuid(),
-            songmid,
-            songtype,
-            ctx: 0
-          },
-          { deferBlock: true }
-        )
-        const retcode = Number(data.retcode)
-        if (Number.isFinite(retcode) && retcode !== 0) {
-          throw mapUpstreamCode(retcode, 'music.vkey.GetVkey.UrlGetVkey')
-        }
-      } catch (fallbackError) {
-        // 两个 vkey 入口都拒绝时，说明不是单曲问题；进入全局 60 秒截断窗口。
-        if (fallbackError instanceof UpstreamError && fallbackError.upstreamCode === 104009) {
-          tripUpstreamBlock()
-        }
-        throw fallbackError
-      }
-    }
-
-    for (const info of data.midurlinfo ?? []) {
-      if (!info.songmid) continue
-      if (info.purl) urls.set(info.songmid, info.purl)
-      const result = Number(info.result)
-      if (Number.isFinite(result)) results.set(info.songmid, result)
-    }
+  const uin = getCredential()?.musicid ?? '0'
+  // 一次 vkey 请求只取一首歌；串行与 300ms 间隔由 api/vkey 统一保证。
+  for (const track of tracks) {
+    const { purl, result } = await fetchVkey({
+      songMid: track.songMid,
+      filename: `${prefix}${track.mediaMid}${ext}`,
+      uin
+    })
+    if (purl) urls.set(track.songMid, purl)
+    if (result !== null) results.set(track.songMid, result)
   }
   return { urls, results }
 }
@@ -394,19 +370,31 @@ export async function getStreamUrls(mids: string[], quality: Quality): Promise<U
       if (albumOnly) {
         throw new UpstreamError('NO_STREAM', '数字专辑需要购买后才能播放')
       }
-      const vip = await isVipUser()
-      if (vip) {
+      const vip = await getVipStatus()
+      if (vip.state === 'known' && vip.isVip) {
         throw new UpstreamError(
           'NO_STREAM',
           '播放授权异常（104003）：登录可能已失效或触发风控，请重新登录后重试'
         )
       }
+      if (vip.state === 'unknown') {
+        throw new UpstreamError(
+          'NO_STREAM',
+          '当前内容无法播放（104003）：账号权益状态未知，可能需要 VIP / 购买或已下架'
+        )
+      }
       throw new UpstreamError('NO_STREAM', '当前内容需要 VIP 或购买（104003）')
     }
-    const vip = await isVipUser()
+    const vip = await getVipStatus()
+    if (vip.state === 'unknown') {
+      throw new UpstreamError(
+        'NO_STREAM',
+        '无法获取播放链接（可能已下架、需要 VIP 或登录授权异常）'
+      )
+    }
     throw new UpstreamError(
       'NO_STREAM',
-      vip
+      vip.isVip
         ? '无法获取播放链接（可能已下架或登录授权异常）'
         : '当前内容不可播放（可能需要 VIP 或已下架）'
     )

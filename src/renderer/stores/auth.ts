@@ -5,9 +5,24 @@ import type {
   LoginMethod,
   ReauthReason,
   RefreshState,
-  UserProfile
+  UserProfile,
+  VipStatus
 } from '@shared/types'
 import { unwrap } from '../api'
+
+const KNOWN_NONE: VipStatus = {
+  state: 'known',
+  isVip: false,
+  level: 'none',
+  expiresAtMs: null
+}
+
+const VIP_UNKNOWN: VipStatus = {
+  state: 'unknown',
+  isVip: false,
+  level: 'none',
+  expiresAtMs: null
+}
 
 export const useAuthStore = defineStore('auth', () => {
   const loggedIn = ref(false)
@@ -18,7 +33,10 @@ export const useAuthStore = defineStore('auth', () => {
   const expiresAtMs = ref<number | null>(null)
   const refreshState = ref<RefreshState>('ok')
   const reauthReason = ref<ReauthReason | null>(null)
+  /** 账号会员状态；接口失败为 unknown，不能当作非会员。 */
+  const vip = ref<VipStatus>(VIP_UNKNOWN)
   let dismissedReauthReason: ReauthReason | null = null
+  let vipRequest = 0
 
   const displayName = computed(() => profile.value?.nickname ?? (musicid.value ? `音乐 ID ${musicid.value}` : '未登录'))
 
@@ -43,8 +61,22 @@ export const useAuthStore = defineStore('auth', () => {
     }
     if (status.loggedIn) {
       if (status.musicid !== previousMusicid || !profile.value) void loadProfile()
+      void loadVip()
     } else {
       profile.value = null
+      vipRequest += 1
+      vip.value = KNOWN_NONE
+    }
+  }
+
+  /** 会员状态用于派生歌曲播放权限；失败时保持 unknown，避免把接口异常当作非会员。 */
+  async function loadVip(): Promise<void> {
+    const request = ++vipRequest
+    try {
+      const status = unwrap(await window.lychee.user.vipStatus())
+      if (request === vipRequest) vip.value = status
+    } catch {
+      if (request === vipRequest) vip.value = VIP_UNKNOWN
     }
   }
 
@@ -99,6 +131,8 @@ export const useAuthStore = defineStore('auth', () => {
     refreshState.value = 'ok'
     reauthReason.value = null
     dismissedReauthReason = null
+    vipRequest += 1
+    vip.value = KNOWN_NONE
     window.dispatchEvent(new Event('lychee:logout'))
   }
 
@@ -112,6 +146,8 @@ export const useAuthStore = defineStore('auth', () => {
     expiresAtMs,
     refreshState,
     reauthReason,
+    vip,
+    loadVip,
     refresh,
     applyStatus,
     dismissReauth,

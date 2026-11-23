@@ -83,7 +83,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
     >
       <header class="dialog-head">
         <h2>用户缓存管理</h2>
-        <button class="icon-btn" title="关闭" @click="emit('close')">
+        <button class="icon-btn" aria-label="关闭" @click="emit('close')">
           <AppIcon name="close" :size="17" />
         </button>
       </header>

@@ -27,7 +27,6 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
   async function create(name: string): Promise<void> {
     await run(async () => {
       unwrap(await window.lychee.playlist.create(name))
-      toast.show('歌单已创建')
     })
   }
 
@@ -36,14 +35,12 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
       const meta = unwrap(await window.lychee.playlist.rename(id, name))
       const feed = playlist.feed
       if (feed?.meta?.id === id) feed.meta = meta
-      toast.show('歌单已改名')
     })
   }
 
   async function remove(id: string): Promise<void> {
     await run(async () => {
       unwrap(await window.lychee.playlist.remove(id))
-      toast.show('歌单已删除')
     })
   }
 
@@ -52,7 +49,7 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
     try {
       const result = unwrap(await window.lychee.playlist.addSongs(id, mids))
       refreshAfterWrite(id)
-      toast.show(result.changed ? '已添加到歌单' : '已在歌单中')
+      toast.show(result.changed ? '已添加到歌单' : '已添加')
       return result.changed
     } finally {
       busy.value = false
@@ -64,7 +61,7 @@ export const usePlaylistEditStore = defineStore('playlist-edit', () => {
     try {
       const result = unwrap(await window.lychee.playlist.removeSongs(id, mids))
       refreshAfterWrite(id)
-      toast.show(result.changed ? '已从歌单移除' : '歌曲不在歌单中')
+      if (!result.changed) toast.show('歌曲不在歌单中')
       return result.changed
     } finally {
       busy.value = false

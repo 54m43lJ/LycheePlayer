@@ -5,6 +5,8 @@ import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
 import DownloadDeleteDialog from './components/DownloadDeleteDialog.vue'
 import LyricsOverlay from './components/LyricsOverlay.vue'
+import MemberBadge from './components/MemberBadge.vue'
+import MvButton from './components/MvButton.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ReauthDialog from './components/ReauthDialog.vue'
 import ToastStack from './components/ToastStack.vue'
@@ -21,6 +23,8 @@ import { useUiStore } from './stores/ui'
 import { useToast } from './composables/toast'
 import { appTitle, dailyPlaylistName, singerNames, songCover } from './utils/format'
 import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
+import { SHORTCUT_ACTIONS, matchesShortcut } from '@shared/shortcuts'
+import type { ShortcutAction } from '@shared/types'
 
 const route = useRoute()
 const router = useRouter()
@@ -75,10 +79,6 @@ function quitApp(): void {
   window.lychee.system.quit()
 }
 
-function targetThemeLabel(): string {
-  return settings.settings.theme === 'light' ? '深色' : '浅色'
-}
-
 async function toggleTheme(): Promise<void> {
   const theme = settings.settings.theme === 'light' ? 'dark' : 'light'
   try {
@@ -121,10 +121,12 @@ function hasSelectedText(): boolean {
 }
 
 function onPointerDown(event: PointerEvent): void {
-  // 歌词 / 评论打开期间横向手势归分页独占，避免同时唤起侧栏；左边缘 revealer 点击仍可用。
-  if (ui.lyricsOpen || event.button !== 0 || !narrowQuery.matches) return
+  if (event.button !== 0 || !narrowQuery.matches) return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, button, a, [role="button"], .range')) return
+  // 歌词 / 评论弹出层打开时，只有分页轨道内的横向手势归分页独占；
+  // 轨道以外（弹出层头部、播放条等）仍可拖动唤起侧栏。
+  if (ui.lyricsOpen && target?.closest('.lyrics-page-track')) return
   if (event.clientX <= 10 || (ui.sidebarOpen && event.clientX < 300)) {
     dragStartX = event.clientX
     return
@@ -134,10 +136,6 @@ function onPointerDown(event: PointerEvent): void {
 }
 
 function onPointerUp(event: PointerEvent): void {
-  if (ui.lyricsOpen) {
-    dragStartX = null
-    return
-  }
   if (dragStartX === null) return
   const delta = event.clientX - dragStartX
   dragStartX = null
@@ -153,17 +151,87 @@ function onPointerCancel(): void {
   dragStartX = null
 }
 
-function onKeydown(event: KeyboardEvent): void {
-  if (event.key !== 'Escape') return
-  if (ui.lyricsOpen) {
-    ui.closeLyrics()
+function isEditableTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  if (!element) return false
+  const tag = element.tagName
+  return (
+    tag === 'INPUT' ||
+    tag === 'TEXTAREA' ||
+    tag === 'SELECT' ||
+    element.isContentEditable
+  )
+}
+
+/** 空格在按钮 / 链接上保留原生激活行为，不被全局播放 / 暂停吞掉。 */
+function spaceActivatesTarget(target: EventTarget | null): boolean {
+  const element = target as HTMLElement | null
+  return Boolean(
+    element?.closest('button, a, [role="button"], input, textarea, select, [contenteditable="true"]')
+  )
+}
+
+function shortcutFor(event: KeyboardEvent): ShortcutAction | null {
+  const shortcuts = settings.settings.shortcuts
+  if (!shortcuts) return null
+  for (const action of SHORTCUT_ACTIONS) {
+    if (matchesShortcut(event, shortcuts[action.id])) return action.id
+  }
+  return null
+}
+
+function runShortcut(action: ShortcutAction): void {
+  if (action === 'togglePlay') {
+    player.toggle()
     return
   }
-  if (ui.sidebarOpen) ui.closeSidebar()
+  if (action === 'previous') {
+    player.previous()
+    return
+  }
+  if (action === 'next') {
+    player.playNext()
+    return
+  }
+  const song = player.current
+  if (!song) return
+  if (action === 'favorite') {
+    void playlistEdit.toggleFavorite(song.songMid)
+    return
+  }
+  if (!auth.loggedIn) {
+    toast.error('请先登录')
+    return
+  }
+  ui.openSongPicker([song.songMid], song.name)
+}
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key === 'Escape') {
+    if (ui.lyricsOpen) {
+      ui.closeLyrics()
+      return
+    }
+    if (ui.sidebarOpen) {
+      ui.closeSidebar()
+      return
+    }
+    if (ui.songPicker) ui.closeSongPicker()
+    return
+  }
+  if (event.defaultPrevented || event.isComposing || event.repeat) return
+  if (isEditableTarget(event.target)) return
+  // 弹窗打开时不响应全局快捷键，避免在确认 / 选择流程中误触播放。
+  if (document.querySelector('.dialog-backdrop')) return
+  const action = shortcutFor(event)
+  if (!action) return
+  if (action === 'togglePlay' && spaceActivatesTarget(event.target)) return
+  event.preventDefault()
+  runShortcut(action)
 }
 
 onMounted(() => {
-  offBackNavigation = installBackNavigation(() => router.back())
+  offBackNavigation = installBackNavigation(router)
   window.addEventListener('lychee:logout', onLogout)
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('pointerdown', onPointerDown)
@@ -251,7 +319,6 @@ watch(
   <div class="app-shell" :class="{ 'sidebar-is-open': ui.sidebarOpen }">
     <button
       class="sidebar-revealer"
-      title="打开导航"
       aria-label="打开导航"
       @click.stop="openSidebar()"
     />
@@ -304,7 +371,11 @@ watch(
           >
             <CoverArt :src="item.coverUrl" image-class="recent-cover" :icon-size="12" />
             <span class="nav-recent-name">{{ recentPlaylistName(item.name) }}</span>
-            <span v-if="item.id === currentPlaylistId" class="nav-recent-playing" title="正在播放">
+            <span
+              v-if="item.id === currentPlaylistId"
+              class="nav-recent-playing"
+              aria-label="正在播放"
+            >
               <AppIcon name="volume" :size="13" />
             </span>
           </RouterLink>
@@ -327,14 +398,18 @@ watch(
           <AppIcon name="settings" :size="18" />
           <span class="nav-text">设置</span>
         </RouterLink>
-        <button class="nav-item" type="button" title="退出 Lychee Player" @click="quitApp()">
+        <button
+          class="nav-item"
+          type="button"
+          aria-label="退出 Lychee Player"
+          @click="quitApp()"
+        >
           <AppIcon name="power" :size="18" />
           <span class="nav-text">退出</span>
         </button>
         <button
           class="icon-btn sidebar-theme-toggle"
           type="button"
-          :title="`切换到${targetThemeLabel()}模式`"
           aria-label="切换配色"
           @click="toggleTheme()"
         >
@@ -359,7 +434,10 @@ watch(
             <template v-else>{{ avatarLetter }}</template>
           </span>
           <span class="user-meta">
-            <span class="user-name">{{ auth.displayName }}</span>
+            <span class="user-name-row">
+              <span class="user-name">{{ auth.displayName }}</span>
+              <MemberBadge :status="auth.vip" :size="14" />
+            </span>
             <span class="user-state">{{ auth.musicid }}</span>
           </span>
           <AppIcon name="chevron-right" :size="15" />
@@ -394,14 +472,13 @@ watch(
         <div class="lyrics-head-actions">
           <button
             class="icon-btn"
-            title="清空播放队列"
             aria-label="清空播放队列"
             :disabled="player.queue.length === 0"
             @click="player.clearQueue()"
           >
             <AppIcon name="trash" :size="17" />
           </button>
-          <button class="icon-btn" title="关闭播放队列" @click="ui.closeQueue()">
+          <button class="icon-btn" aria-label="关闭播放队列" @click="ui.closeQueue()">
             <AppIcon name="close" :size="18" />
           </button>
         </div>
@@ -448,12 +525,19 @@ watch(
           <span class="queue-index">{{ queueIndex + 1 }}</span>
           <CoverArt :src="songCover(song, 300)" image-class="cover-thumb" :icon-size="16" />
           <div class="song-text">
-            <div class="song-title">{{ song.name }}</div>
+            <div class="song-title">
+              <span class="queue-title">{{ song.name }}</span>
+              <MvButton
+                v-if="song.mvId"
+                :mv-id="song.mvId"
+                class="queue-mv"
+                @click="ui.closeQueue()"
+              />
+            </div>
             <div class="song-artist">{{ singerNames(song) }}</div>
           </div>
           <button
             class="song-icon danger"
-            title="从队列移除"
             aria-label="从队列移除"
             @click="player.removeFromQueue(queueIndex)"
           >

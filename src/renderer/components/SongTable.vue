@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import type { Song, SongAssetState, SongAvailability } from '@shared/types'
+import type { PlaybackPermission, Song, SongAssetState } from '@shared/types'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
+import { playbackPermission } from '@shared/permission'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
+import MvButton from './MvButton.vue'
+import { useAuthStore } from '../stores/auth'
 import { usePlayerStore } from '../stores/player'
 import { formatDuration, singerNames, songCover } from '../utils/format'
 import { downloadStateIcon, resolveDownloadState } from '../utils/download-state'
@@ -14,7 +17,6 @@ const props = withDefaults(
     songs: Song[]
     activeMid?: string | null
     showAlbum?: boolean
-    availability?: Record<string, SongAvailability>
     favoriteMids?: string[]
     downloadable?: boolean
     assetStates?: Record<string, SongAssetState>
@@ -24,7 +26,6 @@ const props = withDefaults(
   {
     activeMid: null,
     showAlbum: true,
-    availability: () => ({}),
     favoriteMids: () => [],
     downloadable: true,
     assetStates: () => ({}),
@@ -44,23 +45,26 @@ const emit = defineEmits<{
 }>()
 
 const player = usePlayerStore()
+const auth = useAuthStore()
 const playing = computed(() => player.status === 'playing')
 const compactQuery = window.matchMedia('(max-width: 900px)')
 const compact = ref(compactQuery.matches)
 const menuIndex = ref<number | null>(null)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 
-function isPlayable(song: Song, index: number): boolean {
-  return props.availability[song.songMid]?.playable !== false && index >= 0
+function permission(song: Song): PlaybackPermission {
+  return playbackPermission(song, auth.vip)
 }
 
-function availabilityLabel(song: Song): string {
-  const item = props.availability[song.songMid]
-  if (!item) return ''
-  if (item.playable === false) return '不可播'
-  if (item.maxQuality === 'flac') return 'FLAC'
-  if (item.maxQuality === '320k') return '320K'
-  if (item.maxQuality === '128k') return '128K'
+function isPlayable(song: Song, index: number): boolean {
+  return permission(song).playable && index >= 0
+}
+
+function qualityLabel(song: Song): string {
+  const quality = permission(song).maxQuality
+  if (quality === 'flac') return 'FLAC'
+  if (quality === '320k') return '320K'
+  if (quality === '128k') return '128K'
   return ''
 }
 
@@ -146,9 +150,10 @@ onBeforeUnmount(() => {
         v-for="(song, index) in songs"
         :key="`${song.songMid}-${index}`"
         class="song-row"
+        :data-song-mid="song.songMid"
         :class="{
           active: song.songMid === activeMid,
-          unavailable: availability[song.songMid]?.playable === false
+          unavailable: !permission(song).playable
         }"
         @dblclick="isPlayable(song, index) && emit('play', index)"
       >
@@ -157,7 +162,7 @@ onBeforeUnmount(() => {
             <span class="song-index-text">{{ index + 1 }}</span>
             <button
               class="song-play"
-              :title="song.songMid === activeMid ? (playing ? '暂停' : '继续播放') : '播放'"
+              :aria-label="song.songMid === activeMid ? (playing ? '暂停' : '继续播放') : '播放'"
               :disabled="!isPlayable(song, index)"
               @click.stop="song.songMid === activeMid ? emit('toggle') : emit('play', index)"
             >
@@ -174,12 +179,13 @@ onBeforeUnmount(() => {
                 <span v-if="song.pay.album" class="pay-badge album">数字专辑</span>
                 <span v-else-if="song.pay.vip" class="pay-badge">VIP</span>
                 <span v-else-if="!song.pay.free" class="pay-badge">付费</span>
-                <span
-                  v-if="availability[song.songMid] && availabilityLabel(song)"
-                  class="quality-badge"
-                  :class="{ unavailable: availability[song.songMid]?.playable === false }"
-                  >{{ availabilityLabel(song) }}</span
+                <span v-if="!permission(song).playable" class="quality-badge unavailable"
+                  >不可播</span
                 >
+                <span v-else-if="qualityLabel(song)" class="quality-badge">{{
+                  qualityLabel(song)
+                }}</span>
+                <MvButton v-if="song.mvId" :mv-id="song.mvId" class="song-mv" />
               </div>
               <div v-if="singerNames(song)" class="song-artist">
                 <template v-for="(singer, singerIndex) in visibleSingers(song)" :key="`${singer.mid}-${singerIndex}`">
@@ -202,19 +208,18 @@ onBeforeUnmount(() => {
             v-if="song.album.mid"
             class="song-album inline-link"
             :to="`/album/${song.album.mid}`"
-            :title="song.album.name"
             @click.stop
           >
             <MarqueeText :text="song.album.name || '—'" />
           </RouterLink>
-          <div v-else class="song-album" :title="song.album.name">{{ song.album.name || '—' }}</div>
+          <div v-else class="song-album">{{ song.album.name || '—' }}</div>
         </td>
         <td class="song-action">
           <div v-if="!compact" class="song-action-inner">
             <button
               class="song-icon"
               :class="{ active: isFavorite(song) }"
-              :title="isFavorite(song) ? '取消收藏' : '收藏'"
+              :aria-label="isFavorite(song) ? '取消收藏' : '收藏'"
               @click.stop="emit('favorite', index)"
             >
               <AppIcon :name="isFavorite(song) ? 'heart-filled' : 'heart'" :size="15" />
@@ -222,15 +227,14 @@ onBeforeUnmount(() => {
             <button
               class="song-icon"
               :class="downloadState(song) === 'none' ? null : downloadState(song)"
-              :title="downloadTitle(song)"
-              :disabled="!downloadable || availability[song.songMid]?.playable === false"
+              :aria-label="downloadTitle(song)"
+              :disabled="!downloadable || !permission(song).playable"
               @click.stop="emit('download', index)"
             >
               <AppIcon :name="downloadIcon(song)" :size="15" />
             </button>
             <button
               class="song-icon"
-              title="下一首播放"
               aria-label="下一首播放"
               :disabled="!isPlayable(song, index)"
               @click.stop="emit('playNext', index)"
@@ -240,7 +244,6 @@ onBeforeUnmount(() => {
             <button
               v-if="canAddToPlaylist"
               class="song-icon"
-              title="添加到歌单"
               aria-label="添加到歌单"
               @click.stop="emit('addToPlaylist', index)"
             >
@@ -249,7 +252,6 @@ onBeforeUnmount(() => {
             <button
               v-if="removable"
               class="song-icon danger"
-              title="从歌单删除"
               aria-label="从歌单删除"
               @click.stop="emit('remove', index)"
             >
@@ -259,7 +261,6 @@ onBeforeUnmount(() => {
           <div v-else class="song-more-wrap" @click.stop>
             <button
               class="song-icon"
-              title="更多操作"
               aria-label="更多操作"
               @click.stop="toggleMenu(index)"
             >
@@ -271,7 +272,7 @@ onBeforeUnmount(() => {
                 {{ isFavorite(song) ? '取消收藏' : '收藏' }}
               </button>
               <button
-                :disabled="!downloadable || availability[song.songMid]?.playable === false"
+                :disabled="!downloadable || !permission(song).playable"
                 @click="run(() => emit('download', index))"
               >
                 <AppIcon :name="downloadIcon(song)" :size="15" />

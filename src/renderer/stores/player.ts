@@ -371,7 +371,7 @@ export const usePlayerStore = defineStore('player', () => {
       }
       if (session !== radioSession || queueSource.value?.kind !== 'radio') return
       if (additions.length === 0) {
-        toast.error('猜你喜欢暂时没有更多歌曲')
+        toast.show('猜你喜欢暂时没有更多歌曲')
         return
       }
       const wasAtEnd = index.value === playOrder.value.length - 1

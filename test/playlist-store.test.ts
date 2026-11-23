@@ -8,7 +8,6 @@ import type {
   PlaylistPage,
   PlaylistSnapshot,
   Song,
-  SongAvailability,
   UrlResult
 } from '../src/shared/types'
 import { PLAYLIST_REFRESH_RETRY_MS } from '../src/shared/constants'
@@ -65,7 +64,13 @@ function song(id: string): Song {
     singers: [],
     album: { mid: '', name: '' },
     durationMs: 180000,
-    pay: { free: true, vip: false, album: false }
+    pay: { free: true, vip: false, album: false },
+    status: null,
+    pay_play: null,
+    pay_month: null,
+    pay_status: null,
+    maxQuality: null,
+    mvId: ''
   }
 }
 
@@ -97,10 +102,6 @@ function songs(count: number): Song[] {
   return Array.from({ length: count }, (_, index) => song(String(index)))
 }
 
-function state(mid: string, playable: boolean): SongAvailability {
-  return { songMid: mid, playable, maxQuality: playable ? '320k' : null, checkedAtMs: 1 }
-}
-
 function pendingUrls(): Promise<IpcResult<UrlResult[]>> {
   return new Promise(() => undefined)
 }
@@ -116,7 +117,8 @@ beforeEach(() => {
   const storage = new Map<string, string>()
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => storage.get(key) ?? null,
-    setItem: (key: string, value: string) => storage.set(key, value)
+    setItem: (key: string, value: string) => storage.set(key, value),
+    removeItem: (key: string) => storage.delete(key)
   })
   getMock = vi.fn()
   getCachedMock = vi.fn(() => Promise.resolve(ok(null)))
@@ -383,87 +385,51 @@ describe('playlist queue snapshot timing', () => {
     return { playlist, player }
   }
 
-  it('builds the final filtered snapshot when metadata is ready at playback start', async () => {
-    const songs = [song('1'), song('2'), song('3')]
-    const { playlist, player } = await setup(songs)
-    playlist.setProbeState(
-      { 1: state('1', true), 2: state('2', true), 3: state('3', false) },
-      false
-    )
-    player.startPlaylistPlayback(songs[0], { kind: 'playlist', id: 'liked' })
-    playlist.beginQueueBuild()
-
-    expect(player.queue.map((item) => item.songMid)).toEqual(['2'])
-  })
-
-  it('uses one temporary snapshot, then replaces it when the final snapshot changes', async () => {
+  it('builds the full queue without filtering when the feed is complete', async () => {
     const songs = [song('1'), song('2'), song('3')]
     const { playlist, player } = await setup(songs)
     player.startPlaylistPlayback(songs[0], { kind: 'playlist', id: 'liked' })
     playlist.beginQueueBuild()
-
-    expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
-
-    songs.push(song('4'))
-    playlist.feed!.songs = songs
-    playlist.feed!.total = songs.length
-    playlist.setProbeState({ 1: state('1', true), 2: state('2', true) }, true)
-    expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
-
-    player.addNext(song('x'))
-    expect(player.queue.map((item) => item.songMid)).toEqual(['x', '2', '3'])
-
-    playlist.setProbeState(
-      {
-        1: state('1', true),
-        2: state('2', true),
-        3: state('3', false),
-        4: state('4', true)
-      },
-      false
-    )
 
     expect(player.current?.songMid).toBe('1')
-    expect(player.queue.map((item) => item.songMid)).toEqual(['x', '2', '4'])
+    expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
   })
 
-  it('waits for max quality metadata before finalizing', async () => {
-    const songs = [song('1'), song('2'), song('3')]
-    const { playlist, player } = await setup(songs)
-    player.startPlaylistPlayback(songs[0], { kind: 'playlist', id: 'liked' })
+  it('keeps manual entries when the final snapshot replaces a temporary queue', async () => {
+    window.lychee.song.getUrls = pendingUrls
+    const { usePlaylistStore } = await import('../src/renderer/stores/playlist')
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const playlist = usePlaylistStore()
+    const player = usePlayerStore()
+    let resolveSnapshot!: (value: IpcResult<PlaylistSnapshot>) => void
+    getSnapshotMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveSnapshot = resolve
+      })
+    )
+    getCachedMock.mockResolvedValueOnce(
+      ok({
+        meta: { ...meta, songCount: 3 },
+        songs: [song('1'), song('2'), song('3')],
+        total: 3,
+        complete: true,
+        fetchedAtMs: 1
+      })
+    )
+
+    const loading = playlist.load('liked')
+    await vi.waitFor(() => expect(playlist.feed?.stale).toBe(true))
+    player.startPlaylistPlayback(playlist.feed!.songs[0], { kind: 'playlist', id: 'liked' })
     playlist.beginQueueBuild()
     expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
 
-    playlist.setProbeState(
-      {
-        1: { songMid: '1', playable: true, maxQuality: null, checkedAtMs: 1 },
-        2: { songMid: '2', playable: true, maxQuality: null, checkedAtMs: 1 },
-        3: { songMid: '3', playable: false, maxQuality: null, checkedAtMs: 1 }
-      },
-      false
-    )
-    expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
-
-    playlist.setProbeState(
-      { 1: state('1', true), 2: state('2', true), 3: state('3', false) },
-      false
-    )
-    expect(player.queue.map((item) => item.songMid)).toEqual(['2'])
-  })
-
-  it('keeps the temporary queue when the final snapshot is unchanged', async () => {
-    const songs = [song('1'), song('2'), song('3')]
-    const { playlist, player } = await setup(songs)
-    player.startPlaylistPlayback(songs[0], { kind: 'playlist', id: 'liked' })
-    playlist.beginQueueBuild()
     player.addNext(song('x'))
-
-    playlist.setProbeState(
-      { 1: state('1', true), 2: state('2', true), 3: state('3', true) },
-      false
-    )
-
     expect(player.queue.map((item) => item.songMid)).toEqual(['x', '2', '3'])
+
+    resolveSnapshot(ok(snapshot([song('1'), song('2'), song('3'), song('4')])))
+    await loading
+    expect(player.current?.songMid).toBe('1')
+    expect(player.queue.map((item) => item.songMid)).toEqual(['x', '2', '3', '4'])
   })
 
   it('keeps the playback snapshot state while browsing another playlist', async () => {
@@ -482,22 +448,7 @@ describe('playlist queue snapshot timing', () => {
       error: '',
       loadToken: 2
     }
-    playlist.setProbeState({ 9: state('9', true) }, false)
+    playlist.beginQueueBuild()
     expect(player.queue.map((item) => item.songMid)).toEqual(['2', '3'])
-
-    playlist.feed = {
-      meta,
-      songs,
-      total: songs.length,
-      status: 'complete',
-      stale: false,
-      error: '',
-      loadToken: 3
-    }
-    playlist.setProbeState(
-      { 1: state('1', true), 2: state('2', true), 3: state('3', false) },
-      false
-    )
-    expect(player.queue.map((item) => item.songMid)).toEqual(['2'])
   })
 })

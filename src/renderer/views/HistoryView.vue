@@ -3,10 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import PageJump from '../components/PageJump.vue'
-import SongTable from '../components/SongTable.vue'
-import { useDownloadAction } from '../composables/download-action'
+import SongListTable from '../components/SongListTable.vue'
+import { useCurrentSongJump } from '../composables/current-song-jump'
 import { usePageJump } from '../composables/page-jump'
-import { useDownloadStore } from '../stores/download'
 import { useHistoryStore } from '../stores/history'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
@@ -15,8 +14,6 @@ import { singerNames } from '../utils/format'
 const history = useHistoryStore()
 const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
-const download = useDownloadStore()
-const { requestDownload } = useDownloadAction()
 const pageRef = ref<HTMLElement | null>(null)
 const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
 
@@ -32,8 +29,10 @@ const filteredSongs = computed(() => {
     return haystack.includes(keyword)
   })
 })
-const favoriteMids = computed(() => [...playlistEdit.favorites])
-const assetStates = computed(() => download.assets)
+const { showCurrent: showJumpCurrent, scrollToCurrent } = useCurrentSongJump(
+  pageRef,
+  filteredSongs
+)
 
 function startAt(index: number): void {
   const song = filteredSongs.value[index]
@@ -44,21 +43,6 @@ function startAt(index: number): void {
 function playAll(): void {
   if (filteredSongs.value.length === 0) return
   player.playList(filteredSongs.value.slice(), 0)
-}
-
-function addNextAt(index: number): void {
-  const song = filteredSongs.value[index]
-  if (song) player.addNext(song)
-}
-
-async function toggleFavorite(index: number): Promise<void> {
-  const song = filteredSongs.value[index]
-  if (song) await playlistEdit.toggleFavorite(song.songMid)
-}
-
-async function downloadAt(index: number): Promise<void> {
-  const song = filteredSongs.value[index]
-  if (song) await requestDownload(song, player.requestedQuality)
 }
 
 function clearHistory(): void {
@@ -113,18 +97,11 @@ onMounted(() => {
       <button v-if="searchText" class="btn ghost small" @click="searchText = ''">清除</button>
     </div>
 
-    <SongTable
+    <SongListTable
       v-if="filteredSongs.length > 0"
       :songs="filteredSongs"
       :active-mid="player.current?.songMid"
-      :favorite-mids="favoriteMids"
-      :asset-states="assetStates"
-      :downloadable="true"
       @play="startAt"
-      @play-next="addNextAt"
-      @toggle="player.toggle()"
-      @favorite="toggleFavorite"
-      @download="downloadAt"
     />
     <div v-else-if="searchText" class="empty compact">
       <div class="empty-icon"><AppIcon name="search" :size="22" /></div>
@@ -141,7 +118,9 @@ onMounted(() => {
     <PageJump
       :show-top="showTop"
       :show-bottom="showBottom"
+      :show-current="showJumpCurrent"
       @top="scrollToTop"
+      @current="scrollToCurrent"
       @bottom="scrollToBottom"
     />
 

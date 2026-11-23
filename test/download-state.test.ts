@@ -7,7 +7,6 @@ function asset(overrides: Partial<SongAssetState>): SongAssetState {
     songMid: 'song-mid',
     cachedQuality: null,
     downloadedQuality: null,
-    maxQuality: null,
     taskStatus: null,
     ...overrides
   }

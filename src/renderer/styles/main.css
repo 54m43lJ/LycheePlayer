@@ -8,6 +8,8 @@
   --palette-purple: #89338e;
   --palette-purple-light: #e593e7;
   --palette-gold: #9d7e4d;
+  --palette-green: #46c078;
+  --palette-gold-bright: #e7be62;
   --palette-cream: #fff7e4;
   --palette-red: #cc2a47;
 
@@ -25,6 +27,10 @@
   --accent-soft: color-mix(in srgb, var(--palette-purple) 22%, transparent);
   --accent-line: color-mix(in srgb, var(--palette-purple) 52%, transparent);
   --gold: var(--palette-gold);
+  --member-green: var(--palette-green);
+  --member-green-edge: color-mix(in srgb, var(--palette-green) 48%, var(--palette-bg));
+  --member-gold: var(--palette-gold-bright);
+  --member-gold-edge: var(--palette-gold);
   --danger: var(--palette-red);
   --danger-soft: color-mix(in srgb, var(--palette-red) 16%, transparent);
   --border: color-mix(in srgb, var(--palette-muted) 16%, transparent);
@@ -64,6 +70,7 @@
     BlinkMacSystemFont,
     'Segoe UI',
     'Noto Sans Yi',
+    'Noto Sans Linear B',
     sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -81,6 +88,8 @@
   --palette-purple: #8a2e8f;
   --palette-purple-light: #d998d9;
   --palette-gold: #5c4824;
+  --palette-green: #1d9a5b;
+  --palette-gold-bright: #c8971f;
   --palette-highlight: #e9dbf2;
   --palette-red: #ab3248;
 
@@ -98,6 +107,10 @@
   --accent-soft: color-mix(in srgb, var(--palette-purple-light) 58%, transparent);
   --accent-line: color-mix(in srgb, var(--palette-purple) 38%, transparent);
   --gold: var(--palette-gold);
+  --member-green: var(--palette-green);
+  --member-green-edge: color-mix(in srgb, var(--palette-green) 55%, var(--palette-bg));
+  --member-gold: var(--palette-gold-bright);
+  --member-gold-edge: var(--palette-gold);
   --danger: var(--palette-red);
   --danger-soft: color-mix(in srgb, var(--palette-red) 12%, transparent);
   --border: color-mix(in srgb, var(--palette-muted) 20%, transparent);
@@ -342,9 +355,61 @@ button:focus-visible,
   color: var(--text);
 }
 
+.user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.user-name-row .user-name {
+  min-width: 0;
+}
+
 .user-state {
   font-size: 11px;
   color: var(--faint);
+}
+
+/* 会员档位：侧栏仅图标，设置页图标 + 文字；颜色见 USER §5.1。 */
+.member-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  line-height: 1;
+}
+
+.member-badge-icon {
+  display: block;
+  flex: none;
+}
+
+.member-diamond {
+  fill: var(--member-green);
+  stroke: var(--member-green-edge);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.member-v {
+  fill: var(--member-gold);
+}
+
+.member-super .member-diamond {
+  fill: var(--member-gold);
+  stroke: var(--member-gold-edge);
+}
+
+.member-super .member-v {
+  fill: var(--member-gold-edge);
+}
+
+.member-badge-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .sidebar-note {
@@ -912,6 +977,10 @@ button:focus-visible,
   white-space: nowrap;
 }
 
+.song-mv {
+  margin-left: 6px;
+}
+
 .pay-badge,
 .quality-badge {
   flex: 0 0 auto;
@@ -982,6 +1051,10 @@ button:focus-visible,
 
 .card-cover.mv-cover {
   aspect-ratio: 16 / 9;
+}
+
+.mv-card {
+  cursor: pointer;
 }
 
 .card {
@@ -1353,6 +1426,21 @@ button:focus-visible,
   font-weight: 600;
 }
 
+.shortcut-button {
+  min-width: 104px;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcut-button.recording {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+/* 最后一行设置项没有下内边距，动作区需自行补出与内容的分隔。 */
+.shortcut-actions {
+  margin-top: 16px;
+}
+
 .setting-desc {
   margin-top: 4px;
   color: var(--faint);
@@ -1598,7 +1686,7 @@ button:focus-visible,
 }
 
 .player-title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 13px;
   font-weight: 600;
@@ -1621,6 +1709,25 @@ button:focus-visible,
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.02em;
+}
+
+/* 歌曲绑定的 MV 入口：矮长方形内放播放三角形。 */
+.mv-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 18px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.mv-mark:hover {
+  border-color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 .player-artist {
@@ -1653,6 +1760,8 @@ button:focus-visible,
 
 .marquee-text {
   flex: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* 位移 = 单份文本 + 份间距（gap 2.5em 的一半），两份拷贝首尾相接形成无缝循环 */
@@ -2116,57 +2225,29 @@ button:focus-visible,
   z-index: 5;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 9px 5px 11px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--panel) 86%, transparent);
-  box-shadow: var(--shadow-sm);
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
   color: var(--muted);
-  font-size: 12px;
-  backdrop-filter: blur(10px);
+  font-size: 13px;
+  font-weight: 600;
   transition:
     color 0.16s ease,
-    border-color 0.16s ease;
+    background 0.16s ease;
 }
 
 .lyrics-trans-toggle:hover {
-  border-color: var(--border-strong);
   color: var(--text);
+  background: var(--subtle-bg);
 }
 
 .lyrics-trans-toggle.on {
-  color: var(--text);
-}
-
-.lyrics-trans-switch {
-  position: relative;
-  width: 28px;
-  height: 16px;
-  flex: 0 0 28px;
-  border-radius: 999px;
-  background: var(--subtle-bg-strong);
-  transition: background 0.18s ease;
-}
-
-.lyrics-trans-switch::after {
-  content: '';
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--on-accent);
-  transition: transform 0.18s ease;
-}
-
-.lyrics-trans-toggle.on .lyrics-trans-switch {
-  background: var(--accent);
-}
-
-.lyrics-trans-toggle.on .lyrics-trans-switch::after {
-  transform: translateX(12px);
+  color: var(--accent-strong);
+  background: var(--accent-soft);
 }
 
 .lyrics-empty {
@@ -2248,9 +2329,21 @@ button:focus-visible,
 }
 
 .queue-row .song-title {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: visible;
+}
+
+.queue-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-mv {
+  margin-left: 6px;
 }
 
 .feed-footer {
@@ -2343,35 +2436,36 @@ button:focus-visible,
 
 .toast-stack {
   position: fixed;
-  right: 22px;
   bottom: calc(var(--player-height) + 18px);
+  left: 50%;
   z-index: 80;
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: 8px;
+  width: max-content;
+  max-width: min(520px, calc(100vw - 32px));
   pointer-events: none;
+  transform: translateX(-50%);
 }
 
 .toast {
-  max-width: 380px;
-  padding: 11px 14px;
-  border: 1px solid var(--border-strong);
-  border-left: 3px solid var(--accent);
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--panel) 96%, transparent);
+  max-width: 100%;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--panel) 72%, transparent);
   color: var(--text);
   font-size: 12px;
   line-height: 1.5;
+  text-align: center;
+  backdrop-filter: blur(14px);
   box-shadow: var(--shadow);
   animation: toast-in 0.2s ease;
 }
 
 .toast.error {
-  border-left-color: var(--danger);
-}
-
-.toast.info {
-  border-left-color: var(--accent);
+  background: color-mix(in srgb, var(--danger) 22%, color-mix(in srgb, var(--panel) 72%, transparent));
 }
 
 @keyframes toast-in {
@@ -2443,17 +2537,156 @@ button:focus-visible,
   }
 
   .player {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.8fr) auto;
-    gap: 10px;
-    padding: 10px 14px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    gap: 8px 12px;
+    padding: 12px 18px;
+  }
+
+  .player-now {
+    grid-column: 1;
+    grid-row: 1;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .player-text {
+    flex: 0 1 auto;
+    max-width: min(72vw, 520px);
+  }
+
+  /* 第一行左侧歌曲信息、右侧交互；进度独占第二行；播放控制单独在第三行居中。 */
+  .player-center {
+    display: contents;
+  }
+
+  .progress-row {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    gap: 12px;
+  }
+
+  .player-controls {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    justify-self: center;
+    gap: 6px;
+  }
+
+  .player-controls .icon-btn,
+  .player-controls .mode-button {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .player-controls .icon-btn > svg,
+  .player-controls .mode-button > svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .play-button {
+    width: 46px;
+    height: 46px;
+    margin: 0 8px;
+  }
+
+  .play-button > svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .player .mode-menu {
+    padding-bottom: 40px;
   }
 
   .player-right {
-    gap: 4px;
+    grid-column: 2;
+    grid-row: 1;
+    gap: 8px;
+  }
+
+  .player-right .icon-btn {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+  }
+
+  .player-right .icon-btn > svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .player .like-menu,
+  .player .volume-menu {
+    padding-bottom: 40px;
+  }
+
+  .quality-chip {
+    min-width: 58px;
+    height: 30px;
+    padding: 0 10px;
+    font-size: 11px;
   }
 }
 
-/* Extra-narrow screens:<=560px. Two-row player, tighter spacing, single-column options. */
+/* 更窄：歌曲信息与右侧交互拆成两行，进度与播放控制继续各占一行。 */
+@media (max-width: 720px) {
+  .player {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .player-now {
+    grid-column: 1;
+    grid-row: 1;
+    justify-content: center;
+    gap: 12px;
+  }
+
+  .player-right {
+    grid-column: 1;
+    grid-row: 2;
+    justify-content: center;
+    justify-self: center;
+    gap: 8px;
+  }
+
+  .progress-row {
+    grid-column: 1;
+    grid-row: 3;
+  }
+
+  .player-controls {
+    grid-column: 1;
+    grid-row: 4;
+    justify-self: center;
+  }
+
+  .player-cover {
+    width: 56px;
+    height: 56px;
+    flex-basis: 56px;
+  }
+
+  .player-title {
+    font-size: 14px;
+  }
+
+  .player-artist {
+    font-size: 11px;
+  }
+
+  .progress-row .time {
+    flex-basis: 38px;
+    font-size: 10px;
+  }
+}
+
+/* Extra-narrow screens:<=560px. Tighter spacing, single-column options. */
 @media (max-width: 560px) {
   .brand-mark {
     width: 34px;
@@ -2572,73 +2805,6 @@ button:focus-visible,
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .player {
-    grid-template-columns: minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    gap: 4px 8px;
-    padding: 8px 10px;
-    align-items: center;
-  }
-
-  .player-now {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  .player-right {
-    grid-column: 2;
-    grid-row: 1;
-    gap: 2px;
-  }
-
-  .player-center {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
-
-  .player-cover {
-    width: 36px;
-    height: 36px;
-    flex-basis: 36px;
-  }
-
-  .player-title {
-    font-size: 12px;
-  }
-
-  .player-artist {
-    font-size: 10px;
-  }
-
-  .player-controls {
-    gap: 0;
-  }
-
-  .player-controls .icon-btn,
-  .player-controls .mode-button {
-    width: 28px;
-    height: 28px;
-  }
-
-  .player-controls .mode-menu {
-    padding-bottom: 28px;
-  }
-
-  .play-button {
-    width: 32px;
-    height: 32px;
-  }
-
-  .progress-row .time {
-    flex-basis: 30px;
-    font-size: 9px;
-  }
-
-  .quality-chip {
-    padding: 0 6px;
-    font-size: 9px;
-  }
-
   .lyrics-panel {
     width: 100%;
   }
@@ -2656,13 +2822,8 @@ button:focus-visible,
   }
 
   .toast-stack {
-    right: 12px;
-    left: 12px;
     bottom: calc(var(--player-height) + 12px);
-  }
-
-  .toast {
-    max-width: 100%;
+    max-width: calc(100vw - 24px);
   }
 }
 
@@ -2960,6 +3121,19 @@ button:focus-visible,
   color: var(--muted);
   font-size: 13px;
   line-height: 1.7;
+}
+
+.mv-comments {
+  height: min(520px, 65vh);
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.mv-comments > .lyrics-page-side {
+  height: 100%;
 }
 
 .dialog-backdrop {
@@ -4092,12 +4266,17 @@ button:focus-visible,
 }
 
 .comment-media-failed-emoji {
-  width: 20px;
-  height: 20px;
-  margin: 0 1px;
+  width: 1.15em;
+  height: 1.15em;
+  margin: 0 0.05em;
   border: 0;
   background: transparent;
-  vertical-align: -4px;
+  vertical-align: -0.18em;
+}
+
+.comment-media-failed-emoji svg {
+  width: 0.95em;
+  height: 0.95em;
 }
 
 .image-lightbox {
@@ -4192,6 +4371,213 @@ button:focus-visible,
   font-size: 11px;
 }
 
+.comment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.comment-reply-action {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.comment-reply-action:hover {
+  color: var(--accent-strong);
+}
+
+.comment-removed,
+.comment-reply-removed {
+  color: var(--faint);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.comment-removed {
+  padding: 2px 0;
+}
+
+.comment-reply-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.comment-reply-input {
+  height: 46px;
+  font-size: 11px;
+}
+
+.comment-reply-composer-nested {
+  margin-top: 5px;
+}
+
+.comment-reply-composer-nested .comment-reply-input {
+  height: 40px;
+}
+
+.comment-reply-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.comment-replies {
+  margin-top: 9px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.comment-replies-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 0;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.comment-reply-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comment-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.comment-reply-avatar {
+  display: grid;
+  flex: 0 0 16px;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--avatar-a), var(--avatar-b));
+  color: var(--on-accent);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.comment-reply-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.comment-reply-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-reply-text {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.comment-reply-nick {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.comment-reply-to {
+  color: var(--faint);
+}
+
+.comment-reply-emoji {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  margin: 0 1px;
+  vertical-align: -3px;
+  object-fit: contain;
+}
+
+.comment-reply-media {
+  max-width: min(100%, 180px);
+  max-height: 160px;
+  margin-top: 5px;
+}
+
+.comment-reply-media-failed {
+  width: 64px;
+  height: 48px;
+  margin-top: 5px;
+}
+
+.comment-reply-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.comment-replies-more {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
+  color: var(--accent-strong);
+  font-size: 11px;
+}
+
+.comment-replies-more:hover {
+  text-decoration: underline;
+}
+
+.comment-reply-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 7px;
+}
+
+.comment-reply-page,
+.comment-reply-page-btn {
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.comment-reply-page:disabled,
+.comment-reply-page-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.comment-reply-page:hover:not(:disabled),
+.comment-reply-page-btn:hover:not(:disabled) {
+  background: var(--subtle-bg-strong);
+  color: var(--text);
+}
+
+.comment-reply-page.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
 /* ---------- 侧栏抽屉 / 最近歌单 ---------- */
 
 .sidebar-revealer {
@@ -4253,7 +4639,7 @@ button:focus-visible,
 
 .sidebar-backdrop {
   position: fixed;
-  inset: 0 0 var(--player-height) 0;
+  inset: 0;
   z-index: 44;
   background: rgba(0, 0, 0, 0.38);
 }
@@ -4317,6 +4703,16 @@ button:focus-visible,
   opacity: 0.55;
 }
 
+.picker-row.duplicate:hover {
+  background: transparent;
+}
+
+.picker-dup {
+  flex: none;
+  color: var(--faint);
+  font-size: 11px;
+}
+
 .picker-text {
   display: flex;
   flex: 1;
@@ -4360,7 +4756,7 @@ button:focus-visible,
 @media (max-width: 900px) {
   :root {
     --sidebar-width: 0px;
-    --player-height: 84px;
+    --player-height: 168px;
   }
 
   .app-shell {
@@ -4374,7 +4770,7 @@ button:focus-visible,
   .sidebar {
     position: fixed;
     top: 0;
-    bottom: var(--player-height);
+    bottom: 0;
     left: 0;
     z-index: 45;
     width: min(282px, 82vw);
@@ -4505,9 +4901,15 @@ button:focus-visible,
   }
 }
 
+/* 播放条在更窄的宽度下再加高：控制与右侧交互分成两行。 */
+@media (max-width: 720px) {
+  :root {
+    --player-height: 204px;
+  }
+}
+
 @media (max-width: 560px) {
   :root {
-    --player-height: 116px;
     --sidebar-width: 0px;
   }
 

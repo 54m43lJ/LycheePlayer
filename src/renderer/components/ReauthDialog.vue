@@ -46,7 +46,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
     >
       <header class="dialog-head">
         <h2>{{ title }}</h2>
-        <button class="icon-btn" title="关闭" @click="emit('dismiss')">
+        <button class="icon-btn" aria-label="关闭" @click="emit('dismiss')">
           <AppIcon name="close" :size="17" />
         </button>
       </header>

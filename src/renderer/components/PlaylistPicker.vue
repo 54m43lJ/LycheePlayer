@@ -22,6 +22,8 @@ const error = ref('')
 const creating = ref(false)
 const newName = ref('')
 const submittingId = ref('')
+const duplicateIds = ref<Set<string>>(new Set())
+let duplicateToken = 0
 
 async function load(): Promise<void> {
   if (!props.open) return
@@ -32,11 +34,40 @@ async function load(): Promise<void> {
     playlists.value = all.filter(
       (playlist) => playlist.editable && playlist.kind !== 'favorites'
     )
+    void detectDuplicates()
   } catch (err) {
     error.value = describeError(err)
   } finally {
     loading.value = false
   }
+}
+
+/**
+ * 本地缓存机制：上游没有“一次检查歌曲是否在全部歌单中”的接口，
+ * 只对已有完整缓存的歌单做成员判断；缓存不完整时保持可点击，
+ * 由写入后的业务状态与 Toast 兜底。
+ */
+async function detectDuplicates(): Promise<void> {
+  const mids = props.songMids
+  const request = ++duplicateToken
+  if (mids.length === 0) {
+    duplicateIds.value = new Set()
+    return
+  }
+  const found = new Set<string>()
+  await Promise.all(
+    playlists.value.map(async (playlist) => {
+      try {
+        const cached = unwrap(await window.lychee.playlist.getCached(playlist.id))
+        if (!cached?.complete) return
+        const members = new Set(cached.songs.map((song) => song.songMid))
+        if (mids.every((mid) => members.has(mid))) found.add(playlist.id)
+      } catch {
+        // 单个歌单缓存读取失败不影响其余判断。
+      }
+    })
+  )
+  if (request === duplicateToken) duplicateIds.value = found
 }
 
 async function isDuplicate(id: string): Promise<boolean> {
@@ -56,8 +87,8 @@ async function addTo(id: string): Promise<void> {
   if (submittingId.value) return
   submittingId.value = id
   try {
-    if (await isDuplicate(id)) {
-      toast.show('已在歌单中')
+    if (duplicateIds.value.has(id) || (await isDuplicate(id))) {
+      toast.show('已添加')
       return
     }
     const changed = await playlistEdit.addSongs(id, props.songMids)
@@ -93,10 +124,18 @@ watch(
     if (open) {
       newName.value = ''
       creating.value = false
+      duplicateIds.value = new Set()
       void load()
     }
   },
   { immediate: true }
+)
+
+watch(
+  () => props.songMids.join('|'),
+  () => {
+    if (props.open) void detectDuplicates()
+  }
 )
 </script>
 
@@ -108,7 +147,7 @@ watch(
           <h2>添加到歌单</h2>
           <p v-if="songName" class="faint">{{ songName }}</p>
         </div>
-        <button class="icon-btn" title="关闭" @click="emit('close')">
+        <button class="icon-btn" aria-label="关闭" @click="emit('close')">
           <AppIcon name="close" :size="17" />
         </button>
       </header>
@@ -125,7 +164,8 @@ watch(
               v-for="playlist in playlists"
               :key="playlist.id"
               class="picker-row"
-              :disabled="Boolean(submittingId)"
+              :class="{ duplicate: duplicateIds.has(playlist.id) }"
+              :disabled="Boolean(submittingId) || duplicateIds.has(playlist.id)"
               @click="addTo(playlist.id)"
             >
               <CoverArt :src="playlist.coverUrl" image-class="cover-thumb" :icon-size="16" />
@@ -133,7 +173,8 @@ watch(
                 <span class="picker-name">{{ playlist.name }}</span>
                 <span class="picker-sub">{{ playlistSubtitle(playlist) }}</span>
               </span>
-              <span v-if="submittingId === playlist.id" class="spinner" />
+              <span v-if="duplicateIds.has(playlist.id)" class="picker-dup">已添加</span>
+              <span v-else-if="submittingId === playlist.id" class="spinner" />
               <AppIcon v-else name="chevron-right" :size="15" />
             </button>
           </div>

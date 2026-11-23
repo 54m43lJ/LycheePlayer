@@ -8,11 +8,12 @@ participant "QQ 音乐\n(音频流)" as STREAM
 
 APP -> API : music.pf_song_detail_svr/get_song_detail_yqq\n{song_mid}
 API --> APP : track_info.file.media_mid
-APP -> API : vkey.GetVkeyServer/CgiGetVkey\n{guid, songmid[], filename[], uin}
+APP -> API : vkey.GetVkeyServer/CgiGetVkey\n{guid, songmid, filename, uin}
+note right of APP : 逐首请求\n相邻请求间隔 ≥ 300ms
 alt 返回 purl
   API --> APP : midurlinfo[].purl
 else 104009 invalidq
-  APP -> API : music.vkey.GetVkey/UrlGetVkey\n{guid, songmid[], filename[], uin, ctx}
+  APP -> API : music.vkey.GetVkey/UrlGetVkey\n{guid, songmid, filename, uin, ctx}
   API --> APP : midurlinfo[].purl / 104009
 end
 APP -> STREAM : GET https://ws.stream.qqmusic.qq.com/{purl}

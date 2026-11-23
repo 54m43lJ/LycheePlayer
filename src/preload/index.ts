@@ -37,11 +37,11 @@ import type {
   Settings,
   Song,
   SongAssetState,
-  SongAvailability,
   UpstreamBlockedEvent,
   UrlResult,
   UserCacheInfo,
-  UserProfile
+  UserProfile,
+  VipStatus
 } from '../shared/types'
 
 const invoke = <T>(channel: string, ...args: unknown[]): Promise<IpcResult<T>> =>
@@ -98,8 +98,7 @@ const api: LycheeApi = {
   song: {
     getUrls: (mids: string[], quality: Quality) =>
       invoke<UrlResult[]>('song.getUrls', mids, quality),
-    probe: (mids: string[], options) =>
-      invoke<SongAvailability[]>('song.probe', mids, options)
+    getMvId: (mid: string) => invoke<string>('song.getMvId', mid)
   },
   playlist: {
     get: (id: string, options) => invoke<PlaylistPage>('playlist.get', id, options),
@@ -161,7 +160,7 @@ const api: LycheeApi = {
   },
   user: {
     getProfile: () => invoke<UserProfile>('user.getProfile'),
-    isVip: () => invoke<boolean>('user.isVip')
+    vipStatus: () => invoke<VipStatus>('user.vipStatus')
   },
   lyric: {
     get: (songId: string) => invoke<Lyric>('lyric.get', songId),
@@ -170,8 +169,20 @@ const api: LycheeApi = {
   comment: {
     get: (songId: string, cursor?: string) =>
       invoke<CommentPage>('comment.get', songId, cursor),
+    getMv: (mvId: string, cursor?: string) =>
+      invoke<CommentPage>('comment.getMv', mvId, cursor),
+    getReplies: (commentId: string, cursor?: string) =>
+      invoke<CommentPage>('comment.getReplies', commentId, cursor),
     post: (songId: string, content: string) =>
       invoke<CommentPostResult>('comment.post', songId, content),
+    postMv: (mvId: string, content: string) =>
+      invoke<CommentPostResult>('comment.postMv', mvId, content),
+    postReply: (
+      targetType: 'song' | 'mv',
+      targetId: string,
+      commentId: string,
+      content: string
+    ) => invoke<CommentPostResult>('comment.postReply', targetType, targetId, commentId, content),
     like: (commentId: string) => invoke<CommentLikeResult>('comment.like', commentId),
     unlike: (commentId: string) => invoke<CommentLikeResult>('comment.unlike', commentId)
   },
@@ -207,6 +218,11 @@ const api: LycheeApi = {
       const listener = (): void => callback()
       ipcRenderer.on('navigation:back', listener)
       return () => ipcRenderer.removeListener('navigation:back', listener)
+    },
+    onForward: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('navigation:forward', listener)
+      return () => ipcRenderer.removeListener('navigation:forward', listener)
     }
   },
   upstream: {

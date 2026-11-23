@@ -43,7 +43,12 @@ vi.mock('../../src/main/media/audio-protocol', () => ({
 }))
 
 vi.mock('../../src/main/api/user', () => ({
-  isVipUser: async () => false
+  getVipStatus: async () => ({
+    state: 'known',
+    isVip: false,
+    level: 'none',
+    expiresAtMs: null
+  })
 }))
 
 beforeEach(() => {
@@ -147,5 +152,34 @@ describe('api/song batch detail', () => {
       'music.pf_song_detail_svr'
     ])
     expect(songs.map((song) => song.songMid)).toEqual(['a', 'b'])
+  })
+
+  it('maps the nested mv.vid binding into Song.mvId', async () => {
+    musicuMock.mockResolvedValue({
+      tracks: [{ ...rawTrack('mv-a'), mv: { id: 1, vid: 'v-mv-a' } }]
+    })
+    const { getDetail } = await import('../../src/main/api/song')
+
+    const [song] = await getDetail(['mv-a'])
+
+    expect(song.mvId).toBe('v-mv-a')
+  })
+
+  it('resolves mvId from the cached track detail without a second request', async () => {
+    musicuMock.mockResolvedValue({
+      tracks: [{ ...rawTrack('mv-cache'), mv: { id: 2, vid: 'v-cache' } }]
+    })
+    const { getMvId } = await import('../../src/main/api/song')
+
+    expect(await getMvId('mv-cache')).toBe('v-cache')
+    expect(await getMvId('mv-cache')).toBe('v-cache')
+    expect(musicuMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns an empty mvId when the track has no MV binding', async () => {
+    musicuMock.mockResolvedValue({ tracks: [rawTrack('mv-none')] })
+    const { getMvId } = await import('../../src/main/api/song')
+
+    expect(await getMvId('mv-none')).toBe('')
   })
 })

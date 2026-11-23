@@ -337,6 +337,72 @@ describe('api/comment', () => {
     })
   })
 
+  it('reads MV comments with BizType 5 and the MV vid', async () => {
+    const requests: Array<Record<string, unknown>> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      requests.push(payload.req_0?.param ?? {})
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [{ CmId: 'm1', Nick: 'M', Content: 'MV 评论', PubTime: 100 }],
+              Total: 1,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getMvComments } = await import('../../src/main/api/comment')
+    const page = await getMvComments('t0016l53c3r', '')
+    expect(page.comments.map((comment) => comment.content)).toEqual(['MV 评论'])
+    expect(requests[0]).toMatchObject({
+      BizType: 5,
+      BizId: 't0016l53c3r'
+    })
+    expect(requests[0]?.BizSubType).toBeUndefined()
+  })
+
+  it('posts an MV comment with BizType 5 and no BizSubType', async () => {
+    const requests: Array<{ method: string; param: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { method?: string; param?: Record<string, unknown> }
+      }
+      requests.push({
+        method: payload.req_0?.method ?? '',
+        param: payload.req_0?.param ?? {}
+      })
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: { SubCode: 0, Msg: '', AddedCmId: 'new-mv-comment' }
+        }
+      })
+    })
+
+    const { postMvComment } = await import('../../src/main/api/comment')
+    await expect(postMvComment('t0016l53c3r', '  hello mv  ')).resolves.toEqual({
+      commentId: 'new-mv-comment'
+    })
+    expect(requests[0]?.method).toBe('AddComment')
+    expect(requests[0]?.param).toMatchObject({
+      Content: 'hello mv',
+      BizType: 5,
+      BizId: 't0016l53c3r'
+    })
+    expect(requests[0]?.param.BizSubType).toBeUndefined()
+  })
+
   it('maps a comment verification requirement to NO_PERMISSION', async () => {
     vi.stubGlobal('fetch', async () =>
       respond({
@@ -352,5 +418,339 @@ describe('api/comment', () => {
     await expect(postComment('123', 'hello')).rejects.toMatchObject({
       code: 'NO_PERMISSION'
     })
+  })
+
+  it('reads replies with first-page hot replies and keeps duplicate rows out of pages', async () => {
+    const requests: Array<{ method: string; param: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { method?: string; param?: Record<string, unknown> }
+      }
+      const param = payload.req_0?.param ?? {}
+      requests.push({ method: payload.req_0?.method ?? '', param })
+      if (param.RankType === 1) {
+        return respond({
+          code: 0,
+          req_0: {
+            code: 0,
+            data: {
+              CommentList: {
+                Comments: [
+                  { CmId: 'r1', Nick: 'R', Content: 'reply', PraiseNum: 5, PubTime: 100 },
+                  { CmId: 'r3', Nick: 'S', Content: 'hot', PraiseNum: 9, PubTime: 50 },
+                  { CmId: 'r4', Nick: 'T', Content: 'at limit', PraiseNum: 3, PubTime: 40 },
+                  { CmId: 'r5', Nick: 'U', Content: 'above limit', PraiseNum: 4, PubTime: 30 }
+                ],
+                Total: 4,
+                HasMore: 0
+              }
+            }
+          }
+        })
+      }
+      return new Response(
+        '{"code":0,"req_0":{"code":0,"data":{"CommentList":{"Comments":[{"CmId":"r1","Nick":"R","Content":"reply","PubTime":100,"SeqNo":1701807071952960001,"Pic":"http://pic.test/r1.png","RepliedComments":[{"Nick":"A"}]},{"CmId":"r2","Nick":"","Content":"","PubTime":90,"State":2,"SeqNo":1701807071952960000}],"Total":2,"HasMore":1}}}}',
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    })
+
+    const { getCommentReplies } = await import('../../src/main/api/comment')
+    const page = await getCommentReplies('root', '')
+    const pageRequest = requests.find((request) => request.param.RankType === 0)
+    const hotRequest = requests.find((request) => request.param.RankType === 1)
+    expect(pageRequest?.method).toBe('GetReplyCommentList')
+    expect(pageRequest?.param).toMatchObject({
+      RootCmId: 'root',
+      LastCommentSeqNo: '',
+      PageSize: 10,
+      RankType: 0
+    })
+    expect(hotRequest?.param).toMatchObject({
+      RootCmId: 'root',
+      LastCommentSeqNo: '',
+      LastRankScore: '',
+      PageSize: 3,
+      RankType: 1
+    })
+    expect(page.comments.map((comment) => comment.id)).toEqual(['r1', 'r2'])
+    expect(page.hotReplies?.map((comment) => comment.id)).toEqual(['r3', 'r1', 'r5'])
+    expect(page.comments[0]).toMatchObject({
+      replyToNickname: 'A',
+      deleted: false,
+      imageUrl: 'https://pic.test/r1.png'
+    })
+    expect(page.comments[1]).toMatchObject({
+      deleted: true,
+      content: ''
+    })
+    expect(page.nextCursor).toBe('1701807071952960000')
+    expect(page.hasMore).toBe(true)
+
+    requests.length = 0
+    await getCommentReplies('root', '1701807071952960000')
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.param.RankType).toBe(0)
+  })
+
+  it('falls back to no hot replies when the hot request fails', async () => {
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      if (payload.req_0?.param?.RankType === 1) throw new Error('hot failed')
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'r1', Nick: 'R', Content: 'reply', PubTime: 100, SeqNo: '1701807071952960001' }
+              ],
+              Total: 1,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getCommentReplies } = await import('../../src/main/api/comment')
+    const page = await getCommentReplies('root', '')
+
+    expect(page.comments.map((comment) => comment.id)).toEqual(['r1'])
+    expect(page.hotReplies).toEqual([])
+  })
+
+  it('drops hot replies whose like count does not exceed three', async () => {
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      const param = payload.req_0?.param ?? {}
+      if (param.RankType === 1) {
+        return respond({
+          code: 0,
+          req_0: {
+            code: 0,
+            data: {
+              CommentList: {
+                Comments: [
+                  { CmId: 'a', Nick: 'A', Content: 'A', PraiseNum: 3 },
+                  { CmId: 'b', Nick: 'B', Content: 'B', PraiseNum: 1 },
+                  { CmId: 'c', Nick: 'C', Content: 'C', PraiseNum: 0 }
+                ],
+                Total: 3,
+                HasMore: 0
+              }
+            }
+          }
+        })
+      }
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: 'A', Content: 'A', PubTime: 100, SeqNo: '1701807071952960001' }
+              ],
+              Total: 1,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getCommentReplies } = await import('../../src/main/api/comment')
+    const page = await getCommentReplies('root', '')
+
+    expect(page.hotReplies).toEqual([])
+  })
+
+  it('shows fewer than three hot replies when only some pass the threshold', async () => {
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      const param = payload.req_0?.param ?? {}
+      if (param.RankType === 1) {
+        return respond({
+          code: 0,
+          req_0: {
+            code: 0,
+            data: {
+              CommentList: {
+                Comments: [
+                  { CmId: 'a', Nick: 'A', Content: 'A', PraiseNum: 8 },
+                  { CmId: 'b', Nick: 'B', Content: 'B', PraiseNum: 2 },
+                  { CmId: 'c', Nick: 'C', Content: 'C', PraiseNum: 1 }
+                ],
+                Total: 3,
+                HasMore: 0
+              }
+            }
+          }
+        })
+      }
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: 'A', Content: 'A', PubTime: 100, SeqNo: '1701807071952960001' },
+                { CmId: 'b', Nick: 'B', Content: 'B', PubTime: 90, SeqNo: '1701807071952960002' }
+              ],
+              Total: 2,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getCommentReplies } = await import('../../src/main/api/comment')
+    const page = await getCommentReplies('root', '')
+
+    expect(page.hotReplies?.map((comment) => comment.id)).toEqual(['a'])
+  })
+
+  it('posts replies with RepliedCmId and the target BizType / BizId', async () => {
+    const requests: Array<{ method: string; param: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { method?: string; param?: Record<string, unknown> }
+      }
+      requests.push({
+        method: payload.req_0?.method ?? '',
+        param: payload.req_0?.param ?? {}
+      })
+      return respond({
+        code: 0,
+        req_0: { code: 0, data: { SubCode: 0, AddedCmId: `new-${requests.length}` } }
+      })
+    })
+
+    const { postCommentReply } = await import('../../src/main/api/comment')
+    await expect(postCommentReply('song', '123', 'root', ' hello ')).resolves.toEqual({
+      commentId: 'new-1'
+    })
+    expect(requests[0]?.param).toMatchObject({
+      Content: 'hello',
+      BizType: 1,
+      BizId: '123',
+      BizSubType: 2,
+      RepliedCmId: 'root'
+    })
+
+    await expect(postCommentReply('mv', 't0016l53c3r', 'root', 'mv reply')).resolves.toEqual({
+      commentId: 'new-2'
+    })
+    expect(requests[1]?.param).toMatchObject({
+      Content: 'mv reply',
+      BizType: 5,
+      BizId: 't0016l53c3r',
+      RepliedCmId: 'root'
+    })
+    expect(requests[1]?.param.BizSubType).toBeUndefined()
+
+    await expect(
+      postCommentReply('song', '123', 'reply-1', 'reply to reply')
+    ).resolves.toEqual({ commentId: 'new-3' })
+    expect(requests[2]?.param).toMatchObject({
+      Content: 'reply to reply',
+      BizType: 1,
+      BizId: '123',
+      BizSubType: 2,
+      RepliedCmId: 'reply-1'
+    })
+  })
+
+  it('strips C0 / C1 control characters from nicknames and content', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                {
+                  CmId: 'a',
+                  Nick: '\u007f\u007f\u007f\u007fT*',
+                  Content: '第一行\u0000第二行\u0007',
+                  PubTime: 100
+                },
+                {
+                  CmId: 'b',
+                  Nick: 'B',
+                  Content: '正文',
+                  PubTime: 90,
+                  RepliedComments: [{ Nick: '\u009f\u0090A' }]
+                },
+                {
+                  CmId: 'c',
+                  Nick: 'C',
+                  Content: '回复空昵称',
+                  PubTime: 80,
+                  RepliedComments: [{ Nick: '\u007f\u007f\u007f\u007f' }]
+                }
+              ],
+              Total: 3,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    )
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', '')
+    expect(page.comments[0]).toMatchObject({
+      nickname: 'T*',
+      content: '第一行第二行'
+    })
+    expect(page.comments[1]).toMatchObject({
+      nickname: 'B',
+      replyToNickname: 'A'
+    })
+    expect(page.comments[2]?.replyToNickname).toBe('')
+    expect(page.comments[0]?.replyToNickname).toBeUndefined()
+  })
+
+  it('maps deleted top-level comments without dropping empty content', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: '', Content: '', PubTime: 100, State: 2 },
+                { CmId: 'b', Nick: 'B', Content: 'normal', PubTime: 90, State: 1 }
+              ],
+              Total: 2,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    )
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', '')
+    expect(page.comments.map((comment) => comment.id)).toEqual(['a', 'b'])
+    expect(page.comments[0]?.deleted).toBe(true)
+    expect(page.comments[1]?.deleted).toBe(false)
   })
 })

@@ -1,4 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { createSSRApp } from 'vue'
+import { renderToString } from '@vue/server-renderer'
+import PageJump from '../src/renderer/components/PageJump.vue'
 import {
   JUMP_TRANSITION_MS,
   cancelJumpScroll,
@@ -32,6 +35,37 @@ describe('jumpProgress', () => {
     expect(jumpProgress(JUMP_TRANSITION_MS / 2)).toBeCloseTo(0.875)
     expect(jumpProgress(JUMP_TRANSITION_MS)).toBe(1)
     expect(jumpProgress(JUMP_TRANSITION_MS * 2)).toBe(1)
+  })
+})
+
+describe('PageJump', () => {
+  it('renders top, current and bottom buttons in order', async () => {
+    const app = createSSRApp(PageJump, {
+      showTop: true,
+      showBottom: true,
+      showCurrent: true
+    })
+    const html = await renderToString(app)
+    const top = html.indexOf('跳转到顶部')
+    const current = html.indexOf('跳转到当前歌曲')
+    const bottom = html.indexOf('跳转到底部')
+
+    expect(top).toBeGreaterThan(-1)
+    expect(current).toBeGreaterThan(top)
+    expect(bottom).toBeGreaterThan(current)
+  })
+
+  it('renders the current button alone when only it is visible', async () => {
+    const app = createSSRApp(PageJump, {
+      showTop: false,
+      showBottom: false,
+      showCurrent: true
+    })
+    const html = await renderToString(app)
+
+    expect(html).toContain('跳转到当前歌曲')
+    expect(html).not.toContain('跳转到顶部')
+    expect(html).not.toContain('跳转到底部')
   })
 })
 

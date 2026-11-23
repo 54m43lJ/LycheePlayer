@@ -36,10 +36,6 @@ vi.mock('../src/main/api/song', () => ({
   resolveStreamUrls: resolveStreamUrlsMock
 }))
 
-vi.mock('../src/main/api/availability', () => ({
-  peekAvailability: () => new Map()
-}))
-
 vi.mock('../src/main/cache/audio', () => ({
   getCachedAudio: getCachedAudioMock,
   getCachedAudioInfo: () => null,

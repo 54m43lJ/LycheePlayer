@@ -13,7 +13,6 @@ import {
   assertUpstreamAvailable,
   mapUpstreamCode,
   setCredentialRefresher,
-  throttleUpstream,
   UpstreamError,
   upstreamRequest
 } from './client'
@@ -71,7 +70,6 @@ export async function requestOAuthCodeWithCookies(
     ui: crypto.randomUUID()
   })
 
-  await throttleUpstream()
   assertUpstreamAvailable()
   const authorizeResponse = await fetch(authorizeUrl, {
     method: 'POST',

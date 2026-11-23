@@ -4,8 +4,6 @@ import {
   UPSTREAM_BLOCK_MS,
   UPSTREAM_NETWORK_BACKOFF_MS,
   UPSTREAM_QUOTA_BACKOFF_MS,
-  UPSTREAM_RATE_LIMIT_BURST,
-  UPSTREAM_RATE_LIMIT_PER_SECOND,
   UPSTREAM_RETRY_ATTEMPTS,
   UPSTREAM_TIMEOUT_MS
 } from '../../shared/constants'
@@ -167,33 +165,6 @@ function cookieHeader(credential: Credential | null): Record<string, string> {
   }
 }
 
-// 全局令牌桶：平滑探测 / 连续失败切歌等场景的请求突发，避免触发上游风控。
-const RATE_LIMIT_INTERVAL_MS = 1000 / UPSTREAM_RATE_LIMIT_PER_SECOND
-let rateTokens = UPSTREAM_RATE_LIMIT_BURST
-let rateUpdatedAt = Date.now()
-let rateQueue: Promise<void> = Promise.resolve()
-
-/** 每个实际发往 QQ 音乐的上游请求都要先取得一个令牌。 */
-export function throttleUpstream(): Promise<void> {
-  const task = rateQueue.then(async () => {
-    for (;;) {
-      const now = Date.now()
-      rateTokens = Math.min(
-        UPSTREAM_RATE_LIMIT_BURST,
-        rateTokens + (now - rateUpdatedAt) / RATE_LIMIT_INTERVAL_MS
-      )
-      rateUpdatedAt = now
-      if (rateTokens >= 1) {
-        rateTokens -= 1
-        return
-      }
-      await sleep(Math.max(1, Math.ceil((1 - rateTokens) * RATE_LIMIT_INTERVAL_MS)))
-    }
-  })
-  rateQueue = task.catch(() => undefined)
-  return task
-}
-
 async function fetchOnce(req: UpstreamRequest): Promise<Response> {
   assertUpstreamAvailable()
   req.signal?.throwIfAborted()
@@ -202,11 +173,6 @@ async function fetchOnce(req: UpstreamRequest): Promise<Response> {
   for (const [key, value] of Object.entries(req.params)) {
     url.searchParams.set(key, value)
   }
-
-  await throttleUpstream()
-  // 排队取令牌期间可能刚好收到 104009，取到令牌后再检查一次。
-  assertUpstreamAvailable()
-  req.signal?.throwIfAborted()
 
   const timeout = AbortSignal.timeout(req.timeoutMs ?? UPSTREAM_TIMEOUT_MS)
   let response: Response

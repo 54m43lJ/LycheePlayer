@@ -8,7 +8,6 @@ import type {
   MprisCommand,
   PlayerState,
   PlaylistSnapshot,
-  ProbeOptions,
   Quality,
   SearchRequest,
   Settings
@@ -16,8 +15,7 @@ import type {
 import {
   COMMENT_CONTENT_MAX,
   DOWNLOAD_QUEUE_MAX,
-  IPC_SONG_MIDS_MAX,
-  PROBE_MIDS_MAX
+  IPC_SONG_MIDS_MAX
 } from '../shared/constants'
 import {
   getRefreshState,
@@ -27,7 +25,16 @@ import {
 } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
-import { getComments, likeComment, postComment, unlikeComment } from './api/comment'
+import {
+  getCommentReplies,
+  getComments,
+  getMvComments,
+  likeComment,
+  postComment,
+  postCommentReply,
+  postMvComment,
+  unlikeComment
+} from './api/comment'
 import {
   fetchPlaylistPage,
   fetchPlaylistSnapshot,
@@ -48,9 +55,8 @@ import { getMvDetail, getMvStream, searchMv } from './api/mv'
 import { searchByType } from './api/search'
 import { getArtist, getArtistAlbums, getArtistSongs } from './api/artist'
 import { getAlbum } from './api/album'
-import { getStreamUrls } from './api/song'
-import { probeAvailability, clearAvailabilityCache } from './api/availability'
-import { getProfile, isVipUser } from './api/user'
+import { getMvId, getStreamUrls } from './api/song'
+import { getProfile, getVipStatus } from './api/user'
 import { toIpcError, setUpstreamBlockNotifier } from './api/client'
 import {
   clearCredential,
@@ -264,12 +270,10 @@ export function registerIpc(): void {
     const credential = await openWebLogin(method)
     await saveCredential(credential)
     resetRefreshState()
-    clearAvailabilityCache(credential.musicid)
     return currentAuthStatus()
   })
   handle('login.refreshSession', async () => {
     await refreshSession()
-    clearAvailabilityCache(getCredential()?.musicid)
     return currentAuthStatus()
   })
   handle('login.logout', async () => {
@@ -326,15 +330,7 @@ export function registerIpc(): void {
   handle('song.getUrls', async (mids: unknown, quality: unknown) =>
     getStreamUrls(midArray(mids), qualityArg(quality))
   )
-  handle(
-    'song.probe',
-    async (mids: unknown, options: unknown) => {
-      const list = midArray(mids, PROBE_MIDS_MAX)
-      return probeAvailability(list, (options ?? {}) as ProbeOptions)
-    },
-    // 背景可用性探测失败时渲染层会静默处理，不输出易误导的 IPC 错误日志。
-    { silent: true }
-  )
+  handle('song.getMvId', async (mid: unknown) => getMvId(stringArg(mid, '歌曲 mid')))
 
   handle('playlist.get', async (id: unknown, options: unknown) => {
     const value = (options ?? {}) as { offset?: number }
@@ -498,16 +494,50 @@ export function registerIpc(): void {
 
   // ---------- account / metadata ----------
   handle('user.getProfile', async () => getProfile())
-  handle('user.isVip', async () => isVipUser())
+  handle('user.vipStatus', async () => getVipStatus())
   handle('lyric.get', async (songId: unknown) => getLyric(stringArg(songId, '歌曲 ID')))
   handle('comment.get', async (songId: unknown, cursor: unknown) =>
     getComments(String(songId), typeof cursor === 'string' ? cursor : '')
+  )
+  handle('comment.getMv', async (mvId: unknown, cursor: unknown) =>
+    getMvComments(String(mvId), typeof cursor === 'string' ? cursor : '')
+  )
+  handle('comment.getReplies', async (commentId: unknown, cursor: unknown) =>
+    getCommentReplies(
+      stringArg(commentId, '评论 ID'),
+      typeof cursor === 'string' ? cursor : ''
+    )
   )
   handle('comment.post', async (songId: unknown, content: unknown) =>
     postComment(
       stringArg(songId, '歌曲 ID'),
       stringArg(content, '评论内容', COMMENT_CONTENT_MAX)
     )
+  )
+  handle('comment.postMv', async (mvId: unknown, content: unknown) =>
+    postMvComment(
+      stringArg(mvId, 'MV ID'),
+      stringArg(content, '评论内容', COMMENT_CONTENT_MAX)
+    )
+  )
+  handle(
+    'comment.postReply',
+    async (
+      targetType: unknown,
+      targetId: unknown,
+      commentId: unknown,
+      content: unknown
+    ) => {
+      if (targetType !== 'song' && targetType !== 'mv') {
+        throw new Error('评论目标类型无效')
+      }
+      return postCommentReply(
+        targetType,
+        stringArg(targetId, '评论目标 ID'),
+        stringArg(commentId, '评论 ID'),
+        stringArg(content, '评论内容', COMMENT_CONTENT_MAX)
+      )
+    }
   )
   handle('comment.like', async (commentId: unknown) =>
     likeComment(stringArg(commentId, '评论 ID'))

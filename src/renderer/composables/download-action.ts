@@ -38,7 +38,6 @@ export function useDownloadAction() {
         },
         quality
       )
-      toast.show('已加入下载任务')
     } catch (err) {
       toast.error(describeError(err))
     }
@@ -50,7 +49,6 @@ export function useDownloadAction() {
     if (!target) return
     try {
       await download.removeSong(target.songMid)
-      toast.show('已删除下载')
     } catch (err) {
       toast.error(describeError(err))
     }

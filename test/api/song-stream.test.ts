@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { PROBE_VKEY_BATCH } from '../../src/shared/constants'
 import type { Credential } from '../../src/shared/types'
 
 vi.mock('electron', () => ({
@@ -49,7 +48,17 @@ vi.mock('../../src/main/api/client', () => {
   }
 })
 
-vi.mock('../../src/main/api/user', () => ({ isVipUser: vipMock }))
+vi.mock('../../src/main/api/user', () => ({
+  getVipStatus: async () => {
+    const isVip = await vipMock()
+    return {
+      state: 'known',
+      isVip,
+      level: isVip ? 'vip' : 'none',
+      expiresAtMs: null
+    }
+  }
+}))
 
 vi.mock('../../src/main/credential', () => ({
   getCredential: () => credentialState.value
@@ -69,7 +78,9 @@ function vkeyResult(result: number, purl = ''): unknown {
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  const { resetVkeyGate } = await import('../../src/main/api/vkey')
+  resetVkeyGate()
   musicuMock.mockReset()
   vipMock.mockReset()
   tripBlockMock.mockReset()
@@ -217,8 +228,8 @@ describe('api/song stream failures', () => {
     expect(tripBlockMock).toHaveBeenCalledTimes(1)
   })
 
-  it('requests a 50-song vkey batch in one upstream call', async () => {
-    const mids = Array.from({ length: PROBE_VKEY_BATCH }, (_, index) => `mid-${index}`)
+  it('requests vkey one song per call instead of batching', async () => {
+    const mids = ['mid-a', 'mid-b']
     const vkeyParams: Array<{ songmid: string[]; filename: string[] }> = []
     musicuMock.mockImplementation(
       async (module: string, _method: string, param: Record<string, unknown>) => {
@@ -236,10 +247,10 @@ describe('api/song stream failures', () => {
           }
         }
         if (module === 'vkey.GetVkeyServer') {
-          const batch = param as { songmid: string[]; filename: string[] }
-          vkeyParams.push(batch)
+          const query = param as { songmid: string[]; filename: string[] }
+          vkeyParams.push(query)
           return {
-            midurlinfo: batch.songmid.map((mid) => ({
+            midurlinfo: query.songmid.map((mid) => ({
               songmid: mid,
               purl: `purl-${mid}`,
               result: 0
@@ -253,10 +264,11 @@ describe('api/song stream failures', () => {
 
     const results = await getStreamUrls(mids, 'flac')
 
-    expect(results).toHaveLength(PROBE_VKEY_BATCH)
-    expect(vkeyParams).toHaveLength(1)
-    expect(vkeyParams[0].songmid).toHaveLength(PROBE_VKEY_BATCH)
-    expect(vkeyParams[0].filename).toHaveLength(PROBE_VKEY_BATCH)
+    expect(results).toHaveLength(mids.length)
+    expect(vkeyParams).toHaveLength(mids.length)
+    expect(vkeyParams.every((query) => query.songmid.length === 1)).toBe(true)
+    expect(vkeyParams.every((query) => query.filename.length === 1)).toBe(true)
+    expect(vkeyParams.map((query) => query.songmid[0]).sort()).toEqual(mids)
     expect(results.every((result) => result.url !== null)).toBe(true)
   })
 })

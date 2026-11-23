@@ -46,7 +46,13 @@ function song(id: string, name: string): Song {
     singers: [{ mid: 's', name: 'S' }],
     album: { mid: 'a', name: 'A' },
     durationMs: 180000,
-    pay: { free: true, vip: false, album: false }
+    pay: { free: true, vip: false, album: false },
+    status: null,
+    pay_play: null,
+    pay_month: null,
+    pay_status: null,
+    maxQuality: null,
+    mvId: ''
   }
 }
 

@@ -170,7 +170,7 @@ onBeforeUnmount(() => {
               class="card discover-playlist"
               role="button"
               tabindex="0"
-              title="开始播放猜你喜欢连续推荐"
+              aria-label="开始播放猜你喜欢连续推荐"
               @click="startGuessRadio(section)"
               @keydown.enter="startGuessRadio(section)"
             >
@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
             </span>
             <button
               class="icon-btn"
-              :title="`刷新${sectionTitle(section)}`"
+              :aria-label="`刷新${sectionTitle(section)}`"
               :disabled="recommend.loading || recommend.loadingIds[section.id]"
               @click="refreshSection(section.id)"
             >
@@ -249,7 +249,7 @@ onBeforeUnmount(() => {
               </div>
               <button
                 class="icon-btn discover-next"
-                title="下一首播放"
+                aria-label="下一首播放"
                 @click.stop="addNext(song)"
               >
                 <AppIcon name="play-next" :size="14" />
