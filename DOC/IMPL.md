@@ -710,3 +710,34 @@
 - 这次只调整手势归属判断，未修改分页阈值、方向仲裁、指针捕获或侧栏开关吸附逻辑。
 - `npm run typecheck`、`npm test`（51 个测试文件、246 个用例）与 `npm run build` 通过。
 - 未做窄屏触屏真机验收；轨道内 / 外的分工由 `pointerdown` 的目标选择器决定，方向仲裁仍由现有 `swipe` 单测覆盖。
+
+### 4.37 评论罕见字符 Linear B 缺字修复 [已解决] 
+
+**描述**：ISSUE 报告 Travis - Bus 的评论昵称 `Neon藏雀𐂂` 显示异常。`𐂂` 是 `U+10082 LINEAR B IDEOGRAM B104 DEER`，属于 Linear B 表意文字区；现有字体栈只内置了 Noto Sans Yi，Electron 在系统回退时没有选中可覆盖该码位的字体，画布对比显示与缺字方框完全一致。
+
+**解决方案**：
+
+- 新增依赖 `@fontsource/noto-sans-linear-b`（OFL-1.1），与现有 `@fontsource/noto-sans-yi` 的接入方式一致。
+- `src/renderer/main.ts` 导入 `@fontsource/noto-sans-linear-b/linear-b-400.css`，只加载 Linear B 子集。
+- 正文 `font-family` 在 `Noto Sans Yi` 之后加入 `Noto Sans Linear B`，仅在现有字体缺字时回退；不修改评论文本，也不替换原字符。
+- 该字体子集覆盖 `U+10000-100FF`，包含 `U+10082`；线性 B 表意文字会按原字符显示。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | `Neon藏雀𐂂` 显示异常条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“评论罕见字符 Linear B 缺字修复” | 增 | 记录码位、缺字原因与字体回退方案。 |
+| `CORE.html` | §3 SBOM | 增 | 新增 `@fontsource/noto-sans-linear-b`（OFL-1.1），说明覆盖 `U+10000-100FF`。 |
+| `CORE.html` | §4.22 `main.ts`（`#c4-22`） | 改 | 记录 Linear B 样式导入与 `Noto Sans Linear B` 回退。 |
+| `USER.html` | §5.2.5 歌词与评论 | 增 | 注明昵称 / 正文中的 Yi、Linear B 等罕见文种字符使用内置字体回退，不显示缺字方框。 |
+| `package.json` | dependencies | 改 | 新增 `@fontsource/noto-sans-linear-b`。 |
+| `README.md` / `ABOUT.html` | 无 | 不动 | 用户交互摘要不涉及字体回退细节。 |
+
+**工作记录**：
+
+- `fc-scan` 确认字体子集字符集包含 `10080-100fa`，覆盖 `U+10082`。
+- 用该 woff2 在 Chromium 画布中对比 `U+10082` 与缺字码位：渲染结果不同（829 像素差，720 个墨点），确认不再走 `.notdef`。
+- `npm run build` 产物包含 `noto-sans-linear-b-linear-b-400-normal-*.woff2` / `.woff`。
+- `npm run typecheck`、`npm test`（51 个测试文件、246 个用例）与 `npm run build` 通过。
+- 未做真实评论窗口截图验收；字符覆盖由字体字符集与画布渲染验证。
