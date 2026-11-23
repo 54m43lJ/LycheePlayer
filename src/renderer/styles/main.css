@@ -4200,12 +4200,17 @@ button:focus-visible,
 }
 
 .comment-media-failed-emoji {
-  width: 20px;
-  height: 20px;
-  margin: 0 1px;
+  width: 1.15em;
+  height: 1.15em;
+  margin: 0 0.05em;
   border: 0;
   background: transparent;
-  vertical-align: -4px;
+  vertical-align: -0.18em;
+}
+
+.comment-media-failed-emoji svg {
+  width: 0.95em;
+  height: 0.95em;
 }
 
 .image-lightbox {

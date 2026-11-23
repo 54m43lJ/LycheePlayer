@@ -78,7 +78,11 @@ const ICONS: Record<string, string[]> = {
   plus: ['M12 5v14', 'M5 12h14'],
   trash: ['M5 7h14', 'M9 7V5h6v2', 'M7 7l1 13h8l1-13', 'M10 11v5', 'M14 11v5'],
   folder: ['M4 6h6l2 2h8v10H4z'],
-  'file-broken': ['M6 3h8l4 4v14H6z', 'M14 3v4h4', 'M13 15l4 4', 'M17 15l-4 4'],
+  'paper-torn': [
+    'M3 3h9v4l-2 2 2 2v3l-2 2 2 2v3H3z',
+    'M21 3h-8v4l2 2-2 2v3l2 2-2 2v3h8z',
+    'M17 3v4h4'
+  ],
   video: ['M4 6h11v12H4z', 'M15 10l5-3v10l-5-3'],
   fullscreen: ['M4 9V4h5', 'M20 9V4h-5', 'M4 15v5h5', 'M20 15v5h-5'],
   edit: ['M4 20h4l11-11-4-4L4 16v4z', 'M13.5 6.5l4 4'],

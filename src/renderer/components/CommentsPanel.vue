@@ -359,14 +359,14 @@ onBeforeUnmount(() => {
                     class="comment-media-failed comment-media-failed-emoji"
                     aria-label="表情加载失败"
                   >
-                    <AppIcon name="file-broken" :size="14" />
+                    <AppIcon name="paper-torn" :size="14" />
                   </span>
                   <span
                     v-else-if="part.missing"
                     class="comment-media-failed comment-media-failed-emoji"
                     aria-label="媒体加载失败"
                   >
-                    <AppIcon name="file-broken" :size="14" />
+                    <AppIcon name="paper-torn" :size="14" />
                   </span>
                   <template v-else>{{ part.text }}</template>
                 </template>
@@ -386,7 +386,7 @@ onBeforeUnmount(() => {
               class="comment-media-failed"
               aria-label="图片加载失败"
             >
-              <AppIcon name="file-broken" :size="24" />
+              <AppIcon name="paper-torn" :size="24" />
             </div>
             <div class="comment-foot">
               <span class="comment-time">{{ timeLabel(comment.createdAtMs) }}</span>
