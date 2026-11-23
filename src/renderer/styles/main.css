@@ -394,8 +394,8 @@ button:focus-visible,
 .member-facet {
   fill: none;
   stroke: var(--member-green-edge);
-  stroke-width: 0.7;
-  opacity: 0.55;
+  stroke-width: 0.9;
+  opacity: 0.7;
 }
 
 .member-v {

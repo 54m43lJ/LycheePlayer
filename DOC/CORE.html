@@ -2971,7 +2971,7 @@ export function formatShortcut(binding: ShortcutBinding): string;
 <ul class="note">
   <li>会员档位展示的唯一组件，侧栏账号 pill 与设置页账号区共用；只读取传入的 <code>VipStatus</code>，不查询 IPC。</li>
   <li>仅 <code>state === 'known'</code>、<code>isVip</code> 为真且 <code>level !== 'none'</code> 时渲染；档位映射为 <code>vip → 绿钻</code>、<code>deluxe → 豪华绿钻</code>、<code>super → 超级会员</code>，不使用 <code>VIP</code> / <code>SVIP</code> 文案。</li>
-  <li>图标为 24×24 视框的实心钻石：绿钻为绿色；豪华绿钻为绿色钻石 + 右下金色 V；超级会员为金色钻石 + 中央暗金 V。颜色来自 <code>--member-green</code> / <code>--member-gold</code>，见 <a href="#c4-49">§4.49</a>。</li>
+  <li>图标为 24×24 视框的实心钻石轮廓（平顶桌面、腰线、下尖亭部）：绿钻为绿色；豪华绿钻为绿色钻石 + 右下金色 V；超级会员为金色钻石 + 中央暗金 V。颜色来自 <code>--member-green</code> / <code>--member-gold</code>，见 <a href="#c4-49">§4.49</a>。</li>
   <li><code>showLabel=false</code> 时只渲染图标，以 <code>role="img"</code> + <code>aria-label</code> 提供档位名；<code>showLabel=true</code> 时图标后显示档位文字，文字供无障碍读取。</li>
 </ul>
 

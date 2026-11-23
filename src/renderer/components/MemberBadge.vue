@@ -44,10 +44,10 @@ const label = computed(() => (level.value ? LABELS[level.value] : ''))
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
-      <path class="member-diamond" d="M12 2.6 21.2 9.4 12 21.4 2.8 9.4Z" />
-      <path class="member-facet" d="M2.8 9.4h18.4" />
-      <path v-if="level === 'deluxe'" class="member-v" d="M13.8 13.2 15.5 15.6 17.7 12.6" />
-      <path v-else-if="level === 'super'" class="member-v" d="M8 11 12 15.6 16 11" />
+      <path class="member-diamond" d="M8 4H16L21 9.5L12 21L3 9.5Z" />
+      <path class="member-facet" d="M3 9.5H21" />
+      <path v-if="level === 'deluxe'" class="member-v" d="M14.6 13 16 15 17.9 12.6" />
+      <path v-else-if="level === 'super'" class="member-v" d="M8.4 11.7 12 15.8 15.6 11.7" />
     </svg>
     <span v-if="showLabel" class="member-badge-label">{{ label }}</span>
   </span>
