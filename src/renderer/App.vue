@@ -121,10 +121,12 @@ function hasSelectedText(): boolean {
 }
 
 function onPointerDown(event: PointerEvent): void {
-  // 歌词 / 评论打开期间横向手势归分页独占，避免同时唤起侧栏；左边缘 revealer 点击仍可用。
-  if (ui.lyricsOpen || event.button !== 0 || !narrowQuery.matches) return
+  if (event.button !== 0 || !narrowQuery.matches) return
   const target = event.target as HTMLElement | null
   if (target?.closest('input, textarea, button, a, [role="button"], .range')) return
+  // 歌词 / 评论弹出层打开时，只有分页轨道内的横向手势归分页独占；
+  // 轨道以外（弹出层头部、播放条等）仍可拖动唤起侧栏。
+  if (ui.lyricsOpen && target?.closest('.lyrics-page-track')) return
   if (event.clientX <= 10 || (ui.sidebarOpen && event.clientX < 300)) {
     dragStartX = event.clientX
     return
@@ -134,10 +136,6 @@ function onPointerDown(event: PointerEvent): void {
 }
 
 function onPointerUp(event: PointerEvent): void {
-  if (ui.lyricsOpen) {
-    dragStartX = null
-    return
-  }
   if (dragStartX === null) return
   const delta = event.clientX - dragStartX
   dragStartX = null
