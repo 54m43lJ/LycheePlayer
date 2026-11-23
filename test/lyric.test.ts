@@ -37,9 +37,13 @@ describe('歌词译文按行序附加', () => {
     expect(lines.some((line) => Boolean(line.trans))).toBe(false)
   })
 
-  it('纯斜杠占位显示为三个大圆点', () => {
-    const lines = parseLyric('[00:10.00]First\n[00:20.00]Second', '[00:10.00]//\n[00:20.00]第二句')
-    expect(lines.map((line) => line.trans)).toEqual(['●●●', '第二句'])
+  it('纯斜杠占位显示为空行并保持后续译文行序', () => {
+    const lines = parseLyric(
+      '[00:10.00]First\n[00:20.00]Second\n[00:30.00]Third',
+      '[00:10.00]//\n[00:20.00]第二句\n[00:30.00]第三句'
+    )
+    expect(lines.map((line) => line.trans)).toEqual(['', '第二句', '第三句'])
+    expect(lines[0]?.trans).toBe('')
   })
 
   it('QRC 译文附加到对应原文行并共享活动行', () => {

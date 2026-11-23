@@ -188,7 +188,9 @@ onBeforeUnmount(() => {
             >
           </template>
           <template v-else>{{ line.text || '♪' }}</template>
-          <span v-if="line.trans && translationVisible" class="lyric-trans">{{ line.trans }}</span>
+          <span v-if="line.trans !== null && translationVisible" class="lyric-trans">{{
+            line.trans
+          }}</span>
         </button>
       </div>
       <button
