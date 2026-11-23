@@ -46,10 +46,6 @@ async function chooseQuality(quality: MvStream['quality']): Promise<void> {
   }
 }
 
-function fullscreen(): void {
-  void videoRef.value?.requestFullscreen()
-}
-
 /** MV 开始播放时暂停音乐；音乐开始播放时由下方 watch 暂停 MV。 */
 function onVideoPlay(): void {
   if (player.status === 'playing') player.pause()
@@ -120,10 +116,6 @@ onMounted(() => void load())
           <p class="page-sub">{{ mv.detail.singerName }}</p>
           <p v-if="mv.detail.description" class="mv-description">{{ mv.detail.description }}</p>
         </div>
-        <button v-if="mv.stream?.url" class="btn small" @click="fullscreen()">
-          <AppIcon name="fullscreen" :size="14" />
-          全屏
-        </button>
       </section>
     </template>
   </div>

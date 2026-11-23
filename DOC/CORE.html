@@ -2404,7 +2404,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 </code></pre>
 <ul class="note">
   <li>加载详情与取流，默认最高清晰度 <code>fhd</code>，打开后自动播放；请求档位不可用时按 <code>fhd → hd → sd</code> 自动降档。清晰度按钮跟随 <code>stream.quality</code> 的实际档位高亮，不跟随请求档；<code>url: null</code> 时展示失败重试，不把请求档当作已取到。</li>
-  <li>视频使用原生 <code>&lt;video controls&gt;</code>，提供清晰度切换、全屏与失败重试；退出全屏恢复普通页面布局并保持播放位置与播放状态，不实现离开页面后的续播。</li>
+  <li>视频使用原生 <code>&lt;video controls&gt;</code>，全屏与退出全屏由原生控件提供；页面只提供清晰度切换与失败重试。退出全屏恢复普通页面布局并保持播放位置与播放状态，不实现离开页面后的续播。</li>
   <li>MV 与音乐互斥：视频的 <code>play</code> 事件在 <code>player.status === 'playing'</code> 时调用 <code>player.pause()</code>；同时监听 <code>player.status</code>，变为 <code>playing</code> 时调用视频 <code>pause()</code>。MV 页面不改变播放条的当前歌曲与队列，只通过互斥暂停 / 保留音乐状态。</li>
 </ul>
 
@@ -3510,7 +3510,7 @@ views/MvView::watch(player.status)
 </code></pre>
 <ul class="note">
   <li>默认最高清晰度 <code>fhd</code>，打开自动播放；档位不可用时按 <code>fhd → hd → sd</code> 降档并同步清晰度按钮。</li>
-  <li>可播地址取 <code>freeflow_url</code>；全部档位失败保留详情并提示重试。原生视频控制、全屏与退出全屏恢复由页面负责。</li>
+  <li>可播地址取 <code>freeflow_url</code>；全部档位失败保留详情并提示重试。全屏与退出全屏恢复由原生视频控件提供，页面只负责清晰度按钮与失败重试。</li>
   <li>MV 与音乐互斥：MV 开始播放时暂停音乐，音乐开始播放时暂停 MV；搜索入口使用 <code>search_type: 4</code> 的真实 MV 结果。</li>
 </ul>
 

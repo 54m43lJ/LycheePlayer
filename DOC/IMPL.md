@@ -635,7 +635,7 @@
 
 ### 4.35 MV 播放入口与音乐互斥 [已解决] 
 
-**描述**：ISSUE 要求优化 MV 播放交互：播放列表与单曲搜索结果页也要带 MV 按钮；按钮内的播放三角形加大（参考 YouTube 比例并再大一点）；MV 播放与音乐播放互斥，播放一方时暂停另一方。
+**描述**：ISSUE 要求优化 MV 播放交互：播放列表与单曲搜索结果页也要带 MV 按钮；按钮内的播放三角形加大（参考 YouTube 比例并再大一点）；MV 播放与音乐播放互斥，播放一方时暂停另一方；MV 播放页不需要额外的全屏按钮，播放控件自带全屏。
 
 **解决方案**：
 
@@ -643,6 +643,7 @@
 - 播放条改用 `MvButton`；歌曲表在标题徽标之后渲染同一按钮（歌单、搜索单曲结果、专辑、歌手、历史等所有 `SongTable` 场景），播放队列行在歌名后渲染；列表只读取 `Song.mvId`，无绑定不显示，不逐行补查。
 - 队列 `.song-title` 改为 flex，歌名由 `.queue-title` 单独省略，MV 图标不被压缩；歌曲表 `.song-mv` 与队列 `.queue-mv` 使用 6px 左间距。
 - `MvView` 增加互斥：视频 `play` 事件在 `player.status === 'playing'` 时调用 `player.pause()`；监听 `player.status`，变为 `playing` 时调用视频 `pause()`。互斥只暂停，不切换当前歌曲、队列或 MV 路由。
+- `MvView` 移除页面内的“全屏”按钮与 `fullscreen()`，全屏 / 退出全屏只使用原生视频控件；页面保留清晰度切换与失败重试。
 - 修正 CORE / USER 中“MV 播放与音频播放互不影响”的旧描述，改为统一互斥规则。
 
 **文档操作**：
@@ -654,7 +655,7 @@
 | `USER.html` | §2 CONVENTIONS | 增 | 新增“MV 与音乐互斥”：开始播放一方暂停另一方，仅暂停不切换歌曲 / 队列 / 页面。 |
 | `USER.html` | §5.2.3 播放条 | 改 | MV 按钮改为 26×18px、13px 播放三角；链接 §2 互斥规则。 |
 | `USER.html` | §5.2.4 歌曲列表 | 改 | 标题徽标后显示同一 MV 按钮，点击进入 MV 页且不触发行播放；无绑定不显示、不逐行补查。 |
-| `USER.html` | §5.2.8 MV 播放 | 改 | 补充 MV 与音乐互斥。 |
+| `USER.html` | §5.2.8 MV 播放 | 改 | 补充 MV 与音乐互斥；明确全屏由原生控件提供，页面不额外放置全屏按钮。 |
 | `USER.html` | §5.2.9 播放队列 | 改 | 队列行歌名后显示 MV 按钮，点击不触发移除。 |
 | `CORE.html` | §1 文件树 | 增 | 新增 `components/MvButton.vue`。 |
 | `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 队列行增加 MV 按钮，沿用行内标题布局。 |
@@ -662,15 +663,17 @@
 | `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | MV 入口改用 `MvButton`，三角由 9px 增大到 13px。 |
 | `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 记录 `.mv-mark` 尺寸、`.song-mv` / `.queue-mv` 间距与队列标题 flex / 省略结构。 |
 | `CORE.html` | §4.56 `api/mv.ts`（`#c4-56`） | 改 | 删除“MV 播放与音频播放互不影响”，互斥归属渲染层。 |
-| `CORE.html` | §4.69 `MvView.vue`（`#c4-69`） | 改 | 记录 video play → `player.pause()` 与 `player.status` → video pause 的互斥链路。 |
+| `CORE.html` | §4.69 `MvView.vue`（`#c4-69`） | 改 | 记录 video play → `player.pause()` 与 `player.status` → video pause 的互斥链路；删除页面全屏按钮，全屏交由原生控件。 |
 | `CORE.html` | §4.108 `MvButton.vue`（`#c4-108`） | 增 | 记录 props、路由、13px 三角与事件阻断。 |
-| `CORE.html` | §5.15 MV 播放（`#c5-15`） | 改 | 调用树补充 MV ↔ 音乐互斥调用。 |
+| `CORE.html` | §5.15 MV 播放（`#c5-15`） | 改 | 调用树补充 MV ↔ 音乐互斥调用，并注明全屏由原生视频控件提供。 |
 | `PROVIDER.html` | MV 接口 | 不动 | 互斥属于渲染层媒体状态，不改变上游协议。 |
+| `ISSUE.md` | 子项“MV播放页不需要额外的全屏按钮” | 不动 | 随父项统一标记为已解决，未单独追加标记。 |
 | `README.md` / `ABOUT.html` | 播放行 | 改 | 补充歌曲表 / 队列 MV 入口与互斥规则。 |
 
 **工作记录**：
 
 - 新增 `test/mv-button.test.ts`：覆盖链接目标、无障碍名称、默认 13px 三角、自定义尺寸与空 `mvId` 不渲染。
 - 用 4× 放大图对比 9 / 11 / 13 / 15px 三角，选择 13px：在 26×18px 按钮内明显大于原尺寸，同时不挤压边框。
+- 移除 MV 页的额外全屏按钮与 `requestFullscreen()` 调用，全屏行为回归原生 `<video controls>`。
 - `npm run typecheck`、`npm test`（51 个测试文件、246 个用例）与 `npm run build` 通过。
 - 未做真实 MV 与音乐同时播放的窗口验收；互斥由 `MvView` 的事件 / 状态监听实现，类型检查与代码审阅确认。
