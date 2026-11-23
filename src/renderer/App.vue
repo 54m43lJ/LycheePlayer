@@ -6,6 +6,7 @@ import CoverArt from './components/CoverArt.vue'
 import DownloadDeleteDialog from './components/DownloadDeleteDialog.vue'
 import LyricsOverlay from './components/LyricsOverlay.vue'
 import MemberBadge from './components/MemberBadge.vue'
+import MvButton from './components/MvButton.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ReauthDialog from './components/ReauthDialog.vue'
 import ToastStack from './components/ToastStack.vue'
@@ -526,7 +527,15 @@ watch(
           <span class="queue-index">{{ queueIndex + 1 }}</span>
           <CoverArt :src="songCover(song, 300)" image-class="cover-thumb" :icon-size="16" />
           <div class="song-text">
-            <div class="song-title">{{ song.name }}</div>
+            <div class="song-title">
+              <span class="queue-title">{{ song.name }}</span>
+              <MvButton
+                v-if="song.mvId"
+                :mv-id="song.mvId"
+                class="queue-mv"
+                @click="ui.closeQueue()"
+              />
+            </div>
             <div class="song-artist">{{ singerNames(song) }}</div>
           </div>
           <button

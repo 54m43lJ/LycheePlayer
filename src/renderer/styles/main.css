@@ -976,6 +976,10 @@ button:focus-visible,
   white-space: nowrap;
 }
 
+.song-mv {
+  margin-left: 6px;
+}
+
 .pay-badge,
 .quality-badge {
   flex: 0 0 auto;
@@ -2324,9 +2328,21 @@ button:focus-visible,
 }
 
 .queue-row .song-title {
-  display: block;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: visible;
+}
+
+.queue-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.queue-mv {
+  margin-left: 6px;
 }
 
 .feed-footer {

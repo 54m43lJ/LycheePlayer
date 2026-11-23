@@ -126,6 +126,7 @@
 │       │   ├── <a href="#c4-39">SongTable.vue</a>             歌曲列表
 │       │   ├── <a href="#c4-101">SongListTable.vue</a>         歌曲表页面共用接线
 │       │   ├── <a href="#c4-40">PlayerBar.vue</a>             播放条
+│       │   ├── <a href="#c4-108">MvButton.vue</a>             歌曲 MV 入口按钮
 │       │   ├── <a href="#c4-41">LyricsPanel.vue</a>           歌词面板（弹出层左列）
 │       │   ├── <a href="#c4-42">CommentsPanel.vue</a>         评论面板（弹出层右列）
 │       │   ├── <a href="#c4-72">LyricsOverlay.vue</a>         歌词 / 评论弹出层
@@ -1341,7 +1342,7 @@ export function destroyTray(): void;
   <li>侧栏底部账号 pill 在已登录时于昵称右侧渲染仅图标的 <a href="#c4-107">MemberBadge</a>，只显示已知会员档位；未登录仍为“登录 QQ 音乐”入口。点击已登录 pill 进入设置页，窄屏点击后关闭抽屉。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；<code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后只重置 playlist / recommend / download 的内存视图，不再清空最近歌单 local key，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
-  <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
+  <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；歌曲带 <code>Song.mvId</code> 时在歌名后渲染 <a href="#c4-108">MvButton</a>，点击进入 MV 页、不触发移除，并关闭队列面板。不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
   <li>播放队列筛选输入框不显示占位文字，用 <code>aria-label="筛选队列中的歌曲"</code> 保留无障碍名称；输入值、清除按钮与过滤逻辑不变。</li>
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
   <li>播放队列头部 <code>.lyrics-head-actions</code> 并排放置“清空播放队列”与“关闭播放队列”两个图标按钮；清空按钮使用 <code>trash</code> 图标，队列为空时 <code>disabled</code> 并沿用 <code>.icon-btn:disabled</code> 灰化，滚动或筛选都不影响入口。列表底部不再渲染 <code>.queue-footer</code> 或文字按钮；<code>player.clearQueue()</code> 仍只清空当前曲之后的队列。</li>
@@ -1721,6 +1722,7 @@ const emit = defineEmits&lt;{
   <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由加号图标按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。</li>
   <li>每行按 <code>playbackPermission(song, auth.vip)</code> 派生 <code>PlaybackPermission</code>（<a href="#c4-105">§4.105</a>）；<code>playable === false</code> 的行显示“不可播”、禁用 <code>play</code> / <code>playNext</code> / 下载并降低标题与歌手透明度。收藏与下载按钮分别发出 <code>favorite</code> / <code>download</code>。</li>
   <li>音质角标只读取 <code>PlaybackPermission.maxQuality</code>，表示曲库最高音质（FLAC / 320K / 128K），不暗示当前账号一定可取流；不可播时由“不可播”角标取代音质角标。</li>
+  <li>歌曲带 <code>Song.mvId</code> 时，在标题徽标之后渲染 <a href="#c4-108">MvButton</a>；无绑定不显示，列表不逐行补查。按钮使用 <code>@click.stop</code> / <code>@dblclick.stop</code>，避免触发行播放。</li>
   <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态；下载按钮三态由 <code>resolveDownloadState</code> 派生为唯一状态（已下载 / 已缓存 / 普通），class、图标与无障碍名称共用该状态。已缓存与已下载互斥，下载优先；即使资产同时带两个档位也只显示已下载，无障碍名称只显示当前状态。状态框固定 24px，按钮点击热区不变。</li>
   <li>专辑列与歌手行渲染为链接：歌手 <code>mid</code> 非空链接到 <code>/artist/:mid</code>，专辑 <code>mid</code> 非空链接到 <code>/album/:mid</code>，点击不触发行播放；<code>mid</code> 为空时按纯文本展示，名称为空不渲染。标题、歌手、专辑统一使用 <code>MarqueeText</code>，仅在溢出时滚动；≤900px 隐藏专辑列。</li>
   <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：窄窗口优先省略歌名，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与无障碍名称。</li>
@@ -1741,7 +1743,7 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>点击封面调用 <code>ui.toggleLyrics()</code> 开合歌词 / 评论弹出层，不导航；<code>title</code> 在“歌词与评论 / 关闭歌词与评论”之间切换，无当前歌曲时封面禁用。播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
   <li>标题行用 <a href="#c4-38">MarqueeText</a> 渲染歌名；歌名按内容宽度显示，音质标记与 MV 入口紧随其后，短歌名不被撑满的跑马灯推到列尾，布局规则见 <a href="#c4-49">§4.49</a>。</li>
-  <li>音质标记之后渲染 MV 入口：<code>mvId</code> 非空时显示 26×18px 圆角长方形按钮（内嵌 9px 播放三角），<code>RouterLink</code> 进入 <code>/mv/:id</code>；无绑定不渲染。当前歌曲来自搜索 / 推荐且 <code>Song.mvId</code> 为空时，等 <code>player.loading</code> 结束再调用 <code>song.getMvId</code>，复用取流已缓存的详情；请求带序号，切歌后旧结果不覆盖。</li>
+  <li>音质标记之后渲染 <a href="#c4-108">MvButton</a>：<code>mvId</code> 非空时显示 26×18px 圆角长方形按钮（内嵌 13px 播放三角），进入 <code>/mv/:id</code>；无绑定不渲染。当前歌曲来自搜索 / 推荐且 <code>Song.mvId</code> 为空时，等 <code>player.loading</code> 结束再调用 <code>song.getMvId</code>，复用取流已缓存的详情；请求带序号，切歌后旧结果不覆盖。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲元数据判定不可播时由播放条沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首取流失败后停止。</li>
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px surface 状态块已缓存 / 24px accent 高亮已下载），与歌曲表共用状态与图标；无障碍名称只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与无障碍名称随之切换。</li>
   <li>下载按钮点击统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload(current, quality)</code>：已下载时打开全局删除确认，未下载时加入统一队列；播放条不复制“已下载 / 未下载”判断。</li>
@@ -1896,6 +1898,7 @@ const emit = defineEmits&lt;{
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
   <li><code>.song-title .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。</li>
   <li><code>.player-title</code> 与歌曲表标题相同，使用 <code>flex: 0 1 auto</code>；标题行宽度由较长的歌手行或可用宽度决定时，短歌名仍按内容宽度显示，<code>.quality-mark</code> / <code>.mv-mark</code> 紧随其后，长歌名才收缩并滚动。</li>
+  <li><code>.mv-mark</code> 为 26×18px、5px 圆角的长方形入口，边框与底色使用 accent，内嵌的 13px 播放三角由 <a href="#c4-108">MvButton</a> 的 <code>size</code> prop 控制。歌曲表 <code>.song-mv</code> 与队列 <code>.queue-mv</code> 使用 6px 左间距；队列 <code>.song-title</code> 改为 flex，歌名由 <code>.queue-title</code> 单独省略，MV 图标不被压缩。</li>
   <li>会员标记 <code>.member-badge</code> 为 inline-flex，图标 <code>.member-badge-icon</code> 不收缩；<code>.member-diamond</code> 使用 <code>--member-green</code> 填充、<code>--member-green-edge</code> 描边，无腰线；<code>.member-v</code> 使用 <code>--member-gold</code> 填充，路径为左右镜像的等宽 V，直接写入 24×24 图标坐标。超级会员 <code>.member-super</code> 将钻石填充与描边切换为 <code>--member-gold</code> / <code>--member-gold-edge</code>，V 使用 <code>--member-gold-edge</code> 填充。设置页的文字标签 <code>.member-badge-label</code> 为 11px、600 字重、正文色；侧栏账号行 <code>.user-name-row</code> 让昵称省略而图标保持完整。</li>
   <li>下载按钮三态使用共用的 24px <code>::before</code> 状态框：<code>.cached:not(.downloaded)</code> 为 <code>var(--panel)</code> surface 背景，<code>.downloaded</code> 为 <code>var(--accent-soft)</code> 填充且覆盖缓存态；不画按钮外沿 inset 边框，不使用 <code>background-clip</code>，播放条与歌曲表尺寸一致、点击热区不变。</li>
   <li>播放缓存上限滑杆使用 <code>.cache-limit-row</code> / <code>.cache-slider</code> / <code>.cache-slider-nodes</code>：accent 填充轨道、滑块、已选节点与焦点环，未到节点保持弱色；轨道两端各留 7px 与滑块半径对齐，节点绝对定位，首尾标签不挤出面板。</li>
@@ -2083,7 +2086,7 @@ export function getMvStream(mvId: string, quality: MvStream['quality']): Promise
   <li>搜索复用 <code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code> 并传 <code>search_type: 4</code>；结果取 <code>body.mv.list[]</code> 的 <code>v_id</code> / <code>mv_name</code> / <code>mv_pic_url</code> / <code>singer_list</code> / <code>duration</code> / <code>publish_date</code>，映射为 <code>SearchResult.mvs</code>；<code>singer_list</code> 同时生成拼接文案 <code>singerName</code> 与结构化 <code>singers[]</code>（保留 <code>mid</code> 供歌手链接）。MV 搜索接受页码与每页条数，总数读取 <code>data.meta.sum</code>（兼容 <code>body.meta</code>），并根据 <code>meta.nextpage</code> 写入 <code>SearchResult.hasMore</code>；<a href="#c4-10">search.searchByType</a> 的 <code>type='mv'</code> 直接转交该入口，返回独立的 <code>SearchResult.mvs</code>、<code>total</code> 与 <code>hasMore</code>。</li>
   <li>详情：<code>MvService.MvInfoProServer / GetMvInfoList</code>，参数 <code>{ vidlist: [mvId] }</code>；取 <code>mvlist[0]</code> 的 <code>cover_pic</code> / <code>desc</code> / <code>duration</code> / <code>singers</code> / <code>pubdate</code> / <code>playcnt</code>；<code>singers</code> 同样映射为 <code>MvSummary.singers[]</code>。</li>
   <li>取流：<code>gosrf.Stream.MvUrlProxy / GetMvUrls</code>，参数 <code>{ vids: [mvId], from: 'h5.playsong' }</code>；<code>data[mvId].mp4[]</code> 的 <code>filetype</code> 10 / 20 / 30 对应 <code>sd</code> / <code>hd</code> / <code>fhd</code>，可播地址取条目的 <code>freeflow_url</code>；<code>filetype</code> 0 / 40 / 50 无地址时按档位降级。</li>
-  <li>默认请求 <code>fhd</code>，不可用时按 <code>fhd → hd → sd</code> 降档。成功时 <code>MvStream.quality</code> 返回实际采用的档位，而不是请求档；全部失败时返回请求档并令 <code>url: null</code>，表示从请求档起向下所有档位都不可用，调用方应展示重试 / 错误，不得把请求档当作已取到。结构缺失映射 <code>UPSTREAM_CHANGED</code>。MV 播放与音频播放互不影响。</li>
+  <li>默认请求 <code>fhd</code>，不可用时按 <code>fhd → hd → sd</code> 降档。成功时 <code>MvStream.quality</code> 返回实际采用的档位，而不是请求档；全部失败时返回请求档并令 <code>url: null</code>，表示从请求档起向下所有档位都不可用，调用方应展示重试 / 错误，不得把请求档当作已取到。结构缺失映射 <code>UPSTREAM_CHANGED</code>。</li>
 </ul>
 
 <h3 id="c4-57">4.57 src/main/cache/playlist.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -2402,7 +2405,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
 <ul class="note">
   <li>加载详情与取流，默认最高清晰度 <code>fhd</code>，打开后自动播放；请求档位不可用时按 <code>fhd → hd → sd</code> 自动降档。清晰度按钮跟随 <code>stream.quality</code> 的实际档位高亮，不跟随请求档；<code>url: null</code> 时展示失败重试，不把请求档当作已取到。</li>
   <li>视频使用原生 <code>&lt;video controls&gt;</code>，提供清晰度切换、全屏与失败重试；退出全屏恢复普通页面布局并保持播放位置与播放状态，不实现离开页面后的续播。</li>
-  <li>MV 播放与音频播放互不影响；MV 页面不修改播放条状态。</li>
+  <li>MV 与音乐互斥：视频的 <code>play</code> 事件在 <code>player.status === 'playing'</code> 时调用 <code>player.pause()</code>；同时监听 <code>player.status</code>，变为 <code>playing</code> 时调用视频 <code>pause()</code>。MV 页面不改变播放条的当前歌曲与队列，只通过互斥暂停 / 保留音乐状态。</li>
 </ul>
 
 <h3 id="c4-70">4.70 src/renderer/stores/mv.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -2975,6 +2978,15 @@ export function formatShortcut(binding: ShortcutBinding): string;
   <li><code>showLabel=false</code> 时只渲染图标，以 <code>role="img"</code> + <code>aria-label</code> 提供档位名；<code>showLabel=true</code> 时图标后显示档位文字，文字供无障碍读取。</li>
 </ul>
 
+<h3 id="c4-108">4.108 src/renderer/components/MvButton.vue <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>// props：mvId: string；size?: number = 13。
+</code></pre>
+<ul class="note">
+  <li>歌曲 MV 入口的唯一组件，播放条、歌曲表与播放队列共用；<code>mvId</code> 为空时不渲染。</li>
+  <li>根节点为 <code>RouterLink</code>，目标 <code>/mv/:mvId</code>，无障碍名称“播放 MV”；继承 <code>.mv-mark</code> 的 26×18px 外观，播放三角由 <code>AppIcon name="play"</code> 按 <code>size</code> 渲染，默认 13px（参考 YouTube 比例并略大）。</li>
+  <li><code>@click.stop</code> / <code>@dblclick.stop</code> 阻止歌曲行或队列行的播放 / 移除事件；组件不查询 MV 绑定，列表来源缺少 <code>mvId</code> 时不逐行补查。</li>
+</ul>
+
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
 
@@ -3489,11 +3501,17 @@ views/DiscoverView::onBeforeUnmount()
             └── api/mv::getMvStream(mvId, quality)
                 ├── api/client::musicu('gosrf.Stream.MvUrlProxy', 'GetMvUrls', ...)
                 └── 判断档位无地址 → 下一档重试（fhd → hd → sd）
+
+views/MvView::onVideoPlay()
+└── 判断 player.status === 'playing' → stores/player::pause()
+
+views/MvView::watch(player.status)
+└── 判断 status === 'playing' → HTMLVideoElement::pause()
 </code></pre>
 <ul class="note">
   <li>默认最高清晰度 <code>fhd</code>，打开自动播放；档位不可用时按 <code>fhd → hd → sd</code> 降档并同步清晰度按钮。</li>
   <li>可播地址取 <code>freeflow_url</code>；全部档位失败保留详情并提示重试。原生视频控制、全屏与退出全屏恢复由页面负责。</li>
-  <li>MV 播放与音频播放状态相互独立；搜索入口使用 <code>search_type: 4</code> 的真实 MV 结果。</li>
+  <li>MV 与音乐互斥：MV 开始播放时暂停音乐，音乐开始播放时暂停 MV；搜索入口使用 <code>search_type: 4</code> 的真实 MV 结果。</li>
 </ul>
 
 <h3 id="c5-16">5.16 下载</h3>

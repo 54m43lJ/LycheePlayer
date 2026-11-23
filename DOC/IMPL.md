@@ -632,3 +632,45 @@
 - 按草稿把初版菱形改为钻石轮廓：平顶桌面 + 下尖亭部，去掉水平腰线；按反馈把钻石加宽到 6:5，V 以 Roboto Black 为参照重建为左右镜像的等宽字形，消除左右笔画粗细不均。豪华绿钻的 V 位于右下区域，超级会员的 V 水平/垂直居中并与四周边框留出间距。
 - `npm run typecheck`、`npm test`（50 个测试文件、243 个用例）与 `npm run build` 通过。
 - 未用真实会员账号做窗口截图验收；展示由组件 SSR 测试、类型检查与静态图标预览确认。
+
+### 4.35 MV 播放入口与音乐互斥 [已解决] 
+
+**描述**：ISSUE 要求优化 MV 播放交互：播放列表与单曲搜索结果页也要带 MV 按钮；按钮内的播放三角形加大（参考 YouTube 比例并再大一点）；MV 播放与音乐播放互斥，播放一方时暂停另一方。
+
+**解决方案**：
+
+- 新增 `MvButton.vue` 作为歌曲 MV 入口的唯一实现：根节点为 `RouterLink`，`mvId` 为空时不渲染；沿用 26×18px 的 `.mv-mark` 外观，播放三角默认 13px（原 9px），无障碍名称“播放 MV”；`@click.stop` / `@dblclick.stop` 避免触发行播放 / 队列移除。
+- 播放条改用 `MvButton`；歌曲表在标题徽标之后渲染同一按钮（歌单、搜索单曲结果、专辑、歌手、历史等所有 `SongTable` 场景），播放队列行在歌名后渲染；列表只读取 `Song.mvId`，无绑定不显示，不逐行补查。
+- 队列 `.song-title` 改为 flex，歌名由 `.queue-title` 单独省略，MV 图标不被压缩；歌曲表 `.song-mv` 与队列 `.queue-mv` 使用 6px 左间距。
+- `MvView` 增加互斥：视频 `play` 事件在 `player.status === 'playing'` 时调用 `player.pause()`；监听 `player.status`，变为 `playing` 时调用视频 `pause()`。互斥只暂停，不切换当前歌曲、队列或 MV 路由。
+- 修正 CORE / USER 中“MV 播放与音频播放互不影响”的旧描述，改为统一互斥规则。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | “优化MV播放交互”条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“MV 播放入口与音乐互斥” | 增 | 记录按钮复用、列表入口与互斥实现。 |
+| `USER.html` | §2 CONVENTIONS | 增 | 新增“MV 与音乐互斥”：开始播放一方暂停另一方，仅暂停不切换歌曲 / 队列 / 页面。 |
+| `USER.html` | §5.2.3 播放条 | 改 | MV 按钮改为 26×18px、13px 播放三角；链接 §2 互斥规则。 |
+| `USER.html` | §5.2.4 歌曲列表 | 改 | 标题徽标后显示同一 MV 按钮，点击进入 MV 页且不触发行播放；无绑定不显示、不逐行补查。 |
+| `USER.html` | §5.2.8 MV 播放 | 改 | 补充 MV 与音乐互斥。 |
+| `USER.html` | §5.2.9 播放队列 | 改 | 队列行歌名后显示 MV 按钮，点击不触发移除。 |
+| `CORE.html` | §1 文件树 | 增 | 新增 `components/MvButton.vue`。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 队列行增加 MV 按钮，沿用行内标题布局。 |
+| `CORE.html` | §4.39 `SongTable.vue`（`#c4-39`） | 改 | 标题徽标后渲染 `MvButton`，阻止行播放事件。 |
+| `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | MV 入口改用 `MvButton`，三角由 9px 增大到 13px。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 记录 `.mv-mark` 尺寸、`.song-mv` / `.queue-mv` 间距与队列标题 flex / 省略结构。 |
+| `CORE.html` | §4.56 `api/mv.ts`（`#c4-56`） | 改 | 删除“MV 播放与音频播放互不影响”，互斥归属渲染层。 |
+| `CORE.html` | §4.69 `MvView.vue`（`#c4-69`） | 改 | 记录 video play → `player.pause()` 与 `player.status` → video pause 的互斥链路。 |
+| `CORE.html` | §4.108 `MvButton.vue`（`#c4-108`） | 增 | 记录 props、路由、13px 三角与事件阻断。 |
+| `CORE.html` | §5.15 MV 播放（`#c5-15`） | 改 | 调用树补充 MV ↔ 音乐互斥调用。 |
+| `PROVIDER.html` | MV 接口 | 不动 | 互斥属于渲染层媒体状态，不改变上游协议。 |
+| `README.md` / `ABOUT.html` | 播放行 | 改 | 补充歌曲表 / 队列 MV 入口与互斥规则。 |
+
+**工作记录**：
+
+- 新增 `test/mv-button.test.ts`：覆盖链接目标、无障碍名称、默认 13px 三角、自定义尺寸与空 `mvId` 不渲染。
+- 用 4× 放大图对比 9 / 11 / 13 / 15px 三角，选择 13px：在 26×18px 按钮内明显大于原尺寸，同时不挤压边框。
+- `npm run typecheck`、`npm test`（51 个测试文件、246 个用例）与 `npm run build` 通过。
+- 未做真实 MV 与音乐同时播放的窗口验收；互斥由 `MvView` 的事件 / 状态监听实现，类型检查与代码审阅确认。

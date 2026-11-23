@@ -7,6 +7,7 @@ import { unwrap } from '../api'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
+import MvButton from './MvButton.vue'
 import PlaylistPicker from './PlaylistPicker.vue'
 import { usePlayerStore, PLAY_MODE_LABEL, type PlayMode } from '../stores/player'
 import { QUALITY_PREFERENCE_OPTIONS } from '../stores/settings'
@@ -630,14 +631,7 @@ watch(
           <MarqueeText v-if="hasSong" class="player-title" :text="current?.name ?? ''" />
           <span v-else class="player-title">&nbsp;</span>
           <span v-if="hasSong" class="quality-mark">{{ qualityLabel }}</span>
-          <RouterLink
-            v-if="hasSong && mvId"
-            class="mv-mark"
-            :to="`/mv/${mvId}`"
-            aria-label="播放 MV"
-          >
-            <AppIcon name="play" :size="9" />
-          </RouterLink>
+          <MvButton v-if="hasSong && mvId" :mv-id="mvId" />
         </div>
         <div v-if="hasSong" class="player-artist">
           <template v-for="(singer, index) in visibleSingers()" :key="`${singer.mid}-${index}`">

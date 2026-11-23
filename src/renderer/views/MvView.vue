@@ -7,10 +7,12 @@ import CoverArt from '../components/CoverArt.vue'
 import { describeError } from '../api'
 import { useToast } from '../composables/toast'
 import { useMvStore } from '../stores/mv'
+import { usePlayerStore } from '../stores/player'
 
 const route = useRoute()
 const router = useRouter()
 const mv = useMvStore()
+const player = usePlayerStore()
 const toast = useToast()
 const videoRef = ref<HTMLVideoElement | null>(null)
 const error = ref('')
@@ -47,6 +49,18 @@ async function chooseQuality(quality: MvStream['quality']): Promise<void> {
 function fullscreen(): void {
   void videoRef.value?.requestFullscreen()
 }
+
+/** MV 开始播放时暂停音乐；音乐开始播放时由下方 watch 暂停 MV。 */
+function onVideoPlay(): void {
+  if (player.status === 'playing') player.pause()
+}
+
+watch(
+  () => player.status,
+  (status) => {
+    if (status === 'playing') videoRef.value?.pause()
+  }
+)
 
 watch(mvId, () => void load())
 onMounted(() => void load())
@@ -90,6 +104,7 @@ onMounted(() => void load())
           :src="mv.stream.url"
           controls
           autoplay
+          @play="onVideoPlay"
         />
         <div v-else class="mv-placeholder">
           <CoverArt :src="mv.detail.coverUrl" image-class="playlist-cover" :icon-size="44" />

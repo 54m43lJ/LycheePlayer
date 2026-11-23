@@ -6,6 +6,7 @@ import { playbackPermission } from '@shared/permission'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
+import MvButton from './MvButton.vue'
 import { useAuthStore } from '../stores/auth'
 import { usePlayerStore } from '../stores/player'
 import { formatDuration, singerNames, songCover } from '../utils/format'
@@ -184,6 +185,7 @@ onBeforeUnmount(() => {
                 <span v-else-if="qualityLabel(song)" class="quality-badge">{{
                   qualityLabel(song)
                 }}</span>
+                <MvButton v-if="song.mvId" :mv-id="song.mvId" class="song-mv" />
               </div>
               <div v-if="singerNames(song)" class="song-artist">
                 <template v-for="(singer, singerIndex) in visibleSingers(song)" :key="`${singer.mid}-${singerIndex}`">
