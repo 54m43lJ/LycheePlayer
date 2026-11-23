@@ -1896,7 +1896,7 @@ const emit = defineEmits&lt;{
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
   <li><code>.song-title .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。</li>
   <li><code>.player-title</code> 与歌曲表标题相同，使用 <code>flex: 0 1 auto</code>；标题行宽度由较长的歌手行或可用宽度决定时，短歌名仍按内容宽度显示，<code>.quality-mark</code> / <code>.mv-mark</code> 紧随其后，长歌名才收缩并滚动。</li>
-  <li>会员标记 <code>.member-badge</code> 为 inline-flex，图标 <code>.member-badge-icon</code> 不收缩；<code>.member-diamond</code> 使用 <code>--member-green</code> 填充、<code>--member-green-edge</code> 描边，无腰线；<code>.member-v</code> 使用 <code>--member-gold</code> 填充，路径为 Roboto Regular 大写 V 的单条轮廓，通过 <code>transform</code> 等比缩放并定位。超级会员 <code>.member-super</code> 将钻石填充与描边切换为 <code>--member-gold</code> / <code>--member-gold-edge</code>，V 使用 <code>--member-gold-edge</code> 填充。设置页的文字标签 <code>.member-badge-label</code> 为 11px、600 字重、正文色；侧栏账号行 <code>.user-name-row</code> 让昵称省略而图标保持完整。</li>
+  <li>会员标记 <code>.member-badge</code> 为 inline-flex，图标 <code>.member-badge-icon</code> 不收缩；<code>.member-diamond</code> 使用 <code>--member-green</code> 填充、<code>--member-green-edge</code> 描边，无腰线；<code>.member-v</code> 使用 <code>--member-gold</code> 填充，路径为 Roboto Black 大写 V 的单条轮廓，通过 <code>transform</code> 等比缩放并定位。超级会员 <code>.member-super</code> 将钻石填充与描边切换为 <code>--member-gold</code> / <code>--member-gold-edge</code>，V 使用 <code>--member-gold-edge</code> 填充。设置页的文字标签 <code>.member-badge-label</code> 为 11px、600 字重、正文色；侧栏账号行 <code>.user-name-row</code> 让昵称省略而图标保持完整。</li>
   <li>下载按钮三态使用共用的 24px <code>::before</code> 状态框：<code>.cached:not(.downloaded)</code> 为 <code>var(--panel)</code> surface 背景，<code>.downloaded</code> 为 <code>var(--accent-soft)</code> 填充且覆盖缓存态；不画按钮外沿 inset 边框，不使用 <code>background-clip</code>，播放条与歌曲表尺寸一致、点击热区不变。</li>
   <li>播放缓存上限滑杆使用 <code>.cache-limit-row</code> / <code>.cache-slider</code> / <code>.cache-slider-nodes</code>：accent 填充轨道、滑块、已选节点与焦点环，未到节点保持弱色；轨道两端各留 7px 与滑块半径对齐，节点绝对定位，首尾标签不挤出面板。</li>
 </ul>
@@ -2971,7 +2971,7 @@ export function formatShortcut(binding: ShortcutBinding): string;
 <ul class="note">
   <li>会员档位展示的唯一组件，侧栏账号 pill 与设置页账号区共用；只读取传入的 <code>VipStatus</code>，不查询 IPC。</li>
   <li>仅 <code>state === 'known'</code>、<code>isVip</code> 为真且 <code>level !== 'none'</code> 时渲染；档位映射为 <code>vip → 绿钻</code>、<code>deluxe → 豪华绿钻</code>、<code>super → 超级会员</code>，不使用 <code>VIP</code> / <code>SVIP</code> 文案。</li>
-  <li>图标为 24×24 视框的实心钻石轮廓（宽高比 6:5，平顶桌面 + 下尖亭部，无腰线）：绿钻为绿色；豪华绿钻为绿色钻石 + 右下区域金色 V；超级会员为金色钻石 + 居中暗金 V。V 直接复用 Roboto Regular 大写 V 的字形轮廓，按目标高度等比缩放；超级会员的 V 水平居中，四边与钻石边框均留出间距。颜色来自 <code>--member-green</code> / <code>--member-gold</code>，见 <a href="#c4-49">§4.49</a>。</li>
+  <li>图标为 24×24 视框的实心钻石轮廓（宽高比 6:5，平顶桌面 + 下尖亭部，无腰线）：绿钻为绿色；豪华绿钻为绿色钻石 + 右下区域金色 V；超级会员为金色钻石 + 居中暗金 V。V 直接复用 Roboto Black 大写 V 的字形轮廓，按目标高度等比缩放，笔画保持横向粗壮；超级会员的 V 水平居中，四边与钻石边框均留出间距。颜色来自 <code>--member-green</code> / <code>--member-gold</code>，见 <a href="#c4-49">§4.49</a>。</li>
   <li><code>showLabel=false</code> 时只渲染图标，以 <code>role="img"</code> + <code>aria-label</code> 提供档位名；<code>showLabel=true</code> 时图标后显示档位文字，文字供无障碍读取。</li>
 </ul>
 
