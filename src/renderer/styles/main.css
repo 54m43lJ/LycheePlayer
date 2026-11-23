@@ -391,27 +391,16 @@ button:focus-visible,
   stroke-linejoin: round;
 }
 
-.member-facet {
-  fill: none;
-  stroke: var(--member-green-edge);
-  stroke-width: 0.9;
-  opacity: 0.7;
-}
-
 .member-v {
   fill: none;
   stroke: var(--member-gold);
-  stroke-width: 2.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  stroke-width: 2.4;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
 }
 
 .member-super .member-diamond {
   fill: var(--member-gold);
-  stroke: var(--member-gold-edge);
-}
-
-.member-super .member-facet {
   stroke: var(--member-gold-edge);
 }
 

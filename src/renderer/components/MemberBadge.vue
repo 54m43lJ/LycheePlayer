@@ -45,9 +45,8 @@ const label = computed(() => (level.value ? LABELS[level.value] : ''))
       aria-hidden="true"
     >
       <path class="member-diamond" d="M8 4H16L21 9.5L12 21L3 9.5Z" />
-      <path class="member-facet" d="M3 9.5H21" />
-      <path v-if="level === 'deluxe'" class="member-v" d="M14.6 13 16 15 17.9 12.6" />
-      <path v-else-if="level === 'super'" class="member-v" d="M8.4 11.7 12 15.8 15.6 11.7" />
+      <path v-if="level === 'deluxe'" class="member-v" d="M12.6 12.2 15.3 19.4 18.6 12.2" />
+      <path v-else-if="level === 'super'" class="member-v" d="M7.8 11 12 19.4 16.2 11" />
     </svg>
     <span v-if="showLabel" class="member-badge-label">{{ label }}</span>
   </span>
