@@ -15,10 +15,6 @@ export const UPSTREAM_NETWORK_BACKOFF_MS = 400
 export const UPSTREAM_QUOTA_BACKOFF_MS = 600
 /** 瞬时繁忙码（2001 / 104604）重试的基础退避。推荐值 500 ms。 */
 export const MUSICU_BUSY_BACKOFF_MS = 500
-/** 上游请求持续速率上限（每秒）。推荐值 4。 */
-export const UPSTREAM_RATE_LIMIT_PER_SECOND = 4
-/** 上游请求突发令牌容量。推荐值 8。 */
-export const UPSTREAM_RATE_LIMIT_BURST = 8
 /** 收到 104009 后全局截断上游请求的时长。推荐值 60_000 ms。 */
 export const UPSTREAM_BLOCK_MS = 60_000
 
@@ -72,11 +68,8 @@ export const RECENT_PLAYLIST_VALIDATE_MS = 5000
 export const SONG_DETAIL_CONCURRENCY = 2
 /** 批量歌曲详情单次请求上限。推荐值 50。 */
 export const SONG_DETAIL_BATCH = 50
-/**
- * vkey 批量大小。推荐值 50。
- * 约束：不超过 IPC_SONG_MIDS_MAX。
- */
-export const VKEY_BATCH_SIZE = 50
+/** 相邻两次 vkey 请求的最小间隔；一次 vkey 请求只取一首歌。推荐值 300 ms。 */
+export const VKEY_MIN_INTERVAL_MS = 300
 
 /** 雷达 / 猜你喜欢分区缓存时长；每日推荐按上海自然日 0 点过期，不使用该 TTL。推荐值 24 小时。 */
 export const RECOMMEND_CACHE_TTL_MS = 24 * 60 * 60_000

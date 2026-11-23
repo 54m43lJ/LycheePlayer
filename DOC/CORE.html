@@ -51,6 +51,7 @@
 │   │   │   ├── <a href="#c4-75">artist.ts</a>                歌手详情与歌曲分页
 │   │   │   ├── <a href="#c4-76">album.ts</a>                 专辑详情与歌曲分页
 │   │   │   ├── <a href="#c4-11">song.ts</a>                  歌曲详情与播放链接
+│   │   │   ├── <a href="#c4-110">vkey.ts</a>                  vkey 专用安全取流入口
 │   │   │   ├── <a href="#c4-12">playlist.ts</a>              歌单
 │   │   │   ├── <a href="#c4-13">user.ts</a>                  用户资料
 │   │   │   ├── <a href="#c4-14">lyric.ts</a>                 歌词
@@ -276,6 +277,10 @@
   <tr>
     <td>可播性判定</td>
     <td>列表不申请 vkey；播放权限由 <a href="#c4-105">§4.105</a> 的阻断判定栈从 <code>Song</code> 元数据与账号会员状态派生，只作为展示与按钮禁用依据。实际可播性仍以播放时取流结果为准，失败由 <code>NO_STREAM</code> 沿队列兜底。</td>
+  </tr>
+  <tr>
+    <td>vkey 请求</td>
+    <td>只有 <a href="#c4-110">§4.110</a> 的 <code>api/vkey.ts::fetchVkey()</code> 可以请求 vkey，其他模块不得直接调用 <code>vkey.GetVkeyServer</code> / <code>music.vkey.GetVkey</code>。单次请求只携带一首歌（<code>songmid</code> / <code>filename</code> 数组长度为 1），禁止批量申请与并发请求；相邻两次 vkey 请求至少间隔 <code>VKEY_MIN_INTERVAL_MS = 300</code>，由该入口串行排队。列表、可用性探测与预取都不得触发 vkey，只有真实播放与下载可以取流。上游侧的约束见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。</td>
   </tr>
   <tr>
     <td>fixture 回放</td>
@@ -1041,7 +1046,6 @@ export async function withCredentialRefresh&lt;T&gt;(
   run: (credential: Credential) =&gt; Promise&lt;T&gt;
 ): Promise&lt;T&gt;;
 export function toIpcError(err: unknown): IpcError;
-export function throttleUpstream(): Promise&lt;void&gt;;
 export function setUpstreamBlockNotifier(
   notifier: ((event: UpstreamBlockedEvent) =&gt; void) | null
 ): void;
@@ -1085,10 +1089,10 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
 <ul class="note">
   <li><code>upstreamRequest</code> 负责 UA / Referer / Cookie 注入、超时、HTTP 错误与 HTTP 非 2xx 退避；<code>musicu</code> 负责组装 <code>comm</code> / <code>req_0</code> 并处理瞬时繁忙码。</li>
   <li><code>UpstreamRequest.stringFields</code> 在 <code>JSON.parse</code> 前把指定字段的裸数字字面量转成字符串，避免 19 位 <code>SeqNo</code> 等超过 <code>Number.MAX_SAFE_INTEGER</code> 时丢精度；<code>MusicuOptions.stringFields</code> 透传给 <code>upstreamRequest</code>，评论请求使用 <code>['SeqNo']</code>。</li>
-  <li><code>fetchOnce</code> 在真正发出请求前调用 <code>throttleUpstream()</code>：全局令牌桶按 <code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> 补充、最多积压 <code>UPSTREAM_RATE_LIMIT_BURST</code> 个令牌；OAuth authorize 与收藏签名写入等绕过 <code>upstreamRequest</code> 的请求也显式取令牌。推荐值为 4 req/s、突发 8；限流只平滑请求，不等于取消，页面离开时仍须通过 <code>recommend.cancel</code> / <code>AbortController</code> 主动中止，见 <a href="#c2">§2</a> 页面请求生命周期。</li>
+  <li><code>fetchOnce</code> 只负责 UA / Referer / Cookie 注入、超时与错误映射，不做全局限速；应用侧限速只作用于 vkey，由 <a href="#c4-110">§4.110</a> 的 <code>fetchVkey()</code> 串行排队。页面离开时仍须通过 <code>recommend.cancel</code> / <code>AbortController</code> 主动中止，见 <a href="#c2">§2</a> 页面请求生命周期。</li>
   <li>进程级 104009 截断由 <code>tripUpstreamBlock()</code> 设置，截止时间为当前时间加 <code>UPSTREAM_BLOCK_MS</code>；<code>upstreamBlockRemainingMs()</code> 返回剩余时长，<code>assertUpstreamAvailable()</code> 在窗口内直接抛 <code>UPSTREAM_NETWORK</code>（保留 <code>upstreamCode = 104009</code>）且不重试。窗口内重复触发只延长截止时间，不重复通知渲染层。</li>
-  <li><code>fetchOnce</code> 在取令牌前后各调用一次 <code>assertUpstreamAvailable()</code>，排队期间进入截断也会在真正 fetch 前失败；<code>favorite.ts</code> 的签名写入与 <code>login.ts</code> 的 OAuth authorize 等绕过 <code>fetchOnce</code> 的请求，在取令牌后同样显式检查。</li>
-  <li><code>musicu</code> 默认在 104009 时调用 <code>tripUpstreamBlock()</code>；vkey 通过 <code>deferBlock: true</code> 暂停截断，先尝试经典入口与 <code>UrlGetVkey</code> 备用入口，只有两个入口都返回 104009 才由 <code>song.ts</code> 触发截断，备用入口成功则不进入冷却。</li>
+  <li><code>fetchOnce</code> 在真正 fetch 前调用一次 <code>assertUpstreamAvailable()</code>；<code>favorite.ts</code> 的签名写入与 <code>login.ts</code> 的 OAuth authorize 等绕过 <code>fetchOnce</code> 的请求，在发出前同样显式检查。</li>
+  <li><code>musicu</code> 默认在 104009 时调用 <code>tripUpstreamBlock()</code>；vkey 通过 <code>deferBlock: true</code> 暂停截断，先尝试经典入口与 <code>UrlGetVkey</code> 备用入口，只有两个入口都返回 104009 才由 <a href="#c4-110">§4.110</a> 的 <code>api/vkey.ts</code> 触发截断，备用入口成功则不进入冷却。</li>
   <li><code>musicu</code> 通过 <code>dataErrorCode(data)</code> 读取具体错误：先取非 0 的 <code>data.retcode</code>，再取顶层负数 <code>data.code</code>（如歌单失效的 <code>-100006</code>）；当 <code>req_0.code</code> 为 <code>0</code> 或 <code>1000</code> 时优先采用该具体码，避免把 vkey 的 <code>104009 invalidq</code> 误判成登录过期。<code>mapUpstreamCode</code> 把 <code>-100006</code> 映射为 <code>NO_PERMISSION</code>（歌单不存在或已失效），把 <code>104009</code> 映射为 <code>UPSTREAM_NETWORK</code> 并保留 <code>upstreamCode</code> 供 vkey 备用入口判断。</li>
   <li><code>mapUpstreamCode</code> 对未识别的业务码统一返回 <code>UPSTREAM_CHANGED</code> 并保留原始 <code>upstreamCode</code>（例如 80092）；写 API 与 <code>assertWrite</code> 据此把 80092 识别为“状态未变化”，而不是普通失败。</li>
   <li><code>getGuid</code> 返回进程级稳定 GUID，供 vkey 请求使用。</li>
@@ -1134,8 +1138,8 @@ function buildStreamUrl(purl: string): string;
 </code></pre>
 <ul class="note">
   <li><code>getStreamUrls</code> 是全应用唯一拼装播放链接的位置；回退规则见 <a href="PROVIDER.html#p2">PROVIDER §2</a>。返回的 <code>url</code> 是主进程 <code>lychee-audio://stream/&lt;token&gt;</code> 代理地址，不是上游原始链接。</li>
-  <li><code>requestQuality</code> 按 <code>VKEY_BATCH_SIZE = 50</code> 分块请求 vkey；单次 IPC 的歌曲上限仍为 <code>IPC_SONG_MIDS_MAX = 100</code>，因此 <code>song.getUrls</code> 单批 100 首时内部会拆成 50 + 50 两次 vkey 请求。每首歌的 <code>midurlinfo[].result</code> 与音质档位一起保留，供全批量失败时判定原因。</li>
-  <li>vkey 请求先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>；若响应或 <code>data.retcode</code> 为 <code>104009</code>，再以相同 filename 尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
+  <li><code>requestQuality</code> 逐首调用 <a href="#c4-110">§4.110</a> 的 <code>fetchVkey()</code>，一次 vkey 请求只取一首歌；串行与 300ms 间隔由该入口保证，不再按批分块。单次 IPC 的歌曲上限仍为 <code>IPC_SONG_MIDS_MAX = 100</code>，多首歌按顺序逐首解析。每首歌的 <code>midurlinfo[].result</code> 与音质档位一起保留，供全部档位失败时判定原因。</li>
+  <li>vkey 的两个入口与 104009 截断都由 <a href="#c4-110">§4.110</a> 统一处理：先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>，只有该入口返回 <code>104009</code> 才尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
   <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>getVipStatus()</code> 通用文案。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
   <li><code>toSong</code> 同时映射 <code>status</code>、<code>pay_play</code>、<code>pay_month</code>、<code>pay_status</code>（缺失为 <code>null</code>），并按 <code>file.size_flac</code> → <code>size_320mp3</code> → <code>size_128mp3</code> 取第一个非零档写入 <code>maxQuality</code>。该字段只表示曲库存在该档，不代表当前账号可取流；播放权限派生见 <a href="#c4-105">§4.105</a>。<code>mv.vid</code>（缺失时回退扁平 <code>vid</code>）写入 <code>mvId</code>，无绑定为空字符串。</li>
@@ -1265,7 +1269,7 @@ function mergeRefreshedCredential(
   <li><code>exchangeQqLoginCode</code> 调用 <code>QQConnectLogin.LoginServer/QQLogin</code>，解析为 <code>method=qq</code>；<code>exchangeWechatLoginCode</code> 调用 <code>music.login.LoginServer/Login</code>（<code>tmeLoginType=1</code>、<code>strAppid</code> + <code>code</code>），解析为 <code>method=wechat</code>，并兼容微信的 <code>expired_at</code> 到期字段。</li>
   <li><code>refreshSession</code> 按 <code>Credential.method</code> 严格分流：<code>wechat</code> 只走 <code>music.login.LoginServer/Login</code> 的 <code>loginMode=2</code>；<code>qq</code> 只走 <code>QQConnectLogin.LoginServer/QQLogin</code>。QQ 续期参数必须同时带旧 <code>musickey</code>、<code>expired_in</code>、<code>access_token</code>、<code>refresh_token</code>、<code>openid</code>、数字 <code>musicid</code> 与 <code>onlyNeedAccessToken</code> / <code>forceRefreshToken</code>；<code>access_token</code> / <code>refresh_token</code> / <code>openid</code> 可从 <code>webCookies</code> 的 <code>psrf_qq*</code> 回退读取。请求 <code>comm</code> 带 <code>tmeLoginType=2</code>、<code>uin</code>、<code>g_tk</code>、<code>format</code>、<code>ct=24</code>、<code>cv=0</code> 与 <code>platform=yqq</code>；续期响应兼容 <code>req_0</code> / <code>req</code> / <code>req1</code>。不存在跨方式回退，避免把微信凭证送到 QQ 续期路径或反向误用。</li>
   <li>续期结果写入 <code>refreshState</code>：成功为 <code>ok</code>；<code>AUTH_EXPIRED</code> 为 <code>auth-failed</code> 并设置 <code>reauthReason='auth-failed'</code>；网络 / 超时 / 限流等为 <code>temp-failed</code>，不设置重新登录原因。三种结果都保留旧凭证；<code>auth-failed</code> 暂停自动续期，<code>temp-failed</code> 按 <code>SESSION_REFRESH_RETRY_BASE_MS</code> 起指数退避重试，成功或登录 / 退出时重置。</li>
-  <li><code>setAuthStatusNotifier</code> 由 <code>ipc</code> 注册为广播 <code>login:status</code>；续期成功 / 失败和登录 / 退出都通过 <code>AuthStatus</code> 实时同步渲染层。<code>requestOAuthCodeWithCookies</code> 在发起 authorize 前先调用 <code>throttleUpstream()</code>，与其他上游请求共用同一限速队列。</li>
+  <li><code>setAuthStatusNotifier</code> 由 <code>ipc</code> 注册为广播 <code>login:status</code>；续期成功 / 失败和登录 / 退出都通过 <code>AuthStatus</code> 实时同步渲染层。<code>requestOAuthCodeWithCookies</code> 在发起 authorize 前显式调用 <code>assertUpstreamAvailable()</code>，与其它上游请求共享同一截断窗口。</li>
 </ul>
 
 <h3 id="c4-17">4.17 src/main/api/web-login.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1965,8 +1969,6 @@ export declare const UPSTREAM_RETRY_ATTEMPTS: number;       // 3
 export declare const UPSTREAM_NETWORK_BACKOFF_MS: number;   // 400 ms
 export declare const UPSTREAM_QUOTA_BACKOFF_MS: number;     // 600 ms
 export declare const MUSICU_BUSY_BACKOFF_MS: number;        // 500 ms
-export declare const UPSTREAM_RATE_LIMIT_PER_SECOND: number; // 4
-export declare const UPSTREAM_RATE_LIMIT_BURST: number;      // 8
 export declare const UPSTREAM_BLOCK_MS: number;             // 60_000 ms；104009 全局截断时长
 export declare const SEARCH_EMPTY_RETRY_MS: number;         // 350 ms
 export declare const SEARCH_EMPTY_RETRY_COUNT: number;      // 1
@@ -1990,7 +1992,7 @@ export declare const RECENT_PLAYLIST_STORAGE_PREFIX: string; // 'lychee:recent-p
 export declare const SIDEBAR_DRAG_THRESHOLD_PX: number;      // 48 px
 export declare const SONG_DETAIL_BATCH: number;             // 50；批量详情单次上限
 export declare const SONG_DETAIL_CONCURRENCY: number;       // 2；仅用于批量缺口的单曲兜底
-export declare const VKEY_BATCH_SIZE: number;               // 50；≤ IPC_SONG_MIDS_MAX
+export declare const VKEY_MIN_INTERVAL_MS: number;           // 300 ms；相邻 vkey 请求最小间隔
 export declare const DOWNLOAD_POLL_MS: number;              // 1500 ms
 export declare const DOWNLOAD_CONCURRENCY: number;          // 1
 export declare const DOWNLOAD_QUEUE_MAX: number;            // 2000
@@ -2047,11 +2049,11 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
 <ul class="note">
   <li>所有工程常量只在本文件声明；其它模块只 import。源码中是实际赋值，本签名只保留名称与取值。</li>
   <li><code>AUDIO_CACHE_LIMIT_STEPS_BYTES</code> 提供设置页 6 个固定档位；<code>normalizeAudioCacheLimitBytes</code> 对合法档位原样返回，越界 / 非档位值归一到最近档位，非法值回退默认档；<code>AUDIO_CACHE_MAX_BYTES</code> 作为默认 / 最大档位。</li>
-  <li><code>VKEY_BATCH_SIZE = 50</code> 不得大于 <code>IPC_SONG_MIDS_MAX</code>；<code>song.getUrls</code> 单批 100 首时内部拆成 50 + 50 两次 vkey 请求，只有真实播放与下载会触发。</li>
+  <li><code>VKEY_MIN_INTERVAL_MS = 300</code> 为相邻两次 vkey 请求的最小间隔，由 <a href="#c4-110">§4.110</a> 串行保证；一次 vkey 请求只携带一首歌，<code>song.getUrls</code> 的多首歌曲逐首解析。</li>
   <li><code>SONG_DETAIL_BATCH = 50</code> 为批量详情单次上限；<code>SONG_DETAIL_CONCURRENCY = 2</code> 仅用于批量缺口的单曲兜底。</li>
   <li><code>COMMENT_PAGE_SIZE = 25</code> 为上游实测单页上限（26 起返回业务码 <code>10000</code>）；<code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 使“跳转到底部”最多补拉约 1000 条，并保持串行请求与取消机制；<code>COMMENT_CONTENT_MAX = 300</code> 同时约束输入框 <code>maxlength</code>、渲染层提交校验与主进程 IPC 参数校验。</li>
   <li><code>CATALOG_PAGE_SIZE = 50</code> 用于歌手 / 专辑歌曲分页；<code>ARTIST_ALBUM_PAGE_SIZE = 80</code> 为上游专辑列表单页上限，<code>ARTIST_ALBUM_PAGE_MAX = 20</code> 限制歌手页一次展开专辑最多补拉 1600 张。</li>
-  <li><code>UPSTREAM_RATE_LIMIT_PER_SECOND</code> / <code>UPSTREAM_RATE_LIMIT_BURST</code> 控制全局令牌桶；<code>UPSTREAM_BLOCK_MS</code> 为收到 104009 后的全局截断时长（推荐 60_000 ms），窗口内所有上游请求直接失败、下载泵暂停出队；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限。</li>
+  <li><code>UPSTREAM_BLOCK_MS</code> 为收到 104009 后的全局截断时长（推荐 60_000 ms），窗口内所有上游请求直接失败、下载泵暂停出队；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限。全局限速已移除，应用侧只对 vkey 限速。</li>
   <li><code>RECOMMEND_CACHE_TTL_MS</code> 控制雷达 / 猜你喜欢分区缓存（24 小时）；每日推荐不使用该 TTL，按上海自然日 0 点过期。<code>GUESS_RADIO_BATCH_SIZE = 5</code> 控制猜你喜欢连续队列每批拉取数；<code>RECOMMEND_SECTION_LIMIT</code> 控制发现页列表分区的歌曲上限（30 首）；有歌单入口的分区不渲染歌曲条目，其余分区固定 3 行滚动。</li>
   <li><code>DOWNLOAD_CONCURRENCY</code> 固定为 1，统一队列按入队顺序串行；<code>DOWNLOAD_QUEUE_MAX</code> 限制单次“下载全部”的入队数量；<code>DOWNLOAD_INDEX_PREFIX</code> 与账号 musicid 拼成 <code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>；<code>CACHE_PROGRESS_THROTTLE_MS</code> 控制缓存进度上报节流。</li>
   <li><code>RECENT_PLAYLIST_LIMIT</code> 限制最近歌单条数；<code>RECENT_PLAYLIST_CHECK_THROTTLE_MS</code> 与单飞互斥共同限制校验频率；<code>RECENT_PLAYLIST_STORAGE_PREFIX</code> 与账号 musicid 拼接为 localStorage key；<code>SIDEBAR_DRAG_THRESHOLD_PX</code> 为抽屉开关的位移阈值。</li>
@@ -2108,7 +2110,7 @@ export function toggleFavorite(songMid: string): Promise&lt;FavoriteState&gt;;
   <li>写入用官网 Web 通道 <code>u6.y.qq.com/cgi-bin/musics.fcg?encoding=ag-1&amp;sign=...</code>，模块 <code>music.musicasset.PlaylistDetailWrite</code>，方法 <code>AddSonglist</code> / <code>DelSonglist</code>，参数为 <code>dirId:201</code> 与 <code>v_songInfo:[{ songId, songType }]</code>。签名与 AES-128-GCM 协议见 <a href="PROVIDER.html#p3-3">PROVIDER §3.3</a>。</li>
   <li><code>songType</code> 必须取歌曲详情的真实值，不能用 <code>0</code> 兜底；错误类型可能返回 80105 或生成用户不可见的隐藏记录。</li>
   <li>写后必须读回确认：业务码成功、状态接口为 true 或总数增加都不单独构成成功条件，还要确认成员可见性（例如后续 <code>CgiGetDiss</code>）；状态读回不一致时抛错并回滚 UI。</li>
-  <li>上游 80105 提示“请退出后重新扫码登录，以同步网页会话”；1101 表示该歌曲暂不支持收藏；2001 / 104604 做短暂退避重试。收藏签名写入与普通读取一样先经过全局上游限速。</li>
+  <li>上游 80105 提示“请退出后重新扫码登录，以同步网页会话”；1101 表示该歌曲暂不支持收藏；2001 / 104604 做短暂退避重试。收藏签名写入在发出前显式检查全局截断窗口，不再经过全局限速。</li>
   <li>成功后使 <code>liked</code> 歌单缓存失效，并通过 <code>playlist.invalidate('liked')</code> 触发已打开歌单立即轮询；失败不刷新。</li>
 </ul>
 
@@ -3074,6 +3076,45 @@ export function replyPageLinks(
   <li>由 <a href="#c4-42">CommentsPanel</a> 调用；测试见 <code>test/comment-replies.test.ts</code>。</li>
 </ul>
 
+<h3 id="c4-110">4.110 src/main/api/vkey.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export interface VkeyQuery {
+  /** 单首歌的 songMid；一次 vkey 请求只允许一首歌。 */
+  songMid: string;
+  /** 与当前音质对应的文件名，必须用 media_mid 拼接。 */
+  filename: string;
+  /** 账号 uin；未登录为 '0'。 */
+  uin: string;
+}
+
+export interface VkeyResult {
+  purl: string;
+  result: number | null;
+}
+
+interface VkeyResponse {
+  retcode?: number;
+  msg?: string;
+  midurlinfo?: Array&lt;{ songmid?: string; purl?: string; result?: number }&gt;;
+}
+
+export async function fetchVkey(query: VkeyQuery): Promise&lt;VkeyResult&gt;;
+export function resetVkeyGate(): void;   // 仅测试使用：重置串行队列与间隔计时
+async function withVkeyGate&lt;T&gt;(run: () =&gt; Promise&lt;T&gt;): Promise&lt;T&gt;;
+async function callVkey(
+  module: string,
+  method: string,
+  param: Record&lt;string, unknown&gt;
+): Promise&lt;VkeyResponse&gt;;
+</code></pre>
+<ul class="note">
+  <li>vkey 的唯一入口：其他模块不得直接调用 <code>vkey.GetVkeyServer</code> / <code>music.vkey.GetVkey</code>，约定见 <a href="#c2">§2</a> vkey 请求。</li>
+  <li><code>withVkeyGate()</code> 把请求串成单飞队列，相邻两次请求的开始时间至少相差 <code>VKEY_MIN_INTERVAL_MS = 300</code>；排队期间不检查截断，由 <code>fetchOnce</code> 在真正 fetch 前统一检查。请求失败不会阻塞后续请求。</li>
+  <li><code>fetchVkey()</code> 的参数固定为单首歌：<code>songmid</code> / <code>songtype</code> / <code>filename</code> 数组各只有一个元素，从结构上禁止批量申请。</li>
+  <li>经典入口 <code>vkey.GetVkeyServer / CgiGetVkey</code> 与备用入口 <code>music.vkey.GetVkey / UrlGetVkey</code> 都经过同一道 gate，备用请求同样满足 300ms 间隔；<code>musicu</code> 以 <code>deferBlock: true</code> 调用，只有两个入口都返回 104009 才调用 <code>tripUpstreamBlock()</code>。</li>
+  <li>响应通过 <code>data.retcode</code> 判定业务错误；取 <code>midurlinfo</code> 中匹配当前 <code>songMid</code> 的条目，<code>purl</code> 为空表示该档无链接，<code>result</code> 缺失时为 <code>null</code>，由 <a href="#c4-11">§4.11</a> 的音质回退与错误分类继续处理。</li>
+  <li><code>resetVkeyGate()</code> 只供测试隔离模块级队列状态；生产流程不调用。</li>
+</ul>
+
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
 
@@ -3217,8 +3258,10 @@ views/LoginView::selectMethod(next)
             │           ├── api/song::fetchTrack(mid)
             │           │   └── api/client::musicu('music.pf_song_detail_svr', 'get_song_detail_yqq', ...)
             │           ├── api/song::requestQuality(tracks, quality)
-            │           │   ├── api/client::musicu('vkey.GetVkeyServer', 'CgiGetVkey', ...)
-            │           │   └── 判断 104009 → api/client::musicu('music.vkey.GetVkey', 'UrlGetVkey', ...)
+            │           │   └── api/vkey::fetchVkey({ songMid, filename, uin })    // 逐首请求，不批量
+            │           │       ├── api/vkey::withVkeyGate(callVkey)               // 串行，间隔 300ms
+            │           │       │   └── api/client::musicu('vkey.GetVkeyServer', 'CgiGetVkey', ...)
+            │           │       └── 判断 104009 → api/client::musicu('music.vkey.GetVkey', 'UrlGetVkey', ...)
             │           ├── 判断 purl 为空 → 下一档重试
             │           ├── 判断 result 全为 104004 → 抛出 UPSTREAM_NETWORK
             │           ├── 判断 result 全为 104013 → 抛出 NO_PERMISSION

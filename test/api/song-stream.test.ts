@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { VKEY_BATCH_SIZE } from '../../src/shared/constants'
 import type { Credential } from '../../src/shared/types'
 
 vi.mock('electron', () => ({
@@ -79,7 +78,9 @@ function vkeyResult(result: number, purl = ''): unknown {
   }
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  const { resetVkeyGate } = await import('../../src/main/api/vkey')
+  resetVkeyGate()
   musicuMock.mockReset()
   vipMock.mockReset()
   tripBlockMock.mockReset()
@@ -227,8 +228,8 @@ describe('api/song stream failures', () => {
     expect(tripBlockMock).toHaveBeenCalledTimes(1)
   })
 
-  it('requests a 50-song vkey batch in one upstream call', async () => {
-    const mids = Array.from({ length: VKEY_BATCH_SIZE }, (_, index) => `mid-${index}`)
+  it('requests vkey one song per call instead of batching', async () => {
+    const mids = ['mid-a', 'mid-b']
     const vkeyParams: Array<{ songmid: string[]; filename: string[] }> = []
     musicuMock.mockImplementation(
       async (module: string, _method: string, param: Record<string, unknown>) => {
@@ -246,10 +247,10 @@ describe('api/song stream failures', () => {
           }
         }
         if (module === 'vkey.GetVkeyServer') {
-          const batch = param as { songmid: string[]; filename: string[] }
-          vkeyParams.push(batch)
+          const query = param as { songmid: string[]; filename: string[] }
+          vkeyParams.push(query)
           return {
-            midurlinfo: batch.songmid.map((mid) => ({
+            midurlinfo: query.songmid.map((mid) => ({
               songmid: mid,
               purl: `purl-${mid}`,
               result: 0
@@ -263,10 +264,11 @@ describe('api/song stream failures', () => {
 
     const results = await getStreamUrls(mids, 'flac')
 
-    expect(results).toHaveLength(VKEY_BATCH_SIZE)
-    expect(vkeyParams).toHaveLength(1)
-    expect(vkeyParams[0].songmid).toHaveLength(VKEY_BATCH_SIZE)
-    expect(vkeyParams[0].filename).toHaveLength(VKEY_BATCH_SIZE)
+    expect(results).toHaveLength(mids.length)
+    expect(vkeyParams).toHaveLength(mids.length)
+    expect(vkeyParams.every((query) => query.songmid.length === 1)).toBe(true)
+    expect(vkeyParams.every((query) => query.filename.length === 1)).toBe(true)
+    expect(vkeyParams.map((query) => query.songmid[0]).sort()).toEqual(mids)
     expect(results.every((result) => result.url !== null)).toBe(true)
   })
 })

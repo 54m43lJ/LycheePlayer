@@ -1082,3 +1082,44 @@
 - 复查 `src/renderer/components/CommentsPanel.vue` 与 `src/main/api/comment.ts`：没有 `nickname ||`、`replyToNickname ||` 或对评论昵称的真值回退；空昵称保留为 `''`，只有没有 `RepliedComments` 时 `replyToNickname` 才是 `undefined`。
 - 该原则只约束评论 / 回复昵称；侧栏账号头像等其它界面的昵称回退不在本次范围内。
 - `npm run typecheck`、`npm test`（52 个测试文件、271 个用例）与 `npm run build` 通过。
+
+### 4.49 限速收缩到 vkey 并改为专用安全取流 [已解决] 
+
+**描述**：TODO 要求把限速从“全部上游请求共用一个全局令牌桶”收缩为只限制 vkey，vkey 走专门的安全 fetch 方法，300ms 内只能请求一次，并把“vkey 相关请求禁止批量操作”作为通用规则写入文档。此前 `client.ts` 的 `throttleUpstream()` 对所有上游请求按 4 req/s、突发 8 平滑，`song.ts` 仍按 50 首一批申请 vkey；全局限速既拖慢无关请求，也没有从结构上阻止批量取流。
+
+**解决方案**：
+
+- 删除 `client.ts` 的全局令牌桶与 `throttleUpstream()`；`fetchOnce` 只保留截断检查与请求本身，`favorite.ts` / `login.ts` 绕过统一入口的请求改为只检查 104009 截断窗口。
+- 新增 `src/main/api/vkey.ts`：`fetchVkey()` 是 vkey 的唯一入口，参数固定为单首歌；`withVkeyGate()` 把请求串成单飞队列，相邻两次请求开始时间至少相差 `VKEY_MIN_INTERVAL_MS = 300`，失败不阻塞后续请求。
+- 两个 vkey 入口与 104009 截断整体迁入 `vkey.ts`：经典入口返回 104009 才尝试备用入口，两个入口都拒绝才 `tripUpstreamBlock()`；备用请求同样经过 gate。
+- `song.ts` 的 `requestQuality()` 改为逐首调用 `fetchVkey()`，删除 `VKEY_BATCH_SIZE` 分块与本地 vkey 参数组装。
+- `shared/constants.ts` 删除 `UPSTREAM_RATE_LIMIT_PER_SECOND` / `UPSTREAM_RATE_LIMIT_BURST` / `VKEY_BATCH_SIZE`，新增 `VKEY_MIN_INTERVAL_MS`。
+- 在 USER / CORE / PROVIDER 的 CONVENTIONS 中写入“vkey 请求禁止批量、单曲、300ms 串行”；只有真实播放与下载可以取流。
+- 更新 `test/api/song-stream.test.ts` 的批量用例为逐首断言，新增 `test/api/vkey.test.ts` 覆盖单曲参数、串行间隔、失败后保持 gate 与备用入口。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 收缩限速机制到只对 vkey 相关请求限制条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“限速收缩到 vkey 并改为专用安全取流” | 增 | 记录全局限速问题、专用入口与 300ms 串行规则。 |
+| `USER.html` | §2 CONVENTIONS | 增 | 新增“vkey 请求”：只有真实播放与下载取流，一次一首、间隔至少 300ms。 |
+| `CORE.html` | §1 文件树 | 增 | 增加 `api/vkey.ts` 条目。 |
+| `CORE.html` | §2 CONVENTIONS | 增 | 新增“vkey 请求”约定：唯一入口、单曲、禁止批量与并发、300ms 间隔。 |
+| `CORE.html` | §4.8 `client.ts`（`#c4-8`） | 改 | 删除 `throttleUpstream` 签名与全局限速说明，截断检查只保留一次。 |
+| `CORE.html` | §4.11 `song.ts`（`#c4-11`） | 改 | `requestQuality` 逐首调用 `fetchVkey()`，删除批量分块与本地 vkey 处理。 |
+| `CORE.html` | §4.16 `login.ts` / §4.54 `favorite.ts` | 改 | 绕过统一入口的请求不再取令牌，只检查截断窗口。 |
+| `CORE.html` | §4.50 `constants.ts`（`#c4-50`） | 改 | 删除 `UPSTREAM_RATE_LIMIT_*` 与 `VKEY_BATCH_SIZE`，新增 `VKEY_MIN_INTERVAL_MS`。 |
+| `CORE.html` | §4.110 `vkey.ts`（`#c4-110`） | 增 | 新增签名、gate、单曲参数与备用入口说明。 |
+| `CORE.html` | §5.5 播放单曲 | 改 | 调用树改为 `api/song::requestQuality → api/vkey::fetchVkey → api/client::musicu`。 |
+| `PROVIDER.html` | §2 CONVENTIONS | 改 | “限速”改为“vkey 限速”，其他请求不做应用侧限速。 |
+| `PROVIDER.html` | §3.2 播放链接协议（含 `prov-play` 图） | 改 | vkey 参数改为单曲数组，注明相邻请求间隔至少 300ms。 |
+| `PROVIDER.html` | §4.1 播放链接 / §4.3 响应模型 | 改 | 删除“按 50 首一批”，改为逐首请求。 |
+
+**工作记录**：
+
+- 全局令牌桶删除后，搜索 / 歌单 / 评论等请求不再被应用侧节流；429、瞬时繁忙码退避与 104009 截断仍然保留。
+- `fetchVkey()` 的 `songmid` / `songtype` / `filename` 数组固定长度为 1，批量只能由调用方逐首循环，无法再拼出批量请求。
+- `test/api/vkey.test.ts` 使用假时钟验证 299ms 时第二次请求仍未发出、300ms 时发出；`song-stream` 的批量用例改为断言每次只带一首歌。
+- `npm run typecheck`、`npm test`（53 个测试文件、275 个用例）与 `npm run build` 通过。
+- 未做真实窗口验收；取流时序由接口测试覆盖。

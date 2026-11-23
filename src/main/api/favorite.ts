@@ -4,7 +4,6 @@ import { FAVORITE_STATUS_CACHE_MS, UPSTREAM_TIMEOUT_MS } from '../../shared/cons
 import { getCredential } from '../credential'
 import {
   assertUpstreamAvailable,
-  throttleUpstream,
   UpstreamError,
   musicu,
   upstreamRequest,
@@ -186,7 +185,6 @@ async function signedPlaylistWrite(
     url.searchParams.set('encoding', 'ag-1')
     url.searchParams.set('sign', webSign(body))
 
-    await throttleUpstream()
     assertUpstreamAvailable()
     let response: Response
     try {

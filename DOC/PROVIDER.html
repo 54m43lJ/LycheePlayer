@@ -161,8 +161,8 @@
     <td>先尝试请求档位；该档位无 <code>purl</code> 时，再按 <code>flac → 320k → 128k</code> 顺序尝试其余档位（跳过已尝试的请求档位）；全部档位无链接时返回 <code>NO_STREAM</code>。</td>
   </tr>
   <tr>
-    <td>限速</td>
-    <td>应用侧所有主动发出的上游请求共用一个全局令牌桶（持续速率与突发容量见 <a href="CORE.html#c4-50">CORE §4.50</a>），OAuth authorize 与收藏签名写入同样受控；批量请求按批串行，不并发轰炸。</td>
+    <td>vkey 限速</td>
+    <td>应用只对 vkey 请求限速：单次请求只携带一首歌，同一时刻只有一个 vkey 请求在途，相邻两次请求至少间隔 300ms（取值见 <a href="CORE.html#c4-50">CORE §4.50</a>，入口见 <a href="CORE.html#c4-110">CORE §4.110</a>）。其他上游请求不做应用侧限速，依靠 429 / 瞬时繁忙码退避与 104009 截断保护；批量读取按批串行，不并发轰炸。</td>
   </tr>
   <tr>
     <td>重试</td>
@@ -255,8 +255,8 @@
 <div class="diagram"><img src="diagram/prov-play.svg" alt="播放链接上游协议时序图"></div>
 <ul class="note">
   <li>先通过 <code>get_song_detail_yqq</code> 获取 <code>media_mid</code>，再按请求音质拼出 vkey 的 <code>filename</code>。</li>
-  <li>vkey 请求使用进程级稳定 <code>guid</code>、歌曲 <code>songmid</code> 数组、对应 <code>filename</code> 数组与账号 <code>uin</code>。</li>
-  <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。<code>result</code> 同时返回授权结果码，应用会保留每个档位最后一次结果，用于全批量失败时区分权限、链路与下架。</li>
+  <li>vkey 请求使用进程级稳定 <code>guid</code>、单曲 <code>songmid</code> 数组、对应 <code>filename</code> 数组与账号 <code>uin</code>；应用一次只请求一首歌，同一时刻只有一个 vkey 请求在途，相邻两次请求至少间隔 300ms。</li>
+  <li><code>midurlinfo[].purl</code> 为空表示该曲在该档位无链接；按音质回退顺序继续尝试。<code>result</code> 同时返回授权结果码，应用会保留每个档位最后一次结果，用于全部档位失败时区分权限、链路与下架。</li>
   <li>经典入口为 <code>vkey.GetVkeyServer / CgiGetVkey</code>；该入口返回 <code>104009</code>（<code>invalidq</code>）时，应用会再尝试当前维护的 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。两个入口都返回 <code>104009</code> 时按网络 / VPN / 代理出口问题处理，不再当作接口结构变化或单曲下架，并进入 60 秒全局截断窗口；窗口内应用不再向上游发起任何请求。</li>
   <li>音频流端点与 vkey / purl 契约不变；应用侧加载边界见 <a href="USER.html#u3-1">USER §3.1</a>。</li>
   <li>上游音频流必须兼容 Range：应用会把浏览器的 <code>Range</code> 原样转发，并优先使用上游返回的 <code>206</code> / <code>Content-Range</code> / <code>Accept-Ranges</code>。若上游忽略 Range 返回 200，代理按完整响应处理并缓存；局部 206 不缓存。</li>
@@ -318,7 +318,7 @@
   <tr><td>歌手专辑</td><td><code>music.musichallAlbum.AlbumListServer / GetAlbumList</code></td><td>按 <code>singerMid</code> 分页获取专辑；<code>order=1</code> 为最热、<code>order=0</code> 及其它值等价于最新；单页最多 80 张；<code>albumType</code> 提供录音室专辑 / EP / 演唱会 / Single 等版本信息。</td></tr>
   <tr><td>专辑详情</td><td><code>music.musichallAlbum.AlbumInfoServer / GetAlbumDetail</code></td><td>按 <code>albumMid</code> 获取专辑名、发行日期、简介与歌手。</td></tr>
   <tr><td>专辑歌曲</td><td><code>music.musichallAlbum.AlbumSongList / GetAlbumSongList</code></td><td>按 <code>albumMid</code> 分页获取歌曲；单页最多 100 首。</td></tr>
-  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用按 50 首一批请求。上游 <code>104009</code> 主要出现在 vkey / 播放链接请求；列表不再批量申请 vkey，只有实际播放与下载触发取流。</td></tr>
+  <tr><td>播放链接</td><td><code>vkey.GetVkeyServer / CgiGetVkey</code></td><td>按音质获取 <code>purl</code>；应用逐首请求，一次只携带一首歌，相邻请求至少间隔 300ms。上游 <code>104009</code> 主要出现在 vkey / 播放链接请求；列表不再申请 vkey，只有实际播放与下载触发取流。</td></tr>
   <tr><td>收藏状态</td><td><code>music.musicasset.SongFavRead / IsSongFanByMid</code></td><td>按 <code>v_songMid</code> 批量读取 <code>m_fan</code> 红心状态。</td></tr>
   <tr><td>收藏写入</td><td><code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>（<code>u6.y.qq.com</code>，<code>ag-1</code>）</td><td>向 <code>dirId:201</code> 添加 / 删除歌曲；签名加密协议见 <a href="#p3-3">§3.3</a>。</td></tr>
   <tr><td>歌单详情</td><td><code>music.srfDissInfo.DissInfo / CgiGetDiss</code></td><td>分页拉取歌单元数据与歌曲列表；<code>song_num</code> 单次可返回约 1 万首，大歌单会静默省略少量不可用曲目，分页须用固定 <code>song_begin</code> 递增。歌单不存在 / 已失效时 <code>req_0.code</code> 仍为 <code>0</code>，失效码位于顶层 <code>data.code = -100006</code>，且 <code>dirinfo</code> 为空壳、<code>songlist</code> 为空；不能只看 <code>retcode</code>。</td></tr>
@@ -970,7 +970,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqVkeyData</code></td>
     <td><code>midurlinfo[].songmid</code> · <code>purl</code> · <code>result</code></td>
-    <td><code>purl</code> 为空表示该档位无链接；<code>result</code> 用于区分 104003 / 104004 / 104013，全部档位失败时决定内部错误码与文案。响应级 <code>retcode</code> / <code>msg</code> 也会被读取：<code>104009</code> 触发备用入口，两个入口都返回 <code>104009</code> 后进入 60 秒全局截断并按网络 / 代理问题处理。vkey 请求按应用批量 50 分块。</td>
+    <td><code>purl</code> 为空表示该档位无链接；<code>result</code> 用于区分 104003 / 104004 / 104013，全部档位失败时决定内部错误码与文案。响应级 <code>retcode</code> / <code>msg</code> 也会被读取：<code>104009</code> 触发备用入口，两个入口都返回 <code>104009</code> 后进入 60 秒全局截断并按网络 / 代理问题处理。应用逐首请求 vkey，不批量。</td>
   </tr>
   <tr>
     <td><code>QqFavoriteData</code></td>

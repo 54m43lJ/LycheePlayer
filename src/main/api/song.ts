@@ -1,14 +1,10 @@
 import type { PayInfo, Quality, Song, UrlResult } from '../../shared/types'
-import {
-  IPC_SONG_MIDS_MAX,
-  SONG_DETAIL_BATCH,
-  SONG_DETAIL_CONCURRENCY,
-  VKEY_BATCH_SIZE
-} from '../../shared/constants'
+import { IPC_SONG_MIDS_MAX, SONG_DETAIL_BATCH, SONG_DETAIL_CONCURRENCY } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { resolveDownloadedAudio } from '../download/registry'
 import { audioStreamUrl } from '../media/audio-protocol'
-import { mapUpstreamCode, tripUpstreamBlock, UpstreamError, getGuid, musicu } from './client'
+import { UpstreamError, musicu } from './client'
+import { fetchVkey } from './vkey'
 import { getVipStatus } from './user'
 
 interface RawSong {
@@ -38,16 +34,6 @@ interface RawSong {
 
 interface RawTrackInfo extends RawSong {
   file?: RawSong['file']
-}
-
-interface VkeyData {
-  retcode?: number
-  msg?: string
-  midurlinfo?: Array<{
-    songmid?: string
-    purl?: string
-    result?: number
-  }>
 }
 
 interface TrackMeta {
@@ -256,70 +242,16 @@ async function requestQuality(
   const { prefix, ext } = QUALITY_FILE[quality]
   const urls = new Map<string, string>()
   const results = new Map<string, number>()
-  for (let start = 0; start < tracks.length; start += VKEY_BATCH_SIZE) {
-    const batch = tracks.slice(start, start + VKEY_BATCH_SIZE)
-    const songmid = batch.map((track) => track.songMid)
-    const songtype = batch.map(() => 0)
-    const filename = batch.map((track) => `${prefix}${track.mediaMid}${ext}`)
-    const uin = getCredential()?.musicid ?? '0'
-
-    let data: VkeyData
-    try {
-      data = await musicu<VkeyData>(
-        'vkey.GetVkeyServer',
-        'CgiGetVkey',
-        {
-          guid: getGuid(),
-          songmid,
-          songtype,
-          filename,
-          uin,
-          loginflag: 1,
-          platform: '20'
-        },
-        { deferBlock: true }
-      )
-      // 有些响应把具体错误放在 data.retcode，而 req_0.code 为 0。
-      const retcode = Number(data.retcode)
-      if (Number.isFinite(retcode) && retcode !== 0) {
-        throw mapUpstreamCode(retcode, 'vkey.GetVkeyServer.CgiGetVkey')
-      }
-    } catch (err) {
-      // 经典接口返回 104009 invalidq 时，尝试当前维护的 UrlGetVkey 接口。
-      if (!(err instanceof UpstreamError) || err.upstreamCode !== 104009) throw err
-      try {
-        data = await musicu<VkeyData>(
-          'music.vkey.GetVkey',
-          'UrlGetVkey',
-          {
-            uin,
-            filename,
-            guid: getGuid(),
-            songmid,
-            songtype,
-            ctx: 0
-          },
-          { deferBlock: true }
-        )
-        const retcode = Number(data.retcode)
-        if (Number.isFinite(retcode) && retcode !== 0) {
-          throw mapUpstreamCode(retcode, 'music.vkey.GetVkey.UrlGetVkey')
-        }
-      } catch (fallbackError) {
-        // 两个 vkey 入口都拒绝时，说明不是单曲问题；进入全局 60 秒截断窗口。
-        if (fallbackError instanceof UpstreamError && fallbackError.upstreamCode === 104009) {
-          tripUpstreamBlock()
-        }
-        throw fallbackError
-      }
-    }
-
-    for (const info of data.midurlinfo ?? []) {
-      if (!info.songmid) continue
-      if (info.purl) urls.set(info.songmid, info.purl)
-      const result = Number(info.result)
-      if (Number.isFinite(result)) results.set(info.songmid, result)
-    }
+  const uin = getCredential()?.musicid ?? '0'
+  // 一次 vkey 请求只取一首歌；串行与 300ms 间隔由 api/vkey 统一保证。
+  for (const track of tracks) {
+    const { purl, result } = await fetchVkey({
+      songMid: track.songMid,
+      filename: `${prefix}${track.mediaMid}${ext}`,
+      uin
+    })
+    if (purl) urls.set(track.songMid, purl)
+    if (result !== null) results.set(track.songMid, result)
   }
   return { urls, results }
 }
