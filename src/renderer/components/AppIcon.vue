@@ -79,9 +79,9 @@ const ICONS: Record<string, string[]> = {
   trash: ['M5 7h14', 'M9 7V5h6v2', 'M7 7l1 13h8l1-13', 'M10 11v5', 'M14 11v5'],
   folder: ['M4 6h6l2 2h8v10H4z'],
   'paper-torn': [
-    'M3 3h9v4l-2 2 2 2v3l-2 2 2 2v3H3z',
-    'M21 3h-8v4l2 2-2 2v3l2 2-2 2v3h8z',
-    'M17 3v4h4'
+    'M5 3h9l5 5v4h-4l-3 3-3-3H5z',
+    'M5 22v-8.5h4l3 3 3-3h4V22z',
+    'M14 3v5h5'
   ],
   video: ['M4 6h11v12H4z', 'M15 10l5-3v10l-5-3'],
   fullscreen: ['M4 9V4h5', 'M20 9V4h-5', 'M4 15v5h5', 'M20 15v5h-5'],
