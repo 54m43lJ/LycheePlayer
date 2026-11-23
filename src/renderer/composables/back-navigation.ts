@@ -7,9 +7,11 @@ type Dismiss = () => void
 const popupStack: Dismiss[] = []
 /** 页面访问栈；最后一项是当前页面。 */
 const pageStack: string[] = []
+/** 后退时弹出的页面；前进时按后进先出恢复。 */
+const forwardStack: string[] = []
 let routerRef: Router | null = null
 let homePath = '/discover'
-let navigatingBack = false
+let navigatingHistory = false
 
 /** 注册一个可被“后退”关闭的浮层；返回注销函数。 */
 export function pushBackDismiss(dismiss: Dismiss): () => void {
@@ -31,6 +33,11 @@ export function dismissTopPopup(): boolean {
   return true
 }
 
+/** 当前是否有打开的浮层；前进时用于避免在浮层背后导航。 */
+export function hasOpenPopup(): boolean {
+  return popupStack.length > 0
+}
+
 /** 浮层打开期间注册“后退关闭”，关闭或卸载时自动注销。 */
 export function useBackDismiss(isOpen: () => boolean, dismiss: Dismiss): void {
   let release: (() => void) | null = null
@@ -48,7 +55,10 @@ export function useBackDismiss(isOpen: () => boolean, dismiss: Dismiss): void {
 }
 
 function recordPage(path: string): void {
-  if (!path || path === '/' || path === '/login') return
+  if (!path || path === '/') return
+  // 任何普通页面导航都会截断前进链，等价于浏览器的新导航。
+  forwardStack.length = 0
+  if (path === '/login') return
   if (pageStack.length === 0) {
     if (path !== homePath) pageStack.push(homePath)
     pageStack.push(path)
@@ -59,19 +69,20 @@ function recordPage(path: string): void {
 }
 
 /**
- * 安装页面访问栈：每次路由切换把最终路径压栈，供 goBack() 使用。
+ * 安装页面访问栈：每次路由切换把最终路径压栈，供 goBack() / goForward() 使用。
  * 登录页不进入页面栈，避免登录后后退回到登录页。
  */
 export function installPageHistory(router: Router, home = '/discover'): () => void {
   routerRef = router
   homePath = home
   pageStack.length = 0
-  navigatingBack = false
+  forwardStack.length = 0
+  navigatingHistory = false
   const initial = router.currentRoute.value.fullPath
   if (initial) recordPage(initial)
   const removeAfterEach = router.afterEach((to, _from, failure) => {
-    if (navigatingBack) {
-      navigatingBack = false
+    if (navigatingHistory) {
+      navigatingHistory = false
       return
     }
     if (!failure) recordPage(to.fullPath)
@@ -80,59 +91,102 @@ export function installPageHistory(router: Router, home = '/discover'): () => vo
     removeAfterEach()
     if (routerRef === router) routerRef = null
     pageStack.length = 0
-    navigatingBack = false
+    forwardStack.length = 0
+    navigatingHistory = false
   }
 }
 
-/** 后退：优先关闭浮层；没有浮层时按页面访问栈返回上一页。 */
+function navigateHistory(target: string): void {
+  const router = routerRef
+  if (!router) return
+  navigatingHistory = true
+  try {
+    void router.replace(target)
+  } catch {
+    navigatingHistory = false
+  }
+}
+
+/** 后退：优先关闭浮层；没有浮层时按页面访问栈返回上一页，并压入前进栈。 */
 export function goBack(): void {
   if (dismissTopPopup()) return
   const router = routerRef
   if (!router) return
   const current = router.currentRoute.value.fullPath
-  if (pageStack[pageStack.length - 1] === current) pageStack.pop()
-  const target = pageStack[pageStack.length - 1] ?? homePath
+  let target = pageStack[pageStack.length - 1] ?? homePath
+  if (pageStack[pageStack.length - 1] === current) {
+    target = pageStack[pageStack.length - 2] ?? homePath
+    if (target === current) return
+    pageStack.pop()
+    forwardStack.push(current)
+  }
   if (!target || target === current) return
-  navigatingBack = true
-  void router.replace(target)
+  navigateHistory(target)
+}
+
+/** 前进：浮层打开时不动作；否则恢复最近一次后退前的页面。 */
+export function goForward(): void {
+  if (hasOpenPopup()) return
+  const router = routerRef
+  if (!router) return
+  const target = forwardStack.pop()
+  if (!target) return
+  const current = router.currentRoute.value.fullPath
+  if (target === current) return
+  if (pageStack[pageStack.length - 1] !== target) pageStack.push(target)
+  navigateHistory(target)
 }
 
 /**
- * 安装全局后退处理：优先关闭最上层浮层，否则按页面访问栈返回上一页。
- * 返回卸载函数。主进程只转发系统手势，导航决策留在渲染层。
+ * 安装全局后退 / 前进处理：后退优先关闭最上层浮层，否则按页面访问栈返回上一页；
+ * 前进在无浮层时恢复后退前的页面。返回卸载函数。主进程只转发系统手势，导航决策留在渲染层。
  */
 export function installBackNavigation(router: Router, home = '/discover'): () => void {
   const removePageHistory = installPageHistory(router, home)
   let lastBackAt = 0
+  let lastForwardAt = 0
 
-  function runBack(): void {
-    // Linux 的鼠标后退会分别上报按下 / 抬起；同一次操作只处理一次。
+  function debounced(kind: 'back' | 'forward'): void {
     const now = Date.now()
-    if (now - lastBackAt < 200) return
-    lastBackAt = now
-    goBack()
+    if (kind === 'back') {
+      // Linux 的鼠标后退会分别上报按下 / 抬起；同一次操作只处理一次。
+      if (now - lastBackAt < 200) return
+      lastBackAt = now
+      goBack()
+      return
+    }
+    if (now - lastForwardAt < 200) return
+    lastForwardAt = now
+    goForward()
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (!event.altKey || event.key !== 'ArrowLeft') return
-    event.preventDefault()
-    runBack()
+    if (!event.altKey) return
+    if (event.key === 'ArrowLeft') {
+      event.preventDefault()
+      debounced('back')
+    } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
+      debounced('forward')
+    }
   }
 
   function onMouseUp(event: MouseEvent): void {
-    // 拦掉 Chromium 自带的鼠标侧键历史导航；后退统一由主进程推送后处理。
-    if (event.button !== 3) return
+    // 拦掉 Chromium 自带的鼠标侧键历史导航；后退 / 前进统一由主进程推送后处理。
+    if (event.button !== 3 && event.button !== 4) return
     event.preventDefault()
     event.stopPropagation()
   }
 
-  const offBack = window.lychee.navigation.onBack(runBack)
+  const offBack = window.lychee.navigation.onBack(() => debounced('back'))
+  const offForward = window.lychee.navigation.onForward(() => debounced('forward'))
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('mouseup', onMouseUp, true)
 
   return () => {
     removePageHistory()
     offBack()
+    offForward()
     document.removeEventListener('keydown', onKeydown)
     window.removeEventListener('mouseup', onMouseUp, true)
   }

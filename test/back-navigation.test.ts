@@ -3,6 +3,7 @@ import type { Router } from 'vue-router'
 import {
   dismissTopPopup,
   goBack,
+  goForward,
   installPageHistory,
   pushBackDismiss
 } from '../src/renderer/composables/back-navigation'
@@ -72,6 +73,52 @@ describe('back navigation', () => {
     goBack()
     expect(replace).toHaveBeenCalledTimes(2)
 
+    remove()
+  })
+
+  it('walks forward again after going back', () => {
+    const { router, navigate, replace } = fakeRouter('/discover')
+    const remove = installPageHistory(router)
+
+    navigate('/playlist/1')
+    navigate('/artist/a')
+    goBack()
+    expect(replace).toHaveBeenLastCalledWith('/playlist/1')
+    goForward()
+    expect(replace).toHaveBeenLastCalledWith('/artist/a')
+    goForward()
+    expect(replace).toHaveBeenCalledTimes(2)
+
+    remove()
+  })
+
+  it('clears the forward stack on a new navigation', () => {
+    const { router, navigate, replace } = fakeRouter('/discover')
+    const remove = installPageHistory(router)
+
+    navigate('/playlist/1')
+    navigate('/artist/a')
+    goBack()
+    navigate('/album/b')
+    goForward()
+    expect(replace).toHaveBeenCalledTimes(1)
+    expect(replace).toHaveBeenLastCalledWith('/playlist/1')
+
+    remove()
+  })
+
+  it('does not navigate forward while a popup is open', () => {
+    const { router, navigate, replace } = fakeRouter('/discover')
+    const remove = installPageHistory(router)
+    navigate('/playlist/1')
+    navigate('/artist/a')
+    goBack()
+
+    const release = pushBackDismiss(() => undefined)
+    goForward()
+    expect(replace).toHaveBeenCalledTimes(1)
+
+    release()
     remove()
   })
 

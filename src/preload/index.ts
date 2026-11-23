@@ -206,6 +206,11 @@ const api: LycheeApi = {
       const listener = (): void => callback()
       ipcRenderer.on('navigation:back', listener)
       return () => ipcRenderer.removeListener('navigation:back', listener)
+    },
+    onForward: (callback) => {
+      const listener = (): void => callback()
+      ipcRenderer.on('navigation:forward', listener)
+      return () => ipcRenderer.removeListener('navigation:forward', listener)
     }
   },
   upstream: {

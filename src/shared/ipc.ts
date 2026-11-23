@@ -176,6 +176,8 @@ export interface LycheeApi {
   navigation: {
     /** 订阅系统后退手势（鼠标侧键等）；返回取消订阅函数。 */
     onBack(callback: () => void): () => void
+    /** 订阅系统前进手势（鼠标侧键等）；返回取消订阅函数。 */
+    onForward(callback: () => void): () => void
   }
   upstream: {
     /** 收到 104009 进入全局截断窗口时通知渲染层展示提示。 */

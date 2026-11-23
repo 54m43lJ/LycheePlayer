@@ -772,35 +772,37 @@
 - `npm run typecheck`、`npm test`（51 个测试文件、250 个用例）与 `npm run build` 通过。
 - 未做真实窗口截图验收；用真实歌词数据直接调用 `parseLyric()` 验证行序。
 
-### 4.39 浏览器式页面后退栈 [已解决] 
+### 4.39 浏览器式页面后退与前进栈 [已解决] 
 
-**描述**：TODO 要求用类似浏览器的方式管理页面后退，确保每次后退都回到上一个页面；所有弹出是例外，弹出窗口对后退键的处理保持独立且明确。原实现没有显式页面栈，系统后退、Alt + ← 与页面返回按钮都依赖 `router.back()` / 浏览器历史，重复访问当前页时会出现“后退没有反应”，栈底行为也不确定。
+**描述**：TODO 要求用类似浏览器的方式管理页面后退，确保每次后退都回到上一个页面；所有弹出是例外，弹出窗口对后退键的处理保持独立且明确。后续补充要求同样实现前进。原实现没有显式页面栈，系统后退、Alt + ← 与页面返回按钮都依赖 `router.back()` / 浏览器历史，重复访问当前页时会出现“后退没有反应”，栈底行为也不确定。
 
 **解决方案**：
 
-- `back-navigation.ts` 新增模块级页面访问栈：`installPageHistory(router, home)` 在安装时用当前路由初始化，并在每个 `router.afterEach` 记录最终 `fullPath`。
-- 记录规则：连续重复路径不重复入栈；`/` 与 `/login` 不记录，登录成功后 `replace('/library')` 只把目标页入栈，后退不会回到登录页；深链接首屏在 `/discover` 之后入栈，保证有上一页。
-- `goBack()` 先关闭最上层浮层（浮层不动页面栈）；没有浮层时弹出当前页，用 `router.replace()` 回到栈顶上一页，栈底回到 `/discover`，当前已是发现页则不动。`navigatingBack` 标记阻止回退自身触发的 `afterEach` 再次入栈。
-- `installBackNavigation(router)` 安装页面栈并接管系统后退、`Alt + ←` 与鼠标侧键；专辑 / 歌手 / MV 页的返回按钮改用共享 `goBack()`，不再直接调用 `router.back()`。
-- 浮层栈与页面栈保持独立：所有现有弹层仍通过 `useBackDismiss` / `pushBackDismiss` 处理后退，只关闭自身。
+- `back-navigation.ts` 新增模块级页面访问栈与前进栈：`installPageHistory(router, home)` 在安装时用当前路由初始化，并在每个 `router.afterEach` 记录最终 `fullPath`。
+- 记录规则：连续重复路径不重复入栈；`/` 与 `/login` 不记录，登录成功后 `replace('/library')` 只把目标页入栈，后退不会回到登录页；深链接首屏在 `/discover` 之后入栈，保证有上一页。任何普通新导航清空前进栈。
+- `goBack()` 先关闭最上层浮层（浮层不动页面栈）；没有浮层时弹出当前页并压入前进栈，用 `router.replace()` 回到栈顶上一页，栈底回到 `/discover`，当前已是发现页则不动。
+- `goForward()` 在浮层打开时不动作；否则从前进栈恢复最近后退前的页面并压回页面栈，前进栈为空时不动作。`navigatingHistory` 标记阻止后退 / 前进自身触发的 `afterEach` 再次入栈。
+- `installBackNavigation(router)` 安装页面栈并接管系统后退 / 前进、`Alt + ←` / `Alt + →` 与鼠标侧键；`navigation.onBack` / `onForward` 由主进程分别推送。专辑 / 歌手 / MV 页的返回按钮改用共享 `goBack()`，不再直接调用 `router.back()`。
+- 浮层栈与页面栈保持独立：所有现有弹层仍通过 `useBackDismiss` / `pushBackDismiss` 处理后退，只关闭自身；前进不关闭浮层。
 
 **文档操作**：
 
 | 文档 | 章节 | 动作 | 内容 |
 |---|---|---|---|
 | `TODO.md` | “优化后退机制”条目 | 改 | 行尾追加 ` [已解决] `。 |
-| `IMPL.md` | 新增“浏览器式页面后退栈” | 增 | 记录页面栈、去重、登录页排除与栈底回退规则。 |
-| `USER.html` | §2 CONVENTIONS · 后退手势 | 改 | 改为没有浮层时按页面访问栈返回上一页；补充连续去重、登录页不入栈与栈底回发现页。 |
-| `CORE.html` | §4.92 `back-navigation.ts`（`#c4-92`） | 改 | 记录 `installPageHistory` / `goBack` / `installBackNavigation(router)`、页面栈与浮层栈的独立关系。 |
-| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 安装后退分发改为 `goBack()`，不再调用 `router.back()`。 |
-| `CORE.html` | §4.2 IPC 表 | 改 | `navigation:back` 说明改为按页面访问栈返回。 |
+| `IMPL.md` | 新增“浏览器式页面后退与前进栈” | 增 | 记录页面栈、前进栈、去重、登录页排除与栈底规则。 |
+| `USER.html` | §2 CONVENTIONS · 后退 / 前进手势 | 改 | 补充后退压入前进栈、前进恢复页面、新导航清空前进栈、浮层打开时前进不动作。 |
+| `CORE.html` | §4.92 `back-navigation.ts`（`#c4-92`） | 改 | 记录 `installPageHistory` / `goBack` / `goForward` / `installBackNavigation(router)`、双栈与浮层栈的独立关系。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 安装后退 / 前进分发，分别调用 `goBack()` / `goForward()`。 |
+| `CORE.html` | §4.2 IPC 表 / `LycheeApi` | 改 | 新增 `navigation:forward` 与 `navigation.onForward`。 |
+| `CORE.html` | §4.4 `main/index.ts`（`#c4-4`） | 改 | `app-command` 同时处理 `browser-backward` / `browser-forward`，分别转发后退 / 前进。 |
 | `CORE.html` | §4.73 `ArtistView.vue` / §4.74 `AlbumView.vue` | 改 | 返回按钮改用共享 `goBack()`；栈底回到发现页。 |
-| `CORE.html` | §1 文件树 · 测试 | 改 | back-navigation 测试说明改为浮层与页面栈顺序。 |
+| `CORE.html` | §1 文件树 · 测试 | 改 | back-navigation 测试说明改为后退 / 前进页面栈顺序。 |
 | `README.md` / `ABOUT.html` | 无 | 不动 | 用户交互摘要未描述后退细节。 |
 
 **工作记录**：
 
-- 新增页面栈测试：连续访问多页逐步后退、浮层优先且不导航、登录页不入栈、深链接首屏回发现页、重复访问当前页不重复入栈。
-- 原浮层测试保留；`test/back-navigation.test.ts` 共 6 个用例。
-- `npm run typecheck`、`npm test`（51 个测试文件、255 个用例）与 `npm run build` 通过。
-- 未做真实鼠标侧键 / 系统手势窗口验收；页面栈由 fake router 单测覆盖，事件入口沿用原有已验证监听。
+- 新增页面栈测试：连续访问多页逐步后退、前进恢复后退前页面、新导航清空前进栈、浮层优先且不导航、浮层打开时前进不动作、登录页不入栈、深链接首屏回发现页、重复访问当前页不重复入栈。
+- 原浮层测试保留；`test/back-navigation.test.ts` 共 9 个用例。
+- `npm run typecheck`、`npm test`（51 个测试文件、258 个用例）与 `npm run build` 通过。
+- 未做真实鼠标侧键 / 系统手势窗口验收；页面栈与前进栈由 fake router 单测覆盖，事件入口沿用原有已验证监听。
