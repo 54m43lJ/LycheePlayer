@@ -432,7 +432,7 @@ describe('api/comment', () => {
         param: payload.req_0?.param ?? {}
       })
       return new Response(
-        '{"code":0,"req_0":{"code":0,"data":{"CommentList":{"Comments":[{"CmId":"r1","Nick":"R","Content":"reply","PubTime":100,"SeqNo":1701807071952960001,"RepliedComments":[{"Nick":"A"}]},{"CmId":"r2","Nick":"","Content":"","PubTime":90,"State":2,"SeqNo":1701807071952960000}],"Total":2,"HasMore":1}}}}',
+        '{"code":0,"req_0":{"code":0,"data":{"CommentList":{"Comments":[{"CmId":"r1","Nick":"R","Content":"reply","PubTime":100,"SeqNo":1701807071952960001,"Pic":"http://pic.test/r1.png","RepliedComments":[{"Nick":"A"}]},{"CmId":"r2","Nick":"","Content":"","PubTime":90,"State":2,"SeqNo":1701807071952960000}],"Total":2,"HasMore":1}}}}',
         { status: 200, headers: { 'Content-Type': 'application/json' } }
       )
     })
@@ -449,7 +449,8 @@ describe('api/comment', () => {
     expect(page.comments.map((comment) => comment.id)).toEqual(['r1', 'r2'])
     expect(page.comments[0]).toMatchObject({
       replyToNickname: 'A',
-      deleted: false
+      deleted: false,
+      imageUrl: 'https://pic.test/r1.png'
     })
     expect(page.comments[1]).toMatchObject({
       deleted: true,

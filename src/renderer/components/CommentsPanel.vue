@@ -805,11 +805,22 @@ onBeforeUnmount(() => {
                               </span>
                               <template v-else>{{ part.text }}</template>
                             </template>
-                            <span
-                              v-if="reply.imageUrl && !reply.content && !reply.emojiUrl"
-                              class="comment-reply-to"
-                              >[图片]</span
-                            >
+                          </div>
+                          <img
+                            v-if="reply.imageUrl && !mediaFailed(reply.imageUrl)"
+                            class="comment-media comment-reply-media"
+                            :src="reply.imageUrl"
+                            alt="回复图片"
+                            loading="lazy"
+                            @error="markMediaFailed(reply.imageUrl)"
+                            @click="openViewer(reply.imageUrl)"
+                          />
+                          <div
+                            v-else-if="reply.imageUrl"
+                            class="comment-media-failed comment-reply-media-failed"
+                            aria-label="图片加载失败"
+                          >
+                            <AppIcon name="paper-torn" :size="18" />
                           </div>
                           <div class="comment-reply-foot">
                             <span>{{ timeLabel(reply.createdAtMs) }}</span>

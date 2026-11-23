@@ -4507,6 +4507,18 @@ button:focus-visible,
   object-fit: contain;
 }
 
+.comment-reply-media {
+  max-width: min(100%, 180px);
+  max-height: 160px;
+  margin-top: 5px;
+}
+
+.comment-reply-media-failed {
+  width: 64px;
+  height: 48px;
+  margin-top: 5px;
+}
+
 .comment-reply-foot {
   display: flex;
   align-items: center;

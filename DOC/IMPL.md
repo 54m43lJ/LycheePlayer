@@ -988,3 +988,34 @@
 - 新增 API 断言：`postCommentReply('song', '123', 'reply-1', ...)` 的 `RepliedCmId` 为 `reply-1`，BizType / BizId / BizSubType 保持正确。
 - `npm run typecheck`、`npm test`（52 个测试文件、271 个用例）与 `npm run build` 通过。
 - 未使用真实登录账号发表回复的回复（避免产生公开内容）；请求格式对照官方客户端脚本确认。
+
+### 4.45 回复图片渲染 [已解决] 
+
+**描述**：ISSUE 指出 King Gnu - AIZO 的 2026-07-17 19:26 评论下同时间回复的图片只显示 `[图片]` 占位符，回复图片没有真正渲染。
+
+**解决方案**：
+
+- 调查确认该回复 `Content` 为空、`Pic` 为有效 JPEG（1080×1920），`PicSize` 为 `1080x1920`；`toComment()` 已把回复的 `Pic` 映射为 `imageUrl`，问题只在回复模板。
+- 回复条目在正文下方渲染 `reply.imageUrl`：使用 `comment-media` 基础样式与 `comment-reply-media` 紧凑尺寸（最大 180×160px、上间距 5px），点击调用 `openViewer()` 打开全屏查看器。
+- 图片加载失败时显示 `paper-torn` 占位（64×48px），按 URL 记录到 `failedMedia`；只有附图、没有正文的回复照常显示图片。
+- 删除原有 `[图片]` 文本占位。
+- 回复与顶层评论共用 `Pic` / `EmoPic` 映射，无需新增 API 或 IPC。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 回复图片渲染条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“回复图片渲染” | 增 | 记录真实回复图片数据与模板调整。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 回复附图以缩略图显示，可点击查看大图，失败显示占位。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 记录回复图片渲染、点击查看器与失败占位。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 增加 `.comment-reply-media` / `.comment-reply-media-failed` 尺寸。 |
+| `PROVIDER.html` | §2 CONVENTIONS · 评论回复 | 改 | 注明回复的 `Pic` / `EmoPic` 与顶层评论相同映射。 |
+| `README.md` / `ABOUT.html` | 歌词 / 评论行 | 改 | 补充回复附图可点击查看大图。 |
+
+**工作记录**：
+
+- 真实匿名读取歌曲 `632959788`（King Gnu - AIZO）的回复：`Content=''`、`Pic='https://music-file.y.qq.com/comment/u/7eoPowvioivF/20a44/e8e7252591bb07376ebd36e86b81709c007032d6_148b58.jpeg'`、`PicSize='1080x1920'`。
+- 更新回复读取测试：`Pic` 正确映射为 `https` 的 `imageUrl`。
+- `npm run typecheck`、`npm test`（52 个测试文件、271 个用例）与 `npm run build` 通过。
+- 未做真实窗口截图验收；图片模板与尺寸由代码审阅与接口映射测试覆盖。

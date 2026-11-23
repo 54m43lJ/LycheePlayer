@@ -190,7 +190,7 @@
   </tr>
   <tr>
     <td>评论回复</td>
-    <td>读取使用 <code>GetReplyCommentList</code>，以 <code>RootCmId</code> 定位顶层评论，单页 10 条，游标为最后一条回复的 <code>SeqNo</code>；<code>PageNum</code> 不生效。发表沿用目标类型的 <code>AddComment</code> 参数并追加 <code>RepliedCmId</code>：回复顶层评论时是该评论 CmId，回复某条回复时是该回复 CmId；不需要额外的根评论参数。回复与顶层评论共用 <code>Comment</code> / <code>CommentPage</code>。参数见 <a href="#p4-1">§4.1</a>，字段见 <a href="#p4-3">§4.3</a>。</td>
+    <td>读取使用 <code>GetReplyCommentList</code>，以 <code>RootCmId</code> 定位顶层评论，单页 10 条，游标为最后一条回复的 <code>SeqNo</code>；<code>PageNum</code> 不生效。发表沿用目标类型的 <code>AddComment</code> 参数并追加 <code>RepliedCmId</code>：回复顶层评论时是该评论 CmId，回复某条回复时是该回复 CmId；不需要额外的根评论参数。回复与顶层评论共用 <code>Comment</code> / <code>CommentPage</code>，回复的 <code>Pic</code> / <code>EmoPic</code> 与顶层评论相同地映射为附图和内嵌表情。参数见 <a href="#p4-1">§4.1</a>，字段见 <a href="#p4-3">§4.3</a>。</td>
   </tr>
   <tr>
     <td>回复计数与列表不一致</td>
