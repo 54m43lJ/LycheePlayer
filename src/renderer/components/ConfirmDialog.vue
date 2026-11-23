@@ -44,7 +44,7 @@ onBeforeUnmount(() => document.removeEventListener('keydown', onKeydown))
     <section class="dialog confirm-dialog" role="alertdialog" aria-modal="true" :aria-label="title">
       <header class="dialog-head">
         <h2>{{ title }}</h2>
-        <button class="icon-btn" title="关闭" @click="emit('cancel')">
+        <button class="icon-btn" aria-label="关闭" @click="emit('cancel')">
           <AppIcon name="close" :size="17" />
         </button>
       </header>

@@ -152,7 +152,6 @@ onBeforeUnmount(() => window.removeEventListener('keydown', onKeydown, true))
       <button
         class="image-lightbox-close"
         type="button"
-        title="关闭"
         aria-label="关闭"
         @click="emit('close')"
       >

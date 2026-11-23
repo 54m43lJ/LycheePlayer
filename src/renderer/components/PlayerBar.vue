@@ -135,12 +135,6 @@ const bufferedPercent = computed(() => {
 const bufferPercent = computed(() => Math.max(cachePercent.value, bufferedPercent.value))
 const bufferStyle = computed(() => ({ width: `${bufferPercent.value}%` }))
 const bufferVisible = computed(() => hasSong.value && bufferPercent.value > 0)
-const bufferLabel = computed(() => {
-  if (!bufferVisible.value) return ''
-  if (asset.value?.downloadedQuality) return '已下载到本机'
-  if (cacheForCurrent.value?.complete) return '缓存完成'
-  return `缓冲 ${Math.round(bufferPercent.value)}%`
-})
 
 const qualityOptions: Array<{ value: Settings['defaultQuality']; label: string; short: string }> =
   QUALITY_PREFERENCE_OPTIONS
@@ -624,7 +618,7 @@ watch(
     <div class="player-now">
       <button
         class="player-cover-button"
-        :title="lyricsTitle"
+        :aria-label="lyricsTitle"
         :disabled="!hasSong"
         @click="toggleLyrics()"
       >
@@ -635,12 +629,11 @@ watch(
         <div class="player-title-row">
           <MarqueeText v-if="hasSong" class="player-title" :text="current?.name ?? ''" />
           <span v-else class="player-title">&nbsp;</span>
-          <span v-if="hasSong" class="quality-mark" title="实际音质（降档后）">{{ qualityLabel }}</span>
+          <span v-if="hasSong" class="quality-mark">{{ qualityLabel }}</span>
           <RouterLink
             v-if="hasSong && mvId"
             class="mv-mark"
             :to="`/mv/${mvId}`"
-            title="播放 MV"
             aria-label="播放 MV"
           >
             <AppIcon name="play" :size="9" />
@@ -683,7 +676,7 @@ watch(
         >
           <button
             class="mode-button"
-            :title="player.modeLocked ? '猜你喜欢队列仅支持顺序播放' : PLAY_MODE_LABEL[mode]"
+            :aria-label="player.modeLocked ? '猜你喜欢队列仅支持顺序播放' : PLAY_MODE_LABEL[mode]"
             aria-haspopup="true"
             :aria-expanded="modeMenu"
             :disabled="player.modeLocked"
@@ -702,32 +695,32 @@ watch(
               class="mode-option"
               :class="{ 'touch-active': modeHighlighted === index }"
               data-revealer-option
-              :title="PLAY_MODE_LABEL[item]"
+              :aria-label="PLAY_MODE_LABEL[item]"
               @click="chooseMode(item)"
             >
               <AppIcon :name="MODE_ICON[item]" :size="16" />
             </button>
           </div>
         </div>
-        <button class="icon-btn" title="上一首" :disabled="!hasSong" @click="player.previous()">
+        <button class="icon-btn" aria-label="上一首" :disabled="!hasSong" @click="player.previous()">
           <AppIcon name="previous" :size="17" />
         </button>
         <button
           class="play-button"
-          :title="status === 'playing' ? '暂停' : '播放'"
+          :aria-label="status === 'playing' ? '暂停' : '播放'"
           :disabled="!hasSong || player.loading || !player.canPlay"
           @click="player.toggle()"
         >
           <span v-if="player.loading" class="spinner" />
           <AppIcon v-else :name="status === 'playing' ? 'pause' : 'play'" :size="17" />
         </button>
-        <button class="icon-btn" title="下一首" :disabled="!hasSong" @click="player.playNext()">
+        <button class="icon-btn" aria-label="下一首" :disabled="!hasSong" @click="player.playNext()">
           <AppIcon name="next" :size="17" />
         </button>
         <button
           class="icon-btn"
           :class="{ active: ui.queueOpen }"
-          title="播放队列"
+          aria-label="播放队列"
           @click="ui.toggleQueue()"
         >
           <AppIcon name="list" :size="17" />
@@ -735,7 +728,7 @@ watch(
       </div>
       <div class="progress-row">
         <span class="time">{{ hasSong ? formatDuration(positionMs) : '0:00' }}</span>
-        <div class="progress-stack" :title="bufferLabel">
+        <div class="progress-stack">
           <div class="progress-track" :class="{ 'progress-disabled': !hasSong }" aria-hidden="true">
             <span
               v-if="bufferVisible"
@@ -774,7 +767,7 @@ watch(
         <button
           class="icon-btn like-button"
           :class="{ active: favorited }"
-          :title="favorited ? '取消收藏' : '收藏'"
+          :aria-label="favorited ? '取消收藏' : '收藏'"
           :disabled="!hasSong"
           @click.stop="toggleFavorite()"
           @pointerdown="onLikePointerDown"
@@ -789,7 +782,7 @@ watch(
             class="like-option"
             :class="{ 'touch-active': likeHighlighted === 0 }"
             data-revealer-option
-            title="加入歌单"
+            aria-label="加入歌单"
             :disabled="!hasSong"
             @click="openSongPicker()"
           >
@@ -800,7 +793,7 @@ watch(
       <button
         class="icon-btn"
         :class="downloadState === 'none' ? null : downloadState"
-        :title="downloadTitle"
+        :aria-label="downloadTitle"
         :disabled="!hasSong"
         @click.stop="downloadCurrent()"
       >
@@ -818,7 +811,7 @@ watch(
       >
         <button
           class="quality-chip"
-          :title="qualityTitle"
+          :aria-label="qualityTitle"
           aria-haspopup="true"
           :aria-expanded="qualityMenu"
           @click.stop="cycleQuality()"
@@ -835,7 +828,7 @@ watch(
             :key="option.value"
             :class="{ 'touch-active': qualityHighlighted === index }"
             data-revealer-option
-            :title="option.label"
+            :aria-label="option.label"
             @click="chooseQuality(option.value)"
           >
             {{ option.short }}
@@ -862,7 +855,6 @@ watch(
               max="1"
               step="0.01"
               :value="volume"
-              :title="`音量 ${Math.round(volume * 100)}%`"
               aria-label="音量"
               @input="player.setVolume(Number(($event.target as HTMLInputElement).value))"
             />
@@ -870,7 +862,7 @@ watch(
         </div>
         <button
           class="icon-btn volume-button"
-          :title="volume > 0 ? '静音' : '恢复音量'"
+          :aria-label="volume > 0 ? '静音' : '恢复音量'"
           aria-haspopup="true"
           :aria-expanded="volumeOpen"
           @click.stop="toggleMute()"

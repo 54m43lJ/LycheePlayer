@@ -161,7 +161,7 @@ onBeforeUnmount(() => {
             <span class="song-index-text">{{ index + 1 }}</span>
             <button
               class="song-play"
-              :title="song.songMid === activeMid ? (playing ? '暂停' : '继续播放') : '播放'"
+              :aria-label="song.songMid === activeMid ? (playing ? '暂停' : '继续播放') : '播放'"
               :disabled="!isPlayable(song, index)"
               @click.stop="song.songMid === activeMid ? emit('toggle') : emit('play', index)"
             >
@@ -206,19 +206,18 @@ onBeforeUnmount(() => {
             v-if="song.album.mid"
             class="song-album inline-link"
             :to="`/album/${song.album.mid}`"
-            :title="song.album.name"
             @click.stop
           >
             <MarqueeText :text="song.album.name || '—'" />
           </RouterLink>
-          <div v-else class="song-album" :title="song.album.name">{{ song.album.name || '—' }}</div>
+          <div v-else class="song-album">{{ song.album.name || '—' }}</div>
         </td>
         <td class="song-action">
           <div v-if="!compact" class="song-action-inner">
             <button
               class="song-icon"
               :class="{ active: isFavorite(song) }"
-              :title="isFavorite(song) ? '取消收藏' : '收藏'"
+              :aria-label="isFavorite(song) ? '取消收藏' : '收藏'"
               @click.stop="emit('favorite', index)"
             >
               <AppIcon :name="isFavorite(song) ? 'heart-filled' : 'heart'" :size="15" />
@@ -226,7 +225,7 @@ onBeforeUnmount(() => {
             <button
               class="song-icon"
               :class="downloadState(song) === 'none' ? null : downloadState(song)"
-              :title="downloadTitle(song)"
+              :aria-label="downloadTitle(song)"
               :disabled="!downloadable || !permission(song).playable"
               @click.stop="emit('download', index)"
             >
@@ -234,7 +233,6 @@ onBeforeUnmount(() => {
             </button>
             <button
               class="song-icon"
-              title="下一首播放"
               aria-label="下一首播放"
               :disabled="!isPlayable(song, index)"
               @click.stop="emit('playNext', index)"
@@ -244,7 +242,6 @@ onBeforeUnmount(() => {
             <button
               v-if="canAddToPlaylist"
               class="song-icon"
-              title="添加到歌单"
               aria-label="添加到歌单"
               @click.stop="emit('addToPlaylist', index)"
             >
@@ -253,7 +250,6 @@ onBeforeUnmount(() => {
             <button
               v-if="removable"
               class="song-icon danger"
-              title="从歌单删除"
               aria-label="从歌单删除"
               @click.stop="emit('remove', index)"
             >
@@ -263,7 +259,6 @@ onBeforeUnmount(() => {
           <div v-else class="song-more-wrap" @click.stop>
             <button
               class="song-icon"
-              title="更多操作"
               aria-label="更多操作"
               @click.stop="toggleMenu(index)"
             >

@@ -11,7 +11,6 @@ const emit = defineEmits<{ top: []; bottom: []; current: [] }>()
       v-if="showTop"
       type="button"
       class="page-jump-btn"
-      title="跳转到顶部"
       aria-label="跳转到顶部"
       @click="emit('top')"
     >
@@ -21,7 +20,6 @@ const emit = defineEmits<{ top: []; bottom: []; current: [] }>()
       v-if="showCurrent"
       type="button"
       class="page-jump-btn"
-      title="跳转到当前歌曲"
       aria-label="跳转到当前歌曲"
       @click="emit('current')"
     >
@@ -31,7 +29,6 @@ const emit = defineEmits<{ top: []; bottom: []; current: [] }>()
       v-if="showBottom"
       type="button"
       class="page-jump-btn"
-      title="跳转到底部"
       aria-label="跳转到底部"
       @click="emit('bottom')"
     >

@@ -151,7 +151,7 @@ onBeforeUnmount(() => {
   <div class="lyrics-overlay">
     <div class="lyrics-page">
       <header class="lyrics-page-head">
-        <button class="icon-btn" title="关闭歌词与评论" @click="ui.closeLyrics()">
+        <button class="icon-btn" aria-label="关闭歌词与评论" @click="ui.closeLyrics()">
           <AppIcon name="chevron-left" :size="19" />
         </button>
         <CoverArt

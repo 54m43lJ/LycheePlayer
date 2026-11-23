@@ -397,3 +397,30 @@
 - 新增歌曲详情测试：`mv.vid` 映射、缓存命中不重复请求、无绑定返回空字符串。
 - `npm run typecheck`、`npm test`（49 个测试文件、239 个用例）与 `npm run build` 通过。
 - 绑定字段来自既有录制 fixture；未用真实账号再次拉取验证。缺失绑定或补查失败时按钮隐藏，不影响播放。
+
+### 4.27 移除应用内悬停 tooltip [已解决] 
+
+**描述**：ISSUE 指出侧栏“退出”按钮悬停时出现突兀的原生 tooltip；要求删除该提示，定义禁用 tooltip 的规则并清理所有悬停 tooltip。
+
+**解决方案**：
+
+- 移除渲染层全部 DOM 元素的 `title` 属性，包括按钮、链接、截断文本、状态标记、图片与进度条；退出按钮不再出现悬停提示。
+- 图标按钮保留或补齐 `aria-label` 作为无障碍名称；有可见文字或已有 `aria-label` 的控件只删除 `title`，不改变可访问名称来源。
+- 组件 `title` prop（确认框 / 删除下载弹层标题）属于对话框标题，不是悬停提示，保持不变；系统托盘 tooltip 属于操作系统界面，保持现状。
+- 删除因此不再使用的 `App.vue` `targetThemeLabel()` 与 `PlayerBar.vue` `bufferLabel`。
+- `USER.html` §2 新增“悬停提示”约定，并清理相关章节对 tooltip 的描述；`CORE.html` 同步为“无障碍名称”表述。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 退出按钮 tooltip 条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“移除应用内悬停 tooltip” | 增 | 记录需求、实现范围与规则。 |
+| `USER.html` | §2 CONVENTIONS · 悬停提示 | 增 | 应用内禁用原生 `title`；图标按钮用 `aria-label`；托盘 tooltip 除外。 |
+| `USER.html` | §2 界面文案 / §5.2.3 播放条 / §5.2.4 歌曲列表 / §5.2.9 播放队列 | 改 | 删除 tooltip 描述，改为无障碍名称或直接移除。 |
+| `CORE.html` | §4.23 `App.vue` / §4.39 `SongTable.vue` / §4.40 `PlayerBar.vue` / §4.79 `download-state.ts` | 改 | 把 tooltip 描述改为无障碍名称，并删除无用的 tooltip 派生值。 |
+
+**工作记录**：
+
+- 渲染层仅保留 6 处组件 `title` prop（确认框 / 删除下载弹层标题），DOM 元素无 `title`。
+- `npm run typecheck`、`npm test`（49 个测试文件、239 个用例）与 `npm run build` 通过。

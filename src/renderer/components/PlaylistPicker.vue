@@ -147,7 +147,7 @@ watch(
           <h2>添加到歌单</h2>
           <p v-if="songName" class="faint">{{ songName }}</p>
         </div>
-        <button class="icon-btn" title="关闭" @click="emit('close')">
+        <button class="icon-btn" aria-label="关闭" @click="emit('close')">
           <AppIcon name="close" :size="17" />
         </button>
       </header>

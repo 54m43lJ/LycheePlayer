@@ -204,10 +204,10 @@ watch(
             </div>
             <div class="card-sub">{{ playlistSubtitle(playlist) }}</div>
             <div v-if="playlist.editable && playlist.kind !== 'favorites'" class="card-actions">
-              <button class="icon-btn" title="重命名" @click.stop="openRename(playlist)">
+              <button class="icon-btn" aria-label="重命名" @click.stop="openRename(playlist)">
                 <AppIcon name="edit" :size="14" />
               </button>
-              <button class="icon-btn" title="删除" @click.stop="removePlaylist(playlist)">
+              <button class="icon-btn" aria-label="删除" @click.stop="removePlaylist(playlist)">
                 <AppIcon name="trash" :size="14" />
               </button>
             </div>

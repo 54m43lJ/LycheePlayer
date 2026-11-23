@@ -196,7 +196,6 @@ onBeforeUnmount(() => {
         class="lyrics-trans-toggle"
         :class="{ on: translationVisible }"
         :aria-pressed="translationVisible"
-        :title="translationVisible ? '隐藏译文' : '显示译文'"
         @click="onToggleTranslation()"
       >
         <span>译文</span>

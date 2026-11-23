@@ -307,7 +307,7 @@ onBeforeUnmount(() => {
       <div class="comments-title">评论</div>
       <div class="comments-toolbar-right">
         <span v-if="total > 0" class="faint">{{ formatCount(total) }} 条</span>
-        <button class="icon-btn" title="刷新评论" :disabled="loading" @click="load()">
+        <button class="icon-btn" aria-label="刷新评论" :disabled="loading" @click="load()">
           <span v-if="loading" class="spinner" />
           <AppIcon v-else name="refresh" :size="17" />
         </button>
@@ -357,7 +357,6 @@ onBeforeUnmount(() => {
                   <span
                     v-else-if="part.emoji"
                     class="comment-media-failed comment-media-failed-emoji"
-                    title="表情加载失败"
                     aria-label="表情加载失败"
                   >
                     <AppIcon name="file-broken" :size="14" />
@@ -365,7 +364,6 @@ onBeforeUnmount(() => {
                   <span
                     v-else-if="part.missing"
                     class="comment-media-failed comment-media-failed-emoji"
-                    title="媒体加载失败"
                     aria-label="媒体加载失败"
                   >
                     <AppIcon name="file-broken" :size="14" />
@@ -380,14 +378,12 @@ onBeforeUnmount(() => {
               :src="comment.imageUrl"
               alt="评论图片"
               loading="lazy"
-              title="查看大图"
               @error="markMediaFailed(comment.imageUrl)"
               @click="openViewer(comment.imageUrl)"
             />
             <div
               v-else-if="comment.imageUrl"
               class="comment-media-failed"
-              title="图片加载失败"
               aria-label="图片加载失败"
             >
               <AppIcon name="file-broken" :size="24" />
@@ -397,7 +393,7 @@ onBeforeUnmount(() => {
               <button
                 class="comment-like"
                 :class="{ active: comment.liked }"
-                :title="comment.liked ? '取消点赞' : '点赞'"
+                :aria-label="comment.liked ? '取消点赞' : '点赞'"
                 @click="toggleLike(comment, $event)"
               >
                 <AppIcon :name="comment.liked ? 'heart-filled' : 'heart'" :size="13" />
@@ -431,7 +427,6 @@ onBeforeUnmount(() => {
       <button
         v-if="showTop"
         class="comments-jump-btn"
-        title="跳转到顶部"
         aria-label="跳转到顶部"
         @click="scrollToTop()"
       >
@@ -440,7 +435,6 @@ onBeforeUnmount(() => {
       <button
         v-if="showBottom"
         class="comments-jump-btn"
-        title="跳转到底部"
         aria-label="跳转到底部"
         :disabled="loadingAll"
         @click="jumpToBottom()"

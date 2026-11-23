@@ -77,10 +77,6 @@ function quitApp(): void {
   window.lychee.system.quit()
 }
 
-function targetThemeLabel(): string {
-  return settings.settings.theme === 'light' ? '深色' : '浅色'
-}
-
 async function toggleTheme(): Promise<void> {
   const theme = settings.settings.theme === 'light' ? 'dark' : 'light'
   try {
@@ -323,7 +319,6 @@ watch(
   <div class="app-shell" :class="{ 'sidebar-is-open': ui.sidebarOpen }">
     <button
       class="sidebar-revealer"
-      title="打开导航"
       aria-label="打开导航"
       @click.stop="openSidebar()"
     />
@@ -376,7 +371,11 @@ watch(
           >
             <CoverArt :src="item.coverUrl" image-class="recent-cover" :icon-size="12" />
             <span class="nav-recent-name">{{ recentPlaylistName(item.name) }}</span>
-            <span v-if="item.id === currentPlaylistId" class="nav-recent-playing" title="正在播放">
+            <span
+              v-if="item.id === currentPlaylistId"
+              class="nav-recent-playing"
+              aria-label="正在播放"
+            >
               <AppIcon name="volume" :size="13" />
             </span>
           </RouterLink>
@@ -399,14 +398,18 @@ watch(
           <AppIcon name="settings" :size="18" />
           <span class="nav-text">设置</span>
         </RouterLink>
-        <button class="nav-item" type="button" title="退出 Lychee Player" @click="quitApp()">
+        <button
+          class="nav-item"
+          type="button"
+          aria-label="退出 Lychee Player"
+          @click="quitApp()"
+        >
           <AppIcon name="power" :size="18" />
           <span class="nav-text">退出</span>
         </button>
         <button
           class="icon-btn sidebar-theme-toggle"
           type="button"
-          :title="`切换到${targetThemeLabel()}模式`"
           aria-label="切换配色"
           @click="toggleTheme()"
         >
@@ -466,14 +469,13 @@ watch(
         <div class="lyrics-head-actions">
           <button
             class="icon-btn"
-            title="清空播放队列"
             aria-label="清空播放队列"
             :disabled="player.queue.length === 0"
             @click="player.clearQueue()"
           >
             <AppIcon name="trash" :size="17" />
           </button>
-          <button class="icon-btn" title="关闭播放队列" @click="ui.closeQueue()">
+          <button class="icon-btn" aria-label="关闭播放队列" @click="ui.closeQueue()">
             <AppIcon name="close" :size="18" />
           </button>
         </div>
@@ -525,7 +527,6 @@ watch(
           </div>
           <button
             class="song-icon danger"
-            title="从队列移除"
             aria-label="从队列移除"
             @click="player.removeFromQueue(queueIndex)"
           >

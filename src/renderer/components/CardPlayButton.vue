@@ -35,7 +35,6 @@ const labelText = computed(() => {
   <button
     type="button"
     class="card-play"
-    :title="labelText"
     :aria-label="labelText"
     :disabled="loading"
     @click.stop="emit('play')"
