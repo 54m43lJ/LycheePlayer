@@ -20,13 +20,13 @@ const LABELS: Record<Exclude<VipLevel, 'none'>, string> = {
   super: '超级会员'
 }
 
-/** Roboto Black 大写 V 的字形，已合并为单条轮廓；坐标单位为字体单位，横竖笔画更粗壮。 */
-const ROBOTO_V =
-  'M-4 1456 L387 1456 L690 343 L662 343 L965 1456 L1358 1456 L867 0 L613 0 Z'
-/** 豪华绿钻：V 放在图标右下区域，宽高比保持 Roboto V 的 1362:1456。 */
-const V_DELUXE = 'translate(12.3 20.6) scale(0.00590659 -0.00590659) translate(4 0)'
+/**
+ * 以 Roboto Black 的 V 为参照重建的对称字形：左右镜像，保证两侧笔画等宽。
+ * 豪华绿钻放在右下区域。
+ */
+const V_DELUXE = 'M12.2 12 L14.44 12 L16.2 18.498 L17.96 12 L20.2 12 L16.92 20.55 L15.48 20.55 Z'
 /** 超级会员：V 水平居中，上下左右均与钻石边框留出间距。 */
-const V_SUPER = 'translate(8.07 16.2) scale(0.00576923 -0.00576923) translate(4 0)'
+const V_SUPER = 'M8.2 7.9 L10.328 7.9 L12 14.077 L13.672 7.9 L15.8 7.9 L12.684 16.028 L11.316 16.028 Z'
 
 const level = computed<Exclude<VipLevel, 'none'> | null>(() => {
   const status = props.status
@@ -53,8 +53,8 @@ const label = computed(() => (level.value ? LABELS[level.value] : ''))
       aria-hidden="true"
     >
       <path class="member-diamond" d="M7.8 4H16.2L21.6 9.4L12 20L2.4 9.4Z" />
-      <path v-if="level === 'deluxe'" class="member-v" :transform="V_DELUXE" :d="ROBOTO_V" />
-      <path v-else-if="level === 'super'" class="member-v" :transform="V_SUPER" :d="ROBOTO_V" />
+      <path v-if="level === 'deluxe'" class="member-v" :d="V_DELUXE" />
+      <path v-else-if="level === 'super'" class="member-v" :d="V_SUPER" />
     </svg>
     <span v-if="showLabel" class="member-badge-label">{{ label }}</span>
   </span>
