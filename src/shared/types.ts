@@ -261,6 +261,8 @@ export interface MvSummary {
   mvId: string
   name: string
   singerName: string
+  /** 歌手列表；带 mid 时渲染为可点击链接。 */
+  singers: Singer[]
   coverUrl: string
 }
 

@@ -189,6 +189,7 @@ describe('api/search', () => {
         mvId: 'w0026q7f01a',
         name: '晴天',
         singerName: '周杰伦',
+        singers: [{ mid: '0025NhlN2yWrP4', name: '周杰伦' }],
         coverUrl:
           'https://y.gtimg.cn/music/photo_new/T015R640x360M10300061J2t0b0PPW.jpg'
       }

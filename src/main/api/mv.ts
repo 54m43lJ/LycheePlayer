@@ -58,11 +58,20 @@ function singerLine(list: Array<{ name?: string }> | undefined): string {
     .join(' / ')
 }
 
+function toSingers(
+  list: Array<{ mid?: string; name?: string }> | undefined
+): MvSummary['singers'] {
+  return (list ?? [])
+    .map((item) => ({ mid: item.mid ?? '', name: (item.name ?? '').trim() }))
+    .filter((item) => item.name.length > 0 || item.mid.length > 0)
+}
+
 function toSummary(raw: RawMvSummary): MvSummary {
   return {
     mvId: String(raw.v_id ?? ''),
     name: raw.mv_name ?? '',
     singerName: singerLine(raw.singer_list),
+    singers: toSingers(raw.singer_list),
     coverUrl: coverUrl(raw.mv_pic_url)
   }
 }
@@ -124,6 +133,7 @@ export async function getMvDetail(mvId: string): Promise<MvDetail> {
     mvId: info.vid || String(info.mvid ?? id),
     name: info.name ?? '',
     singerName: singerLine(info.singers),
+    singers: toSingers(info.singers),
     coverUrl: coverUrl(info.cover_pic),
     description: info.desc ?? '',
     publishDate: info.pubdate

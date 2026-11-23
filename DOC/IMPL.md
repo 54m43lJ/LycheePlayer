@@ -474,3 +474,32 @@
 
 - 更新 `test/lyric.test.ts`：占位行返回空字符串，且其后的译文仍按行序对齐。
 - `npm run typecheck`、`npm test` 与 `npm run build` 通过。
+
+### 4.30 MV 搜索卡片跑马灯与歌手链接 [已解决] 
+
+**描述**：ISSUE 指出 MV 搜索结果卡片没有跑马灯，长标题 / 歌手名显示不全；且歌手名只是纯文本，无法点击进入歌手页。
+
+**解决方案**：
+
+- `MvSummary` 增加 `singers: Singer[]`；`api/mv.ts` 的 `toSummary` / `getMvDetail` 从 `singer_list` / `singers` 映射结构化歌手并保留 `mid`，同时继续生成拼接文案 `singerName`。
+- `MarqueeText` 支持默认插槽：`text` 改为可选；插槽内容按实际宽度测量并可滚动，第二份循环副本加 `inert` 与 `aria-hidden`，避免重复链接参与点击或焦点。
+- `SearchView` 的 MV 卡片由 `<button>` 改为 `div[role="button"]`，标题使用 `MarqueeText`；歌手行使用带插槽的 `MarqueeText`，带 `mid` 的歌手渲染为 `RouterLink`（`/artist/:mid`）并 `@click.stop` / `@keydown.stop`，避免触发卡片跳转；点击卡片其余区域或 Enter 进入 `/mv/:id`。
+- 增加 `.mv-card` 指针光标；窄屏两列布局不变。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | MV 搜索跑马灯与歌手点击条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“MV 搜索卡片跑马灯与歌手链接” | 增 | 记录结构化歌手、插槽跑马灯与卡片交互。 |
+| `USER.html` | §5.2.8 搜索页 | 改 | MV 卡片标题 / 歌手跑马灯，歌手可点击进入歌手页。 |
+| `CORE.html` | §4.38 `MarqueeText.vue`（`#c4-38`） | 改 | 记录可选 `text` 与默认插槽、`inert` 循环副本。 |
+| `CORE.html` | §4.44 `SearchView.vue`（`#c4-44`） | 改 | 记录 MV 卡片结构、歌手链接与点击边界。 |
+| `CORE.html` | §4.56 `mv.ts`（`#c4-56`） | 改 | 记录 `singer_list` 同时映射 `singerName` 与 `singers[]`。 |
+| `README.md` / `ABOUT.html` | 搜索行 | 改 | 补充 MV 卡片跑马灯与歌手链接。 |
+
+**工作记录**：
+
+- 更新 MV 搜索与详情的映射测试，覆盖 `singers[]` 保留 `mid`。
+- `npm run typecheck`、`npm test`（49 个测试文件、239 个用例）与 `npm run build` 通过。
+- 未做真实窗口截图验收；卡片交互由模板结构与类型检查确认。

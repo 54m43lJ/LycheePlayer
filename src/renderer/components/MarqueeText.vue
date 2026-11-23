@@ -5,11 +5,15 @@ import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
  * 文本超出容器宽度时无缝跑马灯滚动，未超出时静止。
  * 测量以首个文本副本为准；悬停暂停由 CSS 提供。
  */
-const props = defineProps<{
-  text: string
-  /** 滚动速度，像素/秒。 */
-  speed?: number
-}>()
+const props = withDefaults(
+  defineProps<{
+    /** 纯文本内容；使用默认插槽时可省略。 */
+    text?: string
+    /** 滚动速度，像素/秒。 */
+    speed?: number
+  }>(),
+  { text: '' }
+)
 
 const root = ref<HTMLElement | null>(null)
 const textEl = ref<HTMLElement | null>(null)
@@ -53,8 +57,10 @@ onBeforeUnmount(() => observer?.disconnect())
       :class="{ scrolling }"
       :style="scrolling ? { animationDuration: `${duration}s` } : undefined"
     >
-      <span ref="textEl" class="marquee-text">{{ text }}</span>
-      <span v-if="scrolling" class="marquee-text" aria-hidden="true">{{ text }}</span>
+      <span ref="textEl" class="marquee-text"><slot>{{ text }}</slot></span>
+      <span v-if="scrolling" class="marquee-text" aria-hidden="true" inert
+        ><slot>{{ text }}</slot></span
+      >
     </div>
   </div>
 </template>

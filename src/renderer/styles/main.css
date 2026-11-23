@@ -984,6 +984,10 @@ button:focus-visible,
   aspect-ratio: 16 / 9;
 }
 
+.mv-card {
+  cursor: pointer;
+}
+
 .card {
   min-width: 0;
   padding: 10px;
@@ -1687,6 +1691,8 @@ button:focus-visible,
 
 .marquee-text {
   flex: none;
+  display: inline-flex;
+  align-items: center;
 }
 
 /* 位移 = 单份文本 + 份间距（gap 2.5em 的一半），两份拷贝首尾相接形成无缝循环 */

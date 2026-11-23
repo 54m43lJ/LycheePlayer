@@ -1669,8 +1669,15 @@ export function useToast(): {
 </code></pre>
 
 <h3 id="c4-38">4.38 src/renderer/components/MarqueeText.vue <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>const props = withDefaults(defineProps&lt;{ text: string; speed?: number }&gt;(), { speed: 30 });
+<pre><code>const props = withDefaults(
+  defineProps&lt;{ text?: string; speed?: number }&gt;(),
+  { text: '', speed: 30 }
+);
 </code></pre>
+<ul class="note">
+  <li><code>text</code> 可与默认插槽二选一；使用插槽时按实际内容宽度测量，适合带链接的歌手行。插槽内容会渲染两份用于无缝循环，第二份带 <code>inert</code> 与 <code>aria-hidden</code>，不参与点击与焦点。</li>
+  <li>仅当内容超出容器 4px 时滚动；悬停暂停。</li>
+</ul>
 
 <h3 id="c4-39">4.39 src/renderer/components/SongTable.vue <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>const props = withDefaults(
@@ -1786,6 +1793,7 @@ const emit = defineEmits&lt;{
   <li>上游会按 <code>perpage</code> 限制每页上限，但返回条数可能少于请求值（歌单常见 48 / 46 / 45，重复请求同一页结果稳定，属于服务端过滤而非随机）；歌手 <code>perpage &gt; 40</code> 会返回 <code>is_filter=-2</code> 与空列表。页面不额外补页凑整，末行可能不满，这是上游不可控行为。</li>
   <li>宽屏（&gt;900px）歌手 / 专辑 / 歌单固定 8 列，窄屏 3 列；MV 宽屏 6 列、窄屏 2 列，卡片宽度随内容区缩放。MV 封面使用源图 640×360 的 16:9 比例；封面使用原生 <code>&lt;img&gt;</code>，若 URL 为 GIF / WebP 动图则按浏览器原生行为播放，不做冻结或重绘。当前搜索接口的 <code>mv_pic_url</code> 通常是静态 JPEG（例如 Bound 2 (Network Edit)），客户端看到的“动”是视频预览而非动图，接口本身没有提供动画帧。</li>
   <li>歌手卡片使用 <code>Singer.avatarUrl</code> 显示头像，加载失败时把该字段清空并回退为姓名首字；歌手 / 专辑卡片点击进入 <code>/artist/:mid</code> / <code>/album/:mid</code>，不再以“搜索该歌手 / 专辑的单曲”作为点击行为；MV 卡片进入 <code>/mv/:id</code>。歌手 / 专辑卡片只显示名称，不用副标题解释点击行为。</li>
+  <li>MV 卡片外层为 <code>div[role="button"]</code>，标题与歌手行都使用 <a href="#c4-38">MarqueeText</a>；歌手来自 <code>MvSummary.singers</code>，带 <code>mid</code> 的歌手渲染为 <code>RouterLink</code>（<code>/artist/:mid</code>）并 <code>@click.stop</code> / <code>@keydown.stop</code>，不带 <code>mid</code> 时只显示文本。点击卡片其余区域或按 Enter 进入 <code>/mv/:id</code>。</li>
   <li>歌单结果卡片外层改为 <code>div[role="button"]</code>，卡片中心叠放 <a href="#c4-89">CardPlayButton</a>；播放按钮 <code>@click.stop</code> 调用 <a href="#c4-90">usePlaylistPlay().toggleSource</a>，当前歌单播放 / 暂停时切换播放状态，否则直接播放整个歌单而不进入详情；卡片其余区域仍跳转 <code>/playlist/:id</code>。</li>
 </ul>
 
@@ -2066,8 +2074,8 @@ export function getMvDetail(mvId: string): Promise&lt;MvDetail&gt;;
 export function getMvStream(mvId: string, quality: MvStream['quality']): Promise&lt;MvStream&gt;;
 </code></pre>
 <ul class="note">
-  <li>搜索复用 <code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code> 并传 <code>search_type: 4</code>；结果取 <code>body.mv.list[]</code> 的 <code>v_id</code> / <code>mv_name</code> / <code>mv_pic_url</code> / <code>singer_list</code> / <code>duration</code> / <code>publish_date</code>，映射为 <code>SearchResult.mvs</code>。MV 搜索接受页码与每页条数，总数读取 <code>data.meta.sum</code>（兼容 <code>body.meta</code>），并根据 <code>meta.nextpage</code> 写入 <code>SearchResult.hasMore</code>；<a href="#c4-10">search.searchByType</a> 的 <code>type='mv'</code> 直接转交该入口，返回独立的 <code>SearchResult.mvs</code>、<code>total</code> 与 <code>hasMore</code>。</li>
-  <li>详情：<code>MvService.MvInfoProServer / GetMvInfoList</code>，参数 <code>{ vidlist: [mvId] }</code>；取 <code>mvlist[0]</code> 的 <code>cover_pic</code> / <code>desc</code> / <code>duration</code> / <code>singers</code> / <code>pubdate</code> / <code>playcnt</code>。</li>
+  <li>搜索复用 <code>music.search.SearchCgiService / DoSearchForQQMusicDesktop</code> 并传 <code>search_type: 4</code>；结果取 <code>body.mv.list[]</code> 的 <code>v_id</code> / <code>mv_name</code> / <code>mv_pic_url</code> / <code>singer_list</code> / <code>duration</code> / <code>publish_date</code>，映射为 <code>SearchResult.mvs</code>；<code>singer_list</code> 同时生成拼接文案 <code>singerName</code> 与结构化 <code>singers[]</code>（保留 <code>mid</code> 供歌手链接）。MV 搜索接受页码与每页条数，总数读取 <code>data.meta.sum</code>（兼容 <code>body.meta</code>），并根据 <code>meta.nextpage</code> 写入 <code>SearchResult.hasMore</code>；<a href="#c4-10">search.searchByType</a> 的 <code>type='mv'</code> 直接转交该入口，返回独立的 <code>SearchResult.mvs</code>、<code>total</code> 与 <code>hasMore</code>。</li>
+  <li>详情：<code>MvService.MvInfoProServer / GetMvInfoList</code>，参数 <code>{ vidlist: [mvId] }</code>；取 <code>mvlist[0]</code> 的 <code>cover_pic</code> / <code>desc</code> / <code>duration</code> / <code>singers</code> / <code>pubdate</code> / <code>playcnt</code>；<code>singers</code> 同样映射为 <code>MvSummary.singers[]</code>。</li>
   <li>取流：<code>gosrf.Stream.MvUrlProxy / GetMvUrls</code>，参数 <code>{ vids: [mvId], from: 'h5.playsong' }</code>；<code>data[mvId].mp4[]</code> 的 <code>filetype</code> 10 / 20 / 30 对应 <code>sd</code> / <code>hd</code> / <code>fhd</code>，可播地址取条目的 <code>freeflow_url</code>；<code>filetype</code> 0 / 40 / 50 无地址时按档位降级。</li>
   <li>默认请求 <code>fhd</code>，不可用时按 <code>fhd → hd → sd</code> 降档。成功时 <code>MvStream.quality</code> 返回实际采用的档位，而不是请求档；全部失败时返回请求档并令 <code>url: null</code>，表示从请求档起向下所有档位都不可用，调用方应展示重试 / 错误，不得把请求档当作已取到。结构缺失映射 <code>UPSTREAM_CHANGED</code>。MV 播放与音频播放互不影响。</li>
 </ul>
