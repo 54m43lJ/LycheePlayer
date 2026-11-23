@@ -2139,11 +2139,6 @@ button:focus-visible,
   line-height: 1.45;
 }
 
-/* 纯斜杠占位保留空译文行，维持译文开关打开时的行高一致。 */
-.lyric-trans:empty {
-  min-height: 1.45em;
-}
-
 .lyric-line.active .lyric-trans {
   color: color-mix(in srgb, var(--accent-strong) 65%, transparent);
 }
