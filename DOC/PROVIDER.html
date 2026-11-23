@@ -312,14 +312,14 @@
   <tr><td>MV 详情</td><td><code>MvService.MvInfoProServer / GetMvInfoList</code></td><td>按 <code>vidlist</code> 获取封面、简介、时长、歌手与播放数。</td></tr>
   <tr><td>MV 取流</td><td><code>gosrf.Stream.MvUrlProxy / GetMvUrls</code></td><td>按 <code>vids</code> 返回各清晰度的 <code>freeflow_url</code>。</td></tr>
   <tr><td>评论点赞</td><td><code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code></td><td><code>type</code> 3 点赞、4 取消；需要登录。</td></tr>
-  <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td><code>Content</code> · <code>BizType</code>（1） · <code>BizId</code> · <code>BizSubType</code>（2）；需要登录，正文字符串上限 300。</td></tr>
+  <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td>歌曲：<code>Content</code> · <code>BizType</code>（1） · <code>BizId</code>（数字歌曲 ID） · <code>BizSubType</code>（2）；MV：<code>BizType</code>（5） · <code>BizId</code>（MV vid），不传 <code>BizSubType</code>；需要登录，正文字符串上限 300。</td></tr>
   <tr><td>会话续期（QQ 网页登录）</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>携带旧 <code>musickey</code>、<code>expired_in</code>、<code>access_token</code>、<code>refresh_token</code>、<code>openid</code> 与数字 <code>musicid</code> 换新 <code>musickey</code>；缺少 OAuth 字段时只传 <code>musicid</code> + <code>musickey</code> 会被上游以 10006 拒绝。旧 key 已过期时仍可尝试恢复。</td></tr>
   <tr><td>微信会话续期</td><td><code>music.login.LoginServer / Login</code></td><td><code>loginMode=2</code>，用 <code>refresh_token</code> / <code>access_token</code> / <code>openid</code> 换新 <code>musickey</code>；<code>comm.tmeLoginType=1</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
   <tr><td>微信登录换证</td><td><code>music.login.LoginServer / Login</code></td><td>用微信回调 <code>code</code> 与 <code>param.strAppid</code> 换取登录凭证；<code>comm.tmeLoginType=1</code>。</td></tr>
   <tr><td>微信登录二维码</td><td><code>https://open.weixin.qq.com/connect/qrconnect</code></td><td>微信开放平台网站应用二维码；回调到 QQ 音乐 <code>wx_redirect</code> 页。</td></tr>
   <tr><td>歌词</td><td><code>music.musichallSong.PlayLyricInfo / GetPlayLyricInfo</code></td><td>按数字歌曲 ID 返回 Base64 编码的 <code>lyric</code> 与 <code>trans</code>；旧歌词接口因译文缺失不再消费。</td></tr>
-  <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲最新评论；应用不提供“最旧”或按点赞排序，单页固定 25 条（26 起返回业务码 <code>10000</code>）。</td></tr>
+  <tr><td>歌曲 / MV 评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲或 MV 最新评论：歌曲 <code>BizType 1</code> + <code>BizSubType 2</code>、<code>BizId</code> 为数字歌曲 ID；MV <code>BizType 5</code>、<code>BizId</code> 为 MV vid，不传 <code>BizSubType</code>。应用不提供“最旧”或按点赞排序，单页固定 25 条（26 起返回业务码 <code>10000</code>）。</td></tr>
   <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号会员身份与到期信息；<code>identity.vip</code> 为绿钻，<code>svip</code> 为豪华绿钻，<code>identity.HugeVip</code> / <code>huge_vip</code> 为超级会员，<code>userinfo.expire</code> 为到期时间。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>QQ 官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方 xlogin 扫码组件。</td></tr>
@@ -406,7 +406,7 @@
   </tr>
   <tr>
     <td>评论发表</td>
-    <td><code>Content</code>（≤300 字） · <code>BizType</code>（1） · <code>BizId</code>（数字歌曲 ID） · <code>BizSubType</code>（2）</td>
+    <td><code>Content</code>（≤300 字） · <code>BizType</code>（1 歌曲 / 5 MV） · <code>BizId</code>（歌曲数字 ID 或 MV vid） · <code>BizSubType</code>（歌曲 2；MV 不传）</td>
   </tr>
   <tr>
     <td>歌手详情</td>
@@ -433,8 +433,8 @@
     <td><code>songID</code>（数字） · <code>trans</code>（1） · <code>qrc</code>（0） · <code>crypt</code>（0） · <code>interval</code> · <code>ct</code>（6） · <code>cv</code>（80600）</td>
   </tr>
   <tr>
-    <td>歌曲评论</td>
-    <td><code>BizId</code>（数字歌曲 ID） · <code>BizType</code>（1） · <code>BizSubType</code>（2） · <code>PageSize</code>（≤25） · <code>PageNum</code> · <code>LastCommentSeqNo</code> · <code>HashTagID</code> · <code>SelfSeeEnable</code> · <code>PicEnable</code> · <code>AudioEnable</code> · <code>WithHot</code>（1 附带热评） · <code>LastCommentSeqNo</code>（游标）</td>
+    <td>歌曲 / MV 评论</td>
+    <td>歌曲：<code>BizId</code>（数字歌曲 ID） · <code>BizType</code>（1） · <code>BizSubType</code>（2）；MV：<code>BizId</code>（MV vid） · <code>BizType</code>（5），不传 <code>BizSubType</code>；均含 <code>PageSize</code>（≤25） · <code>PageNum</code> · <code>LastCommentSeqNo</code> · <code>HashTagID</code> · <code>SelfSeeEnable</code> · <code>PicEnable</code> · <code>AudioEnable</code> · <code>WithHot</code>（1 附带热评）</td>
   </tr>
   <tr>
     <td>VIP 状态</td>
@@ -467,7 +467,7 @@
   <tr><td>歌单详情 <code>CgiGetDiss</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>我的歌单 <code>GetPlaylistByUin</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>歌词 <code>PlayLyricInfo</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td><code>u.y.qq.com</code> <code>musicu</code>；Cookie 凭证</td></tr>
-  <tr><td>歌曲评论 <code>GetNewCommentList</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>未登录匿名；登录后携带 Cookie 以读取 <code>IsPraised</code></td></tr>
+  <tr><td>歌曲 / MV 评论 <code>GetNewCommentList</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>未登录匿名；登录后携带 Cookie 以读取 <code>IsPraised</code>；MV 使用 <code>BizType 5</code> + vid</td></tr>
   <tr><td>VIP 状态 <code>vip_login_base</code></td><td>桌面 Chrome 120（Linux）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证</td></tr>
   <tr><td>用户资料 <code>fcg_get_profile_homepage.fcg</code></td><td>桌面 Chrome 120（Windows）</td><td><code>https://y.qq.com/</code></td><td>Cookie 凭证；<code>g_tk=hash33(musickey, 5381)</code></td></tr>
   <tr><td>QQ 登录换证 <code>QQLogin</code></td><td>iPhone iOS 13</td><td><code>https://y.qq.com/</code></td><td>JSON；<code>param.code</code>；不携带凭证</td></tr>
@@ -483,7 +483,7 @@
 <ul class="note">
   <li>搜索请求不携带 <code>comm</code>；其余 <code>musicu</code> 请求按需携带 <code>uin</code>、<code>format</code>、<code>ct</code>、<code>cv</code>。</li>
   <li>普通内容 CGI 不需要额外签名；收藏写入必须使用 <a href="#p3-3">§3.3</a> 的 zzc 签名 + <code>ag-1</code> 加密通道；<code>g_tk</code> 还用于 OAuth 授权、歌词与用户资料请求。</li>
-  <li>歌曲评论单页实测上限 25 条（26 起返回业务码 <code>10000</code>），因此应用固定使用 25 条。未登录时匿名发送，登录后携带 Cookie 以读取 <code>IsPraised</code>。评论区只读取最新评论，通过 <code>LastCommentSeqNo</code> 游标翻页，不提供“最旧”排序。</li>
+  <li>歌曲 / MV 评论单页实测上限 25 条（26 起返回业务码 <code>10000</code>），因此应用固定使用 25 条。未登录时匿名发送，登录后携带 Cookie 以读取 <code>IsPraised</code>。评论区只读取最新评论，通过 <code>LastCommentSeqNo</code> 游标翻页，不提供“最旧”排序。MV 评论使用 <code>BizType 5</code> 与 MV vid；读取与 AddComment 均不传 <code>BizSubType</code>，与官方网页请求一致。</li>
   <li>“我喜欢”歌单读取使用 <code>CgiGetDiss</code> 的 <code>disstid:0</code> + <code>dirid:201</code>；普通歌单仍使用 <code>disstid</code>。上游单次最多返回 100 首，应用固定 50 首/页。</li>
   <li>推荐、歌单写入与 MV 的方法 / 参数已按真实请求固定；内部调用路径与错误处理见 <a href="CORE.html#c4-53">CORE §4.53</a> / <a href="CORE.html#c4-55">§4.55</a> / <a href="CORE.html#c4-56">§4.56</a>。fixture 只覆盖部分映射，具体覆盖范围与未覆盖字段见 <a href="#p4-3">§4.3</a>；接口真实可用性以实际请求结果为准。</li>
   <li>已消费接口中没有“一次查询歌曲是否存在于当前账号全部歌单”的入口：<code>GetPlaylistByUin</code> 只返回歌单元数据，<code>CgiGetDiss</code> 按单个歌单读取。跨歌单成员判断只能逐单读取或使用应用本地缓存；当前采用后者，见 <a href="CORE.html#c4-77">CORE §4.77</a>。</li>

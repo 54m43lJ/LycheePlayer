@@ -19,6 +19,16 @@ const player = usePlayerStore()
 const auth = useAuthStore()
 const toast = useToast()
 
+const props = withDefaults(
+  defineProps<{
+    /** 评论目标类型；默认歌曲。 */
+    targetType?: 'song' | 'mv'
+    /** 指定评论目标 ID；歌曲模式省略时跟随当前播放歌曲。 */
+    targetId?: string
+  }>(),
+  { targetType: 'song', targetId: '' }
+)
+
 const comments = ref<Comment[]>([])
 const total = ref(0)
 const hasMore = ref(false)
@@ -30,7 +40,12 @@ const error = ref('')
 const listRef = ref<HTMLElement | null>(null)
 const showTop = ref(false)
 const showBottom = ref(false)
-const songId = computed(() => player.current?.songId ?? '')
+const resolvedId = computed(
+  () => props.targetId || (props.targetType === 'song' ? player.current?.songId ?? '' : '')
+)
+const emptyLabel = computed(() =>
+  props.targetType === 'mv' ? 'MV 加载后显示评论' : '播放歌曲后显示评论'
+)
 const draft = ref('')
 const posting = ref(false)
 const failedMedia = ref<Record<string, boolean>>({})
@@ -71,8 +86,20 @@ function scrollToBottom(): void {
   updateJumpControls()
 }
 
+function fetchPage(id: string, cursor: string) {
+  return props.targetType === 'mv'
+    ? window.lychee.comment.getMv(id, cursor)
+    : window.lychee.comment.get(id, cursor)
+}
+
+function postTarget(id: string, content: string) {
+  return props.targetType === 'mv'
+    ? window.lychee.comment.postMv(id, content)
+    : window.lychee.comment.post(id, content)
+}
+
 async function load(): Promise<void> {
-  const id = songId.value
+  const id = resolvedId.value
   if (!id) {
     comments.value = []
     total.value = 0
@@ -93,7 +120,7 @@ async function load(): Promise<void> {
   failedMedia.value = {}
   if (listRef.value) listRef.value.scrollTop = 0
   try {
-    const page = unwrap(await window.lychee.comment.get(id, ''))
+    const page = unwrap(await fetchPage(id, ''))
     if (request !== token) return
     comments.value = page.comments
     total.value = page.total
@@ -114,12 +141,12 @@ async function load(): Promise<void> {
 }
 
 async function loadMore(): Promise<boolean> {
-  const id = songId.value
+  const id = resolvedId.value
   if (!id || loadingMore.value || !hasMore.value || !cursor.value) return false
   const request = token
   loadingMore.value = true
   try {
-    const page = unwrap(await window.lychee.comment.get(id, cursor.value))
+    const page = unwrap(await fetchPage(id, cursor.value))
     if (request !== token) return false
     const known = new Set(comments.value.map((comment) => comment.id))
     comments.value = [
@@ -221,7 +248,7 @@ function contentParts(comment: Comment): CommentPart[] {
 }
 
 async function submitComment(): Promise<void> {
-  const id = songId.value
+  const id = resolvedId.value
   const content = draft.value.trim()
   if (!id || !content || posting.value) return
   if (!auth.loggedIn) {
@@ -234,8 +261,8 @@ async function submitComment(): Promise<void> {
   }
   posting.value = true
   try {
-    unwrap(await window.lychee.comment.post(id, content))
-    if (songId.value === id) {
+    unwrap(await postTarget(id, content))
+    if (resolvedId.value === id) {
       draft.value = ''
       await load()
     }
@@ -284,7 +311,7 @@ function onResize(): void {
 }
 
 watch(
-  songId,
+  resolvedId,
   () => {
     draft.value = ''
     void load()
@@ -315,9 +342,9 @@ onBeforeUnmount(() => {
     </div>
 
     <div ref="listRef" class="comments-scroll" @scroll.passive="onScroll">
-      <div v-if="!songId" class="lyrics-empty">
-        <AppIcon name="music" :size="26" />
-        <span>播放歌曲后显示评论</span>
+      <div v-if="!resolvedId" class="lyrics-empty">
+        <AppIcon :name="targetType === 'mv' ? 'video' : 'music'" :size="26" />
+        <span>{{ emptyLabel }}</span>
       </div>
 
       <div v-else-if="loading && comments.length === 0" class="lyrics-empty">
@@ -407,7 +434,7 @@ onBeforeUnmount(() => {
       </template>
     </div>
 
-    <form v-if="songId" class="comment-composer" @submit.prevent="submitComment()">
+    <form v-if="resolvedId" class="comment-composer" @submit.prevent="submitComment()">
       <textarea
         v-model="draft"
         class="comment-input"

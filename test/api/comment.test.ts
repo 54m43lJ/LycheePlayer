@@ -337,6 +337,72 @@ describe('api/comment', () => {
     })
   })
 
+  it('reads MV comments with BizType 5 and the MV vid', async () => {
+    const requests: Array<Record<string, unknown>> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      requests.push(payload.req_0?.param ?? {})
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [{ CmId: 'm1', Nick: 'M', Content: 'MV 评论', PubTime: 100 }],
+              Total: 1,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getMvComments } = await import('../../src/main/api/comment')
+    const page = await getMvComments('t0016l53c3r', '')
+    expect(page.comments.map((comment) => comment.content)).toEqual(['MV 评论'])
+    expect(requests[0]).toMatchObject({
+      BizType: 5,
+      BizId: 't0016l53c3r'
+    })
+    expect(requests[0]?.BizSubType).toBeUndefined()
+  })
+
+  it('posts an MV comment with BizType 5 and no BizSubType', async () => {
+    const requests: Array<{ method: string; param: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { method?: string; param?: Record<string, unknown> }
+      }
+      requests.push({
+        method: payload.req_0?.method ?? '',
+        param: payload.req_0?.param ?? {}
+      })
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: { SubCode: 0, Msg: '', AddedCmId: 'new-mv-comment' }
+        }
+      })
+    })
+
+    const { postMvComment } = await import('../../src/main/api/comment')
+    await expect(postMvComment('t0016l53c3r', '  hello mv  ')).resolves.toEqual({
+      commentId: 'new-mv-comment'
+    })
+    expect(requests[0]?.method).toBe('AddComment')
+    expect(requests[0]?.param).toMatchObject({
+      Content: 'hello mv',
+      BizType: 5,
+      BizId: 't0016l53c3r'
+    })
+    expect(requests[0]?.param.BizSubType).toBeUndefined()
+  })
+
   it('maps a comment verification requirement to NO_PERMISSION', async () => {
     vi.stubGlobal('fetch', async () =>
       respond({

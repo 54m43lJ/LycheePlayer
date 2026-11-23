@@ -806,3 +806,39 @@
 - 原浮层测试保留；`test/back-navigation.test.ts` 共 9 个用例。
 - `npm run typecheck`、`npm test`（51 个测试文件、258 个用例）与 `npm run build` 通过。
 - 未做真实鼠标侧键 / 系统手势窗口验收；页面栈与前进栈由 fake router 单测覆盖，事件入口沿用原有已验证监听。
+
+### 4.40 MV 评论 [已解决] 
+
+**描述**：TODO 询问 MV 是否有评论接口，若有则实现 MV 评论，加载机制参考歌曲评论。调查确认上游存在 MV 评论：`music.globalComment.CommentRead / GetNewCommentList` 使用 `BizType 5`、`BizId` 为 MV 的 vid，即可读取；对 `t0016l53c3r`（Rhinestone Eyes）实测返回 17 条评论。
+
+**解决方案**：
+
+- `api/comment.ts` 抽出共享的读取 / 发表链路：歌曲继续使用 `BizType 1` + `BizSubType 2`；新增 `getMvComments` / `postMvComment`，使用 `BizType 5`、`BizId` 为 vid，读取与 AddComment 均不传 `BizSubType`。该参数组合与官方网页客户端一致。
+- 新增 `comment.getMv` / `comment.postMv` IPC 与 preload 方法，返回模型沿用 `CommentPage` / `CommentPostResult`；点赞仍按 `comment_id`，目标类型无关。
+- `CommentsPanel` 增加 `targetType: 'song' | 'mv'` 与 `targetId` props：歌曲模式省略 `targetId` 时跟随当前播放歌曲，MV 模式使用传入 vid；按目标类型选择 `comment.get` / `getMv` 与 `comment.post` / `postMv`，空状态文案与图标同步区分。
+- `MvView` 在视频信息下方增加固定高度 `.mv-comments` 区域，复用 `CommentsPanel`；分页、刷新、点赞、表情 / 附图、跳转顶部 / 底部与发表评论全部沿用歌曲评论机制。
+- 切换 MV 时评论目标变化，自动重载并清空草稿；未登录可浏览、不能发表。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | “MV有评论接口吗”条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“MV 评论” | 增 | 记录 BizType 5 / vid、共享评论区与 IPC。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 注明评论区同时用于 MV 播放页，规则一致。 |
+| `USER.html` | §5.2.8 MV 播放 | 改 | 增加下方评论区、分页 / 点赞 / 发表与未登录限制。 |
+| `CORE.html` | §4.1 / §4.2 | 改 | 评论模型补充 `getMv` / `postMv` IPC。 |
+| `CORE.html` | §4.15 `api/comment.ts`（`#c4-15`） | 改 | 增加 `getMvComments` / `postMvComment` 与 BizType 5 参数说明。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 记录 `targetType` / `targetId`、API 分支与目标变化重载。 |
+| `CORE.html` | §4.69 `MvView.vue`（`#c4-69`） | 改 | 记录视频下方 MV 评论区。 |
+| `CORE.html` | §5.26 MV 评论（`#c5-26`） | 增 | 记录 MV 评论读取 / 发表 / 点赞调用树。 |
+| `PROVIDER.html` | §4 接口 / 数据模型 / 记录表 | 改 | 补充 MV 评论 `BizType 5`、`BizId` 为 vid、不传 `BizSubType`。 |
+| `README.md` / `ABOUT.html` | MV 行 | 改 | 补充 MV 评论区与歌曲评论机制复用。 |
+
+**工作记录**：
+
+- 真实匿名读取 `Rhinestone Eyes`（vid `t0016l53c3r`）：`BizType 5`、无 `BizSubType` 返回 `Total=17`、首屏 5 条、`HasMore=1`。
+- 对照官方网页客户端请求：读取与 `AddComment` 均使用 `BizType 5` + `BizId=vid`，不携带 `BizSubType`；应用沿用该组合。
+- 新增 API 测试：MV 读取使用 BizType 5 / vid 且无 BizSubType；MV 发表使用 AddComment BizType 5 / vid 且无 BizSubType。
+- `npm run typecheck`、`npm test`（51 个测试文件、260 个用例）与 `npm run build` 通过。
+- 未使用真实登录账号发表 MV 评论（避免产生公开内容）；读取用真实接口验证，发表参数对照官方客户端请求。

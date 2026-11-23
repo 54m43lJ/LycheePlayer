@@ -3,6 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { MvStream } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
+import CommentsPanel from '../components/CommentsPanel.vue'
 import CoverArt from '../components/CoverArt.vue'
 import { describeError } from '../api'
 import { goBack } from '../composables/back-navigation'
@@ -144,6 +145,10 @@ onMounted(() => void load())
           <p class="page-sub">{{ mv.detail.singerName }}</p>
           <p v-if="mv.detail.description" class="mv-description">{{ mv.detail.description }}</p>
         </div>
+      </section>
+
+      <section class="mv-comments">
+        <CommentsPanel target-type="mv" :target-id="mvId" />
       </section>
     </template>
   </div>

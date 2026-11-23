@@ -152,7 +152,9 @@ export interface LycheeApi {
   }
   comment: {
     get(songId: string, cursor?: string): Promise<IpcResult<CommentPage>>
+    getMv(mvId: string, cursor?: string): Promise<IpcResult<CommentPage>>
     post(songId: string, content: string): Promise<IpcResult<CommentPostResult>>
+    postMv(mvId: string, content: string): Promise<IpcResult<CommentPostResult>>
     like(commentId: string): Promise<IpcResult<CommentLikeResult>>
     unlike(commentId: string): Promise<IpcResult<CommentLikeResult>>
   }

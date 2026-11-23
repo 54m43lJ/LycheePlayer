@@ -3123,6 +3123,19 @@ button:focus-visible,
   line-height: 1.7;
 }
 
+.mv-comments {
+  height: min(520px, 65vh);
+  margin-top: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.mv-comments > .lyrics-page-side {
+  height: 100%;
+}
+
 .dialog-backdrop {
   position: fixed;
   inset: 0;

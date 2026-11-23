@@ -25,7 +25,14 @@ import {
 } from './api/login'
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
-import { getComments, likeComment, postComment, unlikeComment } from './api/comment'
+import {
+  getComments,
+  getMvComments,
+  likeComment,
+  postComment,
+  postMvComment,
+  unlikeComment
+} from './api/comment'
 import {
   fetchPlaylistPage,
   fetchPlaylistSnapshot,
@@ -490,9 +497,18 @@ export function registerIpc(): void {
   handle('comment.get', async (songId: unknown, cursor: unknown) =>
     getComments(String(songId), typeof cursor === 'string' ? cursor : '')
   )
+  handle('comment.getMv', async (mvId: unknown, cursor: unknown) =>
+    getMvComments(String(mvId), typeof cursor === 'string' ? cursor : '')
+  )
   handle('comment.post', async (songId: unknown, content: unknown) =>
     postComment(
       stringArg(songId, '歌曲 ID'),
+      stringArg(content, '评论内容', COMMENT_CONTENT_MAX)
+    )
+  )
+  handle('comment.postMv', async (mvId: unknown, content: unknown) =>
+    postMvComment(
+      stringArg(mvId, 'MV ID'),
       stringArg(content, '评论内容', COMMENT_CONTENT_MAX)
     )
   )

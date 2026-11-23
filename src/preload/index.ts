@@ -169,8 +169,12 @@ const api: LycheeApi = {
   comment: {
     get: (songId: string, cursor?: string) =>
       invoke<CommentPage>('comment.get', songId, cursor),
+    getMv: (mvId: string, cursor?: string) =>
+      invoke<CommentPage>('comment.getMv', mvId, cursor),
     post: (songId: string, content: string) =>
       invoke<CommentPostResult>('comment.post', songId, content),
+    postMv: (mvId: string, content: string) =>
+      invoke<CommentPostResult>('comment.postMv', mvId, content),
     like: (commentId: string) => invoke<CommentLikeResult>('comment.like', commentId),
     unlike: (commentId: string) => invoke<CommentLikeResult>('comment.unlike', commentId)
   },

@@ -93,32 +93,50 @@ function toComment(raw: RawComment): Comment {
 }
 
 /** 歌曲评论；songId 为上游数字歌曲 ID。 */
-export async function getComments(
-  songId: string,
-  cursor = ''
+const SONG_BIZ_TYPE = 1
+const SONG_BIZ_SUBTYPE = 2
+/** MV 评论使用 BizType 5，BizId 为 MV 的 vid 字符串。 */
+const MV_BIZ_TYPE = 5
+
+interface CommentQuery extends Record<string, unknown> {
+  PageSize: number
+  PageNum: number
+  HashTagID: string
+  BizType: number
+  PicEnable: number
+  LastCommentSeqNo: string
+  SelfSeeEnable: number
+  BizId: string
+  AudioEnable: number
+  BizSubType?: number
+}
+
+async function fetchComments(
+  bizId: string,
+  cursor: string,
+  bizType: number,
+  bizSubType?: number
 ): Promise<CommentPage> {
-  const id = songId.trim()
-  if (!/^\d+$/.test(id)) {
-    return { comments: [], total: 0, hasMore: false }
-  }
+  if (!bizId) return { comments: [], total: 0, hasMore: false }
 
   // 必须携带登录 Cookie，上游才会按当前用户返回 IsPraised；未登录时自动匿名。
   // SeqNo 可能超过 Number 安全范围，按字符串解析供下一页游标使用。
+  const param: CommentQuery = {
+    PageSize: COMMENT_PAGE_SIZE,
+    PageNum: 0,
+    HashTagID: '',
+    BizType: bizType,
+    PicEnable: 1,
+    LastCommentSeqNo: cursor,
+    SelfSeeEnable: 1,
+    BizId: bizId,
+    AudioEnable: 1
+  }
+  if (bizSubType !== undefined) param.BizSubType = bizSubType
   const data = await musicu<CommentListData>(
     'music.globalComment.CommentRead',
     'GetNewCommentList',
-    {
-      PageSize: COMMENT_PAGE_SIZE,
-      PageNum: 0,
-      HashTagID: '',
-      BizType: 1,
-      PicEnable: 1,
-      LastCommentSeqNo: cursor,
-      SelfSeeEnable: 1,
-      BizId: id,
-      AudioEnable: 1,
-      BizSubType: 2
-    },
+    param,
     { stringFields: ['SeqNo'] }
   )
 
@@ -145,6 +163,28 @@ export async function getComments(
     hasMore: Boolean(list.HasMore) && /^\d+$/.test(nextCursor),
     nextCursor
   }
+}
+
+/** 歌曲评论；songId 为上游数字歌曲 ID。 */
+export async function getComments(
+  songId: string,
+  cursor = ''
+): Promise<CommentPage> {
+  const id = songId.trim()
+  if (!/^\d+$/.test(id)) {
+    return { comments: [], total: 0, hasMore: false }
+  }
+  return fetchComments(id, cursor, SONG_BIZ_TYPE, SONG_BIZ_SUBTYPE)
+}
+
+/** MV 评论；mvId 为上游 vid 字符串，使用 BizType 5。 */
+export async function getMvComments(
+  mvId: string,
+  cursor = ''
+): Promise<CommentPage> {
+  const id = mvId.trim()
+  if (!id) return { comments: [], total: 0, hasMore: false }
+  return fetchComments(id, cursor, MV_BIZ_TYPE)
 }
 
 async function updateLike(commentId: string, type: 3 | 4): Promise<CommentLikeResult> {
@@ -174,14 +214,16 @@ export async function unlikeComment(commentId: string): Promise<CommentLikeResul
   return updateLike(commentId, 4)
 }
 
-/** 发表歌曲评论；上游要求登录并限制正文 300 字。 */
-export async function postComment(
-  songId: string,
-  content: string
+/** 发表评论；上游要求登录并限制正文 300 字。 */
+async function submitComment(
+  bizId: string,
+  bizType: number,
+  content: string,
+  bizSubType?: number
 ): Promise<CommentPostResult> {
-  const id = songId.trim()
-  if (!/^\d+$/.test(id)) {
-    throw new UpstreamError('UPSTREAM_CHANGED', '歌曲 ID 无效，无法发表评论')
+  const id = bizId.trim()
+  if (!id) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '评论目标无效，无法发表评论')
   }
   const text = content.trim()
   if (!text) {
@@ -193,16 +235,17 @@ export async function postComment(
   const credential = getCredential()
   if (!credential) throw new UpstreamError('AUTH_EXPIRED', '请先登录')
 
-  // BizType 1 + BizSubType 2 对应普通歌曲；WriteServer 使用 SubCode 表示业务结果。
+  // WriteServer 使用 SubCode 表示业务结果；歌曲沿用 BizSubType 2，MV 不传。
+  const param: Record<string, unknown> = {
+    Content: text,
+    BizType: bizType,
+    BizId: id
+  }
+  if (bizSubType !== undefined) param.BizSubType = bizSubType
   const data = await musicu<AddCommentData>(
     'music.globalComment.CommentWriteServer',
     'AddComment',
-    {
-      Content: text,
-      BizType: 1,
-      BizId: id,
-      BizSubType: 2
-    },
+    param,
     { credential }
   )
 
@@ -227,4 +270,28 @@ export async function postComment(
     )
   }
   return { commentId: String(data.AddedCmId ?? '') }
+}
+
+/** 发表歌曲评论；songId 为上游数字歌曲 ID。 */
+export async function postComment(
+  songId: string,
+  content: string
+): Promise<CommentPostResult> {
+  const id = songId.trim()
+  if (!/^\d+$/.test(id)) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '歌曲 ID 无效，无法发表评论')
+  }
+  return submitComment(id, SONG_BIZ_TYPE, content, SONG_BIZ_SUBTYPE)
+}
+
+/** 发表 MV 评论；mvId 为上游 vid 字符串。 */
+export async function postMvComment(
+  mvId: string,
+  content: string
+): Promise<CommentPostResult> {
+  const id = mvId.trim()
+  if (!id) {
+    throw new UpstreamError('UPSTREAM_CHANGED', 'MV ID 无效，无法发表评论')
+  }
+  return submitComment(id, MV_BIZ_TYPE, content)
 }
