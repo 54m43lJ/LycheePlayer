@@ -1051,3 +1051,33 @@
 - 新增 API 测试：控制字符-only 的被回复昵称映射为 `''`，未被回复的评论保持 `undefined`。
 - `npm run typecheck`、`npm test`（52 个测试文件、271 个用例）与 `npm run build` 通过。
 - 未做真实窗口截图验收；显示条件由字段存在性与单测覆盖。
+
+### 4.48 空昵称作为合法昵称的文档约定 [已解决] 
+
+**描述**：复查指出“空昵称”必须作为原则落实：空字符串是合法昵称，不做任何特殊处理；同时不能把空昵称当作昵称缺失、评论作者不存在或被回复用户不存在。
+
+**解决方案**：
+
+- `USER` §2 新增“评论 / 回复空昵称”约定：空昵称按原样显示为空，不替换为“匿名用户”、不隐藏评论 / 回复、不判定用户不存在；被回复昵称为空仍有回复目标。
+- `CORE` §2 新增同名约定：`nickname` / `replyToNickname` 以 `''` 为合法值，禁止用 `||`、三目真值或 `Boolean()` 折叠；`replyToNickname === undefined` 才表示无目标，目标是否存在以 `RepliedComments` 为准。
+- `PROVIDER` §2 新增“评论空昵称”约定：上游 `Nick` 为空或清洗后为空仍是合法值，不等同于用户不存在；回复目标以 `RepliedComments` / 被回复 `CmId` 为准。
+- 在 `USER` §5.2.5、`CORE` §4.1 / §4.15 / §4.42、`PROVIDER` §4.3 中补充指向该约定的链接，具体字段说明只保留实现细节。
+- 代码复查：评论 / 回复的昵称直接渲染；`avatarLetter()` 取首字符，空昵称返回空字符串；`hasReplyTarget()` 以 `replyToNickname !== undefined` 判断；未发现对评论 / 回复昵称的真值回退。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `IMPL.md` | 新增“空昵称作为合法昵称的文档约定” | 增 | 记录原则、落地位置与代码复查。 |
+| `USER.html` | §2 CONVENTIONS | 增 | 新增“评论 / 回复空昵称”约定。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 链接 §2 的空昵称约定。 |
+| `CORE.html` | §2 CONVENTIONS | 增 | 新增“评论 / 回复空昵称”约定，禁止真值折叠。 |
+| `CORE.html` | §4.1 / §4.15 / §4.42 | 改 | 补充约定链接，保留字段级实现细节。 |
+| `PROVIDER.html` | §2 CONVENTIONS | 增 | 新增“评论空昵称”约定。 |
+| `PROVIDER.html` | §4.3 数据模型 / 转换 | 改 | 链接 §2 的空昵称约定。 |
+
+**工作记录**：
+
+- 复查 `src/renderer/components/CommentsPanel.vue` 与 `src/main/api/comment.ts`：没有 `nickname ||`、`replyToNickname ||` 或对评论昵称的真值回退；空昵称保留为 `''`，只有没有 `RepliedComments` 时 `replyToNickname` 才是 `undefined`。
+- 该原则只约束评论 / 回复昵称；侧栏账号头像等其它界面的昵称回退不在本次范围内。
+- `npm run typecheck`、`npm test`（52 个测试文件、271 个用例）与 `npm run build` 通过。

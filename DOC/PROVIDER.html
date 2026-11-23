@@ -129,6 +129,10 @@
     <td>上游隔离规则见 <a href="CORE.html#c2">CORE §2</a>；本层只消费 <a href="CORE.html#c4-1">CORE §4.1</a> 定义的内部模型。</td>
   </tr>
   <tr>
+    <td>评论空昵称</td>
+    <td><code>Nick</code> 可能为空字符串或清洗后为空；评论空昵称是合法上游值，不等同于用户不存在。回复目标是否存在以 <code>RepliedComments</code> / 被回复评论的 <code>CmId</code> 为准，不以 <code>Nick</code> 非空为准。映射见 <a href="#p4-3">§4.3</a>。</td>
+  </tr>
+  <tr>
     <td>凭证注入</td>
     <td>请求携带 Cookie：<code>uin</code>、<code>qqmusic_uin</code>、<code>qm_keyst</code>、<code>qqmusic_key</code>；微信请求另补 <code>wxuin</code> / <code>login_type=2</code>。收藏签名写入前先合并 <code>Credential.webCookies</code>（如 <code>p_skey</code> / <code>skey</code>），同名时以凭证字段为准。凭证、Cookie 与完整播放链接不写入日志。</td>
   </tr>
@@ -1143,7 +1147,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code> → <code>CommentPage</code></td>
-    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>（真实 / 字面量换行统一为 <code>\n</code>；保留有 <code>EmoPic</code> 或无媒体的 <code>U+FFFC</code> 占位，只有 <code>Pic</code> 时移除残留占位）；<code>Pic → imageUrl</code>、<code>EmoPic → emojiUrl</code>，无值时为空，<code>http:</code> 改为 <code>https:</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>State === 2 → deleted</code>；<code>RepliedComments[0].Nick → replyToNickname</code>（被回复人昵称清洗后为空时保留空字符串，不丢弃目标）；<code>Total → total</code>；<code>HasMore → hasMore</code>。顶层评论与回复共用该转换。</td>
+    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>（真实 / 字面量换行统一为 <code>\n</code>；保留有 <code>EmoPic</code> 或无媒体的 <code>U+FFFC</code> 占位，只有 <code>Pic</code> 时移除残留占位）；<code>Pic → imageUrl</code>、<code>EmoPic → emojiUrl</code>，无值时为空，<code>http:</code> 改为 <code>https:</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>State === 2 → deleted</code>；<code>RepliedComments[0].Nick → replyToNickname</code>（被回复人昵称清洗后为空时保留空字符串，不丢弃目标；见 <a href="#p2">§2</a>“空昵称”）；<code>Total → total</code>；<code>HasMore → hasMore</code>。顶层评论与回复共用该转换。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code> → <code>UserProfile</code></td>
