@@ -392,11 +392,7 @@ button:focus-visible,
 }
 
 .member-v {
-  fill: none;
-  stroke: var(--member-gold);
-  stroke-width: 2.4;
-  stroke-linecap: butt;
-  stroke-linejoin: miter;
+  fill: var(--member-gold);
 }
 
 .member-super .member-diamond {
@@ -405,7 +401,7 @@ button:focus-visible,
 }
 
 .member-super .member-v {
-  stroke: var(--member-gold-edge);
+  fill: var(--member-gold-edge);
 }
 
 .member-badge-label {
