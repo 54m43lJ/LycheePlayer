@@ -1143,7 +1143,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code> → <code>CommentPage</code></td>
-    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>（真实 / 字面量换行统一为 <code>\n</code>；保留有 <code>EmoPic</code> 或无媒体的 <code>U+FFFC</code> 占位，只有 <code>Pic</code> 时移除残留占位）；<code>Pic → imageUrl</code>、<code>EmoPic → emojiUrl</code>，无值时为空，<code>http:</code> 改为 <code>https:</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>State === 2 → deleted</code>；<code>RepliedComments[0].Nick → replyToNickname</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。顶层评论与回复共用该转换。</td>
+    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>（真实 / 字面量换行统一为 <code>\n</code>；保留有 <code>EmoPic</code> 或无媒体的 <code>U+FFFC</code> 占位，只有 <code>Pic</code> 时移除残留占位）；<code>Pic → imageUrl</code>、<code>EmoPic → emojiUrl</code>，无值时为空，<code>http:</code> 改为 <code>https:</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>State === 2 → deleted</code>；<code>RepliedComments[0].Nick → replyToNickname</code>（被回复人昵称清洗后为空时保留空字符串，不丢弃目标）；<code>Total → total</code>；<code>HasMore → hasMore</code>。顶层评论与回复共用该转换。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code> → <code>UserProfile</code></td>

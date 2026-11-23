@@ -127,7 +127,8 @@ function toComment(raw: RawComment): Comment {
   const seconds = Number(raw.PubTime ?? 0)
   const emojiUrl = normalizeHttpsUrl(raw.EmoPic)
   const imageUrl = normalizeHttpsUrl(raw.Pic)
-  const replyToNickname = cleanNickname(raw.RepliedComments?.[0]?.Nick)
+  const replied = raw.RepliedComments?.[0]
+  const replyToNickname = cleanNickname(replied?.Nick)
   return {
     id: String(raw.CmId ?? ''),
     nickname: cleanNickname(raw.Nick),
@@ -140,7 +141,7 @@ function toComment(raw: RawComment): Comment {
     createdAtMs: seconds > 0 ? (seconds > 1_000_000_000_000 ? seconds : seconds * 1000) : 0,
     liked: Number(raw.IsPraised ?? raw.IsLiked ?? 0) === 1,
     deleted: Number(raw.State ?? 1) === 2,
-    replyToNickname: replyToNickname || undefined
+    replyToNickname: replied ? replyToNickname : undefined
   }
 }
 

@@ -138,7 +138,10 @@ export interface Comment {
   liked?: boolean
   /** 上游 State=2：评论已删除，只显示占位，不展示正文与互动入口。 */
   deleted?: boolean
-  /** 回复所针对的评论昵称（上游 RepliedComments[0].Nick）；顶层评论为空。 */
+  /**
+   * 回复所针对的评论昵称（上游 RepliedComments[0].Nick）。
+   * 无被回复对象时为 undefined；被回复对象昵称为空时保留空字符串。
+   */
   replyToNickname?: string
 }
 

@@ -291,6 +291,11 @@ function isReplyingTo(commentId: string): boolean {
   return replyingTo.value?.commentId === commentId
 }
 
+/** 被回复对象可能只有空昵称；用字段是否存在判断，而不是昵称真值。 */
+function hasReplyTarget(comment: Comment): boolean {
+  return comment.replyToNickname !== undefined
+}
+
 function startReplyTo(rootId: string, commentId: string, nickname: string): void {
   if (!auth.loggedIn) {
     toast.error('请先登录')
@@ -770,7 +775,7 @@ onBeforeUnmount(() => {
                         <div class="comment-reply-body">
                           <div class="comment-reply-text">
                             <span class="comment-reply-nick">{{ reply.nickname }}</span>
-                            <template v-if="reply.replyToNickname">
+                            <template v-if="hasReplyTarget(reply)">
                               <span class="comment-reply-to"> 回复 </span>
                               <span class="comment-reply-nick">{{
                                 reply.replyToNickname

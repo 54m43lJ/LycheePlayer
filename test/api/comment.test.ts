@@ -533,9 +533,16 @@ describe('api/comment', () => {
                   Content: '正文',
                   PubTime: 90,
                   RepliedComments: [{ Nick: '\u009f\u0090A' }]
+                },
+                {
+                  CmId: 'c',
+                  Nick: 'C',
+                  Content: '回复空昵称',
+                  PubTime: 80,
+                  RepliedComments: [{ Nick: '\u007f\u007f\u007f\u007f' }]
                 }
               ],
-              Total: 2,
+              Total: 3,
               HasMore: 0
             }
           }
@@ -553,6 +560,8 @@ describe('api/comment', () => {
       nickname: 'B',
       replyToNickname: 'A'
     })
+    expect(page.comments[2]?.replyToNickname).toBe('')
+    expect(page.comments[0]?.replyToNickname).toBeUndefined()
   })
 
   it('maps deleted top-level comments without dropping empty content', async () => {
