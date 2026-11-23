@@ -231,7 +231,7 @@ function onKeydown(event: KeyboardEvent): void {
 }
 
 onMounted(() => {
-  offBackNavigation = installBackNavigation(() => router.back())
+  offBackNavigation = installBackNavigation(router)
   window.addEventListener('lychee:logout', onLogout)
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('pointerdown', onPointerDown)

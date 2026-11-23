@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import type { MvStream } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import CoverArt from '../components/CoverArt.vue'
 import { describeError } from '../api'
+import { goBack } from '../composables/back-navigation'
 import { useToast } from '../composables/toast'
 import { useMvStore } from '../stores/mv'
 import { usePlayerStore } from '../stores/player'
 
 const route = useRoute()
-const router = useRouter()
 const mv = useMvStore()
 const player = usePlayerStore()
 const toast = useToast()
@@ -91,7 +91,7 @@ onMounted(() => void load())
 <template>
   <div class="page">
     <div class="page-head">
-      <button class="btn ghost small" @click="router.back()">
+      <button class="btn ghost small" @click="goBack()">
         <AppIcon name="chevron-left" :size="15" />
         返回
       </button>

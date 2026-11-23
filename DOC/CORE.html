@@ -162,7 +162,7 @@
 │   ├── auth-store.test.ts                    重新登录弹层与续期状态展示
 │   ├── cache-management.test.ts              按账号统计与删除播放 / 歌单缓存
 │   ├── cache-users.test.ts                   本地记录合并与按账号清理
-│   ├── back-navigation.test.ts               后退关闭浮层的栈顺序
+│   ├── back-navigation.test.ts               后退浮层与页面栈顺序
 │   ├── credential-store.test.ts              v1 凭证清空与失效原因
 │   ├── embed-bounds.test.ts                  登录占位矩形裁剪
 │   ├── page-jump.test.ts                     长页面跳转按钮显隐
@@ -920,7 +920,7 @@ export interface FlagsFile {
   <tr><th>方向</th><th>通道</th><th>载荷</th><th>说明</th></tr>
   <tr><td>main → renderer</td><td><code>player:command</code></td><td><code>MprisCommand</code></td><td>MPRIS / 托盘反向播放控制命令。</td></tr>
   <tr><td>renderer → main</td><td><code>player:state</code></td><td><code>PlayerState</code></td><td>播放器状态发布，主进程转投 MPRIS。</td></tr>
-  <tr><td>main → renderer</td><td><code>navigation:back</code></td><td>无</td><td>系统后退手势（鼠标侧键等）；渲染层优先关闭浮层，没有浮层时才沿路由历史返回。</td></tr>
+  <tr><td>main → renderer</td><td><code>navigation:back</code></td><td>无</td><td>系统后退手势（鼠标侧键等）；渲染层优先关闭浮层，没有浮层时按页面访问栈返回上一页。</td></tr>
   <tr><td>main → renderer</td><td><code>upstream:blocked</code></td><td><code>UpstreamBlockedEvent</code></td><td>收到 104009 进入全局截断窗口时通知渲染层展示 Toast；同一窗口只发送一次。</td></tr>
 </table>
 <ul class="note">
@@ -1335,7 +1335,7 @@ export function destroyTray(): void;
   <li>挂载时并行恢复登录态与设置，订阅 <code>player:command</code>；卸载时取消订阅。</li>
   <li>全局 <code>keydown</code> 先处理 Esc（歌词 / 侧栏 / 歌单选择器逐层关闭），再按 <code>Settings.shortcuts</code> 匹配动作：空格 → <code>player.toggle()</code>，上一首 / 下一首 → <code>player.previous()</code> / <code>player.playNext()</code>，喜欢 → <code>playlistEdit.toggleFavorite()</code>，收藏到歌单 → <code>ui.openSongPicker()</code>。输入框、文本域、可编辑区域、按钮 / 链接上的空格以及已打开弹窗都不响应；命中的组合键会 <code>preventDefault</code>。</li>
   <li>全局只挂载一个 <a href="#c4-91">ReauthDialog</a>，由 <code>auth.reauthReason</code> 控制显示；当前路由为 <code>/login</code> 时不显示。点击“重新登录”由 <code>App.vue</code> 关闭弹层并路由到登录页。</li>
-  <li>挂载时安装 <a href="#c4-92">back-navigation</a> 的后退分发：播放队列与窄屏侧栏在打开期间注册关闭；没有浮层打开时调用 <code>router.back()</code>。浮层自身的注册与注销由组件负责。</li>
+  <li>挂载时安装 <a href="#c4-92">back-navigation</a> 的后退分发：播放队列与窄屏侧栏在打开期间注册关闭；没有浮层打开时调用 <code>goBack()</code>，按页面访问栈返回上一页。浮层自身的注册与注销由组件负责。</li>
   <li>监听 <code>player.current</code> 并立即执行一次，把 <code>appTitle(current)</code> 写入 <code>document.title</code>；Electron 默认将页面标题同步到窗口 / 任务栏，切歌即时更新，无歌曲时回退应用名。</li>
   <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
   <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
@@ -2463,7 +2463,7 @@ interface DownloadStore {
 </code></pre>
 <ul class="note">
   <li>绑定 <code>player.current</code>：顶部展示歌名、歌手与专辑，歌手 / 专辑按 <code>mid</code> 决定链接或纯文本；无当前歌曲时展示空状态且不发起歌词 / 评论请求。</li>
-  <li>左上角关闭按钮调用 <code>ui.closeLyrics()</code>，不执行 <code>router.back()</code>；再次点击播放条封面、Esc、后退手势、路由变化与侧栏导航同样关闭弹出层。组件挂载时通过 <code>pushBackDismiss</code> 注册关闭，卸载时注销。</li>
+  <li>左上角关闭按钮调用 <code>ui.closeLyrics()</code>，不执行页面后退；再次点击播放条封面、Esc、后退手势、路由变化与侧栏导航同样关闭弹出层。组件挂载时通过 <code>pushBackDismiss</code> 注册关闭，卸载时注销。</li>
   <li>宽屏布局为左右两列各 50%，中间保留分隔线；组合 <a href="#c4-41">LyricsPanel</a> 与 <a href="#c4-42">CommentsPanel</a>，不渲染独立标题行。</li>
   <li>窄屏分页由组件内 <code>activePage: 'lyrics' | 'comments'</code> 驱动，默认歌词；<code>narrow</code> 读取 <code>matchMedia('(max-width: 900px)')</code> 并在窗口尺寸变化时更新。轨道用 <code>translateX(calc(-100% + dragOffset))</code> 平移到评论页，底部两个 <code>role="tab"</code> 胶囊按钮表示当前页，点击直接切换。非当前页同时设置 <code>inert</code> 与 <code>aria-hidden</code>，避免键盘或读屏访问屏幕外内容。</li>
   <li>分页手势按元素范围隔离：<code>App.vue</code> 的窄屏侧栏拖拽在 <code>ui.lyricsOpen</code> 时只跳过 <code>.lyrics-page-track</code> 内的按下点；弹出层头部、播放条等轨道外区域仍可横向拖动唤起 / 收起侧栏。左边缘 revealer 点击仍保留。</li>
@@ -2483,7 +2483,7 @@ interface DownloadStore {
   <li>歌曲列表复用 <a href="#c4-101">SongListTable</a>（内部渲染 <code>SongTable</code>），播放由页面提供，下一首播放、收藏、下载与加入歌单由组件统一处理。</li>
   <li>歌曲视图的标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；列表区显示加载态，滚动位置回到页面顶部；失败时回退原排序并保留旧列表。滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
   <li>分页固定 50 首/页；根节点 <code>pageRef</code> 通过 <code>closest('.main')</code> 找到外层滚动容器，注册 <code>passive</code> 的 <code>scroll</code> 监听，距底部小于 <code>SCROLL_LOAD_THRESHOLD = 160px</code> 且 <code>hasMore=true</code>、当前没有首屏或追加加载时自动调用 <code>load(false)</code>，卸载时移除监听。页面不提供“加载更多”按钮，底部按状态显示 spinner + “正在加载更多” / “继续向下滚动加载更多”，无更多歌曲时显示“已经到底了”。加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
-  <li>返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>；点击歌曲不改变路由。</li>
+  <li>返回按钮调用共享 <code>goBack()</code>，按页面访问栈返回上一页；栈底回到发现页。点击歌曲不改变路由。</li>
 </ul>
 
 <h3 id="c4-74">4.74 src/renderer/views/AlbumView.vue <a class="backlink" href="#c1">文件树</a></h3>
@@ -2493,7 +2493,7 @@ interface DownloadStore {
   <li>按路由参数调用 <code>album.get(mid, offset)</code>；展示专辑名、封面、发行日期、简介与歌手，简介为空时隐藏。</li>
   <li>简介非空时渲染 <code>CatalogDescription</code>，复用与歌手页相同的 4 行折叠、按实际高度判断溢出与展开 / 收起逻辑；短简介不显示切换按钮。</li>
   <li>歌手行按 <code>mid</code> 链接到歌手页；歌曲列表复用 <a href="#c4-101">SongListTable</a>（内部渲染 <code>SongTable</code>），播放由页面提供，下一首播放、收藏、下载与加入歌单由组件统一处理。</li>
-  <li>分页固定 50 首/页；加载中、合法空状态与失败重试各自渲染。返回按钮优先 <code>router.back()</code>，无历史时回 <code>/search</code>。</li>
+  <li>分页固定 50 首/页；加载中、合法空状态与失败重试各自渲染。返回按钮调用共享 <code>goBack()</code>，按页面访问栈返回上一页；栈底回到发现页。</li>
 </ul>
 
 <h3 id="c4-75">4.75 src/main/api/artist.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -2765,13 +2765,17 @@ emits: { play: [] };
 <pre><code>export function pushBackDismiss(dismiss: () =&gt; void): () =&gt; void;
 export function dismissTopPopup(): boolean;
 export function useBackDismiss(isOpen: () =&gt; boolean, dismiss: () =&gt; void): void;
-export function installBackNavigation(fallback: () =&gt; void): () =&gt; void;
+export function installPageHistory(router: Router, home?: string): () =&gt; void;
+export function goBack(): void;
+export function installBackNavigation(router: Router, home?: string): () =&gt; void;
 </code></pre>
 <ul class="note">
   <li>模块级数组保存当前打开的浮层关闭函数，后注册者位于栈顶；<code>pushBackDismiss</code> 返回幂等注销函数，<code>dismissTopPopup</code> 只执行栈顶并返回是否命中。</li>
   <li><code>useBackDismiss</code> 监听浮层打开状态：每次打开都重新入栈，保证最近打开的浮层最先关闭；关闭或组件卸载时注销。</li>
-  <li><code>installBackNavigation</code> 订阅 <code>window.lychee.navigation.onBack</code>，并监听 <code>Alt + ←</code>；后退时优先 <code>dismissTopPopup()</code>，没有浮层才调用传入的 fallback（<code>App.vue</code> 传 <code>router.back()</code>）。同一 200ms 窗口内的重复事件只处理一次。</li>
-  <li>在 <code>window</code> 捕获阶段拦截鼠标后退键（<code>button === 3</code>）的 <code>mouseup</code>，阻止 Chromium 自带历史导航；实际关闭 / 导航由主进程推送的 <code>navigation:back</code> 驱动，避免一次按键触发两次动作。</li>
+  <li><code>installPageHistory</code> 保存模块级页面访问栈：安装时用当前路由初始化，之后在每个 <code>router.afterEach</code> 记录最终 <code>fullPath</code>。连续重复路径不重复入栈；<code>/</code> 与 <code>/login</code> 不记录，登录成功后 <code>router.replace('/library')</code> 只把目标页入栈，后退不会回到登录页。深链接首屏会在首页之后入栈。</li>
+  <li><code>goBack</code> 先调用 <code>dismissTopPopup()</code>；没有浮层时弹出当前页，目标为栈顶上一页并通过 <code>router.replace()</code> 返回，避免继续增长浏览器历史；栈底回退到 <code>/discover</code>，当前已是发现页则不动。<code>navigatingBack</code> 标记保证回退自身触发的 <code>afterEach</code> 不再入栈。</li>
+  <li><code>installBackNavigation</code> 安装页面访问栈并订阅 <code>window.lychee.navigation.onBack</code>、监听 <code>Alt + ←</code>；后退统一走 <code>goBack()</code>。同一 200ms 窗口内的重复事件只处理一次。</li>
+  <li>在 <code>window</code> 捕获阶段拦截鼠标后退键（<code>button === 3</code>）的 <code>mouseup</code>，阻止 Chromium 自带历史导航；实际关闭 / 导航由主进程推送的 <code>navigation:back</code> 驱动，避免一次按键触发两次动作。专辑 / 歌手 / MV 页的返回按钮与全局后退调用同一 <code>goBack()</code>。</li>
 </ul>
 
 <h3 id="c4-93">4.93 src/renderer/components/ImageLightbox.vue <a class="backlink" href="#c1">文件树</a></h3>

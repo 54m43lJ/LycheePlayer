@@ -8,6 +8,7 @@ import CoverArt from '../components/CoverArt.vue'
 import PageJump from '../components/PageJump.vue'
 import SongListTable from '../components/SongListTable.vue'
 import { describeError, unwrap } from '../api'
+import { goBack } from '../composables/back-navigation'
 import { usePageJump } from '../composables/page-jump'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
@@ -78,7 +79,7 @@ watch(mid, () => void load(), { immediate: true })
 <template>
   <div ref="pageRef" class="page">
     <div class="page-head">
-      <button class="btn ghost small" @click="router.back()">
+      <button class="btn ghost small" @click="goBack()">
         <AppIcon name="chevron-left" :size="15" />
         返回
       </button>
