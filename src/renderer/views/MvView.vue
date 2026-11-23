@@ -51,6 +51,32 @@ function onVideoPlay(): void {
   if (player.status === 'playing') player.pause()
 }
 
+/**
+ * 原生 video 不跨会话记忆音量；复用播放器已持久化的全局音量，
+ * 不新增存储字段。loadedmetadata 时应用，volumechange 时写回。
+ */
+function applyVideoVolume(): void {
+  const video = videoRef.value
+  if (!video) return
+  video.volume = player.volume
+  video.muted = false
+}
+
+function onVideoVolumeChange(): void {
+  const video = videoRef.value
+  if (!video) return
+  if (Math.abs(video.volume - player.volume) < 0.001) return
+  player.setVolume(video.volume)
+}
+
+watch(
+  () => player.volume,
+  (volume) => {
+    const video = videoRef.value
+    if (video && Math.abs(video.volume - volume) > 0.001) video.volume = volume
+  }
+)
+
 watch(
   () => player.status,
   (status) => {
@@ -101,6 +127,8 @@ onMounted(() => void load())
           controls
           autoplay
           @play="onVideoPlay"
+          @loadedmetadata="applyVideoVolume"
+          @volumechange="onVideoVolumeChange"
         />
         <div v-else class="mv-placeholder">
           <CoverArt :src="mv.detail.coverUrl" image-class="playlist-cover" :icon-size="44" />
