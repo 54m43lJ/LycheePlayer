@@ -46,7 +46,7 @@ import { getMvDetail, getMvStream, searchMv } from './api/mv'
 import { searchByType } from './api/search'
 import { getArtist, getArtistAlbums, getArtistSongs } from './api/artist'
 import { getAlbum } from './api/album'
-import { getStreamUrls } from './api/song'
+import { getMvId, getStreamUrls } from './api/song'
 import { getProfile, getVipStatus } from './api/user'
 import { toIpcError, setUpstreamBlockNotifier } from './api/client'
 import {
@@ -321,6 +321,7 @@ export function registerIpc(): void {
   handle('song.getUrls', async (mids: unknown, quality: unknown) =>
     getStreamUrls(midArray(mids), qualityArg(quality))
   )
+  handle('song.getMvId', async (mid: unknown) => getMvId(stringArg(mid, '歌曲 mid')))
 
   handle('playlist.get', async (id: unknown, options: unknown) => {
     const value = (options ?? {}) as { offset?: number }

@@ -51,7 +51,8 @@ function song(id: string, name: string): Song {
     pay_play: null,
     pay_month: null,
     pay_status: null,
-    maxQuality: null
+    maxQuality: null,
+    mvId: ''
   }
 }
 

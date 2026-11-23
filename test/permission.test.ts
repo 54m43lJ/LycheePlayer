@@ -16,6 +16,7 @@ function song(overrides: Partial<Song> = {}): Song {
     pay_month: null,
     pay_status: null,
     maxQuality: null,
+    mvId: '',
     ...overrides
   }
 }

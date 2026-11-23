@@ -374,6 +374,8 @@ export interface Song {
   pay_status: number | null;
   /** 曲库存在的最高音质档位，不代表当前账号一定可取流。 */
   maxQuality: Quality | null;
+  /** 上游绑定的 MV vid；无绑定或未提供时为空字符串。 */
+  mvId: string;
 }
 
 /** 由 Song 元数据与账号会员状态派生的播放权限。 */
@@ -805,6 +807,7 @@ export interface FlagsFile {
   };
   song: {
     getUrls(mids: string[], quality: Quality): Promise&lt;IpcResult&lt;UrlResult[]&gt;&gt;;
+    getMvId(mid: string): Promise&lt;IpcResult&lt;string&gt;&gt;;
   };
   playlist: {
     get(id: string, options?: { offset?: number }): Promise&lt;IpcResult&lt;PlaylistPage&gt;&gt;;
@@ -924,7 +927,7 @@ export interface FlagsFile {
   <li><code>lyric.decryptQrc</code> 是同步方法，在 preload 内用 Node crypto + zlib 完成解密；主进程只透传密文，接口细节见 <a href="#c4-64">§4.64</a>。</li>
   <li><code>recommend.get</code> / <code>recommend.refresh</code> 在已登录时传 <code>sectionId</code> 只加载并返回该分区，<code>null</code> 才返回完整 feed；未登录直接返回完整空分区用于登录引导。<code>token</code> 用于按请求取消，<code>recommend.cancel</code> 只中止匹配 token 的请求。</li>
   <li><code>recommend.guess(page)</code> 按页拉取猜你喜欢连续队列的一批歌曲，返回 <code>Song[]</code>；<code>page</code> 从 1 开始，主进程只负责单批读取，队列续接由播放器控制。</li>
-  <li>批量参数上限按通道区分：<code>download.startMany</code> 的 <code>downloadRequestsArg</code> 上限为 <code>DOWNLOAD_QUEUE_MAX = 2000</code>，逐项校验 <code>songMid</code> 并截断歌手数量；<code>song.getUrls</code>、<code>playlist.addSongs</code> / <code>removeSongs</code>、<code>favorite.get</code> 等其余 mid 数组使用 <code>IPC_SONG_MIDS_MAX = 100</code>。</li>
+  <li>批量参数上限按通道区分：<code>download.startMany</code> 的 <code>downloadRequestsArg</code> 上限为 <code>DOWNLOAD_QUEUE_MAX = 2000</code>，逐项校验 <code>songMid</code> 并截断歌手数量；<code>song.getUrls</code>、<code>playlist.addSongs</code> / <code>removeSongs</code>、<code>favorite.get</code> 等其余 mid 数组使用 <code>IPC_SONG_MIDS_MAX = 100</code>。新增的 <code>song.getMvId</code> 只接受单个非空 mid，返回绑定 vid 或空字符串。</li>
 </ul>
 
 <h3 id="c4-3">4.3 src/shared/xlogin.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1083,6 +1086,7 @@ export function mapUpstreamCode(code: number, context: string): UpstreamError;
 
 <h3 id="c4-11">4.11 src/main/api/song.ts <a class="backlink" href="#c1">文件树</a></h3>
 <pre><code>export function getDetail(mids: string[]): Promise&lt;Song[]&gt;;
+export function getMvId(mid: string): Promise&lt;string&gt;;
 export function getStreamUrls(mids: string[], quality: Quality): Promise&lt;UrlResult[]&gt;;
 export function resolveStreamUrls(
   mids: string[],
@@ -1109,7 +1113,8 @@ function buildStreamUrl(purl: string): string;
   <li>vkey 请求先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>；若响应或 <code>data.retcode</code> 为 <code>104009</code>，再以相同 filename 尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
   <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>getVipStatus()</code> 通用文案。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
-  <li><code>toSong</code> 同时映射 <code>status</code>、<code>pay_play</code>、<code>pay_month</code>、<code>pay_status</code>（缺失为 <code>null</code>），并按 <code>file.size_flac</code> → <code>size_320mp3</code> → <code>size_128mp3</code> 取第一个非零档写入 <code>maxQuality</code>。该字段只表示曲库存在该档，不代表当前账号可取流；播放权限派生见 <a href="#c4-105">§4.105</a>。</li>
+  <li><code>toSong</code> 同时映射 <code>status</code>、<code>pay_play</code>、<code>pay_month</code>、<code>pay_status</code>（缺失为 <code>null</code>），并按 <code>file.size_flac</code> → <code>size_320mp3</code> → <code>size_128mp3</code> 取第一个非零档写入 <code>maxQuality</code>。该字段只表示曲库存在该档，不代表当前账号可取流；播放权限派生见 <a href="#c4-105">§4.105</a>。<code>mv.vid</code>（缺失时回退扁平 <code>vid</code>）写入 <code>mvId</code>，无绑定为空字符串。</li>
+  <li><code>getMvId</code> 供播放条补查搜索 / 推荐等未携带绑定的歌曲：优先读 <code>trackMetaCache</code>，未命中时用 <code>fetchTracksById</code> 单曲拉取详情并缓存 <code>mediaMid</code> / <code>pay</code> / <code>mvId</code>；取流与下载共用该缓存，因此播放开始后查询通常不产生额外上游请求。上游未提供绑定或详情失败时返回空字符串，不按歌名模糊匹配。</li>
   <li><code>fetchTrackBatch</code> 按 <code>SONG_DETAIL_BATCH = 50</code> 分块调用 <code>music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo</code>（<code>mids</code> / <code>types</code> / <code>modify_stamp</code> / <code>ctx</code> / <code>client</code>），按 <code>mid</code> 建索引；<code>fetchTracksById</code> 先走批量详情，仅对缺失歌曲用 <code>SONG_DETAIL_CONCURRENCY = 2</code> 单曲兜底；<code>getDetail</code> 与 <code>resolveStreams</code> 共用该入口。</li>
   <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。播放取源优先级固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”，与 <a href="#c4-59">§4.59</a> 的 <code>handleStream</code> 顺序一致。</li>
   <li>显示名优先 <code>title.trim()</code>，为空时回退 <code>name.trim()</code>；专辑名与歌手名同样 <code>trim()</code>，避免尾部空白把 VIP / 音质徽标推离标题。<code>title</code> 含 Explicit / Remix 等版本标签，<code>name</code> 是基础名；原始响应没有独立标签布尔字段。</li>
@@ -1725,6 +1730,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>点击封面调用 <code>ui.toggleLyrics()</code> 开合歌词 / 评论弹出层，不导航；<code>title</code> 在“歌词与评论 / 关闭歌词与评论”之间切换，无当前歌曲时封面禁用。播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
+  <li>音质标记之后渲染 MV 入口：<code>mvId</code> 非空时显示 26×18px 圆角长方形按钮（内嵌 9px 播放三角），<code>RouterLink</code> 进入 <code>/mv/:id</code>；无绑定不渲染。当前歌曲来自搜索 / 推荐且 <code>Song.mvId</code> 为空时，等 <code>player.loading</code> 结束再调用 <code>song.getMvId</code>，复用取流已缓存的详情；请求带序号，切歌后旧结果不覆盖。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲元数据判定不可播时由播放条沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首取流失败后停止。</li>
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px surface 状态块已缓存 / 24px accent 高亮已下载），与歌曲表共用状态与图标；tooltip 只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与 tooltip 随之切换。</li>
   <li>下载按钮点击统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload(current, quality)</code>：已下载时打开全局删除确认，未下载时加入统一队列；播放条不复制“已下载 / 未下载”判断。</li>
@@ -2900,7 +2906,7 @@ export function isPlaylistCacheEntry(value: unknown): value is PlaylistCacheEntr
 export function isRecentPlaylist(value: unknown): value is RecentPlaylist;
 </code></pre>
 <ul class="note">
-  <li>持久化缓存结构校验的唯一来源：完整检查 <code>Song</code> 的歌手 / 专辑 / pay / <code>status</code> / <code>pay_play</code> / <code>pay_month</code> / <code>pay_status</code> / <code>maxQuality</code>、<code>PlaylistMeta</code>、<code>PlaylistSnapshot</code>、歌单缓存条目与最近歌单条目；不负责读取文件或 localStorage。旧版本缺少权限字段的歌曲快照按失效处理。</li>
+  <li>持久化缓存结构校验的唯一来源：完整检查 <code>Song</code> 的歌手 / 专辑 / pay / <code>status</code> / <code>pay_play</code> / <code>pay_month</code> / <code>pay_status</code> / <code>maxQuality</code> / <code>mvId</code>、<code>PlaylistMeta</code>、<code>PlaylistSnapshot</code>、歌单缓存条目与最近歌单条目；不负责读取文件或 localStorage。旧版本缺少权限字段的歌曲快照按失效处理。</li>
   <li>校验失败即视为缓存失效；调用方负责删除损坏文件 / 键并从上游或空状态重建。主进程与渲染进程共用同一组校验函数，避免各处只做浅层字段判断。</li>
 </ul>
 
@@ -3705,5 +3711,19 @@ views/HistoryView::startAt(index)
   <li>快捷键只调用现有动作入口，不新增 IPC 或队列语义；未登录点喜欢 / 收藏到歌单时由现有登录提示兜底。</li>
 </ul>
 
+<h3 id="c5-25">5.25 歌曲 MV 检测</h3>
+<pre><code>components/PlayerBar::watch(current.songMid, current.mvId, player.loading)
+├── 判断 current.mvId 非空 → 直接渲染 MV 入口
+└── 判断 取流结束且 mvId 为空 → window.lychee.song.getMvId(mid)
+    └── ipc::handle('song.getMvId')
+        └── api/song::getMvId(mid)
+            ├── 判断 trackMetaCache 命中 → 返回缓存 mvId
+            └── 判断 未命中 → api/song::fetchTracksById([mid])
+                └── 判断 detail.mv.vid / vid → 写入 Song.mvId
+</code></pre>
+<ul class="note">
+  <li>上游在歌曲详情中提供 <code>mv.vid</code> 绑定，歌单 / 专辑 / 歌手歌曲列表通常已携带；搜索 / 推荐缺少时按详情补查，不按歌名模糊匹配。</li>
+  <li>查询失败或无绑定时返回空字符串，播放条隐藏 MV 入口，不阻塞播放。</li>
+</ul>
 </body>
 </html>

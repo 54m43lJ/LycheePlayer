@@ -1638,6 +1638,25 @@ button:focus-visible,
   letter-spacing: 0.02em;
 }
 
+/* 歌曲绑定的 MV 入口：矮长方形内放播放三角形。 */
+.mv-mark {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 18px;
+  border: 1px solid var(--accent);
+  border-radius: 5px;
+  color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.mv-mark:hover {
+  border-color: var(--accent-strong);
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 .player-artist {
   margin-top: 4px;
   color: var(--muted);

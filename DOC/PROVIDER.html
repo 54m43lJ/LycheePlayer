@@ -575,6 +575,8 @@ interface QqLoginRequest {
   tag?: number;
   interval?: number;
   status?: number;
+  vid?: string;
+  mv?: { id?: number | string; vid?: string; name?: string; title?: string };
   singer?: Array&lt;{ mid?: string; name?: string }&gt;;
   album?: { mid?: string; name?: string };
   pay?: {
@@ -929,8 +931,8 @@ interface QqLoginPayload {
   <tr><th>对象</th><th>消费字段</th><th>说明</th></tr>
   <tr>
     <td><code>QqSong</code></td>
-    <td><code>id</code> · <code>mid</code> · <code>name</code> / <code>title</code> · <code>interval</code> · <code>status</code> · <code>singer[]</code> · <code>album</code> · <code>pay</code> · <code>file.media_mid</code> · <code>file.size_*</code></td>
-    <td><code>interval</code> 单位为秒；<code>status</code>、<code>pay.pay_play</code> / <code>pay_month</code> / <code>pay_status</code> 与 <code>file.size_*</code> 一起供列表派生不可播标记与曲库最高音质，不申请播放链接；实际可播性仍由 vkey 决定。</td>
+    <td><code>id</code> · <code>mid</code> · <code>name</code> / <code>title</code> · <code>interval</code> · <code>status</code> · <code>mv.vid</code> / <code>vid</code> · <code>singer[]</code> · <code>album</code> · <code>pay</code> · <code>file.media_mid</code> · <code>file.size_*</code></td>
+    <td><code>interval</code> 单位为秒；<code>status</code>、<code>pay.pay_play</code> / <code>pay_month</code> / <code>pay_status</code> 与 <code>file.size_*</code> 一起供列表派生不可播标记与曲库最高音质，不申请播放链接；实际可播性仍由 vkey 决定。<code>mv.vid</code> 是歌曲与 MV 的现成绑定（歌单 / 专辑 / 歌手歌曲详情均带该字段），无需按歌名模糊匹配。</td>
   </tr>
   <tr>
     <td><code>QqVkeyData</code></td>
@@ -1008,7 +1010,7 @@ interface QqLoginPayload {
   <tr><th>转换</th><th>规则</th></tr>
   <tr>
     <td><code>QqSong</code> → <code>Song</code></td>
-    <td><code>mid → songMid</code>；<code>id</code> 转字符串 → <code>songId</code>；<code>name ?? title → name</code>；<code>interval × 1000 → durationMs</code>；<code>singer[]</code> 取 <code>mid</code> / <code>name</code>：只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空，仅丢弃 <code>name</code> 为空的成员；<code>album</code> 取 <code>mid</code> / <code>name</code>；<code>pay</code> 映射为 <code>PayInfo</code>；<code>status</code> 与 <code>pay.pay_play</code> / <code>pay_month</code> / <code>pay_status</code> 原值映射，缺失为 <code>null</code>；<code>file.size_*</code> 映射为 <code>maxQuality</code>。</td>
+    <td><code>mid → songMid</code>；<code>id</code> 转字符串 → <code>songId</code>；<code>name ?? title → name</code>；<code>interval × 1000 → durationMs</code>；<code>singer[]</code> 取 <code>mid</code> / <code>name</code>：只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空，仅丢弃 <code>name</code> 为空的成员；<code>album</code> 取 <code>mid</code> / <code>name</code>；<code>pay</code> 映射为 <code>PayInfo</code>；<code>status</code> 与 <code>pay.pay_play</code> / <code>pay_month</code> / <code>pay_status</code> 原值映射，缺失为 <code>null</code>；<code>file.size_*</code> 映射为 <code>maxQuality</code>；<code>mv.vid</code>（缺失时回退扁平 <code>vid</code>）映射为 <code>mvId</code>，无绑定为空字符串。</td>
   </tr>
   <tr>
     <td><code>QqSong.pay</code> → <code>PayInfo</code></td>

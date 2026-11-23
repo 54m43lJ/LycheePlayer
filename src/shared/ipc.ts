@@ -86,6 +86,8 @@ export interface LycheeApi {
   }
   song: {
     getUrls(mids: string[], quality: Quality): Promise<IpcResult<UrlResult[]>>
+    /** 查询歌曲绑定的 MV vid；无绑定返回空字符串。 */
+    getMvId(mid: string): Promise<IpcResult<string>>
   }
   playlist: {
     get(id: string, options?: { offset?: number }): Promise<IpcResult<PlaylistPage>>

@@ -15,7 +15,8 @@ function song(singers: Song['singers'], name = 'Song'): Song {
     pay_play: null,
     pay_month: null,
     pay_status: null,
-    maxQuality: null
+    maxQuality: null,
+    mvId: ''
   }
 }
 

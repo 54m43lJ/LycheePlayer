@@ -363,3 +363,37 @@
 - 按 review 反馈为“恢复默认”动作区增加 16px 上间距，避免紧贴最后一行设置项而下方留白过多。
 - `npm run typecheck`、`npm test`（49 个测试文件、236 个用例）与 `npm run build` 通过。
 - 键盘交互未做真实 GUI 自动化验收；共享匹配函数与设置持久化由单测覆盖，全局事件链路由类型检查与实现审阅确认。
+
+### 4.26 歌曲 MV 检测与播放条入口 [已解决] 
+
+**描述**：TODO 第 5 项要求确定歌曲与 MV 是否存在现成绑定；存在则直接绑定，不存在再按歌曲信息模糊匹配。检测到 MV 后在播放条歌名与音质之后增加一个矮长方形、圆角内嵌播放三角形的 MV 按钮。
+
+**解决方案**：
+
+- 调查结论：上游歌曲模型自带 `mv.vid` 绑定。既有 fixture 中 `album-songs.json` / `singer-songs.json` 的歌曲均带嵌套 `mv`，非空时 `vid` 可直接作为 MV ID；歌手歌曲接口另有扁平 `vid`。因此采用现成绑定，不做按标题模糊匹配。
+- `Song` 增加 `mvId`；`toSong()` 优先取 `mv.vid`，缺失时回退扁平 `vid`，空值写空字符串。`shared/validation.ts` 的 `isSong` 同步要求该字段，旧歌单缓存、播放历史与最近歌单按 4.22 整份清除。
+- `api/song.ts` 的 `TrackMeta` 缓存增加 `mvId`；新增 `getMvId(mid)`：优先读取流已缓存的详情，未命中时单曲补拉 `CgiGetTrackInfo`。新增 `song.getMvId` IPC / preload。
+- `PlayerBar` 在音质标记后渲染 MV 入口：`mvId` 非空时显示 26×18px 圆角边框 + 9px 播放三角，`RouterLink` 进入 `/mv/:id`；无绑定隐藏。搜索 / 推荐等列表未携带绑定时，等 `player.loading` 结束再补查，复用取流缓存，切歌用请求序号丢弃旧结果。
+- 不新增模糊匹配与额外搜索请求；补查失败或无绑定时不显示按钮，不影响播放。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 5 项“歌曲MV检测” | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“歌曲 MV 检测与播放条入口” | 增 | 记录绑定调查结论、实现方案与文档操作。 |
+| `USER.html` | §5.2.3 播放条 | 改 | 原型加入 MV 入口；记录显示条件、按钮形态与补查时机。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | `Song` 增加 `mvId`。 |
+| `CORE.html` | §4.2 `ipc.ts`（`#c4-2`） | 改 | 新增 `song.getMvId`。 |
+| `CORE.html` | §4.11 `song.ts`（`#c4-11`） | 改 | 记录 `mv.vid` / 扁平 `vid` 映射、`getMvId` 与详情缓存。 |
+| `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | 记录 MV 入口渲染条件、补查时机与切歌请求序号。 |
+| `CORE.html` | §4.103 `validation.ts`（`#c4-103`） | 改 | `isSong` 要求 `mvId`，旧缓存整份失效。 |
+| `CORE.html` | §5.25 歌曲 MV 检测（`#c5-25`） | 增 | 记录播放条 → IPC → 缓存 / 详情补查的调用树。 |
+| `PROVIDER.html` | §4.3 `QqSong` | 改 | 补充 `mv.vid` / 扁平 `vid` 字段与 `mvId` 转换，注明无需模糊匹配。 |
+| `README.md` / `ABOUT.html` | 用户交互 · 播放行 | 改 | 补充 MV 入口。 |
+
+**工作记录**：
+
+- 新增歌曲详情测试：`mv.vid` 映射、缓存命中不重复请求、无绑定返回空字符串。
+- `npm run typecheck`、`npm test`（49 个测试文件、239 个用例）与 `npm run build` 通过。
+- 绑定字段来自既有录制 fixture；未用真实账号再次拉取验证。缺失绑定或补查失败时按钮隐藏，不影响播放。

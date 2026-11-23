@@ -97,7 +97,8 @@ const api: LycheeApi = {
   },
   song: {
     getUrls: (mids: string[], quality: Quality) =>
-      invoke<UrlResult[]>('song.getUrls', mids, quality)
+      invoke<UrlResult[]>('song.getUrls', mids, quality),
+    getMvId: (mid: string) => invoke<string>('song.getMvId', mid)
   },
   playlist: {
     get: (id: string, options) => invoke<PlaylistPage>('playlist.get', id, options),

@@ -59,7 +59,8 @@ vi.mock('../../src/main/api/playlist', () => ({
       pay_play: null,
       pay_month: null,
       pay_status: null,
-      maxQuality: null
+      maxQuality: null,
+      mvId: ''
     })),
     offset,
     total: state.members.length,

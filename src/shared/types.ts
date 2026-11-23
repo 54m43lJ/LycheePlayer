@@ -59,6 +59,8 @@ export interface Song {
   pay_status: number | null
   /** 曲库存在的最高音质档位，不代表当前账号一定可取流。 */
   maxQuality: Quality | null
+  /** 上游绑定的 MV vid；无绑定或未提供时为空字符串。 */
+  mvId: string
 }
 
 /** 由 Song 元数据与账号会员状态派生的播放权限。 */

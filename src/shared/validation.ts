@@ -53,7 +53,8 @@ export function isSong(value: unknown): value is Song {
     isNumberOrNull(value.pay_play) &&
     isNumberOrNull(value.pay_month) &&
     isNumberOrNull(value.pay_status) &&
-    isQualityOrNull(value.maxQuality)
+    isQualityOrNull(value.maxQuality) &&
+    typeof value.mvId === 'string'
   )
 }
 

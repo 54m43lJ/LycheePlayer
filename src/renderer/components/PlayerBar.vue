@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
+import { RouterLink } from 'vue-router'
 import type { AudioCacheProgress, Settings } from '@shared/types'
+import { unwrap } from '../api'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
@@ -70,6 +72,32 @@ const cache = ref<AudioCacheProgress | null>(null)
 
 const cover = computed(() => songCover(current.value, 300))
 const hasSong = computed(() => Boolean(current.value))
+const resolvedMvId = ref('')
+let mvRequest = 0
+
+/**
+ * 列表未携带 mvId 时（搜索 / 推荐等）按歌曲详情补查。
+ * 等取流结束再查，复用 getStreamUrls 已缓存的详情，避免同曲详情并发请求。
+ */
+watch(
+  () => [current.value?.songMid ?? '', current.value?.mvId ?? '', player.loading] as const,
+  ([mid, boundMvId, loading]) => {
+    const request = ++mvRequest
+    resolvedMvId.value = boundMvId
+    if (!mid || boundMvId || loading) return
+    void (async () => {
+      try {
+        const mvId = unwrap(await window.lychee.song.getMvId(mid))
+        if (request === mvRequest) resolvedMvId.value = mvId
+      } catch {
+        if (request === mvRequest) resolvedMvId.value = ''
+      }
+    })()
+  },
+  { immediate: true }
+)
+
+const mvId = computed(() => current.value?.mvId || resolvedMvId.value)
 const lyricsTitle = computed(() => {
   if (!hasSong.value) return ''
   return ui.lyricsOpen ? '关闭歌词与评论' : '歌词与评论'
@@ -608,6 +636,15 @@ watch(
           <MarqueeText v-if="hasSong" class="player-title" :text="current?.name ?? ''" />
           <span v-else class="player-title">&nbsp;</span>
           <span v-if="hasSong" class="quality-mark" title="实际音质（降档后）">{{ qualityLabel }}</span>
+          <RouterLink
+            v-if="hasSong && mvId"
+            class="mv-mark"
+            :to="`/mv/${mvId}`"
+            title="播放 MV"
+            aria-label="播放 MV"
+          >
+            <AppIcon name="play" :size="9" />
+          </RouterLink>
         </div>
         <div v-if="hasSong" class="player-artist">
           <template v-for="(singer, index) in visibleSingers()" :key="`${singer.mid}-${index}`">

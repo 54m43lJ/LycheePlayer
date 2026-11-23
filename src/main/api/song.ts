@@ -18,6 +18,8 @@ interface RawSong {
   title?: string
   interval?: number
   status?: number
+  vid?: string
+  mv?: { id?: number | string; vid?: string; name?: string; title?: string }
   singer?: Array<{ mid?: string; name?: string }>
   album?: { mid?: string; name?: string }
   pay?: {
@@ -51,6 +53,7 @@ interface VkeyData {
 interface TrackMeta {
   mediaMid: string
   pay: PayInfo
+  mvId: string
 }
 
 interface PendingTrack extends TrackMeta {
@@ -122,14 +125,17 @@ function toSong(raw: RawSong): Song {
     pay_play: numberOrNull(pay.pay_play),
     pay_month: numberOrNull(pay.pay_month),
     pay_status: numberOrNull(pay.pay_status),
-    maxQuality: libraryMaxQuality(raw.file)
+    maxQuality: libraryMaxQuality(raw.file),
+    mvId: (raw.mv?.vid ?? raw.vid ?? '').trim()
   }
 }
 
 function trackMeta(raw: RawTrackInfo, fallbackMid: string): TrackMeta {
+  const song = toSong(raw)
   return {
     mediaMid: raw.file?.media_mid ?? fallbackMid,
-    pay: toSong(raw).pay
+    pay: song.pay,
+    mvId: song.mvId
   }
 }
 
@@ -145,7 +151,7 @@ async function fetchTrack(mid: string): Promise<RawTrackInfo> {
   }
   const mediaMid = data.track_info.file?.media_mid
   if (mediaMid) {
-    trackMetaCache.set(mid, { mediaMid, pay: toSong(data.track_info).pay })
+    trackMetaCache.set(mid, trackMeta(data.track_info, mid))
   }
   return data.track_info
 }
@@ -205,6 +211,23 @@ async function mapLimit<T, R>(
   })
   await Promise.all(runners)
   return results
+}
+
+/**
+ * 查询歌曲绑定的 MV vid；优先复用播放取流已缓存的详情，未命中时单曲补拉。
+ * 无绑定或上游未提供时返回空字符串。
+ */
+export async function getMvId(mid: string): Promise<string> {
+  const id = mid.trim()
+  if (!id) return ''
+  const cached = trackMetaCache.get(id)
+  if (cached) return cached.mvId
+  const tracks = await fetchTracksById([id])
+  const raw = tracks.get(id)
+  if (!raw) return ''
+  const meta = trackMeta(raw, id)
+  trackMetaCache.set(id, meta)
+  return meta.mvId
 }
 
 /** 按 songMid 批量取详情，供歌单/播放器补齐非搜索来源的歌曲。 */
