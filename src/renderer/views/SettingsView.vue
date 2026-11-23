@@ -431,7 +431,7 @@ onBeforeUnmount(() => {
                 {{ recordingShortcut === row.id ? '按下组合键…' : row.value }}
               </button>
             </div>
-            <div class="panel-actions">
+            <div class="panel-actions shortcut-actions">
               <button class="btn ghost small" @click="resetShortcuts()">恢复默认</button>
             </div>
           </div>

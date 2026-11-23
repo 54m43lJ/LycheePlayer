@@ -1363,6 +1363,11 @@ button:focus-visible,
   color: var(--accent-strong);
 }
 
+/* 最后一行设置项没有下内边距，动作区需自行补出与内容的分隔。 */
+.shortcut-actions {
+  margin-top: 16px;
+}
+
 .setting-desc {
   margin-top: 4px;
   color: var(--faint);
