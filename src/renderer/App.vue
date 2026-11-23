@@ -5,6 +5,7 @@ import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
 import DownloadDeleteDialog from './components/DownloadDeleteDialog.vue'
 import LyricsOverlay from './components/LyricsOverlay.vue'
+import MemberBadge from './components/MemberBadge.vue'
 import PlayerBar from './components/PlayerBar.vue'
 import ReauthDialog from './components/ReauthDialog.vue'
 import ToastStack from './components/ToastStack.vue'
@@ -434,7 +435,10 @@ watch(
             <template v-else>{{ avatarLetter }}</template>
           </span>
           <span class="user-meta">
-            <span class="user-name">{{ auth.displayName }}</span>
+            <span class="user-name-row">
+              <span class="user-name">{{ auth.displayName }}</span>
+              <MemberBadge :status="auth.vip" :size="14" />
+            </span>
             <span class="user-state">{{ auth.musicid }}</span>
           </span>
           <AppIcon name="chevron-right" :size="15" />

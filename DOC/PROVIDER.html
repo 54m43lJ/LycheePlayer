@@ -190,7 +190,7 @@
   </tr>
   <tr>
     <td>VIP 状态</td>
-    <td>用于不可播文案与账号区徽标；<code>vip</code> / 豪华绿钻 / <code>svip</code> 任一为真即会员，接口失败返回未知状态而不是非会员，缓存见 <a href="CORE.html#c4-13">CORE §4.13</a>。</td>
+    <td>用于不可播文案与账号区会员标记；<code>identity.vip</code> / <code>svip</code> / <code>identity.HugeVip</code> 任一为真即会员，分别对应绿钻 / 豪华绿钻 / 超级会员；接口失败返回未知状态而不是非会员，缓存见 <a href="CORE.html#c4-13">CORE §4.13</a>。</td>
   </tr>
   <tr>
     <td>登录会话隔离</td>
@@ -320,7 +320,7 @@
   <tr><td>微信登录二维码</td><td><code>https://open.weixin.qq.com/connect/qrconnect</code></td><td>微信开放平台网站应用二维码；回调到 QQ 音乐 <code>wx_redirect</code> 页。</td></tr>
   <tr><td>歌词</td><td><code>music.musichallSong.PlayLyricInfo / GetPlayLyricInfo</code></td><td>按数字歌曲 ID 返回 Base64 编码的 <code>lyric</code> 与 <code>trans</code>；旧歌词接口因译文缺失不再消费。</td></tr>
   <tr><td>歌曲评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲最新评论；应用不提供“最旧”或按点赞排序，单页固定 25 条（26 起返回业务码 <code>10000</code>）。</td></tr>
-  <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号会员身份与到期信息；<code>identity</code> 提供绿钻 / 豪华绿钻等标记，<code>svip</code> 提供超级会员标记，<code>userinfo.expire</code> 为到期时间。</td></tr>
+  <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号会员身份与到期信息；<code>identity.vip</code> 为绿钻，<code>svip</code> 为豪华绿钻，<code>identity.HugeVip</code> / <code>huge_vip</code> 为超级会员，<code>userinfo.expire</code> 为到期时间。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>QQ 官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方 xlogin 扫码组件。</td></tr>
   <tr><td>OAuth 授权</td><td><code>POST https://graph.qq.com/oauth2.0/authorize</code></td><td>用 xlogin 的 Cookie 换取 <code>code</code>。</td></tr>
@@ -987,7 +987,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqVipData</code></td>
     <td><code>identity.vip</code> · <code>identity.huge_vip</code> / <code>HugeVip</code> · <code>svip</code> · <code>identity.overdate</code> · <code>userinfo.expire</code></td>
-    <td>字段映射（同一账号购买超级会员前后对比确认）：<code>identity.vip</code> = 绿钻，<code>svip</code> = 豪华绿钻，<code>identity.HugeVip</code> / <code>huge_vip</code> = 超级会员；三者任一为真即会员，<code>VipStatus.level</code> 取最高档（<code>svip</code> &gt; <code>huge_vip</code> &gt; <code>vip</code>）。<code>userinfo.expire</code> 按秒或毫秒时间戳解析；为 <code>-1</code> 或缺失时回退 <code>identity.overdate</code>，仍无法识别时为 <code>null</code>。接口失败映射为 <code>state='unknown'</code>，不能当作非会员。第三方文档曾把 <code>HugeVip</code> 标为豪华绿钻，与实测不符；不再采用。超级会员到期时间使用 <code>identity.HugeVipEnd</code>。</td>
+    <td>字段映射（同一账号购买超级会员前后对比确认）：<code>identity.vip</code> = 绿钻，<code>svip</code> = 豪华绿钻，<code>identity.HugeVip</code> / <code>huge_vip</code> = 超级会员；三者任一为真即会员，<code>VipStatus.level</code> 取最高档（<code>super</code> &gt; <code>deluxe</code> &gt; <code>vip</code>）。<code>userinfo.expire</code> 按秒或毫秒时间戳解析；为 <code>-1</code> 或缺失时回退 <code>identity.overdate</code>，仍无法识别时为 <code>null</code>。接口失败映射为 <code>state='unknown'</code>，不能当作非会员。第三方文档曾把 <code>HugeVip</code> 标为豪华绿钻，与实测不符；不再采用。超级会员到期时间使用 <code>identity.HugeVipEnd</code>。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code></td>

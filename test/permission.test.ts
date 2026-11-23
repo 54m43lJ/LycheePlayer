@@ -27,8 +27,8 @@ function vip(level: VipLevel, state: VipStatus['state'] = 'known'): VipStatus {
 
 describe('playbackPermission blocking stack', () => {
   it('blocks status 1 and 2 without looking at payment', () => {
-    expect(playbackPermission(song({ status: 1 }), vip('svip')).playable).toBe(false)
-    expect(playbackPermission(song({ status: 2 }), vip('svip')).playable).toBe(false)
+    expect(playbackPermission(song({ status: 1 }), vip('super')).playable).toBe(false)
+    expect(playbackPermission(song({ status: 2 }), vip('super')).playable).toBe(false)
   })
 
   it('allows songs that do not require a paid play', () => {
@@ -45,19 +45,19 @@ describe('playbackPermission blocking stack', () => {
     ).toBe(false)
   })
 
-  it('requires huge_vip for pay_month 0', () => {
+  it('requires deluxe for pay_month 0', () => {
     const paid = { pay_play: 1, pay_month: 0 }
     expect(playbackPermission(song(paid), vip('vip')).playable).toBe(false)
     expect(playbackPermission(song(paid), vip('none')).playable).toBe(false)
-    expect(playbackPermission(song(paid), vip('huge_vip')).playable).toBe(true)
-    expect(playbackPermission(song(paid), vip('svip')).playable).toBe(true)
+    expect(playbackPermission(song(paid), vip('deluxe')).playable).toBe(true)
+    expect(playbackPermission(song(paid), vip('super')).playable).toBe(true)
   })
 
   it('requires vip for pay_month 1', () => {
     const paid = { pay_play: 1, pay_month: 1 }
     expect(playbackPermission(song(paid), vip('none')).playable).toBe(false)
     expect(playbackPermission(song(paid), vip('vip')).playable).toBe(true)
-    expect(playbackPermission(song(paid), vip('huge_vip')).playable).toBe(true)
+    expect(playbackPermission(song(paid), vip('deluxe')).playable).toBe(true)
   })
 
   it('treats missing pay_month as unknown below vip', () => {

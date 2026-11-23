@@ -8,6 +8,8 @@
   --palette-purple: #89338e;
   --palette-purple-light: #e593e7;
   --palette-gold: #9d7e4d;
+  --palette-green: #46c078;
+  --palette-gold-bright: #e7be62;
   --palette-cream: #fff7e4;
   --palette-red: #cc2a47;
 
@@ -25,6 +27,10 @@
   --accent-soft: color-mix(in srgb, var(--palette-purple) 22%, transparent);
   --accent-line: color-mix(in srgb, var(--palette-purple) 52%, transparent);
   --gold: var(--palette-gold);
+  --member-green: var(--palette-green);
+  --member-green-edge: color-mix(in srgb, var(--palette-green) 48%, var(--palette-bg));
+  --member-gold: var(--palette-gold-bright);
+  --member-gold-edge: var(--palette-gold);
   --danger: var(--palette-red);
   --danger-soft: color-mix(in srgb, var(--palette-red) 16%, transparent);
   --border: color-mix(in srgb, var(--palette-muted) 16%, transparent);
@@ -81,6 +87,8 @@
   --palette-purple: #8a2e8f;
   --palette-purple-light: #d998d9;
   --palette-gold: #5c4824;
+  --palette-green: #1d9a5b;
+  --palette-gold-bright: #c8971f;
   --palette-highlight: #e9dbf2;
   --palette-red: #ab3248;
 
@@ -98,6 +106,10 @@
   --accent-soft: color-mix(in srgb, var(--palette-purple-light) 58%, transparent);
   --accent-line: color-mix(in srgb, var(--palette-purple) 38%, transparent);
   --gold: var(--palette-gold);
+  --member-green: var(--palette-green);
+  --member-green-edge: color-mix(in srgb, var(--palette-green) 55%, var(--palette-bg));
+  --member-gold: var(--palette-gold-bright);
+  --member-gold-edge: var(--palette-gold);
   --danger: var(--palette-red);
   --danger-soft: color-mix(in srgb, var(--palette-red) 12%, transparent);
   --border: color-mix(in srgb, var(--palette-muted) 20%, transparent);
@@ -342,9 +354,76 @@ button:focus-visible,
   color: var(--text);
 }
 
+.user-name-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.user-name-row .user-name {
+  min-width: 0;
+}
+
 .user-state {
   font-size: 11px;
   color: var(--faint);
+}
+
+/* 会员档位：侧栏仅图标，设置页图标 + 文字；颜色见 USER §5.1。 */
+.member-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  line-height: 1;
+}
+
+.member-badge-icon {
+  display: block;
+  flex: none;
+}
+
+.member-diamond {
+  fill: var(--member-green);
+  stroke: var(--member-green-edge);
+  stroke-width: 0.9;
+  stroke-linejoin: round;
+}
+
+.member-facet {
+  fill: none;
+  stroke: var(--member-green-edge);
+  stroke-width: 0.7;
+  opacity: 0.55;
+}
+
+.member-v {
+  fill: none;
+  stroke: var(--member-gold);
+  stroke-width: 2.2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.member-super .member-diamond {
+  fill: var(--member-gold);
+  stroke: var(--member-gold-edge);
+}
+
+.member-super .member-facet {
+  stroke: var(--member-gold-edge);
+}
+
+.member-super .member-v {
+  stroke: var(--member-gold-edge);
+}
+
+.member-badge-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
 }
 
 .sidebar-note {

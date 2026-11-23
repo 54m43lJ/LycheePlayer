@@ -107,7 +107,7 @@ function parseVipOverdate(value: unknown): number | null {
 /**
  * 当前登录账号的会员状态；接口失败返回 unknown，不把失败当作非 VIP。
  * 字段映射（已用同一账号购买超级会员前后对比确认）：
- * vip=绿钻，svip=豪华绿钻，HugeVip=超级会员。
+ * identity.vip=绿钻，svip=豪华绿钻，HugeVip=超级会员。
  * 星级等其余标记不参与播放判断。
  */
 export async function getVipStatus(): Promise<VipStatus> {
@@ -129,7 +129,7 @@ export async function getVipStatus(): Promise<VipStatus> {
     const vip = isFlag(identity.vip)
     const deluxe = isFlag(data.svip)
     const superVip = isFlag(identity.HugeVip ?? identity.huge_vip)
-    const level: VipLevel = superVip ? 'svip' : deluxe ? 'huge_vip' : vip ? 'vip' : 'none'
+    const level: VipLevel = superVip ? 'super' : deluxe ? 'deluxe' : vip ? 'vip' : 'none'
     const status: VipStatus = {
       state: 'known',
       isVip: level !== 'none',

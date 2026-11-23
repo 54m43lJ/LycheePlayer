@@ -90,6 +90,22 @@
     <td>歌曲对当前账号的可播属性：免费、VIP 或数字专辑；字段见 <a href="CORE.html#c4-1">CORE §4.1</a> 的 <code>PayInfo</code>。</td>
   </tr>
   <tr>
+    <td>会员状态（VipStatus）</td>
+    <td>当前账号的付费会员档位；仅当 <code>state = known</code> 且档位非 <code>none</code> 时展示会员标记，接口失败或状态未知时既不显示会员档位，也不当作非会员；字段见 <a href="CORE.html#c4-1">CORE §4.1</a> 的 <code>VipStatus</code>。</td>
+  </tr>
+  <tr>
+    <td>绿钻</td>
+    <td>普通付费会员档位；对应 <code>VipStatus.level = vip</code>，上游字段为 <code>identity.vip</code>。</td>
+  </tr>
+  <tr>
+    <td>豪华绿钻</td>
+    <td>高于绿钻的付费会员档位；对应 <code>VipStatus.level = deluxe</code>，上游字段为 <code>svip</code>。</td>
+  </tr>
+  <tr>
+    <td>超级会员</td>
+    <td>最高档付费会员；对应 <code>VipStatus.level = super</code>，上游字段为 <code>identity.HugeVip</code> / <code>huge_vip</code>。</td>
+  </tr>
+  <tr>
     <td>歌词（Lyric）</td>
     <td>LRC 原文与可选的翻译文本。</td>
   </tr>
@@ -251,6 +267,10 @@
     <td>默认路径为 <code>$XDG_CONFIG_HOME/lychee-player/flags.conf</code>（未设置时 <code>~/.config/lychee-player/flags.conf</code>）；每行一个参数，空行与 <code>#</code> 开头行忽略；文件上限 8 KiB / 64 行，非法 switch 被过滤。优先级为显式命令行 &gt; 文件 &gt; 环境变量 &gt; 内置默认；保存后下次启动生效。</td>
   </tr>
   <tr>
+    <td>会员状态展示</td>
+    <td>只有 <code>VipStatus.state = known</code> 且档位非 <code>none</code> 时显示会员标记，状态未知或非会员不显示文字与图标。档位文字统一为“绿钻 / 豪华绿钻 / 超级会员”，不使用 VIP / SVIP 等缩写。图标均为实心钻石：绿钻为绿色钻石；豪华绿钻为绿色钻石、右下角带金色 V；超级会员为金色钻石、中央带暗金 V。侧栏账号入口只显示图标，设置页账号区显示图标 + 文字；档位与上游字段的映射见 <a href="#u1">§1</a>。</td>
+  </tr>
+  <tr>
     <td>不可播标记与曲库最高音质</td>
     <td>列表加载后按歌曲元数据与账号会员状态直接显示不可播标记与曲库最高音质，不申请播放链接；会员状态无法确认时按不可播处理，其余按是否满足会员 / 购买条件判断。</td>
   </tr>
@@ -381,6 +401,8 @@
   <tr><td><span class="palette-swatch" style="background:#89338E"></span></td><td><code>purple</code></td><td><code>#89338E</code></td><td>accent：hover / 选中填充；亮底上的文字</td></tr>
   <tr><td><span class="palette-swatch" style="background:#E593E7"></span></td><td><code>purple-light</code></td><td><code>#E593E7</code></td><td>accent 提亮：深浮层上的文字、hover 高亮</td></tr>
   <tr><td><span class="palette-swatch" style="background:#9D7E4D"></span></td><td><code>gold</code></td><td><code>#9D7E4D</code></td><td>accent：细线、进度填充、副标题弱文字</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#46C078"></span></td><td><code>green</code></td><td><code>#46C078</code></td><td>会员钻石：绿钻 / 豪华绿钻填充</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#E7BE62"></span></td><td><code>gold-bright</code></td><td><code>#E7BE62</code></td><td>会员钻石：超级会员填充、豪华绿钻 V 标记</td></tr>
   <tr><td><span class="palette-swatch" style="background:#FFF7E4"></span></td><td><code>cream</code></td><td><code>#FFF7E4</code></td><td>最亮色：亮面背景、选中 / hover 文字、装饰亮线</td></tr>
   <tr><td><span class="palette-swatch" style="background:#CC2A47"></span></td><td><code>red</code></td><td><code>#CC2A47</code></td><td>警告 / 危险：错误填充、危险操作</td></tr>
 </table>
@@ -395,6 +417,8 @@
   <tr><td><span class="palette-swatch" style="background:#8A2E8F"></span></td><td><code>purple</code></td><td><code>#8A2E8F</code></td><td>accent 主紫；亮底上的文字、按钮填充</td></tr>
   <tr><td><span class="palette-swatch" style="background:#D998D9"></span></td><td><code>purple-light</code></td><td><code>#D998D9</code></td><td>柔和填充：hover / 选中底，需配深色文字</td></tr>
   <tr><td><span class="palette-swatch" style="background:#5C4824"></span></td><td><code>gold</code></td><td><code>#5C4824</code></td><td>accent 金：细线、进度填充、副标题文字</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#1D9A5B"></span></td><td><code>green</code></td><td><code>#1D9A5B</code></td><td>会员钻石：绿钻 / 豪华绿钻填充</td></tr>
+  <tr><td><span class="palette-swatch" style="background:#C8971F"></span></td><td><code>gold-bright</code></td><td><code>#C8971F</code></td><td>会员钻石：超级会员填充、豪华绿钻 V 标记</td></tr>
   <tr><td><span class="palette-swatch" style="background:#E9DBF2"></span></td><td><code>highlight</code></td><td><code>#E9DBF2</code></td><td>选中态高亮底（对应 dark 的 cream 角色）</td></tr>
   <tr><td><span class="palette-swatch" style="background:#AB3248"></span></td><td><code>red</code></td><td><code>#AB3248</code></td><td>错误 / 危险（樱桃红，与 dark 同族）</td></tr>
 </table>
@@ -411,6 +435,8 @@
   <tr><td><code>--accent-soft</code></td><td><code>purple</code></td><td><code>purple-light</code></td><td>accent 软填充（由 token 派生）</td></tr>
   <tr><td><code>--accent-line</code></td><td><code>purple</code></td><td><code>purple</code></td><td>accent 边线（由 token 派生）</td></tr>
   <tr><td><code>--gold</code></td><td><code>gold</code></td><td><code>gold</code></td><td>金色 accent</td></tr>
+  <tr><td><code>--member-green</code></td><td><code>green</code></td><td><code>green</code></td><td>会员钻石绿色填充；边缘与当前 <code>bg</code> 混色</td></tr>
+  <tr><td><code>--member-gold</code></td><td><code>gold-bright</code></td><td><code>gold-bright</code></td><td>会员钻石金色填充与豪华绿钻 V 标记</td></tr>
   <tr><td><code>--danger</code></td><td><code>red</code></td><td><code>red</code></td><td>错误 / 危险</td></tr>
   <tr><td><code>--on-accent</code></td><td><code>cream</code></td><td><code>highlight</code></td><td>accent 上的文字 / 前景</td></tr>
 </table>
@@ -419,6 +445,7 @@
   <li>映射按语义角色对应，不要求两套 token 同名；所有变量只能从当前主题的调色盘取色。dark 与 light 不得互相取色。</li>
   <li>dark 的 <code>purple</code> 在深底上仅适合填充，文字强调用 <code>purple-light</code>；light 的 <code>purple-light</code> 是粉彩填充，压深色文字；light 的 <code>--on-accent</code> 取 <code>highlight</code>，不要直接写白色。</li>
   <li>深 / 浅两套 token 色相保持同族（purple 297°、purple-light ~300°、red ~349°、gold ~37–39°），切换时视觉语言一致。</li>
+  <li>会员钻石使用 <code>green</code> / <code>gold-bright</code>；钻石边缘由填充色与当前 <code>bg</code> 混色，超级会员的暗金 V 使用 <code>gold</code>，不引入调色盘外的字面量。</li>
   <li>阴影统一使用 <code>--shadow-color</code>（深色 fg 20%、浅色 14%）与 <code>--shadow-sm / base / lg / up / left / right / handle</code>；不再使用纯黑硬编码投影，也不对单个组件按宽度单独压缩。</li>
 </ul>
 
@@ -477,7 +504,7 @@
     <div class="u-nav-item">下载</div>
     <div class="u-nav-item">设置</div>
     <div class="u-nav-item">退出</div>
-    <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>0123456789</small></span></div>
+    <div class="u-pill"><span class="u-avatar">L</span><span>Lychee <span class="u-badge green">◆</span><br /><small>0123456789</small></span></div>
   </div>
   <div class="ui-proto u-side" style="width: 224px; height: 470px; border-radius: 10px; box-shadow: 6px 0 18px rgba(0,0,0,.35)">
     <div class="u-brand"><span class="u-mark">♪</span><span><b>Lychee Player</b><br /><small>窄屏抽屉 · 默认隐藏</small></span></div>
@@ -488,12 +515,12 @@
     <div class="u-nav-item">我的歌单</div>
     <div class="u-nav-item" style="padding-left: 28px; opacity: .85">华语流行 <span class="u-qmark">播放中</span></div>
     <div class="u-nav-item">播放历史</div>
-    <div class="u-pill"><span class="u-avatar">L</span><span>Lychee<br /><small>0123456789</small></span></div>
+    <div class="u-pill"><span class="u-avatar">L</span><span>Lychee <span class="u-badge green">◆</span><br /><small>0123456789</small></span></div>
   </div>
 </div>
 </div>
 <ul class="note">
-  <li>宽屏（&gt;900px）固定侧栏 224px：品牌区只显示应用名，不显示副标题；浏览组（“发现 / 搜索 / 我喜欢 / 我的歌单 / 播放历史”，“我喜欢”仅登录后显示并与“我的歌单”同级，进入固定收藏歌单）、应用组（“下载 / 设置 / 退出” + 配色切换图标）与底部账号 pill；已登录时账号次级行只显示 musicid，不再写“已登录”，未登录只显示“登录 QQ 音乐”，不显示扫码方式或其它次级说明。导航项激活态使用 accent 软填充与强调文字，悬停态只改变背景与文字颜色。</li>
+  <li>宽屏（&gt;900px）固定侧栏 224px：品牌区只显示应用名，不显示副标题；浏览组（“发现 / 搜索 / 我喜欢 / 我的歌单 / 播放历史”，“我喜欢”仅登录后显示并与“我的歌单”同级，进入固定收藏歌单）、应用组（“下载 / 设置 / 退出” + 配色切换图标）与底部账号 pill；已登录时账号次级行只显示 musicid，不再写“已登录”，昵称右侧显示仅图标的会员标记，档位未知或非会员时不显示；未登录只显示“登录 QQ 音乐”，不显示扫码方式或其它次级说明。导航项激活态使用 accent 软填充与强调文字，悬停态只改变背景与文字颜色。</li>
   <li>“播放历史”固定为浏览组最后一项（最近歌单子条目之后），指向 <code>/history</code> 完整页面，按当前路由高亮；点击走与其它导航项相同的 <code>onSidebarNavigate()</code>，同时关闭窄屏抽屉与歌词 / 评论弹出层。</li>
   <li>“我的歌单”下最多显示 5 条最近访问歌单作为子条目；点击进入对应歌单。进入歌单页时更新该条目并置顶，超过 5 条淘汰最旧的一条；已删除或无权限的歌单在校验后移除，且不从第 6 条补位；歌单信息变化时更新名称 / 封面 / 歌曲数。</li>
   <li>当前打开的最近歌单与正在播放的歌单都高亮；播放状态由音量图标单独表示，手动队列（无歌单来源）不高亮。路由切换只影响展示态，不改变最近列表排序与校验。</li>
@@ -665,7 +692,7 @@
   <div class="u-col">
     <div class="u-panel">
       <h5>账号</h5>
-      <div class="u-rowline"><span>Lychee<br /><small>QQ · musicid 0123456789</small></span><span class="u-badge gold">VIP</span></div>
+      <div class="u-rowline"><span>Lychee<br /><small>QQ · musicid 0123456789</small></span><span class="u-badge gold">◆ 超级会员</span></div>
       <div class="u-rowline"><span>凭证到期<br /><small>2026-10-21 12:00</small></span><span class="u-tab">立即续期</span></div>
       <div class="u-rowline"><span class="u-tab">我的歌单</span><span class="u-tab">退出登录</span></div>
     </div>
@@ -690,7 +717,7 @@
   <li>快捷键区每行显示动作与当前组合键，点击后进入录制态并提示“按下组合键…”；按下完整组合键即保存，只按修饰键不生效，Esc 取消；与其它动作冲突时提示占用并放弃本次修改；“恢复默认”重置全部五项。改键即时生效并写盘。</li>
   <li>关于区展示版本、音频引擎与许可证；版本与许可证以构建配置为准。</li>
   <li>音质四档，默认“自动”；与播放条共用同一持久化偏好，任一处修改即时同步；回退静默，不弹提示。</li>
-  <li>关闭到托盘默认开启；窗口区只保留“关闭到托盘”，右侧“应用”面板提供“退出应用”，直接结束进程且不受关闭到托盘影响；账号区展示登录方式、musicid 与到期时间，不显示“已登录”徽标；检测到当前账号具有 VIP 权益时在右侧显示“VIP”标记，检测不到则不显示。QQ / 微信扫码凭证在到期前自动续期，调用上游遇到登录失效时也会立即尝试续期并重试一次原请求；续期成功 / 失败后登录态实时更新，auth-failed 时弹出全局重新登录界面。登录后始终允许手动续期，按钮不按凭证类型禁用。</li>
+  <li>关闭到托盘默认开启；窗口区只保留“关闭到托盘”，右侧“应用”面板提供“退出应用”，直接结束进程且不受关闭到托盘影响；账号区展示登录方式、musicid 与到期时间，不显示“已登录”徽标；检测到已知会员档位时在右侧显示档位图标 + 文字（绿钻 / 豪华绿钻 / 超级会员），状态未知或非会员时不显示，规则见 <a href="#u2">§2</a> 的“会员状态展示”。QQ / 微信扫码凭证在到期前自动续期，调用上游遇到登录失效时也会立即尝试续期并重试一次原请求；续期成功 / 失败后登录态实时更新，auth-failed 时弹出全局重新登录界面。登录后始终允许手动续期，按钮不按凭证类型禁用。</li>
   <li>修改设置即写盘，无保存按钮；播放中切换音质会立即重载当前曲目。</li>
 </ul>
 

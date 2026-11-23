@@ -3,8 +3,8 @@ import type { PlaybackPermission, Song, VipLevel, VipStatus } from './types'
 const VIP_RANK: Record<VipLevel, number> = {
   none: 0,
   vip: 1,
-  huge_vip: 2,
-  svip: 3
+  deluxe: 2,
+  super: 3
 }
 
 /**
@@ -21,7 +21,7 @@ export function playbackPermission(song: Song, vip: VipStatus): PlaybackPermissi
   if (vip.state === 'unknown') return blocked()
 
   const rank = VIP_RANK[vip.level]
-  if (rank < VIP_RANK.huge_vip && song.pay_month === 0) return blocked()
+  if (rank < VIP_RANK.deluxe && song.pay_month === 0) return blocked()
   if (rank < VIP_RANK.vip) {
     if (song.pay_status === 0) return blocked()
     if (song.pay_month !== 0 && song.pay_month !== 1) return blocked()

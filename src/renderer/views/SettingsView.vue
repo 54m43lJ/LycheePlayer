@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import type { FlagsFile, Settings, ShortcutAction, ShortcutBinding, VipStatus } from '@shared/types'
+import type { FlagsFile, Settings, ShortcutAction, ShortcutBinding } from '@shared/types'
 import { AUDIO_CACHE_LIMIT_STEPS_BYTES } from '@shared/constants'
 import {
   DEFAULT_SHORTCUTS,
@@ -14,6 +14,7 @@ import {
 import AppIcon from '../components/AppIcon.vue'
 import CacheManagerDialog from '../components/CacheManagerDialog.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import MemberBadge from '../components/MemberBadge.vue'
 import { describeError, IpcCallError, unwrap } from '../api'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
@@ -34,9 +35,7 @@ const playlistStore = usePlaylistStore()
 const router = useRouter()
 const toast = useToast()
 const sessionRefreshing = ref(false)
-const vipStatus = ref<VipStatus | null>(null)
 const recordingShortcut = ref<ShortcutAction | null>(null)
-let vipRequest = 0
 const appVersion = __APP_VERSION__
 const appLicense = __APP_LICENSE__
 
@@ -91,29 +90,6 @@ watch(
 )
 
 let cacheLimitSaveTimer: number | null = null
-
-/** VIP 权益只用于账号区徽标；unknown 或上游失败时保持隐藏。 */
-async function loadVip(): Promise<void> {
-  const request = ++vipRequest
-  if (!auth.loggedIn) {
-    vipStatus.value = null
-    return
-  }
-  try {
-    const status = unwrap(await window.lychee.user.vipStatus())
-    if (request === vipRequest) vipStatus.value = status
-  } catch {
-    if (request === vipRequest) vipStatus.value = null
-  }
-}
-
-watch(
-  () => [auth.loggedIn, auth.musicid] as const,
-  () => {
-    void loadVip()
-  },
-  { immediate: true }
-)
 
 const shortcuts = computed(() => settings.settings.shortcuts ?? DEFAULT_SHORTCUTS)
 const shortcutRows = computed(() =>
@@ -581,7 +557,7 @@ onBeforeUnmount(() => {
                     {{ auth.method === 'wechat' ? '微信' : 'QQ' }} · musicid {{ auth.musicid }}
                   </div>
                 </div>
-                <span v-if="vipStatus?.state === 'known' && vipStatus.isVip" class="pay-badge">{{ vipStatus.level === 'svip' ? 'SVIP' : 'VIP' }}</span>
+                <MemberBadge :status="auth.vip" show-label :size="16" />
               </div>
               <div class="setting-row">
                 <div>

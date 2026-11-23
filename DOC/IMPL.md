@@ -584,3 +584,50 @@
 - 用 Chromium 复现布局：344px 信息列、歌手行较长时，旧规则下歌名文本与 FLAC 标记之间约 102px 空白；改为 `flex: 0 1 auto` 后间距回到 8px，歌名按内容宽度显示。
 - `npm run typecheck`、`npm test`（49 个测试文件、239 个用例）与 `npm run build` 通过。
 - 未做真实播放窗口截图验收；该缺陷为纯 CSS 伸缩规则，已用浏览器布局测量确认。
+
+### 4.34 会员状态术语、图标与展示位置统一 [已解决] 
+
+**描述**：ISSUE 要求统一会员状态的展示：`绿钻`、`豪华绿钻`、`超级会员` 作为术语明确并与上游字段映射；三者分别使用绿色实心钻石、绿色钻石 + 右下金色 V、金色钻石 + 中央暗金 V 的图标；侧栏账号入口只显示图标，设置页显示图标 + 文字。排查发现内部 `VipLevel` 的命名与上游字段名相反：上游 `svip` 是豪华绿钻，却被映射成 `level='huge_vip'`；上游 `HugeVip` 是超级会员，却被映射成 `level='svip'`。设置页据此只显示 `VIP` / `SVIP`，豪华绿钻还会显示成 `VIP`。
+
+**解决方案**：
+
+- 术语与档位统一：`VipLevel` 改为 `none / vip / deluxe / super`，分别表示非会员 / 绿钻 / 豪华绿钻 / 超级会员；`identity.vip` → `vip`，`svip` → `deluxe`，`identity.HugeVip` / `huge_vip` → `super`，`VipStatus.level` 取最高档。
+- 播放权限的档位顺序同步为 `none < vip < deluxe < super`，`pay_month === 0` 的阻断条件改读 `deluxe`，判定结果不变。
+- 新增 `MemberBadge.vue` 作为会员档位的唯一展示组件：仅 `state='known'`、`isVip` 为真且档位非 `none` 时渲染；图标为 24×24 视框的实心钻石，绿钻为绿色、豪华绿钻为绿色钻石 + 右下金色 V、超级会员为金色钻石 + 中央暗金 V；仅图标时以 `role="img"` + `aria-label` 表达档位。
+- 侧栏账号 pill 在昵称右侧渲染 14px 仅图标标记，`user-name-row` 保证昵称省略但不裁掉图标；设置页账号区渲染 16px 图标 + 档位文字，并改用全局 `auth.vip`，删除设置页自己的 `user.vipStatus` 查询与 `VIP` / `SVIP` 徽标。
+- 调色板新增 `green` 与 `gold-bright`，语义变量为 `--member-green` / `--member-gold`；钻石边缘由填充色与当前 `bg` 混色，超级会员的暗金 V 使用 `gold`，不引入调色盘外字面量。
+- 文档同步修正 PROVIDER 中“`svip` 为超级会员”等旧描述，并补齐 USER 术语、展示约定与调色板。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 会员状态展示条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“会员状态术语、图标与展示位置统一” | 增 | 记录档位命名修正、图标与展示位置。 |
+| `USER.html` | §1 TERMS | 增 | 新增会员状态、绿钻、豪华绿钻、超级会员，并注明 `VipStatus.level` 与上游字段映射。 |
+| `USER.html` | §2 CONVENTIONS | 增 | 新增“会员状态展示”：仅已知非 `none` 档位显示；统一档位文字、图标形态、侧栏仅图标与设置页图标 + 文字。 |
+| `USER.html` | §5.1 调色板 | 改 | 增加 `green` / `gold-bright` 与 `--member-green` / `--member-gold`，补充会员钻石取色规则。 |
+| `USER.html` | §5.2.2 侧栏与导航 | 改 | 账号 pill 昵称右侧增加仅图标会员标记；原型同步。 |
+| `USER.html` | §5.2.7 设置页 | 改 | 账号区改为档位图标 + 文字（绿钻 / 豪华绿钻 / 超级会员）；原型同步。 |
+| `CORE.html` | §1 文件树 | 增 | 新增 `components/MemberBadge.vue`。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | `VipLevel` 改为 `none / vip / deluxe / super`，补充档位映射说明。 |
+| `CORE.html` | §4.13 `api/user.ts`（`#c4-13`） | 改 | 更新上游字段到新档位的映射与会员徽标入口。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 侧栏账号 pill 昵称右侧渲染仅图标 `MemberBadge`。 |
+| `CORE.html` | §4.28 `auth.ts`（`#c4-28`） | 改 | `vip` 同时供播放权限与会员徽标使用，设置页不再单独查询。 |
+| `CORE.html` | §4.48 `SettingsView.vue`（`#c4-48`） | 改 | 账号区改用 `auth.vip` 与 `MemberBadge`，删除本地查询与 `VIP` / `SVIP` 徽标。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 增加会员调色板变量与 `.member-badge` 系列样式。 |
+| `CORE.html` | §4.105 `permission.ts`（`#c4-105`） | 改 | 档位顺序改为 `none < vip < deluxe < super`，阻断条件同步。 |
+| `CORE.html` | §5.11 可播性判定 | 改 | 调用树中的 `huge_vip` 改为 `deluxe`。 |
+| `CORE.html` | §4.107 `MemberBadge.vue`（`#c4-107`） | 增 | 记录 props、显隐条件、档位文字、图标形态与无障碍名称。 |
+| `PROVIDER.html` | §2 VIP 状态 / §4.1 接口说明 | 改 | 修正为 `identity.vip` = 绿钻、`svip` = 豪华绿钻、`HugeVip` = 超级会员。 |
+| `PROVIDER.html` | §4.3 VIP 数据模型 | 改 | `VipStatus.level` 最高档改为 `super > deluxe > vip`。 |
+| `README.md` / `ABOUT.html` | 登录行 | 改 | 补充侧栏仅图标、设置页图标 + 文字的会员档位展示。 |
+| `DOC/style.css` | 原型样式 | 改 | 增加 `--p-green` 与 `.u-badge.green`，用于会员图标原型。 |
+
+**工作记录**：
+
+- 档位映射沿用 IMPL 4.23 的真实账号购买前后对照结论：`identity.vip` = 绿钻，`svip` = 豪华绿钻，`HugeVip` = 超级会员；本轮只修正内部命名与展示，不改变上游判断依据。
+- 新增 `test/member-badge.test.ts`：覆盖绿钻仅图标、豪华绿钻与超级会员的图标 / 文字、未知与非会员不渲染；同步更新 VIP 状态与播放权限测试到新档位名。
+- 用 48px 栅格图核对深色 / 浅色图标：绿钻为绿色钻石，豪华绿钻的 V 位于右下侧，超级会员为金色钻石 + 中央暗金 V；14–16px 下形状与对比度可辨。
+- `npm run typecheck`、`npm test`（50 个测试文件、243 个用例）与 `npm run build` 通过。
+- 未用真实会员账号做窗口截图验收；展示由组件 SSR 测试、类型检查与静态图标预览确认。

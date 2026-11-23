@@ -428,7 +428,7 @@ export interface UserProfile {
   avatarUrl: string
 }
 
-export type VipLevel = 'none' | 'vip' | 'huge_vip' | 'svip'
+export type VipLevel = 'none' | 'vip' | 'deluxe' | 'super'
 
 /**
  * 当前账号会员状态。known 表示接口成功；unknown 表示接口失败，

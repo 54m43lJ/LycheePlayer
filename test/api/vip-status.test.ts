@@ -48,7 +48,7 @@ describe('getVipStatus', () => {
   it('maps svip to 豪华绿钻 without HugeVip', async () => {
     musicuMock.mockResolvedValue({ identity: { vip: 1, HugeVip: 0 }, svip: 1 })
     const { getVipStatus } = await import('../../src/main/api/user')
-    expect((await getVipStatus()).level).toBe('huge_vip')
+    expect((await getVipStatus()).level).toBe('deluxe')
   })
 
   it('maps HugeVip to 超级会员 and lets it win over 豪华绿钻', async () => {
@@ -63,7 +63,7 @@ describe('getVipStatus', () => {
     })
     const { getVipStatus } = await import('../../src/main/api/user')
     const status = await getVipStatus()
-    expect(status.level).toBe('svip')
+    expect(status.level).toBe('super')
     expect(status.expiresAtMs).toBe(Date.parse('2027-02-24T00:24:11+08:00'))
   })
 
@@ -74,7 +74,7 @@ describe('getVipStatus', () => {
     })
     const { getVipStatus } = await import('../../src/main/api/user')
     const status = await getVipStatus()
-    expect(status.level).toBe('huge_vip')
+    expect(status.level).toBe('deluxe')
     expect(status.expiresAtMs).toBe(Date.parse('2027-03-16T10:43:22+08:00'))
   })
 
