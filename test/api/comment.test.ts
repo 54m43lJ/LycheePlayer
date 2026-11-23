@@ -419,4 +419,154 @@ describe('api/comment', () => {
       code: 'NO_PERMISSION'
     })
   })
+
+  it('reads replies by root comment id, keeps deleted rows and maps reply targets', async () => {
+    const requests: Array<{ method: string; param: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { method?: string; param?: Record<string, unknown> }
+      }
+      requests.push({
+        method: payload.req_0?.method ?? '',
+        param: payload.req_0?.param ?? {}
+      })
+      return new Response(
+        '{"code":0,"req_0":{"code":0,"data":{"CommentList":{"Comments":[{"CmId":"r1","Nick":"R","Content":"reply","PubTime":100,"SeqNo":1701807071952960001,"RepliedComments":[{"Nick":"A"}]},{"CmId":"r2","Nick":"","Content":"","PubTime":90,"State":2,"SeqNo":1701807071952960000}],"Total":2,"HasMore":1}}}}',
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    })
+
+    const { getCommentReplies } = await import('../../src/main/api/comment')
+    const page = await getCommentReplies('root', '')
+    expect(requests[0]?.method).toBe('GetReplyCommentList')
+    expect(requests[0]?.param).toMatchObject({
+      RootCmId: 'root',
+      LastCommentSeqNo: '',
+      PageSize: 10,
+      RankType: 0
+    })
+    expect(page.comments.map((comment) => comment.id)).toEqual(['r1', 'r2'])
+    expect(page.comments[0]).toMatchObject({
+      replyToNickname: 'A',
+      deleted: false
+    })
+    expect(page.comments[1]).toMatchObject({
+      deleted: true,
+      content: ''
+    })
+    expect(page.nextCursor).toBe('1701807071952960000')
+    expect(page.hasMore).toBe(true)
+  })
+
+  it('posts replies with RepliedCmId and the target BizType / BizId', async () => {
+    const requests: Array<{ method: string; param: Record<string, unknown> }> = []
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { method?: string; param?: Record<string, unknown> }
+      }
+      requests.push({
+        method: payload.req_0?.method ?? '',
+        param: payload.req_0?.param ?? {}
+      })
+      return respond({
+        code: 0,
+        req_0: { code: 0, data: { SubCode: 0, AddedCmId: `new-${requests.length}` } }
+      })
+    })
+
+    const { postCommentReply } = await import('../../src/main/api/comment')
+    await expect(postCommentReply('song', '123', 'root', ' hello ')).resolves.toEqual({
+      commentId: 'new-1'
+    })
+    expect(requests[0]?.param).toMatchObject({
+      Content: 'hello',
+      BizType: 1,
+      BizId: '123',
+      BizSubType: 2,
+      RepliedCmId: 'root'
+    })
+
+    await expect(postCommentReply('mv', 't0016l53c3r', 'root', 'mv reply')).resolves.toEqual({
+      commentId: 'new-2'
+    })
+    expect(requests[1]?.param).toMatchObject({
+      Content: 'mv reply',
+      BizType: 5,
+      BizId: 't0016l53c3r',
+      RepliedCmId: 'root'
+    })
+    expect(requests[1]?.param.BizSubType).toBeUndefined()
+  })
+
+  it('strips C0 / C1 control characters from nicknames and content', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                {
+                  CmId: 'a',
+                  Nick: '\u007f\u007f\u007f\u007fT*',
+                  Content: '第一行\u0000第二行\u0007',
+                  PubTime: 100
+                },
+                {
+                  CmId: 'b',
+                  Nick: 'B',
+                  Content: '正文',
+                  PubTime: 90,
+                  RepliedComments: [{ Nick: '\u009f\u0090A' }]
+                }
+              ],
+              Total: 2,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    )
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', '')
+    expect(page.comments[0]).toMatchObject({
+      nickname: 'T*',
+      content: '第一行第二行'
+    })
+    expect(page.comments[1]).toMatchObject({
+      nickname: 'B',
+      replyToNickname: 'A'
+    })
+  })
+
+  it('maps deleted top-level comments without dropping empty content', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: '', Content: '', PubTime: 100, State: 2 },
+                { CmId: 'b', Nick: 'B', Content: 'normal', PubTime: 90, State: 1 }
+              ],
+              Total: 2,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    )
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', '')
+    expect(page.comments.map((comment) => comment.id)).toEqual(['a', 'b'])
+    expect(page.comments[0]?.deleted).toBe(true)
+    expect(page.comments[1]?.deleted).toBe(false)
+  })
 })

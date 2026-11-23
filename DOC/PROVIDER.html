@@ -181,8 +181,24 @@
     <td><code>Content</code> 同一字段同时存在真实换行与字面量 <code>\n</code> / <code>\r\n</code> / <code>\r</code>，属于上游格式不统一。映射为内部评论时统一归一化为真实换行；渲染层使用 <code>white-space: pre-wrap</code>，不解析 HTML。正文中的 <code>U+FFFC</code>（对象替换符）是内嵌表情图的位置标记：<code>EmoPic</code> 为对应的表情图片 URL；没有占位符但 <code>EmoPic</code> 非空时表情追加在正文末尾。<code>Pic</code> 是评论附图，与正文分开展示；上游带 <code>Pic</code> 的评论通常不带占位符，因此 <code>U+FFFC</code> 不用于定位附图。只有附图、没有 <code>EmoPic</code> 时残留占位在映射时移除；两者都没有时保留占位，由界面显示加载失败占位。图片 / 表情 URL 与头像一样把 <code>http:</code> 改为 <code>https:</code>。仅有 <code>Pic</code> 或 <code>EmoPic</code>、正文为空的评论仍然有效。</td>
   </tr>
   <tr>
+    <td>评论控制字符</td>
+    <td>上游昵称与正文可能夹带 C0 / C1 控制字符，例如 <code>Nick</code> 以 <code>U+007F</code> 开头（实测 <code>\u007f\u007f\u007f\u007fT*</code>）。浏览器为这些字符分配字形宽度并显示为缺字方框，应用在映射前移除 <code>U+0000–U+001F</code> / <code>U+007F–U+009F</code>：昵称全部移除并去首尾空白，正文只保留换行。映射见 <a href="#p4-3">§4.3</a>。</td>
+  </tr>
+  <tr>
     <td>评论发表</td>
     <td>需要登录；正文去首尾空白后为 1–300 字；<code>AddComment</code> 的 <code>SubCode</code> 为 0 才成功。<code>VerifyUrl</code> 非空表示上游要求验证码，应用只提示到官方客户端完成验证，不自建验证码流程。参数与响应见 <a href="#p4-1">§4.1</a> / <a href="#p4-3">§4.3</a>。</td>
+  </tr>
+  <tr>
+    <td>评论回复</td>
+    <td>读取使用 <code>GetReplyCommentList</code>，以 <code>RootCmId</code> 定位顶层评论，单页 10 条，游标为最后一条回复的 <code>SeqNo</code>；<code>PageNum</code> 不生效。发表沿用目标类型的 <code>AddComment</code> 参数并追加 <code>RepliedCmId</code>。回复与顶层评论共用 <code>Comment</code> / <code>CommentPage</code>。参数见 <a href="#p4-1">§4.1</a>，字段见 <a href="#p4-3">§4.3</a>。</td>
+  </tr>
+  <tr>
+    <td>回复计数与列表不一致</td>
+    <td>根评论的 <code>ReplyCnt</code> 与回复接口的 <code>Total</code> 都可能大于实际列表：实测 <code>ReplyCnt=1</code> 时回复接口返回 <code>Total=1</code>、<code>HasMore=0</code> 且 <code>Comments=[]</code>；另一条 <code>Total=36</code> 的回复只返回 30 条（3 页）后 <code>HasMore=0</code>。应用以实际 <code>Comments</code> 与 <code>HasMore</code> 为准，隐藏空回复区并收敛页码，不按 <code>Total</code> 渲染空页。</td>
+  </tr>
+  <tr>
+    <td>评论删除状态</td>
+    <td><code>QqComment.State</code>：0 仅自己可见、1 正常、2 已删除、3 热评、4 置顶、5 未知。应用只把 <code>2</code> 映射为删除占位；已删除记录即使正文为空也保留，其余空记录过滤。顶层评论与回复共用该规则。</td>
   </tr>
   <tr>
     <td>歌手专辑</td>
@@ -312,7 +328,7 @@
   <tr><td>MV 详情</td><td><code>MvService.MvInfoProServer / GetMvInfoList</code></td><td>按 <code>vidlist</code> 获取封面、简介、时长、歌手与播放数。</td></tr>
   <tr><td>MV 取流</td><td><code>gosrf.Stream.MvUrlProxy / GetMvUrls</code></td><td>按 <code>vids</code> 返回各清晰度的 <code>freeflow_url</code>。</td></tr>
   <tr><td>评论点赞</td><td><code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code></td><td><code>type</code> 3 点赞、4 取消；需要登录。</td></tr>
-  <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td>歌曲：<code>Content</code> · <code>BizType</code>（1） · <code>BizId</code>（数字歌曲 ID） · <code>BizSubType</code>（2）；MV：<code>BizType</code>（5） · <code>BizId</code>（MV vid），不传 <code>BizSubType</code>；需要登录，正文字符串上限 300。</td></tr>
+  <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td>歌曲：<code>Content</code> · <code>BizType</code>（1） · <code>BizId</code>（数字歌曲 ID） · <code>BizSubType</code>（2）；MV：<code>BizType</code>（5） · <code>BizId</code>（MV vid），不传 <code>BizSubType</code>；回复评论时额外传 <code>RepliedCmId</code>（顶层评论 CmId）。需要登录，正文字符串上限 300。</td></tr>
   <tr><td>会话续期（QQ 网页登录）</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>携带旧 <code>musickey</code>、<code>expired_in</code>、<code>access_token</code>、<code>refresh_token</code>、<code>openid</code> 与数字 <code>musicid</code> 换新 <code>musickey</code>；缺少 OAuth 字段时只传 <code>musicid</code> + <code>musickey</code> 会被上游以 10006 拒绝。旧 key 已过期时仍可尝试恢复。</td></tr>
   <tr><td>微信会话续期</td><td><code>music.login.LoginServer / Login</code></td><td><code>loginMode=2</code>，用 <code>refresh_token</code> / <code>access_token</code> / <code>openid</code> 换新 <code>musickey</code>；<code>comm.tmeLoginType=1</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
@@ -320,6 +336,7 @@
   <tr><td>微信登录二维码</td><td><code>https://open.weixin.qq.com/connect/qrconnect</code></td><td>微信开放平台网站应用二维码；回调到 QQ 音乐 <code>wx_redirect</code> 页。</td></tr>
   <tr><td>歌词</td><td><code>music.musichallSong.PlayLyricInfo / GetPlayLyricInfo</code></td><td>按数字歌曲 ID 返回 Base64 编码的 <code>lyric</code> 与 <code>trans</code>；旧歌词接口因译文缺失不再消费。</td></tr>
   <tr><td>歌曲 / MV 评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲或 MV 最新评论：歌曲 <code>BizType 1</code> + <code>BizSubType 2</code>、<code>BizId</code> 为数字歌曲 ID；MV <code>BizType 5</code>、<code>BizId</code> 为 MV vid，不传 <code>BizSubType</code>。应用不提供“最旧”或按点赞排序，单页固定 25 条（26 起返回业务码 <code>10000</code>）。</td></tr>
+  <tr><td>评论回复</td><td><code>music.globalComment.CommentRead / GetReplyCommentList</code></td><td>读取指定顶层评论的回复：<code>RootCmId</code> + <code>LastCommentSeqNo</code> 游标，单页固定 10 条，<code>PageNum</code> 不生效；<code>Total</code> 仅首屏可靠。</td></tr>
   <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号会员身份与到期信息；<code>identity.vip</code> 为绿钻，<code>svip</code> 为豪华绿钻，<code>identity.HugeVip</code> / <code>huge_vip</code> 为超级会员，<code>userinfo.expire</code> 为到期时间。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>QQ 官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方 xlogin 扫码组件。</td></tr>
@@ -405,8 +422,8 @@
     <td><code>comment_id</code> · <code>type</code>（3 点赞 / 4 取消） · <code>uin</code></td>
   </tr>
   <tr>
-    <td>评论发表</td>
-    <td><code>Content</code>（≤300 字） · <code>BizType</code>（1 歌曲 / 5 MV） · <code>BizId</code>（歌曲数字 ID 或 MV vid） · <code>BizSubType</code>（歌曲 2；MV 不传）</td>
+    <td>评论发表 / 回复</td>
+    <td><code>Content</code>（≤300 字） · <code>BizType</code>（1 歌曲 / 5 MV） · <code>BizId</code>（歌曲数字 ID 或 MV vid） · <code>BizSubType</code>（歌曲 2；MV 不传） · <code>RepliedCmId</code>（仅回复时传，顶层评论 CmId）</td>
   </tr>
   <tr>
     <td>歌手详情</td>
@@ -435,6 +452,10 @@
   <tr>
     <td>歌曲 / MV 评论</td>
     <td>歌曲：<code>BizId</code>（数字歌曲 ID） · <code>BizType</code>（1） · <code>BizSubType</code>（2）；MV：<code>BizId</code>（MV vid） · <code>BizType</code>（5），不传 <code>BizSubType</code>；均含 <code>PageSize</code>（≤25） · <code>PageNum</code> · <code>LastCommentSeqNo</code> · <code>HashTagID</code> · <code>SelfSeeEnable</code> · <code>PicEnable</code> · <code>AudioEnable</code> · <code>WithHot</code>（1 附带热评）</td>
+  </tr>
+  <tr>
+    <td>评论回复</td>
+    <td><code>RootCmId</code>（顶层评论 CmId） · <code>LastCommentSeqNo</code> · <code>PageSize</code>（10） · <code>LastRankScore</code>（空） · <code>RankType</code>（0） · <code>PicEnable</code>（1） · <code>PageNum</code>（0，不生效）</td>
   </tr>
   <tr>
     <td>VIP 状态</td>
@@ -762,6 +783,11 @@ interface QqComment {
   ReplyCnt?: number;
   IsPraised?: number;
   IsLiked?: number;
+  /** 0 仅自己可见、1 正常、2 已删除、3 热评、4 置顶、5 未知。 */
+  State?: number;
+  /** 回复针对的目标评论；顶层评论为空。 */
+  RepliedComments?: Array&lt;{ Nick?: string }&gt;;
+  // Nick / Content 可能夹带 U+007F 等 C0 / C1 控制字符，映射前移除。
 }
 
 interface QqAddCommentResult {
@@ -872,6 +898,9 @@ interface QqCommentList {
     Comments?: QqComment[];
     Total?: number;
   };
+  // GetReplyCommentList 响应：FromComment 为顶层评论，CommentList.Comments 为当前页回复；
+  // 后续页的 Total 为 0，只有首屏可靠；Total 也可能大于实际条数。
+  FromComment?: QqComment;
 }
 
 interface QqVipData {
@@ -976,8 +1005,8 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code></td>
-    <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> / <code>IsPraised</code> / <code>IsLiked</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
-    <td>评论正文为空或缺少 <code>CmId</code> 的记录被过滤。<code>Content</code> 的真实 / 字面量换行统一归一化为 <code>\n</code> 后再映射。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。评论区只提供最新评论读取，不提供“最旧”排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，上游没有按点赞排序参数。</td>
+    <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> / <code>IsPraised</code> / <code>IsLiked</code> / <code>State</code> / <code>RepliedComments</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
+    <td>缺少 <code>CmId</code> 的记录被过滤；正文与媒体都为空且 <code>State !== 2</code> 的记录被过滤，已删除记录保留占位。<code>Content</code> 的真实 / 字面量换行统一归一化为 <code>\n</code> 后再映射；<code>Nick</code> / <code>RepliedComments[].Nick</code> 与 <code>Content</code> 中的 C0 / C1 控制字符在映射前移除，正文只保留换行。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。<code>State === 2</code> 映射为 <code>deleted</code>；<code>RepliedComments[0].Nick</code> 映射为 <code>replyToNickname</code>。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。顶层评论只提供最新评论读取，不提供“最旧”排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，上游没有按点赞排序参数。<code>GetReplyCommentList</code> 复用同一映射，单页 10 条。</td>
   </tr>
   <tr>
     <td><code>QqAddCommentResult</code></td>
@@ -1114,7 +1143,7 @@ interface QqLoginPayload {
   </tr>
   <tr>
     <td><code>QqCommentList</code> → <code>CommentPage</code></td>
-    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>（真实 / 字面量换行统一为 <code>\n</code>；保留有 <code>EmoPic</code> 或无媒体的 <code>U+FFFC</code> 占位，只有 <code>Pic</code> 时移除残留占位）；<code>Pic → imageUrl</code>、<code>EmoPic → emojiUrl</code>，无值时为空，<code>http:</code> 改为 <code>https:</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。</td>
+    <td><code>CmId → id</code>；<code>Nick → nickname</code>；<code>Avatar</code> 的 <code>http:</code> 改为 <code>https:</code>；<code>Content → content</code>（真实 / 字面量换行统一为 <code>\n</code>；保留有 <code>EmoPic</code> 或无媒体的 <code>U+FFFC</code> 占位，只有 <code>Pic</code> 时移除残留占位）；<code>Pic → imageUrl</code>、<code>EmoPic → emojiUrl</code>，无值时为空，<code>http:</code> 改为 <code>https:</code>；<code>PubTime</code> 秒 / 毫秒自适应后 → <code>createdAtMs</code>；<code>PraiseNum → likedCount</code>；<code>ReplyCnt → replyCount</code>；<code>IsPraised</code> 优先、<code>IsLiked</code> 兼容 → <code>liked</code>，缺失为 <code>false</code>；<code>State === 2 → deleted</code>；<code>RepliedComments[0].Nick → replyToNickname</code>；<code>Total → total</code>；<code>HasMore → hasMore</code>。顶层评论与回复共用该转换。</td>
   </tr>
   <tr>
     <td><code>QqProfileResponse</code> → <code>UserProfile</code></td>

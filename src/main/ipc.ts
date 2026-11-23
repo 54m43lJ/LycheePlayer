@@ -26,10 +26,12 @@ import {
 import { openWebLogin, setEmbedBounds } from './api/web-login'
 import { getLyric } from './api/lyric'
 import {
+  getCommentReplies,
   getComments,
   getMvComments,
   likeComment,
   postComment,
+  postCommentReply,
   postMvComment,
   unlikeComment
 } from './api/comment'
@@ -500,6 +502,12 @@ export function registerIpc(): void {
   handle('comment.getMv', async (mvId: unknown, cursor: unknown) =>
     getMvComments(String(mvId), typeof cursor === 'string' ? cursor : '')
   )
+  handle('comment.getReplies', async (commentId: unknown, cursor: unknown) =>
+    getCommentReplies(
+      stringArg(commentId, '评论 ID'),
+      typeof cursor === 'string' ? cursor : ''
+    )
+  )
   handle('comment.post', async (songId: unknown, content: unknown) =>
     postComment(
       stringArg(songId, '歌曲 ID'),
@@ -511,6 +519,25 @@ export function registerIpc(): void {
       stringArg(mvId, 'MV ID'),
       stringArg(content, '评论内容', COMMENT_CONTENT_MAX)
     )
+  )
+  handle(
+    'comment.postReply',
+    async (
+      targetType: unknown,
+      targetId: unknown,
+      commentId: unknown,
+      content: unknown
+    ) => {
+      if (targetType !== 'song' && targetType !== 'mv') {
+        throw new Error('评论目标类型无效')
+      }
+      return postCommentReply(
+        targetType,
+        stringArg(targetId, '评论目标 ID'),
+        stringArg(commentId, '评论 ID'),
+        stringArg(content, '评论内容', COMMENT_CONTENT_MAX)
+      )
+    }
   )
   handle('comment.like', async (commentId: unknown) =>
     likeComment(stringArg(commentId, '评论 ID'))

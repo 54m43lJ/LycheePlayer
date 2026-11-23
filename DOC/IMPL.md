@@ -842,3 +842,116 @@
 - 新增 API 测试：MV 读取使用 BizType 5 / vid 且无 BizSubType；MV 发表使用 AddComment BizType 5 / vid 且无 BizSubType。
 - `npm run typecheck`、`npm test`（51 个测试文件、260 个用例）与 `npm run build` 通过。
 - 未使用真实登录账号发表 MV 评论（避免产生公开内容）；读取用真实接口验证，发表参数对照官方客户端请求。
+
+### 4.41 评论回复、回复分页与已删除评论 [已解决] 
+
+**描述**：TODO 要求实现评论回复：回复按钮位于点赞按钮右侧，点击在评论与回复区之间展开输入框；回复区使用 surface 背景，0 条回复隐藏；默认显示前 3 条，可点“更多评论”展开；展开后每页 10 条，底部提供上一页、最多 10 个邻近页码与下一页；回复支持时间戳与点赞；已删除评论需要标记，歌曲评论同样适用并复用同一实现。
+
+**解决方案**：
+
+- 调查确认上游回复接口为 `music.globalComment.CommentRead / GetReplyCommentList`，参数 `RootCmId`（顶层评论 CmId）、`LastCommentSeqNo` 游标、`PageSize`、`LastRankScore`、`RankType`、`PicEnable`、`PageNum`；单页取 10 条，`PageNum` 不生效，`SeqNo` 需按字符串保留精度。
+- 回复发表沿用 `AddComment`：歌曲传 `BizType 1` + `BizSubType 2`，MV 传 `BizType 5`，两者都追加 `RepliedCmId` 指向顶层评论 CmId。
+- `Comment` 增加 `deleted` 与 `replyToNickname`：`State === 2` 映射为已删除，`RepliedComments[0].Nick` 映射为被回复昵称。已删除记录即使正文为空也保留，交给界面显示占位；其余空记录仍过滤。
+- `api/comment.ts` 抽出 `toCommentPage()` 统一顶层评论与回复的过滤、总数与游标计算；新增 `getCommentReplies()` / `postCommentReply()`。新增 `comment.getReplies` / `comment.postReply` IPC 与 preload 方法。
+- `CommentsPanel` 为每条顶层评论维护独立回复线程：首屏预取 10 条，折叠显示前 3 条；展开后按 10 条分页，页码窗口最多 10 个，点击未加载页码时按游标串行补拉；刷新、切歌与目标变化清空线程与回复草稿，在途请求按 token 丢弃。
+- 回复区使用 `--panel` 背景，`replyCount === 0` 不渲染；回复条目为 16px 小头像 + 昵称 + 冒号 + 正文的紧凑行，回复另一条回复时显示“回复 @昵称”，下行左侧时间、右侧点赞按钮；回复点赞复用 `toggleLike()` 的乐观更新与回滚。
+- 已删除顶层评论与回复统一显示“该评论已删除”，不展示正文、媒体、点赞与回复入口。
+- 新增 `COMMENT_REPLY_PAGE_SIZE = 10`、`COMMENT_REPLY_PREVIEW = 3`、`COMMENT_REPLY_PAGE_LINK_MAX = 10`。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | “实现评论回复功能”条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“评论回复、回复分页与已删除评论” | 增 | 记录接口调查、数据映射与回复分页实现。 |
+| `USER.html` | §1 TERMS · 评论 | 改 | 改为顶层评论与回复，链接 §5.2.5。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 增加回复入口、回复框、3 条预览与 10 条分页、回复时间 / 点赞、已删除占位；拆分原评论正文说明为独立条目。 |
+| `USER.html` | §5.2.8 MV 播放 | 改 | 说明 MV 评论的回复与删除占位与歌曲一致。 |
+| `CORE.html` | §1 文件树 · `comment.ts` | 改 | 描述改为评论（歌曲 / MV / 回复）。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | `Comment` 增加 `deleted` / `replyToNickname`。 |
+| `CORE.html` | §4.2 `ipc.ts`（`#c4-2`） | 改 | 增加 `comment.getReplies` / `comment.postReply`。 |
+| `CORE.html` | §4.15 `api/comment.ts`（`#c4-15`） | 改 | 增加回复读取 / 发表签名、`GetReplyCommentList` 参数、`RepliedCmId` 与 `State` 映射。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 记录回复线程状态、预取与分页、回复框、紧凑布局与删除占位。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 增加回复区、回复条目与分页按钮样式。 |
+| `CORE.html` | §4.50 `constants.ts`（`#c4-50`） | 改 | 增加回复页大小、预览条数与页码上限。 |
+| `CORE.html` | §5.9 歌词与评论（`#c5-9`） | 改 | 增加回复读取、分页与发表调用树及说明。 |
+| `CORE.html` | §5.26 MV 评论（`#c5-26`） | 改 | 注明回复复用 `CommentsPanel`，调用树见 §5.9。 |
+| `PROVIDER.html` | §2 CONVENTIONS | 增 | 增加评论回复与删除状态约定。 |
+| `PROVIDER.html` | §4.1 接口 / 请求参数 | 改 | 增加 `GetReplyCommentList`、`RepliedCmId` 与回复参数。 |
+| `PROVIDER.html` | §4.3 数据模型 / 转换 | 改 | `QqComment` 增加 `State` / `RepliedComments`，`QqCommentList` 增加 `FromComment`，转换补充删除与回复目标。 |
+| `README.md` / `ABOUT.html` | 歌词 / 评论行、MV 行 | 改 | 补充回复入口、3 条预览、10 条分页与删除占位；MV 回复复用歌曲机制。 |
+
+**工作记录**：
+
+- 使用匿名真实接口验证回复读取：`GetReplyCommentList` 对同一顶层评论返回回复列表，`HasMore` 与 `LastCommentSeqNo` 游标可用，`PageNum` 不生效；后续页 `Total` 为 0，因此分页总数以首屏为准。
+- 对照官方网页客户端请求确认：回复读取为 `music.globalComment.CommentRead / GetReplyCommentList`，回复发表为 `CommentWriteServer / AddComment` + `RepliedCmId`。
+- `State` 映射来自官方网页脚本：0 仅自己可见、1 正常、2 已删除、3 热评、4 置顶、5 未知；应用只把 2 标记为删除占位。
+- 新增 API 测试：回复读取参数与游标、已删除记录保留、`RepliedComments` 映射、歌曲 / MV 回复发表参数。
+- `npm run typecheck`、`npm test`（51 个测试文件、263 个用例）与 `npm run build` 通过。
+- 未在真实登录账号下发表回复（避免产生公开内容）；未做真实窗口截图验收，回复交互由模板、类型检查与接口测试确认。
+
+### 4.42 评论昵称中的控制字符乱码 [已解决] 
+
+**描述**：ISSUE 指出 Nas - Memory Lane (Sittin' in da Park) (Explicit) 在 2026-03-27 10:17 的评论用户名显示为乱码 `T*`。排查确认该昵称并非字体缺字，而是上游 `Nick` 实际为 `\u007f\u007f\u007f\u007fT*`：四个 `U+007F`（DEL，C0 控制字符）前缀。浏览器会为控制字符分配字形宽度并显示为缺字方框，导致昵称与头像首字母出现乱码。
+
+**解决方案**：
+
+- 新增 `stripControlChars(value, keepLineBreaks)`：移除 `U+0000–U+001F` 与 `U+007F–U+009F`；正文模式保留 `\n`，昵称模式全部移除。
+- `cleanNickname()` 对 `Nick` 与 `RepliedComments[].Nick` 先移除控制字符再去首尾空白；`normalizeCommentContent()` 在换行归一化后移除控制字符（只保留换行）。
+- 全部由控制字符组成的昵称映射为空字符串；界面对空昵称不做任何特殊处理，按原样渲染：不替换、不隐藏昵称，回复行仍保留昵称与冒号位置，头像首字母取昵称首字符（空昵称即为空）。
+- 顶层评论、回复与回复目标昵称共用同一套清洗逻辑。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 控制字符昵称条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“评论昵称中的控制字符乱码” | 增 | 记录根因、清洗范围与文档操作。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 说明昵称 / 正文中的 C0 / C1 控制字符在展示前移除，正文只保留换行。 |
+| `CORE.html` | §4.15 `api/comment.ts`（`#c4-15`） | 改 | 增加 `stripControlChars()` / `cleanNickname()` 的清洗规则与实测样例。 |
+| `PROVIDER.html` | §2 CONVENTIONS | 增 | 增加“评论控制字符”约定与实测昵称。 |
+| `PROVIDER.html` | §4.3 数据模型 / 转换 | 改 | `QqComment` 注明控制字符，转换补充昵称与正文清洗。 |
+
+**工作记录**：
+
+- 真实匿名读取歌曲 `1684775`（Nas - Memory Lane (Sittin' in da Park) (Explicit)）的评论，定位到 `PubTime=1774577826`（2026-03-27 10:17:06 +08:00）的记录：`Nick` 为 `['\x7f','\x7f','\x7f','\x7f','T','*']`，`Content` 正常，确认不是字体缺字。
+- 在 Chromium 中测量：单个 `U+007F` 渲染宽度约 16px，`T*` 为 17px；因此控制字符会占据字形宽度并显示为方框，必须从数据层移除。
+- 新增 API 测试：昵称与正文中的 C0 / C1 控制字符被移除，正文换行保留，回复目标昵称同步清洗。
+- `npm run typecheck`、`npm test`（51 个测试文件、264 个用例）与 `npm run build` 通过。
+- 未使用真实登录账号验证该评论在完整窗口中的显示；清洗规则由真实响应与单测覆盖。
+
+### 4.43 回复区空框与无法打开的末页 [已解决] 
+
+**描述**：ISSUE 指出 Ye - Famous (Explicit) 的 2026-10-10 23:22 评论出现空白回复区，回复计数为 1 但展开后为空；同一首歌 2025-10-07 12:47 评论的回复分成 4 页，第 4 页无法打开。要求客户端按实际返回结果渲染，不盲目相信上游计数与总数。
+
+**解决方案**：
+
+- 调查确认两组上游数据不一致：`Acedia` 评论 `ReplyCnt=1`，`GetReplyCommentList` 返回 `Total=1`、`HasMore=0`、`Comments=[]`；`FKA-肢肢日记` 评论 `ReplyCnt=36`，回复接口只有 30 条（3 页），第 3 页后 `HasMore=0`。
+- `ReplyThread` 增加 `loaded`：首次请求返回后置为 `true`，用于区分“尚未加载”与“加载后确实为空”。
+- 新增 `shouldShowReplies(comment)`：回复区只在加载中、加载失败或实际存在回复时渲染；加载完成后实际为空则整块隐藏，`replyCount` 不再单独决定显隐。
+- 回复后续页返回空列表时不再追加空页，并清空游标、置 `hasMore=false`；页码按实际数据收敛。
+- 新增 `utils/comment-replies.ts`：`replyPageCount()` 在 `hasMore=false` 时按实际条数计算页数，仍有下一页时才按 `Total` 保留远端页码；`replyPageLinks()` 统一生成最多 10 个邻近页码。
+- 页码跳转后若目标页不存在，回落到最后一个非空页；末页不再出现无法打开的空页。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | Ye - Famous 空回复区与回复分页条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“回复区空框与无法打开的末页” | 增 | 记录真实上游数据、显隐与分页收敛方案。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 补充实际为空时隐藏回复区、上游总数偏大时页码收敛。 |
+| `CORE.html` | §1 文件树 | 增 | 新增 `utils/comment-replies.ts` 与对应测试。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 记录 `loaded`、`shouldShowReplies()`、空页不追加与页码收敛。 |
+| `CORE.html` | §4.109 `comment-replies.ts`（`#c4-109`） | 增 | 记录 `replyPageCount()` / `replyPageLinks()` 契约。 |
+| `CORE.html` | §5.9 歌词与评论（`#c5-9`） | 改 | 补充回复计数与列表不一致时的实际数据优先规则。 |
+| `PROVIDER.html` | §2 CONVENTIONS | 增 | 记录 `ReplyCnt` / `Total` 与真实列表不一致的实测案例。 |
+| `PROVIDER.html` | §4.3 数据模型 | 改 | 注明回复首屏 `Total` 也可能大于实际条数。 |
+| `README.md` / `ABOUT.html` | 歌词 / 评论行 | 改 | 补充回复区按实际返回结果显示、空列表时隐藏。 |
+
+**工作记录**：
+
+- 真实匿名读取歌曲 `107471791`（Ye - Famous (Explicit)）：`Acedia` 评论回复接口返回 `Total=1`、`HasMore=0`、`Comments=[]`；`FKA-肢肢日记` 评论回复接口首屏 `Total=36`，连续拉取 3 页共 30 条后 `HasMore=0`。
+- 官方客户端同样会把 1 条“幽灵回复”显示成可展开的回复区，本应用改为按实际列表隐藏，比官方更严格。
+- 新增 `test/comment-replies.test.ts`：覆盖 `HasMore=0` 时按实际条数收敛页数、仍有下一页时保留 Total 页码、空列表至少 1 页、10 个邻近页码窗口与边界夹取。
+- `npm run typecheck`、`npm test`（52 个测试文件、271 个用例）与 `npm run build` 通过。
+- 未做真实窗口截图验收；分页与显隐逻辑由纯函数测试、真实接口数据与类型检查覆盖。

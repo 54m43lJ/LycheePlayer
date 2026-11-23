@@ -172,6 +172,12 @@ export const COMMENT_PAGE_SIZE = 25
 export const COMMENT_LOAD_ALL_PAGE_MAX = 40
 /** 发表评论正文长度上限；上游限制 300 字。 */
 export const COMMENT_CONTENT_MAX = 300
+/** 回复单页条数；上游默认 10。 */
+export const COMMENT_REPLY_PAGE_SIZE = 10
+/** 回复折叠时默认展示的条数。 */
+export const COMMENT_REPLY_PREVIEW = 3
+/** 回复分页一次最多展示的邻近页码数。 */
+export const COMMENT_REPLY_PAGE_LINK_MAX = 10
 /** 音频缓存上限的最高档位，也是旧版本沿用的默认值（2 GiB）。 */
 export const AUDIO_CACHE_MAX_BYTES = 2 * 1024 * 1024 * 1024
 /** 播放缓存上限的可选档位：128M / 256M / 512M / 1G / 1.5G / 2G。 */

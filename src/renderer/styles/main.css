@@ -4371,6 +4371,193 @@ button:focus-visible,
   font-size: 11px;
 }
 
+.comment-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.comment-reply-action {
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.comment-reply-action:hover {
+  color: var(--accent-strong);
+}
+
+.comment-removed,
+.comment-reply-removed {
+  color: var(--faint);
+  font-size: 12px;
+  font-style: italic;
+}
+
+.comment-removed {
+  padding: 2px 0;
+}
+
+.comment-reply-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.comment-reply-input {
+  height: 46px;
+  font-size: 11px;
+}
+
+.comment-reply-composer-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.comment-replies {
+  margin-top: 9px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.comment-replies-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 0;
+  color: var(--faint);
+  font-size: 11px;
+}
+
+.comment-reply-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.comment-reply {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+}
+
+.comment-reply-avatar {
+  display: grid;
+  flex: 0 0 16px;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  overflow: hidden;
+  border-radius: 50%;
+  background: linear-gradient(145deg, var(--avatar-a), var(--avatar-b));
+  color: var(--on-accent);
+  font-size: 8px;
+  font-weight: 700;
+}
+
+.comment-reply-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.comment-reply-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.comment-reply-text {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.comment-reply-nick {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.comment-reply-to {
+  color: var(--faint);
+}
+
+.comment-reply-emoji {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  margin: 0 1px;
+  vertical-align: -3px;
+  object-fit: contain;
+}
+
+.comment-reply-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 2px;
+  color: var(--faint);
+  font-size: 10px;
+}
+
+.comment-replies-more {
+  display: block;
+  margin-top: 6px;
+  padding: 0;
+  color: var(--accent-strong);
+  font-size: 11px;
+}
+
+.comment-replies-more:hover {
+  text-decoration: underline;
+}
+
+.comment-reply-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  margin-top: 7px;
+}
+
+.comment-reply-page,
+.comment-reply-page-btn {
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.comment-reply-page:disabled,
+.comment-reply-page-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.comment-reply-page:hover:not(:disabled),
+.comment-reply-page-btn:hover:not(:disabled) {
+  background: var(--subtle-bg-strong);
+  color: var(--text);
+}
+
+.comment-reply-page.active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
 /* ---------- 侧栏抽屉 / 最近歌单 ---------- */
 
 .sidebar-revealer {

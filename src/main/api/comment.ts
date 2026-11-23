@@ -4,7 +4,11 @@ import type {
   CommentPage,
   CommentPostResult
 } from '../../shared/types'
-import { COMMENT_CONTENT_MAX, COMMENT_PAGE_SIZE } from '../../shared/constants'
+import {
+  COMMENT_CONTENT_MAX,
+  COMMENT_PAGE_SIZE,
+  COMMENT_REPLY_PAGE_SIZE
+} from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu } from './client'
 
@@ -24,6 +28,10 @@ interface RawComment {
   /** 当前登录用户是否已点赞；fixture 与真实响应使用 IsPraised。 */
   IsPraised?: number
   IsLiked?: number
+  /** 0 仅自己可见、1 正常、2 已删除、3 热评、4 置顶、5 未知。 */
+  State?: number
+  /** 回复针对的目标评论；顶层评论为空。 */
+  RepliedComments?: Array<{ Nick?: string }>
 }
 
 interface RawCommentList {
@@ -51,9 +59,47 @@ interface AddCommentData {
   VerifyUrl?: string
 }
 
+function toCommentPage(list: RawCommentList, pageSize: number): CommentPage {
+  const raw = list.Comments ?? []
+  const nextCursor = String(raw.at(-1)?.SeqNo ?? '')
+  const comments = raw
+    .map(toComment)
+    .filter(
+      (comment) =>
+        comment.id.length > 0 &&
+        (comment.deleted ||
+          comment.content.replace(/\uFFFC/g, '').trim().length > 0 ||
+          Boolean(comment.imageUrl) ||
+          Boolean(comment.emojiUrl))
+    )
+    .slice(0, pageSize)
+
+  return {
+    comments,
+    total: Number(list.Total ?? comments.length),
+    hasMore: Boolean(list.HasMore) && /^\d+$/.test(nextCursor),
+    nextCursor
+  }
+}
+
 function normalizeHttpsUrl(value: string | undefined): string {
   if (!value) return ''
   return value.startsWith('http://') ? `https://${value.slice(7)}` : value
+}
+
+/**
+ * 上游昵称 / 正文可能夹带 C0 / C1 控制字符（如 U+007F），浏览器会为它们
+ * 分配字形宽度并显示为缺字方框。统一移除；正文只保留换行符。
+ */
+function stripControlChars(value: string, keepLineBreaks: boolean): string {
+  const pattern = keepLineBreaks
+    ? /[\u0000-\u0009\u000B\u000C\u000E-\u001F\u007F-\u009F]/g
+    : /[\u0000-\u001F\u007F-\u009F]/g
+  return value.replace(pattern, '')
+}
+
+function cleanNickname(value: string | undefined): string {
+  return stripControlChars(value ?? '', false).trim()
 }
 
 /**
@@ -70,7 +116,10 @@ function normalizeCommentContent(
   hasImage: boolean
 ): string {
   if (!value) return ''
-  const text = value.replace(/\r\n?/g, '\n').replace(/\\r\\n|\\n|\\r/g, '\n')
+  const text = stripControlChars(
+    value.replace(/\r\n?/g, '\n').replace(/\\r\\n|\\n|\\r/g, '\n'),
+    true
+  )
   return hasEmoji || !hasImage ? text : text.replace(/\uFFFC/g, '')
 }
 
@@ -78,9 +127,10 @@ function toComment(raw: RawComment): Comment {
   const seconds = Number(raw.PubTime ?? 0)
   const emojiUrl = normalizeHttpsUrl(raw.EmoPic)
   const imageUrl = normalizeHttpsUrl(raw.Pic)
+  const replyToNickname = cleanNickname(raw.RepliedComments?.[0]?.Nick)
   return {
     id: String(raw.CmId ?? ''),
-    nickname: raw.Nick ?? '',
+    nickname: cleanNickname(raw.Nick),
     avatarUrl: normalizeHttpsUrl(raw.Avatar),
     content: normalizeCommentContent(raw.Content, Boolean(emojiUrl), Boolean(imageUrl)),
     imageUrl: imageUrl || undefined,
@@ -88,7 +138,9 @@ function toComment(raw: RawComment): Comment {
     likedCount: Number(raw.PraiseNum ?? 0),
     replyCount: Number(raw.ReplyCnt ?? 0),
     createdAtMs: seconds > 0 ? (seconds > 1_000_000_000_000 ? seconds : seconds * 1000) : 0,
-    liked: Number(raw.IsPraised ?? raw.IsLiked ?? 0) === 1
+    liked: Number(raw.IsPraised ?? raw.IsLiked ?? 0) === 1,
+    deleted: Number(raw.State ?? 1) === 2,
+    replyToNickname: replyToNickname || undefined
   }
 }
 
@@ -144,25 +196,7 @@ async function fetchComments(
   if (!list) {
     throw new UpstreamError('UPSTREAM_CHANGED', '评论响应缺少 CommentList')
   }
-  const raw = list.Comments ?? []
-  const nextCursor = String(raw.at(-1)?.SeqNo ?? '')
-  const comments = raw
-    .map(toComment)
-    .filter(
-      (comment) =>
-        comment.id.length > 0 &&
-        (comment.content.replace(/\uFFFC/g, '').trim().length > 0 ||
-          Boolean(comment.imageUrl) ||
-          Boolean(comment.emojiUrl))
-    )
-    .slice(0, COMMENT_PAGE_SIZE)
-
-  return {
-    comments,
-    total: Number(list.Total ?? comments.length),
-    hasMore: Boolean(list.HasMore) && /^\d+$/.test(nextCursor),
-    nextCursor
-  }
+  return toCommentPage(list, COMMENT_PAGE_SIZE)
 }
 
 /** 歌曲评论；songId 为上游数字歌曲 ID。 */
@@ -185,6 +219,34 @@ export async function getMvComments(
   const id = mvId.trim()
   if (!id) return { comments: [], total: 0, hasMore: false }
   return fetchComments(id, cursor, MV_BIZ_TYPE)
+}
+
+/** 评论回复；commentId 为顶层评论 CmId，按 10 条游标分页。 */
+export async function getCommentReplies(
+  commentId: string,
+  cursor = ''
+): Promise<CommentPage> {
+  const id = commentId.trim()
+  if (!id) return { comments: [], total: 0, hasMore: false }
+  const data = await musicu<CommentListData>(
+    'music.globalComment.CommentRead',
+    'GetReplyCommentList',
+    {
+      RootCmId: id,
+      LastCommentSeqNo: cursor,
+      PageSize: COMMENT_REPLY_PAGE_SIZE,
+      LastRankScore: '',
+      RankType: 0,
+      PicEnable: 1,
+      PageNum: 0
+    },
+    { stringFields: ['SeqNo'] }
+  )
+  const list = data.CommentList
+  if (!list) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '回复响应缺少 CommentList')
+  }
+  return toCommentPage(list, COMMENT_REPLY_PAGE_SIZE)
 }
 
 async function updateLike(commentId: string, type: 3 | 4): Promise<CommentLikeResult> {
@@ -219,7 +281,8 @@ async function submitComment(
   bizId: string,
   bizType: number,
   content: string,
-  bizSubType?: number
+  bizSubType?: number,
+  repliedCmId?: string
 ): Promise<CommentPostResult> {
   const id = bizId.trim()
   if (!id) {
@@ -242,6 +305,7 @@ async function submitComment(
     BizId: id
   }
   if (bizSubType !== undefined) param.BizSubType = bizSubType
+  if (repliedCmId) param.RepliedCmId = repliedCmId
   const data = await musicu<AddCommentData>(
     'music.globalComment.CommentWriteServer',
     'AddComment',
@@ -294,4 +358,29 @@ export async function postMvComment(
     throw new UpstreamError('UPSTREAM_CHANGED', 'MV ID 无效，无法发表评论')
   }
   return submitComment(id, MV_BIZ_TYPE, content)
+}
+
+/** 回复评论；沿用目标类型的 BizType / BizId，并携带 RepliedCmId。 */
+export async function postCommentReply(
+  targetType: 'song' | 'mv',
+  targetId: string,
+  commentId: string,
+  content: string
+): Promise<CommentPostResult> {
+  const replyTo = commentId.trim()
+  if (!replyTo) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '评论 ID 无效，无法回复')
+  }
+  if (targetType === 'mv') {
+    const id = targetId.trim()
+    if (!id) {
+      throw new UpstreamError('UPSTREAM_CHANGED', 'MV ID 无效，无法发表评论')
+    }
+    return submitComment(id, MV_BIZ_TYPE, content, undefined, replyTo)
+  }
+  const id = targetId.trim()
+  if (!/^\d+$/.test(id)) {
+    throw new UpstreamError('UPSTREAM_CHANGED', '歌曲 ID 无效，无法发表评论')
+  }
+  return submitComment(id, SONG_BIZ_TYPE, content, SONG_BIZ_SUBTYPE, replyTo)
 }

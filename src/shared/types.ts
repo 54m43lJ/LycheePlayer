@@ -136,6 +136,10 @@ export interface Comment {
   replyCount: number
   createdAtMs: number
   liked?: boolean
+  /** 上游 State=2：评论已删除，只显示占位，不展示正文与互动入口。 */
+  deleted?: boolean
+  /** 回复所针对的评论昵称（上游 RepliedComments[0].Nick）；顶层评论为空。 */
+  replyToNickname?: string
 }
 
 /** 歌手歌曲排序：上游 order=1 为最热，其余值均为最新。 */
