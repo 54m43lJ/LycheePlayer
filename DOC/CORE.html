@@ -1601,20 +1601,20 @@ export interface LyricLine {
   timeMs: number;
   durationMs: number | null;
   text: string;
-  /** 与原文同一行的译文；按行序配对，额外空行需对应原文时间戳。 */
+  /** 按原文时间戳匹配（无时间戳时按行序）；纯斜杠占位已规范化为空字符串。 */
   trans: string | null;
   words: LyricWord[] | null;
 }
 
 export function parseLyric(lrc: string, trans: string | null): LyricLine[];
-export function withTranslations(lines: LyricLine[], trans: string | null): LyricLine[];
+export function withTranslations(lines: LyricLine[], trans: string | null, timed?: boolean): LyricLine[];
 export function activeLyricIndex(lines: LyricLine[], positionMs: number): number;
 export function activeLyricWord(line: LyricLine, positionMs: number): LyricWord | null;
 </code></pre>
 <ul class="note">
-  <li>译文按行序附加到对应原文行，不按时间戳匹配；译文是否存在只看文本是否非空，时间戳不一致不会影响译文出现。空译文条目只有在与某条原文时间戳相差 ≤100ms 时才保留为占位；时间戳对不上原文的空行视为上游多余换行并忽略，避免后续译文整体错位。</li>
-  <li>译文没有时间戳时仍按行序配对；原文也没有时间戳时按行序生成稳定序号。原文与译文仍在同一个 <code>.lyric-line</code> 内显示为上下两行，共享活动状态。</li>
-  <li>上游用纯斜杠（如 <code>//</code>）表示无译文占位时，统一规范化为空字符串并保留该行序；渲染层只输出非空译文，空字符串不生成译文元素，后续译文仍按行序对齐，不把斜杠展示给用户。</li>
+  <li>译文附加顺序固定为“先匹配、再转义、最后渲染”：原文有时间戳时，为每条原文寻找时间差 ≤100ms 的最近未使用译文；匹配不到时 <code>trans = null</code>，原文不存在的多余译文行（含空行）直接忽略，因此不会把后续译文整体推后。</li>
+  <li>匹配完成后再把纯斜杠（如 <code>//</code>）规范化为空字符串并 trim；原文或译文没有时间戳时退化为按行序配对。原文与译文仍在同一个 <code>.lyric-line</code> 内显示为上下两行，共享活动状态。</li>
+  <li>渲染层只输出非空译文，空字符串不生成译文元素；<code>hasTranslation</code> 只统计非空译文，纯斜杠占位不会让“译”字按钮出现，也不把斜杠展示给用户。</li>
   <li><code>activeLyricIndex</code> 在原文行之间取离播放位置最近的一行，最多提前 <code>80ms</code> 进入下一行；活动行内的译文随原文一起高亮。</li>
 </ul>
 

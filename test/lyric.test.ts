@@ -2,15 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { activeLyricIndex, parseLyric } from '../src/renderer/utils/lrc'
 import { parseQrcLyric } from '../src/renderer/utils/qrc'
 
-describe('歌词译文按行序附加', () => {
-  it('译文与原文同一行，时间戳不同也不影响配对', () => {
+describe('歌词译文匹配与行序回退', () => {
+  it('时间戳相差过大的译文不匹配', () => {
     const lines = parseLyric('[00:12.34]Hello', '[00:10.00]你好')
     expect(lines).toHaveLength(1)
     expect(lines[0]?.text).toBe('Hello')
+    expect(lines[0]?.trans).toBeNull()
+  })
+
+  it('时间戳在容差内的译文仍匹配', () => {
+    const lines = parseLyric('[00:12.34]Hello', '[00:12.30]你好')
     expect(lines[0]?.trans).toBe('你好')
   })
 
-  it('多行译文按顺序附加到原文行', () => {
+  it('多行译文按时间戳附加到原文行', () => {
     const lines = parseLyric(
       '[00:10.00]First\n[00:20.00]Second',
       '[00:09.90]第一句\n[00:20.10]第二句'
@@ -19,6 +24,14 @@ describe('歌词译文按行序附加', () => {
       ['First', '第一句'],
       ['Second', '第二句']
     ])
+  })
+
+  it('缺少中间译文时后续译文不整体前移', () => {
+    const lines = parseLyric(
+      '[00:10.00]First\n[00:20.00]Second\n[00:30.00]Third',
+      '[00:10.00]第一句\n[00:30.00]第三句'
+    )
+    expect(lines.map((line) => line.trans)).toEqual(['第一句', null, '第三句'])
   })
 
   it('译文没有时间戳时仍按行序附加', () => {

@@ -57,36 +57,59 @@ function normalizeTranslationText(text: string): string {
 
 function parseTranslationEntries(trans: string | null): TranslationEntry[] {
   if (!trans || !trans.trim()) return []
-  // 时间戳译文保留空行条目，避免占位行被过滤后后续译文整体错位。
+  // 时间戳译文保留空行条目；匹配阶段再按原文时间戳决定是否使用。
   const timed = parsePlain(trans).map((entry) => ({
     timeMs: entry.timeMs,
-    text: normalizeTranslationText(entry.text)
+    text: entry.text
   }))
   if (timed.length > 0) return timed
-  return untimedTexts(trans).map((text) => ({ timeMs: null, text: normalizeTranslationText(text) }))
+  return untimedTexts(trans).map((text) => ({ timeMs: null, text }))
 }
 
-/** 空译文行与原文时间戳的容差；在此范围内视为同一行的占位译文。 */
-const TRANSLATION_EMPTY_TIME_TOLERANCE_MS = 100
+/** 译文与原文时间戳的匹配容差；超出则认为该译文没有对应原文行。 */
+const TRANSLATION_TIME_TOLERANCE_MS = 100
 
 /**
- * 译文按行序附加到原文，而不是按时间戳匹配：
- * 译文行数通常与原文一致，时间戳的小幅差异不会影响配对；超出原文行数的译文忽略。
- * 但上游译文可能夹带原文不存在的空行时间戳（常见于分段换行），这些空行不占原文行位，
- * 直接参与行序配对会把后续译文整体推后，因此只保留能与原文时间戳对应上的空行。
+ * 译文附加顺序：
+ * 1. 原文有时间戳时，按时间戳为每条原文寻找最近的未使用译文，超出容差则留空；
+ *    原文不存在的多余译文行（含空行）直接忽略。
+ * 2. 原文或译文没有时间戳时，退化为按行序配对。
+ * 3. 匹配完成后再把纯斜杠占位转义为空字符串；渲染层只输出非空译文。
  */
-export function withTranslations(lines: LyricLine[], trans: string | null): LyricLine[] {
+export function withTranslations(
+  lines: LyricLine[],
+  trans: string | null,
+  timed = true
+): LyricLine[] {
   const entries = parseTranslationEntries(trans)
   if (entries.length === 0) return lines
-  const texts = entries
-    .filter((entry) => {
-      if (entry.text.length > 0 || entry.timeMs === null) return true
-      const timeMs = entry.timeMs
-      return lines.some((line) => Math.abs(line.timeMs - timeMs) <= TRANSLATION_EMPTY_TIME_TOLERANCE_MS)
+  const timedEntries = entries.filter(
+    (entry): entry is TranslationEntry & { timeMs: number } => entry.timeMs !== null
+  )
+
+  if (!timed || timedEntries.length === 0) {
+    return lines.map((line, index) => {
+      const entry = entries[index]
+      return { ...line, trans: entry ? normalizeTranslationText(entry.text) : null }
     })
-    .map((entry) => entry.text)
-  if (texts.length === 0) return lines
-  return lines.map((line, index) => ({ ...line, trans: texts[index] ?? null }))
+  }
+
+  const used = new Set<number>()
+  return lines.map((line) => {
+    let best = -1
+    let bestDelta = Number.POSITIVE_INFINITY
+    timedEntries.forEach((entry, index) => {
+      if (used.has(index)) return
+      const delta = Math.abs(entry.timeMs - line.timeMs)
+      if (delta <= TRANSLATION_TIME_TOLERANCE_MS && delta < bestDelta) {
+        best = index
+        bestDelta = delta
+      }
+    })
+    if (best < 0) return { ...line, trans: null }
+    used.add(best)
+    return { ...line, trans: normalizeTranslationText(timedEntries[best].text) }
+  })
 }
 
 /** 合并 LRC 与翻译，按时间排序；同一时间戳原文取首条。 */
@@ -106,8 +129,9 @@ export function parseLyric(lrc: string, trans: string | null): LyricLine[] {
       words: null
     }))
   // 原文也没有时间戳时按行序生成稳定序号，至少保证原文与译文能按行序展示。
+  const hasTimestamps = timed.length > 0
   const originals =
-    timed.length > 0
+    hasTimestamps
       ? timed
       : untimedTexts(lrc).map((text, index) => ({
           timeMs: index * 1000,
@@ -116,7 +140,7 @@ export function parseLyric(lrc: string, trans: string | null): LyricLine[] {
           trans: null,
           words: null
         }))
-  return withTranslations(originals, trans)
+  return withTranslations(originals, trans, hasTimestamps)
 }
 
 /** 在按时间排序的行里取离当前位置最近的一行；最多提前 80ms 进入下一行。 */
