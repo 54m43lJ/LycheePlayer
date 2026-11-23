@@ -1617,7 +1617,7 @@ button:focus-visible,
 }
 
 .player-title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   font-size: 13px;
   font-weight: 600;
