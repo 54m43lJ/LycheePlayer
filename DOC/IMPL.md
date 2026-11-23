@@ -424,3 +424,28 @@
 
 - 渲染层仅保留 6 处组件 `title` prop（确认框 / 删除下载弹层标题），DOM 元素无 `title`。
 - `npm run typecheck`、`npm test`（49 个测试文件、239 个用例）与 `npm run build` 通过。
+
+### 4.28 窄屏侧栏展开占满视口并覆盖播放条 [已解决] 
+
+**描述**：ISSUE 指出窄屏模式下展开的导航抽屉只到播放条上沿，未占满屏幕高度；要求抽屉覆盖播放条，且变暗遮罩覆盖包括播放条在内的整个剩余屏幕。
+
+**解决方案**：
+
+- ≤900px 的 `.sidebar` 由 `top: 0; bottom: var(--player-height)` 改为 `top: 0; bottom: 0`，展开时占满整个视口高度，覆盖播放条；z-index 45 保持高于播放条的 30。
+- `.sidebar-backdrop` 由 `inset: 0 0 var(--player-height) 0` 改为 `inset: 0`，遮罩覆盖整个屏幕，包括播放条。
+- 内容区仍不被压缩；关闭、拖拽吸附、焦点回收等既有行为不变。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 窄屏导航抽屉条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“窄屏侧栏展开占满视口并覆盖播放条” | 增 | 记录改动与文档操作。 |
+| `USER.html` | §5.2.2 侧栏与导航 | 改 | 抽屉展开占满视口高度并覆盖播放条；遮罩覆盖整个屏幕。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 记录抽屉覆盖内容区与播放条、backdrop 全屏。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 记录 `.sidebar` 的 `bottom: 0` 与 `.sidebar-backdrop` 的 `inset: 0`。 |
+
+**工作记录**：
+
+- 纯 CSS 调整，未改动组件结构或交互逻辑。
+- `npm run typecheck`、`npm test` 与 `npm run build` 通过。

@@ -4355,7 +4355,7 @@ button:focus-visible,
 
 .sidebar-backdrop {
   position: fixed;
-  inset: 0 0 var(--player-height) 0;
+  inset: 0;
   z-index: 44;
   background: rgba(0, 0, 0, 0.38);
 }
@@ -4486,7 +4486,7 @@ button:focus-visible,
   .sidebar {
     position: fixed;
     top: 0;
-    bottom: var(--player-height);
+    bottom: 0;
     left: 0;
     z-index: 45;
     width: min(282px, 82vw);
