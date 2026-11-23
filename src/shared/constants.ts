@@ -169,6 +169,10 @@ export const COMMENT_CONTENT_MAX = 300
 export const COMMENT_REPLY_PAGE_SIZE = 10
 /** 回复折叠时默认展示的条数。 */
 export const COMMENT_REPLY_PREVIEW = 3
+/** 每条评论取点赞数最高的前几条回复作为回复热评置顶。推荐值 3。 */
+export const COMMENT_HOT_REPLY_LIMIT = 3
+/** 回复热评的最低点赞数；点赞数不超过该值的回复不纳入热评。推荐值 3。 */
+export const COMMENT_HOT_REPLY_MIN_LIKES = 3
 /** 回复分页一次最多展示的邻近页码数。 */
 export const COMMENT_REPLY_PAGE_LINK_MAX = 10
 /** 音频缓存上限的最高档位，也是旧版本沿用的默认值（2 GiB）。 */

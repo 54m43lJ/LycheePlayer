@@ -1,3 +1,4 @@
+import type { Comment } from '@shared/types'
 import { COMMENT_REPLY_PAGE_LINK_MAX, COMMENT_REPLY_PAGE_SIZE } from '@shared/constants'
 
 export interface ReplyPagingState {
@@ -37,4 +38,11 @@ export function replyPageLinks(
   const end = Math.min(count, start + width - 1)
   start = Math.max(1, end - width + 1)
   return Array.from({ length: end - start + 1 }, (_, index) => start + index)
+}
+
+/** 回复热评固定在最前；普通回复中与热评重复的条目被移除。 */
+export function hotRepliesFirst(hotReplies: Comment[], replies: Comment[]): Comment[] {
+  if (hotReplies.length === 0) return replies
+  const hotIds = new Set(hotReplies.map((reply) => reply.id))
+  return [...hotReplies, ...replies.filter((reply) => !hotIds.has(reply.id))]
 }

@@ -162,6 +162,8 @@ export interface CommentLikeResult {
 
 export interface CommentPage {
   comments: Comment[]
+  /** 首屏回复热评：按点赞数降序、最多 COMMENT_HOT_REPLY_LIMIT 条；仅回复首屏返回。 */
+  hotReplies?: Comment[]
   total: number
   hasMore: boolean
   /** 下一页游标（上游 LastCommentSeqNo）；为空表示没有下一页。 */

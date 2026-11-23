@@ -6,6 +6,8 @@ import type {
 } from '../../shared/types'
 import {
   COMMENT_CONTENT_MAX,
+  COMMENT_HOT_REPLY_LIMIT,
+  COMMENT_HOT_REPLY_MIN_LIKES,
   COMMENT_PAGE_SIZE,
   COMMENT_REPLY_PAGE_SIZE
 } from '../../shared/constants'
@@ -59,10 +61,8 @@ interface AddCommentData {
   VerifyUrl?: string
 }
 
-function toCommentPage(list: RawCommentList, pageSize: number): CommentPage {
-  const raw = list.Comments ?? []
-  const nextCursor = String(raw.at(-1)?.SeqNo ?? '')
-  const comments = raw
+function mapComments(raw: RawComment[]): Comment[] {
+  return raw
     .map(toComment)
     .filter(
       (comment) =>
@@ -72,7 +72,12 @@ function toCommentPage(list: RawCommentList, pageSize: number): CommentPage {
           Boolean(comment.imageUrl) ||
           Boolean(comment.emojiUrl))
     )
-    .slice(0, pageSize)
+}
+
+function toCommentPage(list: RawCommentList, pageSize: number): CommentPage {
+  const raw = list.Comments ?? []
+  const nextCursor = String(raw.at(-1)?.SeqNo ?? '')
+  const comments = mapComments(raw).slice(0, pageSize)
 
   return {
     comments,
@@ -222,18 +227,40 @@ export async function getMvComments(
   return fetchComments(id, cursor, MV_BIZ_TYPE)
 }
 
-/** 评论回复；commentId 为顶层评论 CmId，按 10 条游标分页。 */
-export async function getCommentReplies(
-  commentId: string,
-  cursor = ''
-): Promise<CommentPage> {
-  const id = commentId.trim()
-  if (!id) return { comments: [], total: 0, hasMore: false }
+/** 首屏回复热评：RankType=1 按点赞数取前几条，点赞数须超过阈值；失败时降级为无热评。 */
+async function fetchHotReplies(commentId: string): Promise<Comment[]> {
   const data = await musicu<CommentListData>(
     'music.globalComment.CommentRead',
     'GetReplyCommentList',
     {
-      RootCmId: id,
+      RootCmId: commentId,
+      LastCommentSeqNo: '',
+      PageSize: COMMENT_HOT_REPLY_LIMIT,
+      LastRankScore: '',
+      RankType: 1,
+      PicEnable: 1,
+      PageNum: 0
+    },
+    { stringFields: ['SeqNo'] }
+  )
+  const list = data.CommentList
+  if (!list) return []
+  const unique = new Map<string, Comment>()
+  for (const reply of mapComments(list.Comments ?? [])) {
+    if (!unique.has(reply.id)) unique.set(reply.id, reply)
+  }
+  return [...unique.values()]
+    .filter((reply) => reply.likedCount > COMMENT_HOT_REPLY_MIN_LIKES)
+    .sort((left, right) => right.likedCount - left.likedCount)
+    .slice(0, COMMENT_HOT_REPLY_LIMIT)
+}
+
+async function fetchReplyPage(commentId: string, cursor: string): Promise<CommentPage> {
+  const data = await musicu<CommentListData>(
+    'music.globalComment.CommentRead',
+    'GetReplyCommentList',
+    {
+      RootCmId: commentId,
       LastCommentSeqNo: cursor,
       PageSize: COMMENT_REPLY_PAGE_SIZE,
       LastRankScore: '',
@@ -248,6 +275,21 @@ export async function getCommentReplies(
     throw new UpstreamError('UPSTREAM_CHANGED', '回复响应缺少 CommentList')
   }
   return toCommentPage(list, COMMENT_REPLY_PAGE_SIZE)
+}
+
+/** 评论回复；commentId 为顶层评论 CmId，按 10 条游标分页，首屏附带回复热评。 */
+export async function getCommentReplies(
+  commentId: string,
+  cursor = ''
+): Promise<CommentPage> {
+  const id = commentId.trim()
+  if (!id) return { comments: [], total: 0, hasMore: false }
+  const initial = cursor === ''
+  const hotPromise = initial
+    ? fetchHotReplies(id).catch(() => [] as Comment[])
+    : Promise.resolve<Comment[]>([])
+  const page = await fetchReplyPage(id, cursor)
+  return { ...page, hotReplies: await hotPromise }
 }
 
 async function updateLike(commentId: string, type: 3 | 4): Promise<CommentLikeResult> {

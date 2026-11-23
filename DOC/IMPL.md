@@ -1123,3 +1123,41 @@
 - `test/api/vkey.test.ts` 使用假时钟验证 299ms 时第二次请求仍未发出、300ms 时发出；`song-stream` 的批量用例改为断言每次只带一首歌。
 - `npm run typecheck`、`npm test`（53 个测试文件、275 个用例）与 `npm run build` 通过。
 - 未做真实窗口验收；取流时序由接口测试覆盖。
+
+### 4.50 每条评论的回复热评置顶 [已解决] 
+
+**描述**：TODO 要求优化评论呈现：每条评论点赞数前三的回复作为回复热评，按点赞数降序移到该评论回复区的队首展示，且只有点赞数超过 3 的回复才纳入热评。顶层评论的热评不做，评论区仍只读取最新评论。此前回复只按时间游标分页，没有热评排序能力。
+
+**解决方案**：
+
+- `getCommentReplies()` 在首屏（`cursor === ''`）额外请求一次热评：同一接口 `GetReplyCommentList` 使用 `RankType: 1`、`LastRankScore` / `LastCommentSeqNo` 为空、`PageSize: COMMENT_HOT_REPLY_LIMIT = 3`，再按 `CmId` 去重、只保留点赞数超过 `COMMENT_HOT_REPLY_MIN_LIKES = 3` 的回复，按 `likedCount` 降序截断后写入 `CommentPage.hotReplies`；点赞数不超过 3 的回复不纳入热评；合格回复不足 3 条时按实际条数返回（1 条就返回 1 条，0 条时不显示热评）。热评请求失败降级为无热评，不影响普通回复页；后续页不再请求热评。
+- 普通回复页仍使用 `RankType: 0` 与 `LastCommentSeqNo` 游标，热评模式的 `LastRankScore` 游标不与普通分页混用。
+- `CommentPage` 增加可选字段 `hotReplies`；新增常量 `COMMENT_HOT_REPLY_LIMIT = 3` 与 `COMMENT_HOT_REPLY_MIN_LIKES = 3`（点赞数须超过该值才纳入热评）。
+- `utils/comment-replies.ts` 新增 `hotRepliesFirst(hotReplies, replies)`：热评固定在最前，普通回复中与热评同 ID 的条目被移除，其余保持原顺序；热评为空时原样返回。
+- `CommentsPanel` 的回复线程保存 `hot`；折叠时展示热评 + 前 `COMMENT_REPLY_PREVIEW = 3` 条普通回复，展开后每页展示 `COMMENT_REPLY_PAGE_SIZE = 10` 条普通回复，热评始终置顶且不占普通页码；仅存在热评时回复区照常显示。
+- 顶层评论读取保持原样，不读取 `CommentList2` / `WithHot`，不新增评论热评。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 优化评论呈现条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“每条评论的回复热评置顶” | 增 | 记录热评请求、置顶与分页规则。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 每条评论的回复热评降序置顶，折叠 / 展开的展示规则。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | `CommentPage` 增加 `hotReplies`。 |
+| `CORE.html` | §4.15 `api/comment.ts`（`#c4-15`） | 改 | 回复首屏 `RankType=1` 热评请求、去重与降级规则。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 线程保存热评，折叠 / 展开时的置顶与去重。 |
+| `CORE.html` | §4.50 `constants.ts`（`#c4-50`） | 改 | 新增 `COMMENT_HOT_REPLY_LIMIT = 3` 与 `COMMENT_HOT_REPLY_MIN_LIKES = 3`。 |
+| `CORE.html` | §4.109 `utils/comment-replies.ts`（`#c4-109`） | 改 | 新增 `hotRepliesFirst()` 签名与规则。 |
+| `CORE.html` | §5.9 歌词与评论 | 改 | 调用树补回复热评请求与折叠渲染说明。 |
+| `PROVIDER.html` | §2 CONVENTIONS 评论回复 | 改 | 首屏 `RankType=1` 热评与 `LastRankScore` 游标。 |
+| `PROVIDER.html` | §4.1 评论回复 / §4.3 映射 | 改 | 记录热评请求参数、点赞降序与两套游标边界。 |
+
+**工作记录**：
+
+- 真实匿名验证歌曲 `8136` 的根评论 `1!a3VJKpYIpBEwZLrtcAdhno…`（`Total=113`）：`RankType: 0` 按时间返回（PraiseNum 141,2,248,192,16,1017,…），`RankType: 1` 按点赞数降序返回（1017,747,248,192,141,52,16,12,4,4）；`PageSize: 3` 返回 1017 / 747 / 248。
+- 同一根评论验证游标：热评模式用 `LastRankScore` 可续页；传 `LastCommentSeqNo` 会重复返回第一页，因此两套游标严格分开。
+- 匿名读取时上游仍可能把 `ReplyCnt` 返回 0（实测上述根评论有 113 条回复但 `ReplyCnt=0`）；本次不改变回复区的出现条件，仍按现有 `replyCount > 0` 规则加载线程，登录态下按上游计数展示。
+- 新增 / 更新测试覆盖首屏热评请求、后续页不请求热评、热评失败降级、点赞数不超过 3 的回复被排除、合格回复不足 3 条时按实际条数返回，以及 `hotRepliesFirst()` 的置顶 / 去重。
+- `npm run typecheck`、`npm test`（53 个测试文件、280 个用例）与 `npm run build` 通过。
+- 未做真实窗口验收；置顶顺序与分页边界由接口测试与工具函数单测覆盖。

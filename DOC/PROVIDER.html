@@ -194,7 +194,7 @@
   </tr>
   <tr>
     <td>评论回复</td>
-    <td>读取使用 <code>GetReplyCommentList</code>，以 <code>RootCmId</code> 定位顶层评论，单页 10 条，游标为最后一条回复的 <code>SeqNo</code>；<code>PageNum</code> 不生效。发表沿用目标类型的 <code>AddComment</code> 参数并追加 <code>RepliedCmId</code>：回复顶层评论时是该评论 CmId，回复某条回复时是该回复 CmId；不需要额外的根评论参数。回复与顶层评论共用 <code>Comment</code> / <code>CommentPage</code>，回复的 <code>Pic</code> / <code>EmoPic</code> 与顶层评论相同地映射为附图和内嵌表情。参数见 <a href="#p4-1">§4.1</a>，字段见 <a href="#p4-3">§4.3</a>。</td>
+    <td>读取使用 <code>GetReplyCommentList</code>，以 <code>RootCmId</code> 定位顶层评论，单页 10 条，游标为最后一条回复的 <code>SeqNo</code>；<code>PageNum</code> 不生效。应用只在首屏额外请求一次回复热评：同一接口设 <code>RankType: 1</code>、<code>LastRankScore</code> 为空、<code>PageSize: 3</code>，上游按 <code>PraiseNum</code> 降序返回，应用只取点赞数超过 3 的前 3 条置顶，合格回复不足 3 条时按实际条数展示；热评模式的游标是 <code>LastRankScore</code>，与普通页的 <code>LastCommentSeqNo</code> 不混用。发表沿用目标类型的 <code>AddComment</code> 参数并追加 <code>RepliedCmId</code>：回复顶层评论时是该评论 CmId，回复某条回复时是该回复 CmId；不需要额外的根评论参数。回复与顶层评论共用 <code>Comment</code> / <code>CommentPage</code>，回复的 <code>Pic</code> / <code>EmoPic</code> 与顶层评论相同地映射为附图和内嵌表情。参数见 <a href="#p4-1">§4.1</a>，字段见 <a href="#p4-3">§4.3</a>。</td>
   </tr>
   <tr>
     <td>回复计数与列表不一致</td>
@@ -340,7 +340,7 @@
   <tr><td>微信登录二维码</td><td><code>https://open.weixin.qq.com/connect/qrconnect</code></td><td>微信开放平台网站应用二维码；回调到 QQ 音乐 <code>wx_redirect</code> 页。</td></tr>
   <tr><td>歌词</td><td><code>music.musichallSong.PlayLyricInfo / GetPlayLyricInfo</code></td><td>按数字歌曲 ID 返回 Base64 编码的 <code>lyric</code> 与 <code>trans</code>；旧歌词接口因译文缺失不再消费。</td></tr>
   <tr><td>歌曲 / MV 评论</td><td><code>music.globalComment.CommentRead / GetNewCommentList</code></td><td>读取歌曲或 MV 最新评论：歌曲 <code>BizType 1</code> + <code>BizSubType 2</code>、<code>BizId</code> 为数字歌曲 ID；MV <code>BizType 5</code>、<code>BizId</code> 为 MV vid，不传 <code>BizSubType</code>。应用不提供“最旧”或按点赞排序，单页固定 25 条（26 起返回业务码 <code>10000</code>）。</td></tr>
-  <tr><td>评论回复</td><td><code>music.globalComment.CommentRead / GetReplyCommentList</code></td><td>读取指定顶层评论的回复：<code>RootCmId</code> + <code>LastCommentSeqNo</code> 游标，单页固定 10 条，<code>PageNum</code> 不生效；<code>Total</code> 仅首屏可靠。</td></tr>
+  <tr><td>评论回复</td><td><code>music.globalComment.CommentRead / GetReplyCommentList</code></td><td>读取指定顶层评论的回复：<code>RootCmId</code> + <code>LastCommentSeqNo</code> 游标，单页固定 10 条，<code>PageNum</code> 不生效；<code>Total</code> 仅首屏可靠。首屏另发一次 <code>RankType: 1</code>、<code>LastRankScore</code> 为空、<code>PageSize: 3</code> 的热评请求，应用只取点赞数超过 3 的前 3 条回复置顶，不足 3 条时按实际条数展示。</td></tr>
   <tr><td>VIP 状态</td><td><code>VipLogin.VipLoginInter / vip_login_base</code></td><td>读取当前账号会员身份与到期信息；<code>identity.vip</code> 为绿钻，<code>svip</code> 为豪华绿钻，<code>identity.HugeVip</code> / <code>huge_vip</code> 为超级会员，<code>userinfo.expire</code> 为到期时间。</td></tr>
   <tr><td>用户资料</td><td><code>GET https://c6.y.qq.com/rsc/fcgi-bin/fcg_get_profile_homepage.fcg</code></td><td>昵称与头像；失败不影响登录态。</td></tr>
   <tr><td>QQ 官方登录组件</td><td><code>https://xui.ptlogin2.qq.com/cgi-bin/xlogin</code></td><td>登录页内嵌的官方 xlogin 扫码组件。</td></tr>
@@ -1010,7 +1010,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqCommentList</code></td>
     <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> / <code>IsPraised</code> / <code>IsLiked</code> / <code>State</code> / <code>RepliedComments</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
-    <td>缺少 <code>CmId</code> 的记录被过滤；正文与媒体都为空且 <code>State !== 2</code> 的记录被过滤，已删除记录保留占位。<code>Content</code> 的真实 / 字面量换行统一归一化为 <code>\n</code> 后再映射；<code>Nick</code> / <code>RepliedComments[].Nick</code> 与 <code>Content</code> 中的 C0 / C1 控制字符在映射前移除，正文只保留换行。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。<code>State === 2</code> 映射为 <code>deleted</code>；<code>RepliedComments[0].Nick</code> 映射为 <code>replyToNickname</code>。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。顶层评论只提供最新评论读取，不提供“最旧”排序；不读取 <code>CommentList2</code> / <code>WithHot</code>，上游没有按点赞排序参数。<code>GetReplyCommentList</code> 复用同一映射，单页 10 条。</td>
+    <td>缺少 <code>CmId</code> 的记录被过滤；正文与媒体都为空且 <code>State !== 2</code> 的记录被过滤，已删除记录保留占位。<code>Content</code> 的真实 / 字面量换行统一归一化为 <code>\n</code> 后再映射；<code>Nick</code> / <code>RepliedComments[].Nick</code> 与 <code>Content</code> 中的 C0 / C1 控制字符在映射前移除，正文只保留换行。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。<code>State === 2</code> 映射为 <code>deleted</code>；<code>RepliedComments[0].Nick</code> 映射为 <code>replyToNickname</code>。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。顶层评论只提供最新评论读取，不提供“最旧”排序，上游也没有按点赞排序参数；不读取 <code>CommentList2</code> / <code>WithHot</code>。<code>GetReplyCommentList</code> 复用同一映射，单页 10 条；<code>RankType=1</code> 时按点赞数降序返回，应用只用于取首屏点赞数超过 3 的前 3 条回复热评（不足 3 条时按实际条数），该模式的分页游标为 <code>LastRankScore</code>，与普通页的 <code>LastCommentSeqNo</code> 不混用。</td>
   </tr>
   <tr>
     <td><code>QqAddCommentResult</code></td>

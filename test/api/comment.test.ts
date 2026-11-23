@@ -420,17 +420,35 @@ describe('api/comment', () => {
     })
   })
 
-  it('reads replies by root comment id, keeps deleted rows and maps reply targets', async () => {
+  it('reads replies with first-page hot replies and keeps duplicate rows out of pages', async () => {
     const requests: Array<{ method: string; param: Record<string, unknown> }> = []
     vi.stubGlobal('fetch', async (url: string | URL) => {
       const data = new URL(String(url)).searchParams.get('data')
       const payload = JSON.parse(data ?? '{}') as {
         req_0?: { method?: string; param?: Record<string, unknown> }
       }
-      requests.push({
-        method: payload.req_0?.method ?? '',
-        param: payload.req_0?.param ?? {}
-      })
+      const param = payload.req_0?.param ?? {}
+      requests.push({ method: payload.req_0?.method ?? '', param })
+      if (param.RankType === 1) {
+        return respond({
+          code: 0,
+          req_0: {
+            code: 0,
+            data: {
+              CommentList: {
+                Comments: [
+                  { CmId: 'r1', Nick: 'R', Content: 'reply', PraiseNum: 5, PubTime: 100 },
+                  { CmId: 'r3', Nick: 'S', Content: 'hot', PraiseNum: 9, PubTime: 50 },
+                  { CmId: 'r4', Nick: 'T', Content: 'at limit', PraiseNum: 3, PubTime: 40 },
+                  { CmId: 'r5', Nick: 'U', Content: 'above limit', PraiseNum: 4, PubTime: 30 }
+                ],
+                Total: 4,
+                HasMore: 0
+              }
+            }
+          }
+        })
+      }
       return new Response(
         '{"code":0,"req_0":{"code":0,"data":{"CommentList":{"Comments":[{"CmId":"r1","Nick":"R","Content":"reply","PubTime":100,"SeqNo":1701807071952960001,"Pic":"http://pic.test/r1.png","RepliedComments":[{"Nick":"A"}]},{"CmId":"r2","Nick":"","Content":"","PubTime":90,"State":2,"SeqNo":1701807071952960000}],"Total":2,"HasMore":1}}}}',
         { status: 200, headers: { 'Content-Type': 'application/json' } }
@@ -439,14 +457,24 @@ describe('api/comment', () => {
 
     const { getCommentReplies } = await import('../../src/main/api/comment')
     const page = await getCommentReplies('root', '')
-    expect(requests[0]?.method).toBe('GetReplyCommentList')
-    expect(requests[0]?.param).toMatchObject({
+    const pageRequest = requests.find((request) => request.param.RankType === 0)
+    const hotRequest = requests.find((request) => request.param.RankType === 1)
+    expect(pageRequest?.method).toBe('GetReplyCommentList')
+    expect(pageRequest?.param).toMatchObject({
       RootCmId: 'root',
       LastCommentSeqNo: '',
       PageSize: 10,
       RankType: 0
     })
+    expect(hotRequest?.param).toMatchObject({
+      RootCmId: 'root',
+      LastCommentSeqNo: '',
+      LastRankScore: '',
+      PageSize: 3,
+      RankType: 1
+    })
     expect(page.comments.map((comment) => comment.id)).toEqual(['r1', 'r2'])
+    expect(page.hotReplies?.map((comment) => comment.id)).toEqual(['r3', 'r1', 'r5'])
     expect(page.comments[0]).toMatchObject({
       replyToNickname: 'A',
       deleted: false,
@@ -458,6 +486,141 @@ describe('api/comment', () => {
     })
     expect(page.nextCursor).toBe('1701807071952960000')
     expect(page.hasMore).toBe(true)
+
+    requests.length = 0
+    await getCommentReplies('root', '1701807071952960000')
+    expect(requests).toHaveLength(1)
+    expect(requests[0]?.param.RankType).toBe(0)
+  })
+
+  it('falls back to no hot replies when the hot request fails', async () => {
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      if (payload.req_0?.param?.RankType === 1) throw new Error('hot failed')
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'r1', Nick: 'R', Content: 'reply', PubTime: 100, SeqNo: '1701807071952960001' }
+              ],
+              Total: 1,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getCommentReplies } = await import('../../src/main/api/comment')
+    const page = await getCommentReplies('root', '')
+
+    expect(page.comments.map((comment) => comment.id)).toEqual(['r1'])
+    expect(page.hotReplies).toEqual([])
+  })
+
+  it('drops hot replies whose like count does not exceed three', async () => {
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      const param = payload.req_0?.param ?? {}
+      if (param.RankType === 1) {
+        return respond({
+          code: 0,
+          req_0: {
+            code: 0,
+            data: {
+              CommentList: {
+                Comments: [
+                  { CmId: 'a', Nick: 'A', Content: 'A', PraiseNum: 3 },
+                  { CmId: 'b', Nick: 'B', Content: 'B', PraiseNum: 1 },
+                  { CmId: 'c', Nick: 'C', Content: 'C', PraiseNum: 0 }
+                ],
+                Total: 3,
+                HasMore: 0
+              }
+            }
+          }
+        })
+      }
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: 'A', Content: 'A', PubTime: 100, SeqNo: '1701807071952960001' }
+              ],
+              Total: 1,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getCommentReplies } = await import('../../src/main/api/comment')
+    const page = await getCommentReplies('root', '')
+
+    expect(page.hotReplies).toEqual([])
+  })
+
+  it('shows fewer than three hot replies when only some pass the threshold', async () => {
+    vi.stubGlobal('fetch', async (url: string | URL) => {
+      const data = new URL(String(url)).searchParams.get('data')
+      const payload = JSON.parse(data ?? '{}') as {
+        req_0?: { param?: Record<string, unknown> }
+      }
+      const param = payload.req_0?.param ?? {}
+      if (param.RankType === 1) {
+        return respond({
+          code: 0,
+          req_0: {
+            code: 0,
+            data: {
+              CommentList: {
+                Comments: [
+                  { CmId: 'a', Nick: 'A', Content: 'A', PraiseNum: 8 },
+                  { CmId: 'b', Nick: 'B', Content: 'B', PraiseNum: 2 },
+                  { CmId: 'c', Nick: 'C', Content: 'C', PraiseNum: 1 }
+                ],
+                Total: 3,
+                HasMore: 0
+              }
+            }
+          }
+        })
+      }
+      return respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [
+                { CmId: 'a', Nick: 'A', Content: 'A', PubTime: 100, SeqNo: '1701807071952960001' },
+                { CmId: 'b', Nick: 'B', Content: 'B', PubTime: 90, SeqNo: '1701807071952960002' }
+              ],
+              Total: 2,
+              HasMore: 0
+            }
+          }
+        }
+      })
+    })
+
+    const { getCommentReplies } = await import('../../src/main/api/comment')
+    const page = await getCommentReplies('root', '')
+
+    expect(page.hotReplies?.map((comment) => comment.id)).toEqual(['a'])
   })
 
   it('posts replies with RepliedCmId and the target BizType / BizId', async () => {

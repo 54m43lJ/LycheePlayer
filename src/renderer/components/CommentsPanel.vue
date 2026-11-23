@@ -17,6 +17,7 @@ import { useToast } from '../composables/toast'
 import { formatCount } from '../utils/format'
 import { scrollWithTransition } from '../utils/page-jump'
 import {
+  hotRepliesFirst,
   replyPageCount as countReplyPages,
   replyPageLinks as buildReplyPageLinks
 } from '../utils/comment-replies'
@@ -76,6 +77,8 @@ const canPostReply = computed(
 
 interface ReplyThread {
   items: Comment[]
+  /** 首屏返回的回复热评，固定展示在回复列表最前。 */
+  hot: Comment[]
   /** 按游标依次加载的页，每页最多 COMMENT_REPLY_PAGE_SIZE 条。 */
   pages: Comment[][]
   total: number
@@ -153,6 +156,7 @@ function ensureReplyThread(commentId: string): ReplyThread {
   if (existing) return existing
   const thread = reactive<ReplyThread>({
     items: [],
+    hot: [],
     pages: [],
     total: 0,
     cursor: '',
@@ -175,6 +179,7 @@ async function loadReplies(comment: Comment, reset = false): Promise<boolean> {
   if (reset) {
     thread.token += 1
     thread.items = []
+    thread.hot = []
     thread.pages = []
     thread.total = 0
     thread.cursor = ''
@@ -200,6 +205,7 @@ async function loadReplies(comment: Comment, reset = false): Promise<boolean> {
     const fresh = page.comments.filter((item) => !known.has(item.id))
     if (initial) {
       thread.pages = [fresh]
+      thread.hot = page.hotReplies ?? []
     } else if (fresh.length > 0) {
       thread.pages = [...thread.pages, fresh]
     }
@@ -233,8 +239,11 @@ function prefetchReplies(list: Comment[]): void {
 function visibleReplies(comment: Comment): Comment[] {
   const thread = replyThread(comment.id)
   if (!thread) return []
-  if (!thread.expanded) return thread.items.slice(0, COMMENT_REPLY_PREVIEW)
-  return thread.pages[thread.pageIndex] ?? thread.items.slice(0, COMMENT_REPLY_PAGE_SIZE)
+  const hotIds = new Set(thread.hot.map((reply) => reply.id))
+  const normal = thread.expanded
+    ? (thread.pages[thread.pageIndex] ?? thread.items.slice(0, COMMENT_REPLY_PAGE_SIZE))
+    : thread.items.filter((reply) => !hotIds.has(reply.id)).slice(0, COMMENT_REPLY_PREVIEW)
+  return hotRepliesFirst(thread.hot, normal)
 }
 
 function replyPageCount(thread: ReplyThread | null | undefined): number {
@@ -255,7 +264,7 @@ function shouldShowReplies(comment: Comment): boolean {
   if (!thread) return false
   if (thread.error && thread.items.length === 0) return true
   if (!thread.loaded) return true
-  return thread.items.length > 0
+  return thread.items.length > 0 || thread.hot.length > 0
 }
 
 function replyPageLinks(thread: ReplyThread | null | undefined): number[] {
