@@ -854,7 +854,7 @@
 - `Comment` 增加 `deleted` 与 `replyToNickname`：`State === 2` 映射为已删除，`RepliedComments[0].Nick` 映射为被回复昵称。已删除记录即使正文为空也保留，交给界面显示占位；其余空记录仍过滤。
 - `api/comment.ts` 抽出 `toCommentPage()` 统一顶层评论与回复的过滤、总数与游标计算；新增 `getCommentReplies()` / `postCommentReply()`。新增 `comment.getReplies` / `comment.postReply` IPC 与 preload 方法。
 - `CommentsPanel` 为每条顶层评论维护独立回复线程：首屏预取 10 条，折叠显示前 3 条；展开后按 10 条分页，页码窗口最多 10 个，点击未加载页码时按游标串行补拉；刷新、切歌与目标变化清空线程与回复草稿，在途请求按 token 丢弃。
-- 回复区使用 `--panel` 背景，`replyCount === 0` 不渲染；回复条目为 16px 小头像 + 昵称 + 冒号 + 正文的紧凑行，回复另一条回复时显示“回复 @昵称”，下行左侧时间、右侧点赞按钮；回复点赞复用 `toggleLike()` 的乐观更新与回滚。
+- 回复区使用 `--panel` 背景，`replyCount === 0` 不渲染；回复条目为 16px 小头像 + 昵称 + 冒号 + 正文的紧凑行，回复另一条回复时显示“回复 @昵称”，下行左侧时间、右侧点赞按钮；回复点赞复用 `toggleLike()` 的乐观更新与回滚。此处仅渲染上游已有的被回复昵称，不提供回复的回复入口；入口与嵌套回复框在 4.44 实现。
 - 已删除顶层评论与回复统一显示“该评论已删除”，不展示正文、媒体、点赞与回复入口。
 - 新增 `COMMENT_REPLY_PAGE_SIZE = 10`、`COMMENT_REPLY_PREVIEW = 3`、`COMMENT_REPLY_PAGE_LINK_MAX = 10`。
 
@@ -955,3 +955,36 @@
 - 新增 `test/comment-replies.test.ts`：覆盖 `HasMore=0` 时按实际条数收敛页数、仍有下一页时保留 Total 页码、空列表至少 1 页、10 个邻近页码窗口与边界夹取。
 - `npm run typecheck`、`npm test`（52 个测试文件、271 个用例）与 `npm run build` 通过。
 - 未做真实窗口截图验收；分页与显隐逻辑由纯函数测试、真实接口数据与类型检查覆盖。
+
+### 4.44 回复的回复与 @ 渲染 [已解决] 
+
+**描述**：ISSUE 要求实现“回复的回复”：渲染时隐藏被回复人昵称前的 `@`；用与评论回复一致的 UI 支持继续回复某条回复；发表时必须把被回复人作为 `RepliedCmId`，不能丢目标或调用错误的接口。该功能在 4.41 中尚未实现，4.41 只实现了对顶层评论的回复入口。
+
+**解决方案**：
+
+- 对照官方网页客户端确认：回复某条回复仍调用 `music.globalComment.CommentWriteServer / AddComment`，`RepliedCmId` 为该回复的 `CmId`；不需要额外的根评论参数，根评论只用于客户端把新回复挂回正确的回复线程。
+- `CommentsPanel` 的 `replyingTo` 从顶层评论 ID 改为 `ReplyTarget { rootId, commentId, nickname }`：`rootId` 用于刷新线程，`commentId` 作为 `RepliedCmId`，`nickname` 用于回复框占位。
+- 每条回复的点赞按钮右侧增加“回复”按钮；点击在该条回复下方展开与顶层回复相同的输入框，复用 `replyDraft` / `replyPosting` / `canPostReply`。发表成功后收起输入框、增加所在顶层评论的 `replyCount` 并重新加载该顶层线程。
+- 回复正文中的被回复人显示为“回复 昵称”，移除昵称前的 `@`；新回复仍由上游 `RepliedComments[0].Nick` 映射为 `replyToNickname`，被回复人不会丢失。
+- 回复框嵌套在单条回复内部，增加 `comment-reply-composer-nested` 的间距与 40px 输入框高度。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 实现回复的回复功能条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“回复的回复与 @ 渲染” | 增 | 记录官方请求格式、ReplyTarget 与 UI 复用。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 回复条目增加“回复”按钮，说明被回复人昵称前不显示 `@`，新回复保留被回复人。 |
+| `CORE.html` | §4.15 `api/comment.ts`（`#c4-15`） | 改 | 明确 `RepliedCmId` 为被回复的顶层评论或回复 CmId。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 记录 `ReplyTarget`、回复的回复入口、嵌套回复框与线程刷新。 |
+| `CORE.html` | §5.9 歌词与评论（`#c5-9`） | 改 | 增加 `startReplyToReply()` 与以目标回复 CmId 发表的调用树。 |
+| `PROVIDER.html` | §2 CONVENTIONS / §4.1 | 改 | `RepliedCmId` 允许为顶层评论或回复 CmId，不需要根评论参数。 |
+| `README.md` / `ABOUT.html` | 歌词 / 评论行 | 改 | 补充回复支持继续回复、被回复人昵称前不显示 @。 |
+
+**工作记录**：
+
+- 官方网页脚本确认：回复提交函数参数为 `{ type, id, content, replyCmId }`，`AddComment` 参数为 `{ BizType, BizId, Content, RepliedCmId }`；回复某条回复时 `replyCmId` 取该回复 `cmId`，根评论仅用于 `subCmtStateById[rootCmId]` 的本地归组。
+- 官方脚本在本地插入新回复时会写入 `repliedCmts`，本应用改为重新请求线程，由 `RepliedComments[0].Nick` 保留被回复人。
+- 新增 API 断言：`postCommentReply('song', '123', 'reply-1', ...)` 的 `RepliedCmId` 为 `reply-1`，BizType / BizId / BizSubType 保持正确。
+- `npm run typecheck`、`npm test`（52 个测试文件、271 个用例）与 `npm run build` 通过。
+- 未使用真实登录账号发表回复的回复（避免产生公开内容）；请求格式对照官方客户端脚本确认。

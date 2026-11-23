@@ -498,6 +498,17 @@ describe('api/comment', () => {
       RepliedCmId: 'root'
     })
     expect(requests[1]?.param.BizSubType).toBeUndefined()
+
+    await expect(
+      postCommentReply('song', '123', 'reply-1', 'reply to reply')
+    ).resolves.toEqual({ commentId: 'new-3' })
+    expect(requests[2]?.param).toMatchObject({
+      Content: 'reply to reply',
+      BizType: 1,
+      BizId: '123',
+      BizSubType: 2,
+      RepliedCmId: 'reply-1'
+    })
   })
 
   it('strips C0 / C1 control characters from nicknames and content', async () => {

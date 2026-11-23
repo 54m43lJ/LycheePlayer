@@ -59,7 +59,15 @@ const viewerUrl = ref<string | null>(null)
 const canPost = computed(
   () => auth.loggedIn && draft.value.trim().length > 0 && !posting.value
 )
-const replyingTo = ref('')
+interface ReplyTarget {
+  /** 顶层评论 ID，用于定位并刷新回复线程。 */
+  rootId: string
+  /** 实际被回复的评论 ID（顶层评论或其中一条回复）。 */
+  commentId: string
+  nickname: string
+}
+
+const replyingTo = ref<ReplyTarget | null>(null)
 const replyDraft = ref('')
 const replyPosting = ref(false)
 const canPostReply = computed(
@@ -131,7 +139,7 @@ function postTarget(id: string, content: string) {
 
 function resetReplyState(): void {
   replyThreads.value = {}
-  replyingTo.value = ''
+  replyingTo.value = null
   replyDraft.value = ''
   replyPosting.value = false
 }
@@ -279,28 +287,43 @@ function stepReplyPage(comment: Comment, delta: number): void {
   void gotoReplyPage(comment, thread.pageIndex + 1 + delta)
 }
 
-function startReply(comment: Comment): void {
+function isReplyingTo(commentId: string): boolean {
+  return replyingTo.value?.commentId === commentId
+}
+
+function startReplyTo(rootId: string, commentId: string, nickname: string): void {
   if (!auth.loggedIn) {
     toast.error('请先登录')
     return
   }
-  if (replyingTo.value === comment.id) {
+  if (isReplyingTo(commentId)) {
     cancelReply()
     return
   }
-  replyingTo.value = comment.id
+  replyingTo.value = { rootId, commentId, nickname }
   replyDraft.value = ''
+}
+
+function startReply(comment: Comment): void {
+  startReplyTo(comment.id, comment.id, comment.nickname)
+}
+
+function startReplyToReply(root: Comment, reply: Comment): void {
+  startReplyTo(root.id, reply.id, reply.nickname)
 }
 
 function cancelReply(): void {
-  replyingTo.value = ''
+  replyingTo.value = null
   replyDraft.value = ''
 }
 
-async function submitReply(comment: Comment): Promise<void> {
+async function submitReply(root: Comment): Promise<void> {
   const id = resolvedId.value
+  const target = replyingTo.value
   const content = replyDraft.value.trim()
-  if (!id || !content || replyPosting.value) return
+  if (!id || !target || target.rootId !== root.id || !content || replyPosting.value) {
+    return
+  }
   if (!auth.loggedIn) {
     toast.error('请先登录')
     return
@@ -312,14 +335,19 @@ async function submitReply(comment: Comment): Promise<void> {
   replyPosting.value = true
   try {
     unwrap(
-      await window.lychee.comment.postReply(props.targetType, id, comment.id, content)
+      await window.lychee.comment.postReply(
+        props.targetType,
+        id,
+        target.commentId,
+        content
+      )
     )
     if (resolvedId.value !== id) return
     replyDraft.value = ''
-    replyingTo.value = ''
-    comment.replyCount += 1
-    const thread = ensureReplyThread(comment.id)
-    await loadReplies(comment, true)
+    replyingTo.value = null
+    root.replyCount += 1
+    const thread = ensureReplyThread(root.id)
+    await loadReplies(root, true)
     thread.expanded = true
   } catch (err) {
     toast.error(describeError(err))
@@ -669,7 +697,7 @@ onBeforeUnmount(() => {
               </div>
 
               <form
-                v-if="replyingTo === comment.id"
+                v-if="isReplyingTo(comment.id)"
                 class="comment-reply-composer"
                 @submit.prevent="submitReply(comment)"
               >
@@ -744,9 +772,9 @@ onBeforeUnmount(() => {
                             <span class="comment-reply-nick">{{ reply.nickname }}</span>
                             <template v-if="reply.replyToNickname">
                               <span class="comment-reply-to"> 回复 </span>
-                              <span class="comment-reply-nick"
-                                >@{{ reply.replyToNickname }}</span
-                              >
+                              <span class="comment-reply-nick">{{
+                                reply.replyToNickname
+                              }}</span>
                             </template>
                             <span>：</span>
                             <template
@@ -785,21 +813,62 @@ onBeforeUnmount(() => {
                           </div>
                           <div class="comment-reply-foot">
                             <span>{{ timeLabel(reply.createdAtMs) }}</span>
-                            <button
-                              class="comment-like"
-                              :class="{ active: reply.liked }"
-                              :aria-label="reply.liked ? '取消点赞' : '点赞'"
-                              @click="toggleLike(reply, $event)"
-                            >
-                              <AppIcon
-                                :name="reply.liked ? 'heart-filled' : 'heart'"
-                                :size="12"
-                              />
-                              <span v-if="reply.likedCount > 0">{{
-                                formatCount(reply.likedCount)
-                              }}</span>
-                            </button>
+                            <div class="comment-actions">
+                              <button
+                                class="comment-like"
+                                :class="{ active: reply.liked }"
+                                :aria-label="reply.liked ? '取消点赞' : '点赞'"
+                                @click="toggleLike(reply, $event)"
+                              >
+                                <AppIcon
+                                  :name="reply.liked ? 'heart-filled' : 'heart'"
+                                  :size="12"
+                                />
+                                <span v-if="reply.likedCount > 0">{{
+                                  formatCount(reply.likedCount)
+                                }}</span>
+                              </button>
+                              <button
+                                class="comment-reply-action"
+                                @click="startReplyToReply(comment, reply)"
+                              >
+                                回复
+                              </button>
+                            </div>
                           </div>
+                          <form
+                            v-if="isReplyingTo(reply.id)"
+                            class="comment-reply-composer comment-reply-composer-nested"
+                            @submit.prevent="submitReply(comment)"
+                          >
+                            <textarea
+                              v-model="replyDraft"
+                              class="comment-input comment-reply-input"
+                              :maxlength="COMMENT_CONTENT_MAX"
+                              :placeholder="`回复 ${reply.nickname}…`"
+                              :disabled="replyPosting"
+                              aria-label="回复内容"
+                              rows="2"
+                            />
+                            <div class="comment-reply-composer-actions">
+                              <button
+                                type="button"
+                                class="btn ghost small"
+                                :disabled="replyPosting"
+                                @click="cancelReply()"
+                              >
+                                取消
+                              </button>
+                              <button
+                                type="submit"
+                                class="btn primary small"
+                                :disabled="!canPostReply"
+                              >
+                                <span v-if="replyPosting" class="spinner" />
+                                <span v-else>发表</span>
+                              </button>
+                            </div>
+                          </form>
                         </div>
                       </template>
                     </li>

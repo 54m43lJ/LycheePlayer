@@ -190,7 +190,7 @@
   </tr>
   <tr>
     <td>评论回复</td>
-    <td>读取使用 <code>GetReplyCommentList</code>，以 <code>RootCmId</code> 定位顶层评论，单页 10 条，游标为最后一条回复的 <code>SeqNo</code>；<code>PageNum</code> 不生效。发表沿用目标类型的 <code>AddComment</code> 参数并追加 <code>RepliedCmId</code>。回复与顶层评论共用 <code>Comment</code> / <code>CommentPage</code>。参数见 <a href="#p4-1">§4.1</a>，字段见 <a href="#p4-3">§4.3</a>。</td>
+    <td>读取使用 <code>GetReplyCommentList</code>，以 <code>RootCmId</code> 定位顶层评论，单页 10 条，游标为最后一条回复的 <code>SeqNo</code>；<code>PageNum</code> 不生效。发表沿用目标类型的 <code>AddComment</code> 参数并追加 <code>RepliedCmId</code>：回复顶层评论时是该评论 CmId，回复某条回复时是该回复 CmId；不需要额外的根评论参数。回复与顶层评论共用 <code>Comment</code> / <code>CommentPage</code>。参数见 <a href="#p4-1">§4.1</a>，字段见 <a href="#p4-3">§4.3</a>。</td>
   </tr>
   <tr>
     <td>回复计数与列表不一致</td>
@@ -328,7 +328,7 @@
   <tr><td>MV 详情</td><td><code>MvService.MvInfoProServer / GetMvInfoList</code></td><td>按 <code>vidlist</code> 获取封面、简介、时长、歌手与播放数。</td></tr>
   <tr><td>MV 取流</td><td><code>gosrf.Stream.MvUrlProxy / GetMvUrls</code></td><td>按 <code>vids</code> 返回各清晰度的 <code>freeflow_url</code>。</td></tr>
   <tr><td>评论点赞</td><td><code>GlobalComment.GlobalCommentWriteServer / UpdateHotComment</code></td><td><code>type</code> 3 点赞、4 取消；需要登录。</td></tr>
-  <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td>歌曲：<code>Content</code> · <code>BizType</code>（1） · <code>BizId</code>（数字歌曲 ID） · <code>BizSubType</code>（2）；MV：<code>BizType</code>（5） · <code>BizId</code>（MV vid），不传 <code>BizSubType</code>；回复评论时额外传 <code>RepliedCmId</code>（顶层评论 CmId）。需要登录，正文字符串上限 300。</td></tr>
+  <tr><td>评论发表</td><td><code>music.globalComment.CommentWriteServer / AddComment</code></td><td>歌曲：<code>Content</code> · <code>BizType</code>（1） · <code>BizId</code>（数字歌曲 ID） · <code>BizSubType</code>（2）；MV：<code>BizType</code>（5） · <code>BizId</code>（MV vid），不传 <code>BizSubType</code>；回复评论时额外传 <code>RepliedCmId</code>（被回复的顶层评论或回复 CmId）。需要登录，正文字符串上限 300。</td></tr>
   <tr><td>会话续期（QQ 网页登录）</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>携带旧 <code>musickey</code>、<code>expired_in</code>、<code>access_token</code>、<code>refresh_token</code>、<code>openid</code> 与数字 <code>musicid</code> 换新 <code>musickey</code>；缺少 OAuth 字段时只传 <code>musicid</code> + <code>musickey</code> 会被上游以 10006 拒绝。旧 key 已过期时仍可尝试恢复。</td></tr>
   <tr><td>微信会话续期</td><td><code>music.login.LoginServer / Login</code></td><td><code>loginMode=2</code>，用 <code>refresh_token</code> / <code>access_token</code> / <code>openid</code> 换新 <code>musickey</code>；<code>comm.tmeLoginType=1</code>。</td></tr>
   <tr><td>QQ 登录换证</td><td><code>QQConnectLogin.LoginServer / QQLogin</code></td><td>用 OAuth <code>code</code> 换取登录凭证。</td></tr>
@@ -423,7 +423,7 @@
   </tr>
   <tr>
     <td>评论发表 / 回复</td>
-    <td><code>Content</code>（≤300 字） · <code>BizType</code>（1 歌曲 / 5 MV） · <code>BizId</code>（歌曲数字 ID 或 MV vid） · <code>BizSubType</code>（歌曲 2；MV 不传） · <code>RepliedCmId</code>（仅回复时传，顶层评论 CmId）</td>
+    <td><code>Content</code>（≤300 字） · <code>BizType</code>（1 歌曲 / 5 MV） · <code>BizId</code>（歌曲数字 ID 或 MV vid） · <code>BizSubType</code>（歌曲 2；MV 不传） · <code>RepliedCmId</code>（仅回复时传，被回复的顶层评论或回复 CmId）</td>
   </tr>
   <tr>
     <td>歌手详情</td>

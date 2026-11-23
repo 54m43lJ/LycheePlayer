@@ -4409,6 +4409,14 @@ button:focus-visible,
   font-size: 11px;
 }
 
+.comment-reply-composer-nested {
+  margin-top: 5px;
+}
+
+.comment-reply-composer-nested .comment-reply-input {
+  height: 40px;
+}
+
 .comment-reply-composer-actions {
   display: flex;
   justify-content: flex-end;
