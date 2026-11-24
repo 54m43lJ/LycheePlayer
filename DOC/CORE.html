@@ -275,7 +275,7 @@
   </tr>
   <tr>
     <td>单行文本溢出</td>
-    <td>所有单行、非固定宽度的展示文字统一使用 <a href="#c4-38">MarqueeText</a>；多行文本、可编辑输入框与固定尺寸控件不要求。特例：<a href="#c4-23">§4.23</a> 的播放队列歌名与侧栏账号昵称 / musicid / 最近歌单名、<a href="#c4-40">§4.40</a> 的播放条歌手·专辑行、<a href="#c4-42">§4.42</a> 的顶层评论昵称、<a href="#c4-77">§4.77</a> 的歌单选择器名称保持单行省略；其余单行展示文字不得另写 <code>text-overflow: ellipsis</code>。</td>
+    <td>所有单行、非固定宽度的展示文字统一使用 <a href="#c4-38">MarqueeText</a>；多行文本、可编辑输入框与固定尺寸控件不要求。已登记的特例见 <a href="#c4-23">§4.23</a>、<a href="#c4-40">§4.40</a>、<a href="#c4-42">§4.42</a> 与 <a href="#c4-77">§4.77</a>；其余单行展示文字不得另写 <code>text-overflow: ellipsis</code>。</td>
   </tr>
   <tr>
     <td>本地筛选</td>
@@ -1998,7 +1998,7 @@ const emit = defineEmits&lt;{
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
   <li><code>.song-title &gt; .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。副标题内部的 <code>MarqueeText</code> 宽度 100%，不受该规则影响。</li>
   <li><code>.song-subtitle</code> 为歌名后的副标题：11px、400 字重、<code>--muted</code> 色、左间距 6px；外层承担 <code>flex: 0 1000 auto</code> + <code>min-width: 4em</code>，内部 <code>MarqueeText</code> 宽度 100%，溢出时滚动。收缩优先级远高于歌名：空间不足时先把副标题压到最小宽度，之后才压缩歌名。播放条标题行已有 8px gap，<code>.player-title-row .song-subtitle</code> 取消左边距；歌词 / 评论头部标题下的副标题为 12px。发现页歌名行由 <code>.discover-title</code> 以 flex 包裹歌名与副标题。</li>
-  <li><code>text-overflow: ellipsis</code> 只保留给 <a href="#c2">§2</a> 登记的单行特例（侧栏账号 / 最近歌单、播放队列歌名、播放条歌手·专辑行、歌单选择器名称、顶层评论昵称）与骨架 / 多行 clamp 等非展示文本；其余单行展示文字由 <code>MarqueeText</code> 承担滚动。</li>
+  <li><code>text-overflow: ellipsis</code> 只保留给各组件章节登记的单行特例、骨架与多行 clamp 等非展示文本；其余单行展示文字由 <code>MarqueeText</code> 承担滚动。</li>
   <li>可播状态角标复用 <code>.quality-badge</code>：<code>.unavailable</code> 使用 <code>--danger</code> 边框与文字，<code>.trial</code> 使用 <code>--accent-strong</code> 边框与文字；付费墙不新增行级样式，仍以 <code>.pay-badge</code> 表达 VIP / 数字专辑 / 付费。</li>
   <li><code>.player-title</code> 与歌曲表标题相同，使用 <code>flex: 0 1 auto</code>；标题行宽度由较长的歌手行或可用宽度决定时，短歌名仍按内容宽度显示，<code>.quality-mark</code> / <code>.mv-mark</code> 紧随其后，长歌名才收缩并滚动。</li>
   <li><code>.mv-mark</code> 为 26×18px、5px 圆角的长方形入口，边框与底色使用 accent，内嵌的 13px 播放三角由 <a href="#c4-108">MvButton</a> 的 <code>size</code> prop 控制。歌曲表 <code>.song-mv</code> 与队列 <code>.queue-mv</code> 使用 6px 左间距；队列 <code>.song-title</code> 改为 flex，歌名由 <code>.queue-title</code> 单独省略，MV 图标不被压缩。</li>
