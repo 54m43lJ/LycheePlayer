@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import type { AlbumDetail } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import CatalogDescription from '../components/CatalogDescription.vue'
@@ -16,7 +16,6 @@ import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 
 const route = useRoute()
-const router = useRouter()
 const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
@@ -121,7 +120,7 @@ watch(mid, () => void load(), { immediate: true })
               <AppIcon name="play" :size="15" />
               播放全部
             </button>
-            <button class="btn ghost" @click="router.push('/search')">返回搜索</button>
+            <button class="btn ghost" @click="goBack()">返回</button>
           </div>
         </div>
       </section>
