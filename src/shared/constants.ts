@@ -66,8 +66,8 @@ export const RECENT_PLAYLIST_VALIDATE_MS = 5000
 
 /** 歌曲详情并发（批量详情缺失时的单曲兜底）。推荐值 2。 */
 export const SONG_DETAIL_CONCURRENCY = 2
-/** 批量歌曲详情单次请求上限。推荐值 50。 */
-export const SONG_DETAIL_BATCH = 50
+/** 批量歌曲详情单次请求上限；上游超过 100 会静默截断或断开连接。推荐值 100。 */
+export const TRACK_INFO_BATCH_MAX = 100
 /** 相邻两次 vkey 请求的最小间隔；一次 vkey 请求只取一首歌。推荐值 300 ms。 */
 export const VKEY_MIN_INTERVAL_MS = 300
 

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { SONG_DETAIL_BATCH } from '../../src/shared/constants'
+import { TRACK_INFO_BATCH_MAX } from '../../src/shared/constants'
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp', getAppPath: () => '/tmp' },
@@ -90,8 +90,8 @@ describe('api/song batch detail', () => {
     expect(songs.map((song) => song.songMid)).toEqual(['m1', 'm2'])
   })
 
-  it('splits large batches by SONG_DETAIL_BATCH', async () => {
-    const mids = Array.from({ length: SONG_DETAIL_BATCH + 1 }, (_, index) => `m${index}`)
+  it('splits large batches at the upstream 100-song limit', async () => {
+    const mids = Array.from({ length: TRACK_INFO_BATCH_MAX + 1 }, (_, index) => `m${index}`)
     musicuMock.mockImplementation(
       async (_module: string, _method: string, param: { mids: string[] }) => ({
         tracks: param.mids.map((mid) => rawTrack(mid))
@@ -103,16 +103,16 @@ describe('api/song batch detail', () => {
 
     expect(musicuMock).toHaveBeenCalledTimes(2)
     expect((musicuMock.mock.calls[0][2] as { mids: string[] }).mids).toHaveLength(
-      SONG_DETAIL_BATCH
+      TRACK_INFO_BATCH_MAX
     )
     expect((musicuMock.mock.calls[1][2] as { mids: string[] }).mids).toEqual([
-      `m${SONG_DETAIL_BATCH}`
+      `m${TRACK_INFO_BATCH_MAX}`
     ])
-    expect(songs).toHaveLength(SONG_DETAIL_BATCH + 1)
+    expect(songs).toHaveLength(TRACK_INFO_BATCH_MAX + 1)
   })
 
-  it('sends two full 50-song batches sequentially with rate-limit spacing', async () => {
-    const mids = Array.from({ length: SONG_DETAIL_BATCH * 2 }, (_, index) => `n${index}`)
+  it('sends two full batches sequentially without overlapping', async () => {
+    const mids = Array.from({ length: TRACK_INFO_BATCH_MAX * 2 }, (_, index) => `n${index}`)
     const simulatedLatencyMs = 300
     const callTimes: number[] = []
     musicuMock.mockImplementation(
@@ -130,8 +130,8 @@ describe('api/song batch detail', () => {
     expect(musicuMock).toHaveBeenCalledTimes(2)
     const first = musicuMock.mock.calls[0][2] as { mids: string[] }
     const second = musicuMock.mock.calls[1][2] as { mids: string[] }
-    expect(first.mids).toEqual(mids.slice(0, SONG_DETAIL_BATCH))
-    expect(second.mids).toEqual(mids.slice(SONG_DETAIL_BATCH))
+    expect(first.mids).toEqual(mids.slice(0, TRACK_INFO_BATCH_MAX))
+    expect(second.mids).toEqual(mids.slice(TRACK_INFO_BATCH_MAX))
     expect(callTimes[1] - callTimes[0]).toBeGreaterThanOrEqual(simulatedLatencyMs - 50)
     expect(songs.map((song) => song.songMid)).toEqual(mids)
   })

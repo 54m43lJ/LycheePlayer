@@ -291,7 +291,7 @@ export function songFlags(song: { action?: { icons?: number | null } | null }) {
 补充约束：
 
 - `switch` 与账号/地区强相关。登录、退出、切换账号、切换网络出口后，已缓存的 `switch` 会过期；这些时点应让歌单/详情缓存失效或至少重新拉取当前列表。
-- 歌单 / 「我喜欢」列表的 `action.switch` 不能直接写进 `Song.playSwitch`。即使列表与详情大多一致，也可能出现本轮的 10 首「列表可播、详情不可播」；应按当前可见页用 `CgiGetTrackInfo` 批量复核（50 首 / 请求），只把详情侧的 `action.switch`、`file.size_try`、`pay` 字段写入 `Song`，列表字段继续用于顺序和基础元数据。
+- 歌单 / 「我喜欢」列表的 `action.switch` 不能直接写进 `Song.playSwitch`。即使列表与详情大多一致，也可能出现本轮的 10 首「列表可播、详情不可播」；应按当前可见页用 `CgiGetTrackInfo` 批量复核（100 首 / 请求），只把详情侧的 `action.switch`、`file.size_try`、`pay` 字段写入 `Song`，列表字段继续用于顺序和基础元数据。
 - 不要为了判灰去批量申请 vkey。`switch` 已经包含当前上下文的可播权益；vkey 只在真正播放/下载时请求。详情侧的 `switch` 与 vkey 的 `auth_switch` 在本轮样本中完全一致，可作为对照证据。
 - `switch` 在某些响应里可能缺失或为 0；官方此时会回退到 `403`（`403` 解码后 `play_lq = 1`，即当作可播）。本项目建议按 `unknown` 保守处理，避免把未知误判成灰；若要和网页端完全一致，可在 `raw == null || raw === 0` 时改用 403。
 - `switch` 是官方网页客户端的实现细节，不是公开契约；上游改位表时以实际页面行为为准。

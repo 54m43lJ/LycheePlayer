@@ -51,6 +51,7 @@
 │   │   │   ├── <a href="#c4-75">artist.ts</a>                歌手详情与歌曲分页
 │   │   │   ├── <a href="#c4-76">album.ts</a>                 专辑详情与歌曲分页
 │   │   │   ├── <a href="#c4-11">song.ts</a>                  歌曲详情与播放链接
+│   │   │   ├── <a href="#c4-112">track-info.ts</a>            批量歌曲详情封装
 │   │   │   ├── <a href="#c4-110">vkey.ts</a>                  vkey 专用安全取流入口
 │   │   │   ├── <a href="#c4-12">playlist.ts</a>              歌单
 │   │   │   ├── <a href="#c4-13">user.ts</a>                  用户资料
@@ -277,7 +278,7 @@
   </tr>
   <tr>
     <td>可播性判定</td>
-    <td>列表不申请 vkey；<code>SongPlayState</code> 由 <a href="#c4-105">§4.105</a> 的 <code>songPlayState()</code> 从 <code>Song</code> 元数据（<code>status</code> / <code>action.switch</code> / <code>pay_play</code> / <code>pay_down</code> / <code>file.size_try</code>）派生，只作为展示与按钮启用依据。实际可播性仍以播放时取流结果为准，失败由 <code>NO_STREAM</code> 沿队列兜底。</td>
+    <td>列表不申请 vkey；<code>SongPlayState</code> 由 <a href="#c4-105">§4.105</a> 的 <code>songPlayState()</code> 从 <code>Song</code> 元数据（<code>status</code> / <code>action.switch</code> / <code>pay_play</code> / <code>pay_down</code> / <code>file.size_try</code>）派生，只作为展示与按钮启用依据。歌单 / 「我喜欢」列表的 <code>action.switch</code> 可能是过期快照，必须由 <a href="#c5-10">§5.10</a> 的详情权益复核覆盖后才能用于派生；详见 <code>DOC/reference/qq-music-web/playability.md</code>。实际可播性仍以播放时取流结果为准，失败由 <code>NO_STREAM</code> 沿队列兜底。</td>
   </tr>
   <tr>
     <td>vkey 请求</td>
@@ -1158,7 +1159,8 @@ function buildStreamUrl(purl: string): string;
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
   <li><code>toSong</code> 映射 <code>status</code>、<code>pay_play</code>、<code>pay_down</code>、<code>action.switch</code>、<code>file.size_try</code> 与 <code>file.try_begin</code> / <code>try_end</code>（缺失为 <code>null</code>），并按 <code>file.size_flac</code> → <code>size_320mp3</code> → <code>size_128mp3</code> 取第一个非零档写入 <code>maxQuality</code>。该字段只表示曲库存在该档，不代表当前账号可取流；可播状态派生见 <a href="#c4-105">§4.105</a>。<code>PayInfo.free</code> 在 <code>pay_play</code> 与 <code>pay_down</code> 都不为 1 且非数字专辑时为真，<code>vip</code> 仍表示 <code>pay_play = 1</code> 的播放付费墙。<code>mv.vid</code>（缺失时回退扁平 <code>vid</code>）写入 <code>mvId</code>，无绑定为空字符串。</li>
   <li><code>getMvId</code> 供播放条补查搜索 / 推荐等未携带绑定的歌曲：优先读 <code>trackMetaCache</code>，未命中时用 <code>fetchTracksById</code> 单曲拉取详情并缓存 <code>mediaMid</code> / <code>pay</code> / <code>mvId</code>；取流与下载共用该缓存，因此播放开始后查询通常不产生额外上游请求。上游未提供绑定或详情失败时返回空字符串，不按歌名模糊匹配。</li>
-  <li><code>fetchTrackBatch</code> 按 <code>SONG_DETAIL_BATCH = 50</code> 分块调用 <code>music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo</code>（<code>mids</code> / <code>types</code> / <code>modify_stamp</code> / <code>ctx</code> / <code>client</code>），按 <code>mid</code> 建索引；<code>fetchTracksById</code> 先走批量详情，仅对缺失歌曲用 <code>SONG_DETAIL_CONCURRENCY = 2</code> 单曲兜底；<code>getDetail</code> 与 <code>resolveStreams</code> 共用该入口。</li>
+  <li><code>fetchTracksById</code> 直接调用 <a href="#c4-112">§4.112</a> 的 <code>fetchTrackInfoByMids()</code>，批量分片与缺口单曲兜底都在该封装内；本文件不再自行实现 <code>CgiGetTrackInfo</code> 请求。<code>getDetail</code> / <code>getMvId</code> / <code>resolveStreams</code> 共用该入口，返回 Map 中缺失的歌曲按各自语义报错或跳过。</li>
+  <li><code>applyTrackEntitlements(song, raw)</code> 用详情侧 <code>action.switch</code>、<code>pay</code>、<code>status</code> 与试听字段覆盖列表歌曲，保留列表的顺序、标题、歌手、专辑与封面等展示元数据；供 <a href="#c4-12">§4.12</a> 的歌单权益复核使用。</li>
   <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。播放取源优先级固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”，与 <a href="#c4-59">§4.59</a> 的 <code>handleStream</code> 顺序一致。</li>
   <li>显示名优先 <code>title.trim()</code>，为空时回退 <code>name.trim()</code>；专辑名与歌手名同样 <code>trim()</code>，避免尾部空白把 VIP / 音质徽标推离标题。<code>title</code> 含 Explicit / Remix 等版本标签，<code>name</code> 是基础名；原始响应没有独立标签布尔字段。</li>
   <li>歌手映射：<code>singer[]</code> 成员只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空；只有 <code>name</code> 为空的成员被丢弃，不因缺少 <code>mid</code> 丢名字。列表响应缺名字时，歌曲进入可见列表后可用 <code>getDetail</code> 的 <code>track_info.singer[]</code> 补全；补全结果不改变播放队列。</li>
@@ -1184,6 +1186,8 @@ export function listMine(): Promise&lt;PlaylistMeta[]&gt;;
 </code></pre>
 <ul class="note">
   <li><code>fetchPlaylistPage</code> 只负责轻量首页 / 最近歌单校验；<code>start</code> 按 <code>PLAYLIST_PAGE_SIZE = 50</code> 对齐，超出 <code>PLAYLIST_PAGE_MAX</code> 时返回 <code>UPSTREAM_CHANGED</code>。</li>
+  <li>列表响应只提供顺序与基础元数据；<code>requestPage</code> 映射歌曲后调用 <a href="#c4-112">§4.112</a> 的 <code>fetchTrackInfoByMids()</code>，用详情侧 <code>action.switch</code>、<code>pay</code>、<code>status</code> 与试听字段覆盖每首歌，再返回并写入缓存。歌单 / 「我喜欢」列表的 <code>action.switch</code> 可能是过期快照，不直接用于判灰；详情缺失的歌曲保留列表字段。</li>
+  <li><code>fetchPlaylistMeta(id)</code> 只取元数据并跳过权益复核，供改名 / 删除等写操作读取 <code>dirId</code>，避免这些操作触发整页详情请求。</li>
   <li>普通歌单的 <code>editable</code> 由 <code>canEdit(data)</code> 判定：未登录返回 <code>false</code>；<code>dirinfo.owndir === 1</code> 返回 <code>true</code>；字段缺失或为 0 时回退比较当前登录 <code>musicid</code> 与 <code>dirinfo.creator.musicid</code> / <code>dirinfo.host_uin</code>，匹配才可编辑。「我喜欢」固定 <code>editable: true</code>，公开 / 他人歌单为 <code>false</code>。</li>
   <li><code>listMine</code> 从 <code>dirId</code> / <code>dirid</code> 回填 <code>PlaylistMeta.dirId</code>，<code>CgiGetDiss</code> 从 <code>dirinfo.dirid</code> 回填；「我喜欢」固定为 <code>201</code>，公开歌单缺失时保持 <code>undefined</code>。创建歌单的 <code>id</code> / <code>dirId</code> 取值见 <a href="#c4-55">§4.55</a>。</li>
   <li>固定收藏歌单 ID 统一引用 <code>FAVORITES_PLAYLIST_ID = 'liked'</code>（<a href="#c4-50">§4.50</a>），模块内不再保留本地 <code>FAVORITES_ID</code> 字面量；收藏分支判断与收藏歌单元数据都使用该共享常量。</li>
@@ -2012,7 +2016,7 @@ export declare const RECENT_PLAYLIST_LIMIT: number;          // 5
 export declare const RECENT_PLAYLIST_CHECK_THROTTLE_MS: number; // 5000 ms
 export declare const RECENT_PLAYLIST_STORAGE_PREFIX: string; // 'lychee:recent-playlists:'
 export declare const SIDEBAR_DRAG_THRESHOLD_PX: number;      // 48 px
-export declare const SONG_DETAIL_BATCH: number;             // 50；批量详情单次上限
+export declare const TRACK_INFO_BATCH_MAX: number;          // 100；批量详情单次上限
 export declare const SONG_DETAIL_CONCURRENCY: number;       // 2；仅用于批量缺口的单曲兜底
 export declare const VKEY_MIN_INTERVAL_MS: number;           // 300 ms；相邻 vkey 请求最小间隔
 export declare const DOWNLOAD_POLL_MS: number;              // 1500 ms
@@ -2074,7 +2078,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li>所有工程常量只在本文件声明；其它模块只 import。源码中是实际赋值，本签名只保留名称与取值。</li>
   <li><code>AUDIO_CACHE_LIMIT_STEPS_BYTES</code> 提供设置页 6 个固定档位；<code>normalizeAudioCacheLimitBytes</code> 对合法档位原样返回，越界 / 非档位值归一到最近档位，非法值回退默认档；<code>AUDIO_CACHE_MAX_BYTES</code> 作为默认 / 最大档位。</li>
   <li><code>VKEY_MIN_INTERVAL_MS = 300</code> 为相邻两次 vkey 请求的最小间隔，由 <a href="#c4-110">§4.110</a> 串行保证；一次 vkey 请求只携带一首歌，<code>song.getUrls</code> 的多首歌曲逐首解析。</li>
-  <li><code>SONG_DETAIL_BATCH = 50</code> 为批量详情单次上限；<code>SONG_DETAIL_CONCURRENCY = 2</code> 仅用于批量缺口的单曲兜底。</li>
+  <li><code>TRACK_INFO_BATCH_MAX = 100</code> 为批量详情单次上限；上游超过 100 会静默截断或断开连接，因此封装内固定该值，不向调用方暴露。取值依据见 <a href="#c4-112">§4.112</a> 与 <code>DOC/reference/qq-music-web/playability.md</code>。</li>
   <li><code>COMMENT_PAGE_SIZE = 25</code> 为上游实测单页上限（26 起返回业务码 <code>10000</code>）；<code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 使“跳转到底部”最多补拉约 1000 条，并保持串行请求与取消机制；<code>COMMENT_CONTENT_MAX = 300</code> 同时约束输入框 <code>maxlength</code>、渲染层提交校验与主进程 IPC 参数校验；<code>COMMENT_HOT_REPLY_LIMIT = 3</code> 为每条评论取点赞数最高的回复热评条数；<code>COMMENT_HOT_REPLY_MIN_LIKES = 3</code> 为热评的最低点赞数，点赞数不超过该值的回复不纳入热评。</li>
   <li><code>CATALOG_PAGE_SIZE = 50</code> 用于歌手 / 专辑歌曲分页；<code>ARTIST_ALBUM_PAGE_SIZE = 80</code> 为上游专辑列表单页上限，<code>ARTIST_ALBUM_PAGE_MAX = 20</code> 限制歌手页一次展开专辑最多补拉 1600 张。</li>
   <li><code>UPSTREAM_BLOCK_MS</code> 为收到 104009 后的全局截断时长（推荐 60_000 ms），窗口内所有上游请求直接失败、下载泵暂停出队；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限。全局限速已移除，应用侧只对 vkey 限速。</li>
@@ -2147,11 +2151,11 @@ export function removeSongs(id: string, mids: string[]): Promise&lt;PlaylistMuta
 </code></pre>
 <ul class="note">
   <li>创建：<code>music.musicasset.PlaylistBaseWrite / AddPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirName }</code>；要求 <code>data.retCode === 0</code> 且 <code>result.dirId</code> / <code>result.tid</code> 为正整数；返回 <code>id = String(result.tid)</code>（歌单标识）、<code>dirId = result.dirId</code>（目录 ID），两者不能互换；名称最多 20 个 JS 字符。</li>
-  <li>改名：先用 <code>fetchPlaylistPage</code> 读取当前 <code>dirId</code>，再调用 <code>PlaylistBaseWrite / EditPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirNewName, dirShow: 1, mask: 1 }</code>；成功后返回 <code>readMeta</code> 得到的最新 <code>PlaylistMeta</code>。</li>
+  <li>改名：先用 <code>fetchPlaylistMeta</code> 只读取当前 <code>dirId</code>，不触发歌曲权益复核，再调用 <code>PlaylistBaseWrite / EditPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirNewName, dirShow: 1, mask: 1 }</code>；成功后返回 <code>readMeta</code> 得到的最新 <code>PlaylistMeta</code>。</li>
   <li>删除：先用 <code>readMeta</code> 读取当前 <code>dirId</code>，再调用 <code>PlaylistBaseWrite / DelPlaylist</code>，参数 <code>{ bFmtUtf8: 1, dirId, dirName }</code>；只允许当前账号自建、非 <code>201</code> 的普通歌单；删除成功后由主进程清理该歌单缓存，列表刷新由渲染层重新加载。</li>
   <li>增删歌曲：<code>music.musicasset.PlaylistDetailWrite / AddSonglist | DelSonglist</code>，参数 <code>{ dirId, tid, bFmtUtf8: 1, v_songInfo: [{ songId, songType }] }</code>；<code>dirId</code> 是当前账号目录 ID，<code>tid</code> 是歌单标识，不能混用；<code>songId</code> 必须为数字 ID 且 <code>songType</code> 取歌曲详情真实值，每批最多 100 首。<code>dirId:201</code> 的收藏写入走签名加密通道，见 <a href="#c4-54">§4.54</a>。</li>
   <li>写入前不做整单成员预扫描或重复检查：<code>addSongs</code> / <code>removeSongs</code> 只读取一次歌单元数据、批量获取歌曲身份并提交写入；重复 / 不存在由 <code>80092</code> 与写后统一刷新确认，耗时不再随歌单长度线性增长。</li>
-  <li><code>removeSongs</code> 的归属前置校验由详情接口的 <code>editable</code> 提供；写入前先 <code>readMeta</code> 取 <code>dirId</code>，再用 <code>fetchTrackIdentities</code> 取得数字 <code>songId</code> 与真实 <code>songType</code>，提交 <code>DelSonglist</code>；不读回成员，<code>80092</code> 视为 <code>changed:false</code>，写后刷新由 <code>stores/playlist-edit</code> 统一负责。</li>
+  <li><code>removeSongs</code> 的归属前置校验由详情接口的 <code>editable</code> 提供；写入前先 <code>readMeta</code> 取 <code>dirId</code>，再用 <code>fetchTrackIdentities</code> 调用 <a href="#c4-112">§4.112</a> 的 <code>fetchTrackInfoByMids()</code> 取得数字 <code>songId</code> 与真实 <code>songType</code>，提交 <code>DelSonglist</code>；不读回成员，<code>80092</code> 视为 <code>changed:false</code>，写后刷新由 <code>stores/playlist-edit</code> 统一负责。</li>
   <li><strong>写后刷新职责：</strong>增删歌曲只负责写入并返回 <code>PlaylistMutationResult { changed }</code>；<code>80092</code> 视为状态未变化并返回 <code>changed:false</code>。写后歌单内容 / 计数刷新统一由 <code>stores/playlist-edit</code> 调用现有 <code>playlist.invalidate(id)</code> + <code>playlist.poll(id)</code> 完成；不得在写 API 内单独实现整单扫描、尾部读回或其他刷新流程。</li>
   <li>业务码 <code>1000</code> 映射 <code>AUTH_EXPIRED</code>，<code>80105</code> / 权限不足映射 <code>NO_PERMISSION</code>，结构缺失映射 <code>UPSTREAM_CHANGED</code>；不新增错误码。</li>
 </ul>
@@ -3167,6 +3171,21 @@ export function buildCommentSections(
   <li><code>count</code> 供常驻标题栏使用：热评区块为实际热评条数，评论区块为上游总数 <code>latestTotal</code>（缺省取已加载条数）。<a href="#c4-42">CommentsPanel</a> 按返回顺序渲染区块标题与条目；测试见 <code>test/comment-sections.test.ts</code>。</li>
 </ul>
 
+<h3 id="c4-112">4.112 src/main/api/track-info.ts <a class="backlink" href="#c1">文件树</a></h3>
+<pre><code>export interface RawTrack { /* 上游详情 / 列表共用的原始歌曲字段 */ }
+
+export async function fetchTrackInfoByMids(
+  mids: string[]
+): Promise&lt;Map&lt;string, RawTrack&gt;&gt;;
+</code></pre>
+<ul class="note">
+  <li>批量详情唯一入口：内部去重、过滤空白 mid、按 <code>TRACK_INFO_BATCH_MAX = 100</code> 分片串行请求 <code>CgiGetTrackInfo</code>；调用方只传任意数量的 mid，不暴露分片大小。</li>
+  <li>上游实测：1–100 首正常返回；110–160 首只返回前 100 首且 <code>code = 0</code>；180 首及以上会断开 HTTP/2 会话。因此固定 100，不提供调大入口。</li>
+  <li>批量响应缺失的歌曲用 <code>get_song_detail_yqq</code> 单曲兜底，并发为 <code>SONG_DETAIL_CONCURRENCY = 2</code>；仍缺失的歌曲不放入返回 Map，由调用方按各自语义报错或跳过。</li>
+  <li>只读详情，不申请 vkey，也不需要 300ms 间隔；<code>CgiGetTrackInfo</code> 没有客户端限速，封装内只是顺序 <code>await</code>。</li>
+  <li>调用方：<a href="#c4-11">§4.11</a> 的 <code>getDetail</code> / <code>getMvId</code> / <code>resolveStreams</code>，<a href="#c4-55">§4.55</a> 的写入身份解析，以及 <a href="#c4-12">§4.12</a> 的歌单 / 我喜欢权益复核。</li>
+</ul>
+
 <h2 id="c5">5. Call stack tree</h2>
 <p><a href="#top">↑</a></p>
 
@@ -3536,7 +3555,10 @@ api/client::musicu(...)
     ├── window.lychee.playlist.get(id, { offset: 0 })
     │   └── ipc::handle('playlist.get')
     │       └── api/playlist::fetchPlaylistPage(id, 0)
-    │           └── api/client::musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', ...)
+    │           ├── api/client::musicu('music.srfDissInfo.DissInfo', 'CgiGetDiss', ...)
+    │           └── api/track-info::fetchTrackInfoByMids(本页 mids)
+    │               ├── api/client::musicu('music.trackInfo.UniformRuleCtrl', 'CgiGetTrackInfo', ...)
+    │               └── 批量缺失 → api/track-info::fetchTrack(mid)（单曲兜底）
     └── stores/playlist::complete(id, songs.length)
         ├── 逐页调用 playlist.get(id, { offset })
         └── 每页成功 → window.lychee.playlist.saveCache(id, snapshot, complete)
@@ -3544,6 +3566,7 @@ api/client::musicu(...)
 </code></pre>
 <ul class="note">
   <li>缓存只有整份快照，没有页级缓存与预取；<code>listMine</code> 不再触发任何预取。字节上限见 <a href="#c4-50">§4.50</a>。</li>
+  <li>每页列表响应先映射为 <code>Song</code>，再用 <code>fetchTrackInfoByMids()</code> 的详情权益覆盖 <code>action.switch</code> / <code>pay</code> / <code>status</code> / 试听字段，最后才返回并写入快照。列表只负责顺序与展示元数据，不能直接作为判灰依据；缺失详情时保留列表字段。</li>
   <li>进入歌单先读整份缓存并标记 <code>stale</code>；第一页网络请求成功后替换缓存内容并继续补页。每页成功即写整份快照，<code>complete</code> 标记该快照是否完整。</li>
   <li>完整缓存可作为临时队列快照；不完整缓存只作临时展示，并继续加载。加载中断、空页停滞、<code>hasMore=false</code> 但数量不足都会置 <code>error</code> / <code>complete=false</code>。</li>
 </ul>
@@ -3567,6 +3590,7 @@ player::loadAndPlay(song)
 <ul class="note">
   <li>列表只读 <code>Song</code> 元数据派生状态，不申请 vkey；只有真实播放与下载调用 <code>song.getUrls</code>。</li>
   <li>元数据判定只用于展示与按钮启用；实际可播性仍由播放时取流决定，失败沿队列向后尝试。<code>advance()</code> / <code>previous()</code> 跳过不可播与付费墙，未知状态与试听照常尝试。</li>
+  <li>歌单 / 「我喜欢」列表的 <code>switch</code> 可能是过期快照；加载时已按 <a href="#c5-10">§5.10</a> 用批量详情覆盖，判定本身不再区分数据来源。</li>
   <li><code>switch</code> 是官方网页客户端的实现细节，不是公开契约；上游变更位表时以实际页面行为为准。</li>
 </ul>
 

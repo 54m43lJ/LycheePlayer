@@ -1,46 +1,14 @@
 import type { PayInfo, Quality, Song, UrlResult } from '../../shared/types'
-import { IPC_SONG_MIDS_MAX, SONG_DETAIL_BATCH, SONG_DETAIL_CONCURRENCY } from '../../shared/constants'
+import { IPC_SONG_MIDS_MAX } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { resolveDownloadedAudio } from '../download/registry'
 import { audioStreamUrl } from '../media/audio-protocol'
-import { UpstreamError, musicu } from './client'
+import { UpstreamError } from './client'
 import { fetchVkey } from './vkey'
 import { getVipStatus } from './user'
+import { fetchTrackInfoByMids, type RawTrack } from './track-info'
 
-interface RawSong {
-  id?: number | string
-  mid?: string
-  name?: string
-  title?: string
-  interval?: number
-  status?: number
-  vid?: string
-  mv?: { id?: number | string; vid?: string; name?: string; title?: string }
-  singer?: Array<{ mid?: string; name?: string }>
-  album?: { mid?: string; name?: string }
-  action?: {
-    switch?: number | string
-    icons?: number
-  }
-  pay?: {
-    pay_play?: number
-    pay_down?: number
-    price_album?: number
-  }
-  file?: {
-    media_mid?: string
-    size_128mp3?: number
-    size_320mp3?: number
-    size_flac?: number
-    size_try?: number
-    try_begin?: number
-    try_end?: number
-  }
-}
-
-interface RawTrackInfo extends RawSong {
-  file?: RawSong['file']
-}
+type RawSong = RawTrack
 
 interface TrackMeta {
   mediaMid: string
@@ -126,7 +94,23 @@ function toSong(raw: RawSong): Song {
   }
 }
 
-function trackMeta(raw: RawTrackInfo, fallbackMid: string): TrackMeta {
+/** 用详情侧权益覆盖列表歌曲；顺序、标题、专辑等展示元数据仍来自列表。 */
+export function applyTrackEntitlements(song: Song, raw: unknown): Song {
+  const detail = toSong(raw as RawTrack)
+  return {
+    ...song,
+    status: detail.status,
+    pay: detail.pay,
+    pay_play: detail.pay_play,
+    payDown: detail.payDown,
+    playSwitch: detail.playSwitch,
+    sizeTry: detail.sizeTry,
+    tryStartMs: detail.tryStartMs,
+    tryEndMs: detail.tryEndMs
+  }
+}
+
+function trackMeta(raw: RawTrack, fallbackMid: string): TrackMeta {
   const song = toSong(raw)
   return {
     mediaMid: raw.file?.media_mid ?? fallbackMid,
@@ -135,78 +119,9 @@ function trackMeta(raw: RawTrackInfo, fallbackMid: string): TrackMeta {
   }
 }
 
-/** 单曲详情兜底：批量详情缺少某首歌时再单独请求。 */
-async function fetchTrack(mid: string): Promise<RawTrackInfo> {
-  const data = await musicu<{ track_info?: RawTrackInfo }>(
-    'music.pf_song_detail_svr',
-    'get_song_detail_yqq',
-    { song_mid: mid }
-  )
-  if (!data.track_info) {
-    throw new UpstreamError('UPSTREAM_CHANGED', `歌曲详情缺少 track_info：${mid}`)
-  }
-  const mediaMid = data.track_info.file?.media_mid
-  if (mediaMid) {
-    trackMetaCache.set(mid, trackMeta(data.track_info, mid))
-  }
-  return data.track_info
-}
-
-/** 一次请求取回多首歌曲详情；按 mid 建立索引，响应顺序不影响结果。 */
-async function fetchTrackBatch(mids: string[]): Promise<Map<string, RawTrackInfo>> {
-  const result = new Map<string, RawTrackInfo>()
-  for (let start = 0; start < mids.length; start += SONG_DETAIL_BATCH) {
-    const batch = mids.slice(start, start + SONG_DETAIL_BATCH)
-    const data = await musicu<{ tracks?: RawTrackInfo[] }>(
-      'music.trackInfo.UniformRuleCtrl',
-      'CgiGetTrackInfo',
-      {
-        types: batch.map(() => 0),
-        modify_stamp: batch.map(() => 0),
-        ctx: 0,
-        client: 1,
-        mids: batch
-      }
-    )
-    if (!Array.isArray(data.tracks)) {
-      throw new UpstreamError('UPSTREAM_CHANGED', '批量歌曲详情响应缺少 tracks')
-    }
-    for (const track of data.tracks) {
-      if (track.mid) result.set(track.mid, track)
-    }
-  }
-  return result
-}
-
-/** 批量详情 + 缺口单曲兜底，返回按 mid 索引的原始歌曲。 */
-async function fetchTracksById(mids: string[]): Promise<Map<string, RawTrackInfo>> {
-  const unique = [...new Set(mids.filter(Boolean))]
-  if (unique.length === 0) return new Map()
-  const result = await fetchTrackBatch(unique)
-  const missing = unique.filter((mid) => !result.has(mid))
-  if (missing.length > 0) {
-    const fallback = await mapLimit(missing, SONG_DETAIL_CONCURRENCY, fetchTrack)
-    missing.forEach((mid, index) => result.set(mid, fallback[index]))
-  }
-  return result
-}
-
-async function mapLimit<T, R>(
-  items: T[],
-  limit: number,
-  worker: (item: T) => Promise<R>
-): Promise<R[]> {
-  const results = new Array<R>(items.length)
-  let cursor = 0
-  const runners = Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, async () => {
-    while (cursor < items.length) {
-      const index = cursor
-      cursor += 1
-      results[index] = await worker(items[index])
-    }
-  })
-  await Promise.all(runners)
-  return results
+/** 批量详情与缺口单曲兜底统一由 track-info 封装处理。 */
+async function fetchTracksById(mids: string[]): Promise<Map<string, RawTrack>> {
+  return fetchTrackInfoByMids(mids)
 }
 
 /**

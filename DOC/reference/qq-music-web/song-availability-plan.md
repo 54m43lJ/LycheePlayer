@@ -194,4 +194,4 @@ fetchTrackInfoByMids(mids: string[]): Promise<Map<string, RawTrack>>
 
 ## 状态
 
-方向已确认，方案待实施。
+已按本方案实施：`track-info.ts` 封装、100 首固定分片、歌单 / 「我喜欢」详情权益复核均已落地。

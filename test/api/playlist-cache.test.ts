@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PlaylistCacheEntry, PlaylistMeta, Song } from '../../src/shared/types'
+import { songPlayState } from '../../src/shared/permission'
 
 vi.mock('electron', () => ({
   app: { getPath: () => '/tmp', getAppPath: () => '/tmp' },
@@ -8,8 +9,9 @@ vi.mock('electron', () => ({
   net: { fetch: () => Promise.reject(new Error('network disabled')) }
 }))
 
-const { musicuMock, cacheState } = vi.hoisted(() => ({
+const { musicuMock, trackInfoMock, cacheState } = vi.hoisted(() => ({
   musicuMock: vi.fn(),
+  trackInfoMock: vi.fn(),
   cacheState: {
     entry: null as PlaylistCacheEntry | null,
     writes: [] as PlaylistCacheEntry[],
@@ -38,6 +40,10 @@ vi.mock('../../src/main/cache/playlist', () => ({
   invalidatePlaylistCache: async (id: string) => {
     cacheState.invalidated.push(id)
   }
+}))
+
+vi.mock('../../src/main/api/track-info', () => ({
+  fetchTrackInfoByMids: trackInfoMock
 }))
 
 vi.mock('../../src/main/credential', () => ({
@@ -80,6 +86,10 @@ function rawSong(mid: string): unknown {
 
 beforeEach(() => {
   musicuMock.mockReset()
+  trackInfoMock.mockReset()
+  trackInfoMock.mockImplementation(async (mids: string[]) =>
+    new Map(mids.map((mid) => [mid, { mid, name: mid, interval: 180 }]))
+  )
   cacheState.entry = null
   cacheState.writes = []
   cacheState.invalidated = []
@@ -152,6 +162,55 @@ describe('api/playlist cache', () => {
       Array.from({ length: 50 }, (_, index) => `upstream-${index}`)
     )
     expect(cacheState.writes).toHaveLength(0)
+  })
+
+  it('overrides list entitlements with the detail-side action', async () => {
+    musicuMock.mockResolvedValue({
+      dirinfo: { songnum: 1, picurl: '' },
+      songlist: [
+        {
+          mid: 'list-mid',
+          name: 'OK',
+          interval: 180,
+          action: { switch: 134331775 },
+          pay: { pay_play: 0, pay_down: 0 }
+        }
+      ]
+    })
+    trackInfoMock.mockResolvedValue(
+      new Map([
+        [
+          'list-mid',
+          {
+            mid: 'list-mid',
+            action: { switch: 134283265 },
+            pay: { pay_play: 0, pay_down: 0 },
+            file: { size_try: 0 }
+          }
+        ]
+      ])
+    )
+    const { fetchPlaylistPage } = await import('../../src/main/api/playlist')
+
+    const result = await fetchPlaylistPage('liked', 0)
+
+    expect(trackInfoMock).toHaveBeenCalledWith(['list-mid'])
+    expect(result.songs[0].name).toBe('OK')
+    expect(result.songs[0].playSwitch).toBe(134283265)
+    expect(songPlayState(result.songs[0])).toBe('disabled')
+  })
+
+  it('fetches metadata without detail entitlement review for write paths', async () => {
+    musicuMock.mockResolvedValue({
+      dirinfo: { id: '123', dirid: 456, title: '我的歌单', songnum: 1, owndir: 1 },
+      songlist: [rawSong('s')]
+    })
+    const { fetchPlaylistMeta } = await import('../../src/main/api/playlist')
+
+    const meta = await fetchPlaylistMeta('123')
+
+    expect(meta).toMatchObject({ id: '123', dirId: 456, name: '我的歌单' })
+    expect(trackInfoMock).not.toHaveBeenCalled()
   })
 
   it('marks normal playlists editable only when the upstream says the account owns them', async () => {

@@ -45,6 +45,10 @@ vi.mock('../../src/main/api/client', () => ({
 }))
 
 vi.mock('../../src/main/api/playlist', () => ({
+  fetchPlaylistMeta: async (_id: string): Promise<PlaylistMeta> => ({
+    ...state.meta,
+    songCount: state.members.length
+  }),
   fetchPlaylistPage: async (_id: string, offset: number): Promise<PlaylistPage> => ({
     meta: { ...state.meta, songCount: state.members.length },
     songs: state.members.map((mid) => ({

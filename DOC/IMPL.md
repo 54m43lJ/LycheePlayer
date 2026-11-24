@@ -1383,3 +1383,46 @@
 - `npm run typecheck`、`npm test`（54 个测试文件、291 个用例）与 `npm run build` 通过。
 - 未做真实窗口截图验收；真实账号的 `switch` 位未重新抓取（reference 样本为未登录、非中国大陆出口），应用以当前账号响应为准，判定公式与官方代码一致。
 - `investigate-song-meta.html` 仅作为早期调查参考，且被 `.gitignore` 忽略，不纳入文档集。
+
+### 4.58 歌单权益改用批量详情复核与批量详情封装 [已解决] 
+
+**描述**：上一版可播检测直接读取歌单 / 「我喜欢」列表返回的 `action.switch`。investigate-song-meta 分支的复核结论显示：668 首「我喜欢」中有 10 首列表仍带 play 位，但详情与 vkey `auth_switch` 已无 play 位，只读列表会把实际不可播的歌曲显示为可播。要求并入该分支的结论与方案，并按方案改进检测数据来源与批量详情实现。
+
+**解决方案**：
+
+- 并入 `investigate-song-meta` 的 `playability.md`（305 行）与 `song-availability-plan.md`，以详情侧 `action.switch` 作为判灰权威；列表只负责顺序与基础元数据。
+- 新增 `src/main/api/track-info.ts` 的 `fetchTrackInfoByMids(mids)`：内部去重、过滤空白 mid、固定按 `TRACK_INFO_BATCH_MAX = 100` 分片串行请求 `CgiGetTrackInfo`，批量缺失的歌曲用 `get_song_detail_yqq` 单曲兜底（`SONG_DETAIL_CONCURRENCY = 2`）；仍缺失的歌曲不放入返回 Map，由调用方处理。
+- 常量 `SONG_DETAIL_BATCH = 50` 改名为 `TRACK_INFO_BATCH_MAX = 100`，不向调用方暴露分片参数；上游 110–160 首会静默截断、180 首以上会断开 HTTP/2，因此固定 100。
+- `song.ts` 删除本地分片与单曲兜底实现，`fetchTracksById()` 直接走封装；`playlist-write.ts` 的写入身份解析改用同一入口，删除重复分片。
+- `playlist.ts` 的 `requestPage()` 在列表映射后调用封装入口批量取详情，用 `applyTrackEntitlements()` 覆盖 `action.switch` / `pay` / `status` / 试听字段后再返回并写入缓存；详情缺失时保留列表字段。新增 `fetchPlaylistMeta()` 供改名 / 删除等写操作读取 `dirId`，跳过整页权益复核。
+- 新增 `test/api/track-info.test.ts`，覆盖任意数量按 100 分片、空输入、去重、响应乱序、单曲兜底、批量结构错误与仍然缺失；歌单测试增加“列表可播 / 详情不可播”覆盖样本。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `IMPL.md` | 新增“歌单权益改用批量详情复核与批量详情封装” | 增 | 记录列表快照问题、封装方案与文档操作。 |
+| `DOC/reference/qq-music-web/playability.md` | 全文 | 改 | 并入调查分支的 305 行版本，补充列表 / 详情不一致实测与批量上限。 |
+| `DOC/reference/qq-music-web/song-availability-plan.md` | 全文 | 增 | 纳入检测方法改正与批量封装方案，状态标记为已实施。 |
+| `CORE.html` | §1 文件树 | 改 | 新增 `api/track-info.ts`。 |
+| `CORE.html` | §2 CONVENTIONS · 可播性判定 | 改 | 声明歌单列表 `switch` 可能过期，必须由详情复核覆盖。 |
+| `CORE.html` | §4.11 `song.ts`（`#c4-11`） | 改 | 删除本地分片描述，记录 `fetchTracksById` 与 `applyTrackEntitlements`。 |
+| `CORE.html` | §4.12 `playlist.ts`（`#c4-12`） | 改 | 记录 `requestPage` 详情权益复核与 `fetchPlaylistMeta`。 |
+| `CORE.html` | §4.50 常量（`#c4-50`） | 改 | `SONG_DETAIL_BATCH = 50` 改为 `TRACK_INFO_BATCH_MAX = 100`。 |
+| `CORE.html` | §4.55 `playlist-write.ts`（`#c4-55`） | 改 | 改名读取改为 `fetchPlaylistMeta`，写入身份解析走 `fetchTrackInfoByMids`。 |
+| `CORE.html` | §4.112 `track-info.ts`（`#c4-112`） | 增 | 记录封装入口、100 首上限、单曲兜底与调用方。 |
+| `CORE.html` | §5.10 歌单加载（`#c5-10`） | 改 | 调用树补充 `fetchTrackInfoByMids` 详情复核。 |
+| `CORE.html` | §5.11 可播性判定（`#c5-11`） | 改 | 补充列表 `switch` 过期与详情覆盖说明。 |
+| `PROVIDER.html` | §4.1 批量歌曲详情 | 改 | 单次上限 50 → 100，补充静默截断 / 断连与详情判灰权威。 |
+| `PROVIDER.html` | §4.3 `QqSong` / 说明 | 改 | `action.msgid` 入模型，补充列表 `switch` 过期与详情复核要求。 |
+| `USER.html` | §2 CONVENTIONS · 可播状态判定 | 改 | 说明歌单 / 「我喜欢」加载时用批量详情复核权益。 |
+| `ISSUE.md` | 歌曲可用性条目 | 不动 | 已在上一轮标记 ` [已解决] `，本轮为同一需求的实现修正。 |
+| `README.md` / `ABOUT.html` | 歌单行 | 不动 | 用户可见状态语义未变化。 |
+
+**工作记录**：
+
+- `git merge investigate-song-meta` 并入 `78d2f9f`；`DOC/reference/qq-music-web/playability.md` 出现 add/add 冲突，按调查分支版本解决（该版本已包含上一轮实现说明与列表过期取证）。
+- 批量详情封装内部顺序 `await` 分片，不加 300ms 间隔；vkey 限速策略不变，判灰仍然不申请 vkey。
+- 歌单缓存结构未变；已写入的旧快照仍可读取，但页面加载会用详情复核后的结果覆盖并回写。
+- `npm run typecheck`、`npm test`（55 个测试文件、299 个用例）与 `npm run build` 通过。
+- 未用真实账号重新复核 668 首；数据来源与样本沿用调查分支的实测记录。

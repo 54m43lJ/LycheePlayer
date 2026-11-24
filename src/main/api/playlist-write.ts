@@ -1,9 +1,9 @@
 import type { PlaylistMeta, PlaylistMutationResult } from '../../shared/types'
-import { SONG_DETAIL_BATCH } from '../../shared/constants'
 import { getCredential } from '../credential'
 import { UpstreamError, musicu } from './client'
-import { fetchPlaylistPage } from './playlist'
+import { fetchPlaylistMeta } from './playlist'
 import { rawSongToSong } from './song'
+import { fetchTrackInfoByMids } from './track-info'
 
 interface WriteResult {
   retCode?: number
@@ -13,12 +13,6 @@ interface WriteResult {
     dirName?: string
   }
   msg?: string
-}
-
-interface TrackInfo {
-  id?: number | string
-  mid?: string
-  type?: number
 }
 
 function assertWrite(data: WriteResult, action: string): void {
@@ -72,51 +66,23 @@ async function writeBase(
 }
 
 async function readMeta(id: string): Promise<PlaylistMeta> {
-  const page = await fetchPlaylistPage(id, 0)
-  return page.meta
+  return fetchPlaylistMeta(id)
 }
 
 async function fetchTrackIdentities(
   mids: string[]
 ): Promise<Array<{ songId: number; songType: number }>> {
   const unique = [...new Set(mids.filter(Boolean))]
+  const tracks = await fetchTrackInfoByMids(unique)
   const result: Array<{ songId: number; songType: number }> = []
-  for (let start = 0; start < unique.length; start += SONG_DETAIL_BATCH) {
-    const batch = unique.slice(start, start + SONG_DETAIL_BATCH)
-    // 批量详情一次取回，避免逐首详情把写操作拖慢；缺失歌曲再走单曲兜底。
-    const data = await musicu<{ tracks?: TrackInfo[] }>(
-      'music.trackInfo.UniformRuleCtrl',
-      'CgiGetTrackInfo',
-      {
-        types: batch.map(() => 0),
-        modify_stamp: batch.map(() => 0),
-        ctx: 0,
-        client: 1,
-        mids: batch
-      }
-    )
-    if (!Array.isArray(data.tracks)) {
-      throw new UpstreamError('UPSTREAM_CHANGED', '批量歌曲详情响应缺少 tracks')
+  for (const mid of unique) {
+    const info = tracks.get(mid)
+    const songId = String(info?.id ?? '')
+    const songType = Number(info?.type ?? 0)
+    if (!info || !/^\d+$/.test(songId) || !Number.isSafeInteger(songType) || songType < 0) {
+      throw new UpstreamError('UPSTREAM_CHANGED', '无法确认歌曲 ID，写操作已取消')
     }
-    const byMid = new Map<string, TrackInfo>()
-    for (const track of data.tracks) if (track.mid) byMid.set(track.mid, track)
-    for (const mid of batch) {
-      let info = byMid.get(mid)
-      if (!info) {
-        const fallback = await musicu<{ track_info?: TrackInfo }>(
-          'music.pf_song_detail_svr',
-          'get_song_detail_yqq',
-          { song_mid: mid }
-        )
-        info = fallback.track_info
-      }
-      const songId = String(info?.id ?? '')
-      const songType = Number(info?.type ?? 0)
-      if (!info || !/^\d+$/.test(songId) || !Number.isSafeInteger(songType) || songType < 0) {
-        throw new UpstreamError('UPSTREAM_CHANGED', '无法确认歌曲 ID，写操作已取消')
-      }
-      result.push({ songId: Number(songId), songType })
-    }
+    result.push({ songId: Number(songId), songType })
   }
   return result
 }

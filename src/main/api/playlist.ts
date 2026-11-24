@@ -2,7 +2,8 @@ import type {
   PlaylistCacheEntry,
   PlaylistMeta,
   PlaylistPage,
-  PlaylistSnapshot
+  PlaylistSnapshot,
+  Song
 } from '../../shared/types'
 import {
   FAVORITES_PLAYLIST_ID,
@@ -20,7 +21,8 @@ import {
   writePlaylistCache
 } from '../cache/playlist'
 import { UpstreamError, musicu } from './client'
-import { rawSongToSong } from './song'
+import { applyTrackEntitlements, rawSongToSong } from './song'
+import { fetchTrackInfoByMids } from './track-info'
 
 interface RawPlaylistItem {
   dissid?: string | number
@@ -107,11 +109,25 @@ function canEdit(data: PlaylistData): boolean {
   return Number.isSafeInteger(me) && me > 0 && owner === me
 }
 
+/**
+ * 列表接口只提供顺序与基础元数据；可播权益必须按详情侧批量复核。
+ * 返回与入参等长的歌曲数组，缺失详情时保留列表字段。
+ */
+async function applyDetailEntitlements(songs: Song[]): Promise<Song[]> {
+  if (songs.length === 0) return songs
+  const tracks = await fetchTrackInfoByMids(songs.map((song) => song.songMid))
+  return songs.map((song) => {
+    const raw = tracks.get(song.songMid)
+    return raw ? applyTrackEntitlements(song, raw) : song
+  })
+}
+
 async function requestPage(
   id: string,
   offset: number,
   pageSize: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  enrich = true
 ): Promise<PlaylistPage> {
   const favorites = isFavoritesId(id)
   const data = await musicu<PlaylistData>(
@@ -154,7 +170,9 @@ async function requestPage(
     throw new UpstreamError('UPSTREAM_CHANGED', '歌单响应缺少 dirinfo')
   }
 
-  const songs = (data.songlist ?? []).map(rawSongToSong)
+  const listed = (data.songlist ?? []).map(rawSongToSong)
+  signal?.throwIfAborted()
+  const songs = enrich ? await applyDetailEntitlements(listed) : listed
   return {
     meta,
     songs,
@@ -163,6 +181,14 @@ async function requestPage(
     hasMore:
       total === 0 ? songs.length >= pageSize : offset + pageSize < total
   }
+}
+
+/** 只取歌单元数据；写操作读取 dirId 时不需要为整页歌曲复核权益。 */
+export async function fetchPlaylistMeta(id: string): Promise<PlaylistMeta> {
+  if (!validId(id)) {
+    throw new UpstreamError('UPSTREAM_CHANGED', `非法歌单 ID：${id}`)
+  }
+  return (await requestPage(id, 0, PLAYLIST_PAGE_SIZE, undefined, false)).meta
 }
 
 /** 拉取歌单分页；分页只服务加载，缓存始终是整份歌单。 */
