@@ -4111,8 +4111,7 @@ button:focus-visible,
 
 .comments-heading-ruled .comments-title {
   width: fit-content;
-  margin-left: -4px;
-  padding: 0 8px 8px 4px;
+  padding: 0 24px 8px 0;
   border-bottom: 2px solid var(--border);
 }
 
