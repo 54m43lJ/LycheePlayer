@@ -161,7 +161,11 @@ onBeforeUnmount(() => {
           :icon-size="18"
         />
         <div class="lyrics-page-info">
-          <div v-if="current" class="lyrics-page-title">{{ current.name }}</div>
+          <div v-if="current" class="lyrics-page-title">
+            {{ current.name }}<span v-if="current.subtitle" class="song-subtitle">{{
+              current.subtitle
+            }}</span>
+          </div>
           <div v-else class="lyrics-page-title faint">还没有播放中的歌曲</div>
           <div v-if="current" class="lyrics-page-meta">
             <template v-if="singerNames(current)">

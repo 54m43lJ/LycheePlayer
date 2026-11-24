@@ -379,6 +379,8 @@ export interface Song {
   songMid: string;
   songId: string;
   name: string;
+  /** 上游歌名副标题，如“电影《xxx》插曲”；无副标题为空字符串。 */
+  subtitle: string;
   singers: Singer[];
   album: Album;
   durationMs: number;
@@ -1165,7 +1167,7 @@ function buildStreamUrl(purl: string): string;
   <li><code>fetchTracksById</code> 直接调用 <a href="#c4-112">§4.112</a> 的 <code>fetchTrackInfoByMids()</code>，批量分片与缺口单曲兜底都在该封装内；本文件不再自行实现 <code>CgiGetTrackInfo</code> 请求。<code>getDetail</code> / <code>getMvId</code> / <code>resolveStreams</code> 共用该入口，返回 Map 中缺失的歌曲按各自语义报错或跳过。</li>
   <li><code>applyTrackEntitlements(song, raw)</code> 用详情侧 <code>action.switch</code>、<code>pay</code>、<code>status</code> 与试听字段覆盖列表歌曲，保留列表的顺序、标题、歌手、专辑与封面等展示元数据；供 <a href="#c4-12">§4.12</a> 的歌单权益复核使用。</li>
   <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。播放取源优先级固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”，与 <a href="#c4-59">§4.59</a> 的 <code>handleStream</code> 顺序一致。</li>
-  <li>显示名优先 <code>title.trim()</code>，为空时回退 <code>name.trim()</code>；专辑名与歌手名同样 <code>trim()</code>，避免尾部空白把 VIP / 音质徽标推离标题。<code>title</code> 含 Explicit / Remix 等版本标签，<code>name</code> 是基础名；原始响应没有独立标签布尔字段。</li>
+  <li>显示名优先 <code>title.trim()</code>，为空时回退 <code>name.trim()</code>；专辑名与歌手名同样 <code>trim()</code>，避免尾部空白把 VIP / 音质徽标推离标题。<code>title</code> 含 Explicit / Remix 等版本标签，<code>name</code> 是基础名；原始响应没有独立标签布尔字段。上游 <code>subtitle</code> 去首尾空白后写入 <code>Song.subtitle</code>，缺失为空字符串；该字段只用于展示，不参与搜索、队列或文件名。</li>
   <li>歌手映射：<code>singer[]</code> 成员只要 <code>name</code> 非空就保留，<code>mid</code> 允许为空；只有 <code>name</code> 为空的成员被丢弃，不因缺少 <code>mid</code> 丢名字。列表响应缺名字时，歌曲进入可见列表后可用 <code>getDetail</code> 的 <code>track_info.singer[]</code> 补全；补全结果不改变播放队列。</li>
 </ul>
 
@@ -1415,7 +1417,7 @@ export function destroyTray(): void;
   <li>侧栏底部账号 pill 在已登录时于昵称右侧渲染仅图标的 <a href="#c4-107">MemberBadge</a>，只显示已知会员档位；成长等级可用时随后显示 <code>Lv. X</code>；未登录仍为“登录 QQ 音乐”入口。点击已登录 pill 进入设置页，窄屏点击后关闭抽屉。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；<code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后只重置 playlist / recommend / download 的内存视图，不再清空最近歌单 local key，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
-  <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；歌曲带 <code>Song.mvId</code> 时在歌名后渲染 <a href="#c4-108">MvButton</a>，点击进入 MV 页、不触发移除，并关闭队列面板。不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
+  <li>播放队列面板每行字段为序号、封面、歌名（含副标题，按 <a href="USER.html#u2">USER §2</a>）/ 歌手与移除图标按钮；歌曲带 <code>Song.mvId</code> 时在歌名后渲染 <a href="#c4-108">MvButton</a>，点击进入 MV 页、不触发移除，并关闭队列面板。不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。面板顶部“正在播放”条同样在歌名后显示副标题。</li>
   <li>播放队列筛选输入框不显示占位文字，用 <code>aria-label="筛选队列中的歌曲"</code> 保留无障碍名称；输入值、清除按钮与过滤逻辑不变。</li>
   <li>播放队列面板顶部持有筛选关键词，按歌名 / 歌手 / 专辑本地不区分大小写过滤；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
   <li>播放队列头部 <code>.lyrics-head-actions</code> 并排放置“清空播放队列”与“关闭播放队列”两个图标按钮；清空按钮使用 <code>trash</code> 图标，队列为空时 <code>disabled</code> 并沿用 <code>.icon-btn:disabled</code> 灰化，滚动或筛选都不影响入口。列表底部不再渲染 <code>.queue-footer</code> 或文字按钮；<code>player.clearQueue()</code> 仍只清空当前曲之后的队列。</li>
@@ -1801,7 +1803,7 @@ const emit = defineEmits&lt;{
   <li>歌曲带 <code>Song.mvId</code> 时，在标题徽标之后渲染 <a href="#c4-108">MvButton</a>；无绑定不显示，列表不逐行补查。按钮使用 <code>@click.stop</code> / <code>@dblclick.stop</code>，避免触发行播放。</li>
   <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态；下载按钮三态由 <code>resolveDownloadState</code> 派生为唯一状态（已下载 / 已缓存 / 普通），class、图标与无障碍名称共用该状态。已缓存与已下载互斥，下载优先；即使资产同时带两个档位也只显示已下载，无障碍名称只显示当前状态。状态框固定 24px，按钮点击热区不变。</li>
   <li>专辑列与歌手行渲染为链接：歌手 <code>mid</code> 非空链接到 <code>/artist/:mid</code>，专辑 <code>mid</code> 非空链接到 <code>/album/:mid</code>，点击不触发行播放；<code>mid</code> 为空时按纯文本展示，名称为空不渲染。标题、歌手、专辑统一使用 <code>MarqueeText</code>，仅在溢出时滚动；≤900px 隐藏专辑列。</li>
-  <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：窄窗口优先省略歌名，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与无障碍名称。</li>
+  <li>标题 DOM 拆为可压缩的 <code>.song-title-text</code>、<code>.song-subtitle</code> 与固定 <code>flex: 0 0 auto</code> 的 <code>.pay-badge</code> / <code>.quality-badge</code>：歌名后先渲染副标题（<code>Song.subtitle</code> 非空时，视觉契约见 <a href="USER.html#u2">USER §2</a>），再渲染徽标；窄窗口优先省略歌名与副标题，VIP / 数字专辑 / 付费与音质徽标常驻。操作按钮按收藏状态切换 <code>heart-filled</code> / <code>heart</code> 图标与无障碍名称。</li>
   <li>操作单元格本身保持 <code>table-cell</code>；内部 <code>.song-action-inner</code> 使用 flex，行分隔线挂在 <code>tr</code> 上，不得对 <code>td</code> 设置 <code>display: flex</code>。操作列宽屏 160px，≤900px 收窄到 44px，刚好容纳表头“操作”两字不换行，五个图标按钮在单元格内横向排列。</li>
   <li>行的 <code>dblclick</code> 只绑定在 <code>tr</code> 上；歌手 / 专辑链接与操作列按钮统一使用 <code>@click.stop</code>，把点击事件截在子元素内，不触发整行播放。</li>
   <li>操作列基础结构为收藏、下载、下一首播放（<code>play-next</code>）、添加到歌单（<code>playlist-add</code>）、从歌单删除五个图标按钮。<code>addable</code> 为真时渲染“添加到歌单”，点击发出 <code>addToPlaylist(index)</code>；删除按钮仅在 <code>removable</code> 为真时渲染，由 <code>PlaylistView</code> 按 <code>PlaylistMeta.editable</code> 且非“我喜欢”传入；点击发出 <code>remove(index)</code>，不触发行播放。</li>
@@ -1818,7 +1820,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>点击封面调用 <code>ui.toggleLyrics()</code> 开合歌词 / 评论弹出层，不导航；<code>title</code> 在“歌词与评论 / 关闭歌词与评论”之间切换，无当前歌曲时封面禁用。播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
-  <li>标题行用 <a href="#c4-38">MarqueeText</a> 渲染歌名；歌名按内容宽度显示，音质标记与 MV 入口紧随其后，短歌名不被撑满的跑马灯推到列尾，布局规则见 <a href="#c4-49">§4.49</a>。</li>
+  <li>标题行用 <a href="#c4-38">MarqueeText</a> 渲染歌名；歌名按内容宽度显示，音质标记与 MV 入口紧随其后，短歌名不被撑满的跑马灯推到列尾，布局规则见 <a href="#c4-49">§4.49</a>。<code>Song.subtitle</code> 非空时在歌名后渲染 <code>.song-subtitle</code>，位于音质标记之前，显示契约见 <a href="USER.html#u2">USER §2</a>。</li>
   <li>音质标记之后渲染 <a href="#c4-108">MvButton</a>：<code>mvId</code> 非空时显示 26×18px 圆角长方形按钮（内嵌 13px 播放三角），进入 <code>/mv/:id</code>；无绑定不渲染。当前歌曲来自搜索 / 推荐且 <code>Song.mvId</code> 为空时，等 <code>player.loading</code> 结束再调用 <code>song.getMvId</code>，复用取流已缓存的详情；请求带序号，切歌后旧结果不覆盖。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲元数据判定不可播时由播放条沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首取流失败后停止。</li>
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px purple-light 状态块 + purple 图标已缓存 / 24px purple 状态块 + on-accent 图标已下载），与歌曲表共用状态与图标；无障碍名称只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与无障碍名称随之切换。</li>
@@ -1985,6 +1987,7 @@ const emit = defineEmits&lt;{
   <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页首行 <code>.discover-top</code> 使用 flex 横向左对齐放置猜你喜欢与每日推荐卡片（猜你喜欢在左），<code>.discover-top-item</code> 固定 <code>flex: 0 0 150px</code> 并设 <code>min-width: 0</code>，保持原卡片尺寸与封面 1:1 比例，不随首行宽度放大；骨架内的 <code>.discover-playlists</code> 取消 <code>margin-top</code> / <code>padding-top</code> / <code>overflow</code>。专属雷达继续使用 flexbox 横向排列固定宽度条目、纵向 3 行、横向滚动，条目文本溢出时走跑马灯。</li>
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
   <li><code>.song-title .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。</li>
+  <li><code>.song-subtitle</code> 为歌名后的副标题：11px、400 字重、<code>--muted</code> 色、左间距 6px；在 flex 标题行内使用 <code>flex: 0 1 auto</code> + <code>min-width: 0</code> + 省略号，与歌名一起收缩。播放条标题行已有 8px gap，<code>.player-title-row .song-subtitle</code> 取消左边距；歌词 / 评论头部标题下的副标题为 12px。发现页歌名行由 <code>.discover-title</code> 以 flex 包裹歌名与副标题。</li>
   <li>可播状态角标复用 <code>.quality-badge</code>：<code>.unavailable</code> 使用 <code>--danger</code> 边框与文字，<code>.trial</code> 使用 <code>--accent-strong</code> 边框与文字；付费墙不新增行级样式，仍以 <code>.pay-badge</code> 表达 VIP / 数字专辑 / 付费。</li>
   <li><code>.player-title</code> 与歌曲表标题相同，使用 <code>flex: 0 1 auto</code>；标题行宽度由较长的歌手行或可用宽度决定时，短歌名仍按内容宽度显示，<code>.quality-mark</code> / <code>.mv-mark</code> 紧随其后，长歌名才收缩并滚动。</li>
   <li><code>.mv-mark</code> 为 26×18px、5px 圆角的长方形入口，边框与底色使用 accent，内嵌的 13px 播放三角由 <a href="#c4-108">MvButton</a> 的 <code>size</code> prop 控制。歌曲表 <code>.song-mv</code> 与队列 <code>.queue-mv</code> 使用 6px 左间距；队列 <code>.song-title</code> 改为 flex，歌名由 <code>.queue-title</code> 单独省略，MV 图标不被压缩。</li>
@@ -2488,7 +2491,7 @@ const emit = defineEmits&lt;{ close: []; submit: [name: string] }&gt;();
   <li><code>showsSongStrip(section)</code> 只在分区不是每日推荐 / 猜你喜欢、没有歌单入口且 <code>songs</code> 非空时返回真，渲染歌曲条目；每日推荐与猜你喜欢只渲染伪歌单卡片。骨架按分区传参：首行两张卡片使用 <code>songs=0</code> / <code>playlists=1</code>，其余列表分区使用 <code>songs=30</code> / <code>playlists=0</code>；<code>songs=0</code> 时不输出空的 <code>.discover-strip</code>。</li>
   <li>页面挂载后启动 60 秒定时器调用 <code>recommend.refreshDailyIfExpired()</code>，跨过上海 0 点后自动重取日推；卸载时清除定时器。页面不再提供整体“换一批”入口，专属雷达保留自己的单区刷新按钮，日推由自然日过期自动更新。</li>
   <li>页面先渲染三块骨架：首行两张歌单卡片占位，专属雷达渲染 30 条歌曲条目占位；再按 <code>daily → radar → guess</code> 逐块异步填充，未完成的分区不阻塞其他内容。</li>
-  <li>条目为封面图标 + 上方歌名、下方歌手，文字溢出走跑马灯；点击歌曲单曲播放，歌手 / 专辑按 <code>mid</code> 链接。</li>
+  <li>条目为封面图标 + 上方歌名、下方歌手，文字溢出走跑马灯；点击歌曲单曲播放，歌手 / 专辑按 <code>mid</code> 链接。歌名行由 <code>.discover-title</code> 包裹 <code>MarqueeText</code> 与 <code>.song-subtitle</code>，副标题非空时按 <a href="USER.html#u2">USER §2</a> 显示在歌名后。</li>
   <li>未登录显示登录引导；分区空结果显示合法空状态；失败只显示该区错误与重试，不影响其他分区。分区刷新只请求该区。</li>
   <li>卸载时调用 <code>recommend.cancel()</code>，取消进行中的推荐请求与后续分区。</li>
 </ul>
@@ -2557,7 +2560,7 @@ interface DownloadStore {
 <pre><code>// 无 props / emits。ui.lyricsOpen 为真时由 App.vue 渲染的歌词 / 评论弹出层：顶部歌曲信息与关闭，宽屏左歌词、右评论，窄屏左右滑动分页。
 </code></pre>
 <ul class="note">
-  <li>绑定 <code>player.current</code>：顶部展示歌名、歌手与专辑，歌手 / 专辑按 <code>mid</code> 决定链接或纯文本；无当前歌曲时展示空状态且不发起歌词 / 评论请求。</li>
+  <li>绑定 <code>player.current</code>：顶部展示歌名（<code>Song.subtitle</code> 非空时在歌名后以 <code>.song-subtitle</code> 显示，见 <a href="USER.html#u2">USER §2</a>）、歌手与专辑，歌手 / 专辑按 <code>mid</code> 决定链接或纯文本；无当前歌曲时展示空状态且不发起歌词 / 评论请求。</li>
   <li>左上角关闭按钮调用 <code>ui.closeLyrics()</code>，不执行页面后退；再次点击播放条封面、Esc、后退手势、路由变化与侧栏导航同样关闭弹出层。组件挂载时通过 <code>pushBackDismiss</code> 注册关闭，卸载时注销。</li>
   <li>宽屏布局为左右两列各 50%，中间保留分隔线；组合 <a href="#c4-41">LyricsPanel</a> 与 <a href="#c4-42">CommentsPanel</a>，不渲染独立标题行。</li>
   <li>窄屏分页由组件内 <code>activePage: 'lyrics' | 'comments'</code> 驱动，默认歌词；<code>narrow</code> 读取 <code>matchMedia('(max-width: 900px)')</code> 并在窗口尺寸变化时更新。轨道用 <code>translateX(calc(-100% + dragOffset))</code> 平移到评论页，底部两个 <code>role="tab"</code> 胶囊按钮表示当前页，点击直接切换。非当前页同时设置 <code>inert</code> 与 <code>aria-hidden</code>，避免键盘或读屏访问屏幕外内容。</li>
@@ -3027,7 +3030,7 @@ export function isPlaylistCacheEntry(value: unknown): value is PlaylistCacheEntr
 export function isRecentPlaylist(value: unknown): value is RecentPlaylist;
 </code></pre>
 <ul class="note">
-  <li>持久化缓存结构校验的唯一来源：完整检查 <code>Song</code> 的歌手 / 专辑 / pay / <code>status</code> / <code>pay_play</code> / <code>payDown</code> / <code>playSwitch</code> / <code>sizeTry</code> / <code>tryStartMs</code> / <code>tryEndMs</code> / <code>maxQuality</code> / <code>mvId</code>、<code>PlaylistMeta</code>、<code>PlaylistSnapshot</code>、歌单缓存条目与最近歌单条目；不负责读取文件或 localStorage。旧版本缺少权限字段的歌曲快照按失效处理。</li>
+  <li>持久化缓存结构校验的唯一来源：完整检查 <code>Song</code> 的歌手 / 专辑 / pay / <code>status</code> / <code>pay_play</code> / <code>payDown</code> / <code>playSwitch</code> / <code>sizeTry</code> / <code>tryStartMs</code> / <code>tryEndMs</code> / <code>maxQuality</code> / <code>mvId</code> 与 <code>subtitle</code>、<code>PlaylistMeta</code>、<code>PlaylistSnapshot</code>、歌单缓存条目与最近歌单条目；不负责读取文件或 localStorage。旧版本缺少权限字段或副标题的歌曲快照按失效处理。</li>
   <li>校验失败即视为缓存失效；调用方负责删除损坏文件 / 键并从上游或空状态重建。主进程与渲染进程共用同一组校验函数，避免各处只做浅层字段判断。</li>
 </ul>
 

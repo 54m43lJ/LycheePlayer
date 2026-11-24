@@ -33,6 +33,7 @@ export function isSong(value: unknown): value is Song {
     value.songMid.length > 0 &&
     typeof value.songId === 'string' &&
     typeof value.name === 'string' &&
+    typeof value.subtitle === 'string' &&
     Array.isArray(singers) &&
     singers.every(
       (singer) =>

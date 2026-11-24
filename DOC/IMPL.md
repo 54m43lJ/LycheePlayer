@@ -1550,3 +1550,43 @@
 - `test/downloads-view.test.ts` 的 SSR 渲染补装内存路由，以提供 `useRoute` / `useRouter` 上下文。
 - `npm run typecheck`、`npm test`（55 个测试文件、303 个用例）与 `npm run build` 通过。
 - 未做真实窗口导航验收；URL 参数与页面栈行为由单元测试和类型检查覆盖。
+
+### 4.63 歌名副标题显示 [已解决]
+
+**描述**：TODO 第一项未决项要求支持上游歌曲的 subtitle 字段：歌名带副标题时，用浅色小字显示在歌曲标题后。内部 `Song` 模型此前没有该字段，上游映射时直接丢弃。
+
+**解决方案**：
+
+- `Song` 增加 `subtitle: string`；`RawTrack` 声明 `subtitle`，`toSong()` 以 `(raw.subtitle ?? '').trim()` 映射，缺失或空白统一为空字符串。副标题只作为展示元数据，`applyTrackEntitlements()` 只覆盖权益字段，不覆盖列表副标题。
+- 歌曲表在 `.song-title` 内、徽标与 MV 入口之前渲染 `.song-subtitle`；播放条在歌名与音质标记之间渲染；播放队列的“正在播放”条与每一行、歌词 / 评论弹出层头部、发现页专属雷达条目同步显示。
+- 视觉统一由 `.song-subtitle` 承担：11px、400 字重、`--muted` 色、左间距 6px；flex 标题行内 `flex: 0 1 auto` + `min-width: 0` + 省略号，与歌名一起收缩。播放条标题行已有 8px gap，取消副标题左边距；歌词 / 评论头部标题为 12px；发现页新增 `.discover-title` 以 flex 包裹歌名与副标题。
+- 副标题不参与本地筛选、搜索、播放队列构建与下载文件名；下载中心继续使用入队时的任务标题，不新增下载字段。
+- `isSong()` 要求 `subtitle` 为字符串；按 CORE §2“本地缓存结构校验”的约定，旧歌单缓存、播放历史与最近歌单中缺少该字段的歌曲快照按失效处理并重建。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 3 项“歌名subtitle字段的支持” | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“歌名副标题显示” | 增 | 记录字段映射、展示位置、样式与缓存失效。 |
+| `USER.html` | §2 CONVENTIONS · 歌曲副标题 | 增 | 记录显示位置、视觉降级、空值不渲染与各歌曲界面共用规则。 |
+| `USER.html` | §5.2.3 播放条 / §5.2.4 歌曲列表 / §5.2.5 歌词与评论 / §5.2.8 发现页 / §5.2.9 播放队列 | 改 | 补充副标题按 §2 显示。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | `Song` 增加 `subtitle`。 |
+| `CORE.html` | §4.11 `api/song.ts`（`#c4-11`） | 改 | 记录 `subtitle` 去空白映射、缺失为空串与不参与搜索 / 队列 / 文件名。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`） | 改 | 队列“正在播放”条与队列行显示副标题。 |
+| `CORE.html` | §4.39 `SongTable.vue`（`#c4-39`） | 改 | 标题 DOM 增加 `.song-subtitle`，位于歌名与徽标之间。 |
+| `CORE.html` | §4.40 `PlayerBar.vue`（`#c4-40`） | 改 | 歌名后、音质标记前渲染副标题。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 新增 `.song-subtitle`、`.player-title-row .song-subtitle`、`.lyrics-page-title .song-subtitle` 与 `.discover-title` 视觉契约。 |
+| `CORE.html` | §4.68 `DiscoverView.vue`（`#c4-68`） | 改 | 歌名行包裹副标题。 |
+| `CORE.html` | §4.72 `LyricsOverlay.vue`（`#c4-72`） | 改 | 顶部歌名后显示副标题。 |
+| `CORE.html` | §4.103 `validation.ts`（`#c4-103`） | 改 | `isSong` 要求 `subtitle`，旧快照失效。 |
+| `PROVIDER.html` | §4.3 `QqSong` | 改 | 补充 `subtitle` 语义与 `Song.subtitle` 转换。 |
+| `README.md` / `ABOUT.html` | 歌单行 | 改 | 补充歌曲标题附带的副标题以浅色小字显示在歌名后。 |
+
+**工作记录**：
+
+- `test/api/search.test.ts` 增加副标题映射与首尾空白清理断言；各 `Song` 测试工厂补 `subtitle: ''`。
+- `npm run typecheck`、`npm test`（55 个测试文件、303 个用例）与 `npm run build` 通过。
+- 未登录真实账号做窗口截图验收；副标题收缩与省略由 `.song-subtitle` 的 flex / 省略规则保证。
+- 旧版歌单缓存、播放历史与最近歌单会因 `isSong` 校验失败而按约定整份重建；这是新增必填字段的预期结果。
+- 已存在的未提交 `DOC/ISSUE.md` 改动不属于本项，未纳入提交。

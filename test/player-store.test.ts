@@ -43,6 +43,7 @@ function song(id: string, name: string, overrides: Partial<Song> = {}): Song {
     songMid: id,
     songId: id,
     name,
+    subtitle: '',
     singers: [{ mid: 's', name: 'S' }],
     album: { mid: 'a', name: 'A' },
     durationMs: 180000,

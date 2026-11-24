@@ -46,6 +46,7 @@ describe('api/search', () => {
                   mid: '001BigDawgs',
                   name: 'Big Dawgs ',
                   title: 'Big Dawgs (Remix|Explicit)',
+                  subtitle: ' 电影《测试》插曲 ',
                   interval: 200,
                   singer: [{ mid: '001Singer', name: ' Hanumankind ' }],
                   album: { mid: '001Album', name: ' Big Dawgs (Remix) [Explicit] ' },
@@ -78,7 +79,9 @@ describe('api/search', () => {
     expect(result.songs[0].name).toBe('Big Dawgs (Remix|Explicit)')
     expect(result.songs[0].album.name).toBe('Big Dawgs (Remix) [Explicit]')
     expect(result.songs[0].singers).toEqual([{ mid: '001Singer', name: 'Hanumankind' }])
+    expect(result.songs[0].subtitle).toBe('电影《测试》插曲')
     expect(result.songs[1].name).toBe('Company')
+    expect(result.songs[1].subtitle).toBe('')
   })
 
   it('reads the total from top-level meta and maps singer avatars', async () => {

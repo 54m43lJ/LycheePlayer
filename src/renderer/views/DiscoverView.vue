@@ -244,7 +244,10 @@ onBeforeUnmount(() => {
             >
               <CoverArt :src="songCover(song, 300)" image-class="discover-cover" :icon-size="22" />
               <div class="discover-text">
-                <MarqueeText class="discover-name" :text="song.name" />
+                <div class="discover-title">
+                  <MarqueeText class="discover-name" :text="song.name" />
+                  <span v-if="song.subtitle" class="song-subtitle">{{ song.subtitle }}</span>
+                </div>
                 <MarqueeText class="discover-singer" :text="singerNames(song)" />
               </div>
               <button

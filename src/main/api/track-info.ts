@@ -8,6 +8,7 @@ export interface RawTrack {
   type?: number
   name?: string
   title?: string
+  subtitle?: string
   interval?: number
   status?: number
   vid?: string

@@ -7,6 +7,7 @@ function song(overrides: Partial<Song> = {}): Song {
     songMid: 'm1',
     songId: '1',
     name: 'Song',
+    subtitle: '',
     singers: [],
     album: { mid: 'a1', name: 'Album' },
     durationMs: 180000,

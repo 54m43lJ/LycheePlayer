@@ -55,6 +55,7 @@ vi.mock('../../src/main/api/playlist', () => ({
       songMid: mid,
       songId: mid,
       name: mid,
+      subtitle: '',
       singers: [],
       album: { mid: '', name: '' },
       durationMs: 0,

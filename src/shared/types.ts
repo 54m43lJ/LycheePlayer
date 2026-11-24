@@ -48,6 +48,8 @@ export interface Song {
   songMid: string
   songId: string
   name: string
+  /** 上游歌名副标题，如“电影《xxx》插曲”；无副标题为空字符串。 */
+  subtitle: string
   singers: Singer[]
   album: Album
   durationMs: number

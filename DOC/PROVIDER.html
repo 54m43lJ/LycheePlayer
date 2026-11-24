@@ -602,6 +602,7 @@ interface QqLoginRequest {
   // 歌曲类型；写入歌单 / 收藏时作为 songType 使用。
   type?: number;
   // name 为基础名，可能带尾部空白；title 为官方展示标题，含 Explicit / Remix 等版本标签。
+  // subtitle 为官方副标题（如“电影《xxx》插曲”），写入 Song.subtitle；缺失为空字符串。
   // 原始响应没有独立的 explicit / remix 布尔字段；version / tag 为数值，语义不稳定。
   name?: string;
   title?: string;

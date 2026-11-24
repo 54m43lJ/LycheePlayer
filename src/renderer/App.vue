@@ -489,7 +489,12 @@ watch(
         <div v-if="player.current" class="queue-now-song">
           <CoverArt :src="songCover(player.current, 300)" image-class="cover-thumb" :icon-size="16" />
           <div class="song-text">
-            <div class="song-title">{{ player.current.name }}</div>
+            <div class="song-title">
+              <span class="queue-title">{{ player.current.name }}</span>
+              <span v-if="player.current.subtitle" class="song-subtitle">{{
+                player.current.subtitle
+              }}</span>
+            </div>
             <div class="song-artist">{{ singerNames(player.current) }}</div>
           </div>
         </div>
@@ -527,6 +532,7 @@ watch(
           <div class="song-text">
             <div class="song-title">
               <span class="queue-title">{{ song.name }}</span>
+              <span v-if="song.subtitle" class="song-subtitle">{{ song.subtitle }}</span>
               <MvButton
                 v-if="song.mvId"
                 :mv-id="song.mvId"

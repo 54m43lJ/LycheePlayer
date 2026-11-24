@@ -64,6 +64,7 @@ function song(mid: string): Song {
     songMid: mid,
     songId: mid,
     name: mid,
+    subtitle: '',
     singers: [],
     album: { mid: '', name: '' },
     durationMs: 180000,

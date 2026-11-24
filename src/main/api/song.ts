@@ -71,6 +71,8 @@ function toSong(raw: RawSong): Song {
     songMid: raw.mid ?? '',
     songId: String(raw.id ?? ''),
     name,
+    // subtitle 是官方展示的副标题（如“电影《xxx》插曲”），缺失为空字符串。
+    subtitle: (raw.subtitle ?? '').trim(),
     // 官方客户端存在“有名字但没有歌手页”的歌手：mid 可为空，名称仍需保留。
     singers: (raw.singer ?? [])
       .map((singer) => ({ mid: singer.mid ?? '', name: (singer.name ?? '').trim() }))

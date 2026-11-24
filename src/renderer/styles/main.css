@@ -980,6 +980,19 @@ button:focus-visible,
   white-space: nowrap;
 }
 
+/* 歌名副标题：与歌名同一行，弱化字重与颜色，空间不足时先省略。 */
+.song-subtitle {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 400;
+}
+
 .song-mv {
   margin-left: 6px;
 }
@@ -1700,6 +1713,11 @@ button:focus-visible,
   align-items: center;
   gap: 8px;
   min-width: 0;
+}
+
+/* 播放条标题行用 gap 统一分隔，副标题不再额外留左边距。 */
+.player-title-row .song-subtitle {
+  margin-left: 0;
 }
 
 /* 实际音质标记：与右侧音质菜单（请求档位）互补 */
@@ -3760,6 +3778,12 @@ button:focus-visible,
   flex: 1;
 }
 
+.discover-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
 .discover-name {
   font-size: 12px;
   font-weight: 600;
@@ -3962,6 +3986,11 @@ button:focus-visible,
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.lyrics-page-title .song-subtitle {
+  margin-left: 6px;
+  font-size: 12px;
 }
 
 .lyrics-page-meta {
