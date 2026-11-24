@@ -1426,3 +1426,28 @@
 - 歌单缓存结构未变；已写入的旧快照仍可读取，但页面加载会用详情复核后的结果覆盖并回写。
 - `npm run typecheck`、`npm test`（55 个测试文件、299 个用例）与 `npm run build` 通过。
 - 未用真实账号重新复核 668 首；数据来源与样本沿用调查分支的实测记录。
+
+### 4.59 清理 reference 参考文档 [已解决]
+
+**描述**：可播检测与批量详情方案已落地，reference 文件夹中的取证与方案内容已并入 PROVIDER / CORE / IMPL，不再需要作为独立参考文件保留。
+
+**解决方案**：
+
+- 删除 `DOC/reference/qq-music-web/playability.md` 与 `DOC/reference/qq-music-web/song-availability-plan.md`。
+- 移除 USER / CORE / PROVIDER 中指向 reference 文件的链接；switch 位表、灰色公式、列表快照过期结论与 100 首批量上限保留在 PROVIDER §4.3、CORE §4.105 与 §5.10。
+- IMPL 4.57 / 4.58 保留历史实施记录，不再指向可访问的参考文件。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `DOC/reference/qq-music-web/playability.md` | 全文 | 删 | 删除官方网页端取证文档。 |
+| `DOC/reference/qq-music-web/song-availability-plan.md` | 全文 | 删 | 删除批量详情与检测改正方案。 |
+| `CORE.html` | §2 / §4.50 / §4.105 | 改 | 移除 reference 链接，保留结论引用。 |
+| `PROVIDER.html` | §4.3 | 改 | 移除 reference 链接，位表与判定依据仍在本节。 |
+| `USER.html` | §1 / §2 | 改 | 移除 reference 链接，指向 PROVIDER §4.3。 |
+| `IMPL.md` | 新增“清理 reference 参考文档” | 增 | 记录删除范围与保留位置。 |
+
+**工作记录**：
+
+- 本次仅删除文档与链接，不改动代码、测试或协议；`DOC/reference/` 目录随文件删除一并移除。

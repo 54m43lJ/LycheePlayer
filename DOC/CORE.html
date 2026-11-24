@@ -278,7 +278,7 @@
   </tr>
   <tr>
     <td>可播性判定</td>
-    <td>列表不申请 vkey；<code>SongPlayState</code> 由 <a href="#c4-105">§4.105</a> 的 <code>songPlayState()</code> 从 <code>Song</code> 元数据（<code>status</code> / <code>action.switch</code> / <code>pay_play</code> / <code>pay_down</code> / <code>file.size_try</code>）派生，只作为展示与按钮启用依据。歌单 / 「我喜欢」列表的 <code>action.switch</code> 可能是过期快照，必须由 <a href="#c5-10">§5.10</a> 的详情权益复核覆盖后才能用于派生；详见 <code>DOC/reference/qq-music-web/playability.md</code>。实际可播性仍以播放时取流结果为准，失败由 <code>NO_STREAM</code> 沿队列兜底。</td>
+    <td>列表不申请 vkey；<code>SongPlayState</code> 由 <a href="#c4-105">§4.105</a> 的 <code>songPlayState()</code> 从 <code>Song</code> 元数据（<code>status</code> / <code>action.switch</code> / <code>pay_play</code> / <code>pay_down</code> / <code>file.size_try</code>）派生，只作为展示与按钮启用依据。歌单 / 「我喜欢」列表的 <code>action.switch</code> 可能是过期快照，必须由 <a href="#c5-10">§5.10</a> 的详情权益复核覆盖后才能用于派生。实际可播性仍以播放时取流结果为准，失败由 <code>NO_STREAM</code> 沿队列兜底。</td>
   </tr>
   <tr>
     <td>vkey 请求</td>
@@ -2078,7 +2078,7 @@ export declare const AUDIO_PROTOCOL_SCHEME: string;         // 'lychee-audio'
   <li>所有工程常量只在本文件声明；其它模块只 import。源码中是实际赋值，本签名只保留名称与取值。</li>
   <li><code>AUDIO_CACHE_LIMIT_STEPS_BYTES</code> 提供设置页 6 个固定档位；<code>normalizeAudioCacheLimitBytes</code> 对合法档位原样返回，越界 / 非档位值归一到最近档位，非法值回退默认档；<code>AUDIO_CACHE_MAX_BYTES</code> 作为默认 / 最大档位。</li>
   <li><code>VKEY_MIN_INTERVAL_MS = 300</code> 为相邻两次 vkey 请求的最小间隔，由 <a href="#c4-110">§4.110</a> 串行保证；一次 vkey 请求只携带一首歌，<code>song.getUrls</code> 的多首歌曲逐首解析。</li>
-  <li><code>TRACK_INFO_BATCH_MAX = 100</code> 为批量详情单次上限；上游超过 100 会静默截断或断开连接，因此封装内固定该值，不向调用方暴露。取值依据见 <a href="#c4-112">§4.112</a> 与 <code>DOC/reference/qq-music-web/playability.md</code>。</li>
+  <li><code>TRACK_INFO_BATCH_MAX = 100</code> 为批量详情单次上限；上游超过 100 会静默截断或断开连接，因此封装内固定该值，不向调用方暴露。取值依据见 <a href="#c4-112">§4.112</a>。</li>
   <li><code>COMMENT_PAGE_SIZE = 25</code> 为上游实测单页上限（26 起返回业务码 <code>10000</code>）；<code>COMMENT_LOAD_ALL_PAGE_MAX = 40</code> 使“跳转到底部”最多补拉约 1000 条，并保持串行请求与取消机制；<code>COMMENT_CONTENT_MAX = 300</code> 同时约束输入框 <code>maxlength</code>、渲染层提交校验与主进程 IPC 参数校验；<code>COMMENT_HOT_REPLY_LIMIT = 3</code> 为每条评论取点赞数最高的回复热评条数；<code>COMMENT_HOT_REPLY_MIN_LIKES = 3</code> 为热评的最低点赞数，点赞数不超过该值的回复不纳入热评。</li>
   <li><code>CATALOG_PAGE_SIZE = 50</code> 用于歌手 / 专辑歌曲分页；<code>ARTIST_ALBUM_PAGE_SIZE = 80</code> 为上游专辑列表单页上限，<code>ARTIST_ALBUM_PAGE_MAX = 20</code> 限制歌手页一次展开专辑最多补拉 1600 张。</li>
   <li><code>UPSTREAM_BLOCK_MS</code> 为收到 104009 后的全局截断时长（推荐 60_000 ms），窗口内所有上游请求直接失败、下载泵暂停出队；<code>NO_STREAM_SKIP_LIMIT</code> 控制连续不可播自动切歌上限。全局限速已移除，应用侧只对 vkey 限速。</li>
@@ -3043,7 +3043,7 @@ export function canDownloadSong(state: SongPlayState): boolean;
 </code></pre>
 <ul class="note">
   <li>可播状态的唯一实现，按官方网页端公式求值：<code>status</code> 为 1 / 2 时直接 <code>disabled</code>；<code>switch</code> 缺失、0 或非法时 <code>unknown</code>；<code>play_lq</code> / <code>play_hq</code> / <code>play_sq</code> / <code>play_5_1</code>（实际位 1 / 2 / 3 / 17）任一位为 1 时 <code>playable</code>；否则 <code>pay_play</code> 或 <code>pay_down</code> 为 1 时 <code>paywall</code>；否则 <code>try</code> 位（实际位 14）为 1 且 <code>sizeTry &gt; 0</code> 时 <code>trial</code>；其余 <code>disabled</code>。</li>
-  <li>位读取使用 <code>Math.floor(flags / 2 ** bit) % 2</code>，避免 32 位按位运算把大整数截断；位表与官方解析代码见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a> 与 <code>DOC/reference/qq-music-web/playability.md</code>。</li>
+  <li>位读取使用 <code>Math.floor(flags / 2 ** bit) % 2</code>，避免 32 位按位运算把大整数截断；位表与官方解析代码见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</li>
   <li><code>canStartPlayback()</code> 只放行 <code>playable</code> / <code>trial</code> / <code>unknown</code>；<code>canDownloadSong()</code> 只放行 <code>playable</code> / <code>unknown</code>。付费墙与不可播不进入自动播放和下载。</li>
   <li>不再按账号会员档位比较 <code>pay_month</code> / <code>pay_status</code>：官方灰色公式不读取这两个字段，付费墙只表达“不灰、点击后提示开通 / 购买”。</li>
 </ul>

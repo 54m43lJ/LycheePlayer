@@ -123,7 +123,7 @@
   </tr>
   <tr>
     <td>权益位图（switch）</td>
-    <td>上游 <code>action.switch</code> 的 24 位整数位图，按当前账号、地区与登录态计算；位含义见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a> 与 <code>reference/qq-music-web/playability.md</code>。</td>
+    <td>上游 <code>action.switch</code> 的 24 位整数位图，按当前账号、地区与登录态计算；位含义见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</td>
   </tr>
   <tr>
     <td>可播状态（SongPlayState）</td>
@@ -289,7 +289,7 @@
   </tr>
   <tr>
     <td>可播状态判定</td>
-    <td>列表不申请播放链接；按官方网页端的权益位图判定：<code>status</code> 为 1 / 2 时直接不可播；<code>switch</code> 的 <code>play_lq</code> / <code>play_hq</code> / <code>play_sq</code> / <code>play_5_1</code> 任一位为 1 时可播；否则 <code>pay_play</code> 或 <code>pay_down</code> 为 1 时为付费墙；否则 <code>try</code> 位为 1 且存在试听文件时为试听；其余为不可播。<code>switch</code> 缺失、为 0 或非法时为未知，界面保持正常并尝试播放，失败再按 <code>NO_STREAM</code> 兜底。可播状态只用于展示与按钮启用，实际可播性仍由播放时取流决定。歌单 / 「我喜欢」列表加载时会用批量详情复核权益，列表本身只提供顺序与基础元数据，旧列表快照不会直接决定灰显。位表与官方代码见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a> 与 <code>reference/qq-music-web/playability.md</code>。</td>
+    <td>列表不申请播放链接；按官方网页端的权益位图判定：<code>status</code> 为 1 / 2 时直接不可播；<code>switch</code> 的 <code>play_lq</code> / <code>play_hq</code> / <code>play_sq</code> / <code>play_5_1</code> 任一位为 1 时可播；否则 <code>pay_play</code> 或 <code>pay_down</code> 为 1 时为付费墙；否则 <code>try</code> 位为 1 且存在试听文件时为试听；其余为不可播。<code>switch</code> 缺失、为 0 或非法时为未知，界面保持正常并尝试播放，失败再按 <code>NO_STREAM</code> 兜底。可播状态只用于展示与按钮启用，实际可播性仍由播放时取流决定。歌单 / 「我喜欢」列表加载时会用批量详情复核权益，列表本身只提供顺序与基础元数据，旧列表快照不会直接决定灰显。位表与官方代码见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>。</td>
   </tr>
   <tr>
     <td>可播状态的时效</td>
