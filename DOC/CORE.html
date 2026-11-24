@@ -648,6 +648,12 @@ export interface AudioCacheProgress {
   complete: boolean;
 }
 
+/** 一次完整音频写入播放缓存成功后的通知。 */
+export interface AudioCacheStored {
+  songMid: string;
+  quality: Quality;
+}
+
 export interface AudioCacheStats {
   bytes: number;
   files: number;
@@ -882,6 +888,8 @@ export interface FlagsFile {
   };
   audioCache: {
     onProgress(callback: (progress: AudioCacheProgress) =&gt; void): () =&gt; void;
+    /** 完整音频写入缓存成功后触发；用于刷新对应歌曲的资产状态。 */
+    onStored(callback: (stored: AudioCacheStored) =&gt; void): () =&gt; void;
   };
   cache: {
     listUsers(): Promise&lt;IpcResult&lt;UserCacheInfo[]&gt;&gt;;
@@ -1802,7 +1810,7 @@ const emit = defineEmits&lt;{
   <li>标题行用 <a href="#c4-38">MarqueeText</a> 渲染歌名；歌名按内容宽度显示，音质标记与 MV 入口紧随其后，短歌名不被撑满的跑马灯推到列尾，布局规则见 <a href="#c4-49">§4.49</a>。</li>
   <li>音质标记之后渲染 <a href="#c4-108">MvButton</a>：<code>mvId</code> 非空时显示 26×18px 圆角长方形按钮（内嵌 13px 播放三角），进入 <code>/mv/:id</code>；无绑定不渲染。当前歌曲来自搜索 / 推荐且 <code>Song.mvId</code> 为空时，等 <code>player.loading</code> 结束再调用 <code>song.getMvId</code>，复用取流已缓存的详情；请求带序号，切歌后旧结果不覆盖。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲元数据判定不可播时由播放条沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首取流失败后停止。</li>
-  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px surface 状态块已缓存 / 24px accent 高亮已下载），与歌曲表共用状态与图标；无障碍名称只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与无障碍名称随之切换。</li>
+  <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px purple-light 状态块 + purple 图标已缓存 / 24px purple 状态块 + on-accent 图标已下载），与歌曲表共用状态与图标；无障碍名称只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与无障碍名称随之切换。</li>
   <li>下载按钮点击统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload(current, quality)</code>：已下载时打开全局删除确认，未下载时加入统一队列；播放条不复制“已下载 / 未下载”判断。</li>
   <li>播放进度条为单轨结构：<code>.progress-track</code> 背景轨上叠加 <code>.progress-buffer</code> 缓冲层与 <code>.progress-played</code> 播放层，透明 <code>.progress-range</code> 覆盖在轨道上只负责拖动与点击定位。缓冲宽度取 <code>max(cachePercent, bufferedPercent)</code>：缓存进度按当前 <code>songMid + quality</code> 匹配，已下载歌曲按 100%；HTML5 <code>audio.buffered</code> 由 <code>onBufferChange</code> 上报，切歌清空；无歌曲或缓冲为 0 时只保留灰轨，不渲染 overlay。</li>
   <li>音质菜单与音量弹层不使用遮罩；挂载时在 document 捕获阶段监听点击，用 <code>qualityWrap</code> / <code>volumeWrap</code> 判断内外。外部点击关闭弹层且不阻断目标点击；音质与音量弹层互斥。</li>
@@ -2216,6 +2224,7 @@ export function readAudioFile(path: string): Promise&lt;Buffer&gt;;
   <li>渲染层取消读取时，协议处理必须同时 abort 上游 <code>net.fetch</code>：只 cancel body 可能把未读完的连接留在 socket 池，后续音频流复用该连接时会一直等到上游超时（约 10 秒）才报错重试。</li>
   <li>取消路径先调用 <code>abortUpstream()</code>，随后必须用 <code>reader.cancel(reason).catch(() =&gt; undefined)</code> 等待并吞掉取消 Promise。abort 或对端关闭后 <code>reader.cancel()</code> 会以 <code>net::ERR_CONNECTION_CLOSED</code> / <code>ERR_CONTENT_LENGTH_MISMATCH</code> 拒绝，不能使用 <code>void</code> 丢弃，否则会产生进程级未处理 Promise；只吞取消路径的关闭类拒绝，正常读取错误仍照常处理。</li>
   <li>完整响应落盘时按 <code>CACHE_PROGRESS_THROTTLE_MS = 300</code> 节流推送 <code>AudioCacheProgress</code>（歌曲、音质、已写字节、总字节、完成标记）；局部 206 不推进完成度。缓存命中 <code>file</code> 分支直接视为 100%。</li>
+  <li>缓存文件写入成功后额外推送 <code>audioCache:stored</code>（<code>AudioCacheStored</code>）；只在真正落盘后发送一次，缓存命中与简单进度上报不触发。该事件与进度事件分离，供资产状态刷新使用。</li>
 </ul>
 <table>
   <tr><th>URL 分支</th><th>条件</th><th>响应状态</th><th>必带响应头</th><th>是否缓存</th><th>回退 / 说明</th></tr>
@@ -2526,6 +2535,7 @@ interface DownloadStore {
 <ul class="note">
   <li><code>load</code> 读取任务列表；目录用量只在下载页可见时刷新；资产状态只刷新状态发生变化的任务，避免大批量下载时每轮全量查询。页面不可见时若有活动任务仍轮询任务状态以更新歌曲表图标，全部结束后停止；<code>remove</code> 刷新该曲资产，<code>clearDirectory</code> / <code>reset</code> 清空资产与状态记录。</li>
   <li><code>start</code> 复用 <code>startMany</code>；<code>startMany</code> 不自动打开下载页，有活动任务时启动轮询以更新歌曲表图标。任务按数组倒序展示，不改变主进程队列顺序。</li>
+  <li>store 创建时订阅 <code>window.lychee.audioCache.onStored</code>；收到缓存写入完成通知后调用 <code>refreshAssets([songMid])</code>，歌曲表与播放条的下载按钮由 <code>assets</code> 变化即时更新，与下载轮询相互独立。</li>
   <li><code>removeSong</code> 调用 <code>download.removeSong</code>，从本地任务快照中移除该曲的 <code>done</code> 任务并刷新该曲资产状态；即使 <code>tasks</code> 尚未加载，也由主进程按 <code>songMid</code> 完成删除，渲染层不直接操作磁盘。</li>
   <li>没有批次状态或批次控制；<code>clearCompleted</code> 只清记录，<code>clearDirectory</code> 清空下载目录内容与记录，<code>reset</code> 在页面可见时立即重新加载。</li>
 </ul>
@@ -3777,16 +3787,19 @@ views/MvView::onVideoVolumeChange()
 <pre><code>media/audio-protocol::handleStream(request)
 ├── 判断 source.filePath / 缓存命中 → fileResponse，上报 complete = true
 ├── 判断上游完整响应（200，或 206 的 Content-Range 覆盖 0-(total-1)/total）
-│   ├── 写缓存
-│   └── webContents.send('audioCache:progress', progress)          // 300ms 节流
-│       └── components/PlayerBar::onProgress()
-│           └── 按当前 songMid + quality 更新缓冲 overlay（与 audio.buffered 取较大值）
+│   ├── cache/audio::putCachedAudio(...)                           // 完整音频落盘
+│   ├── webContents.send('audioCache:progress', progress)          // 300ms 节流
+│   │   └── components/PlayerBar::onProgress()
+│   │       └── 按当前 songMid + quality 更新缓冲 overlay（与 audio.buffered 取较大值）
+│   └── webContents.send('audioCache:stored', stored)              // 写入完成后一次
+│       └── stores/download::audioCache.onStored(stored)
+│           └── stores/download::refreshAssets([songMid])          // 刷新歌曲表 / 播放条下载按钮
 └── 判断局部 206 → 只透传，不写缓存、不推进完成度
 </code></pre>
 <ul class="note">
   <li>只有完整响应落盘才推进进度，局部 206 不上报完成度；缓存命中 <code>file</code> 分支直接视为 100%，关闭播放缓存时不上报。</li>
-  <li>渲染层切歌、切音质、清理缓存时重置缓存进度；缓存进度与下载进度解耦，不读取下载 store。</li>
-  <li>事件订阅返回取消函数，<code>PlayerBar</code> 卸载时取消；通道与类型见 <a href="#c4-2">§4.2</a> / <a href="#c4-1">§4.1</a>。</li>
+  <li>缓存进度只驱动播放条的缓冲 overlay；写入完成事件交给下载 store 刷新资产，两者互不依赖下载轮询。</li>
+  <li>事件订阅返回取消函数，<code>PlayerBar</code> 卸载时取消；下载 store 的订阅随 store 生命周期存在。通道与类型见 <a href="#c4-2">§4.2</a> / <a href="#c4-1">§4.1</a>。</li>
 </ul>
 
 <h3 id="c5-19">5.19 歌手 / 专辑加载</h3>

@@ -51,23 +51,29 @@ export function audioStreamUrl(
   return `${AUDIO_PROTOCOL_SCHEME}://stream/${token}`
 }
 
+function broadcast(channel: string, payload: unknown): void {
+  for (const window of BrowserWindow.getAllWindows()) {
+    if (!window.isDestroyed()) window.webContents.send(channel, payload)
+  }
+}
+
 function reportCacheProgress(
   source: StreamSource,
   receivedBytes: number,
   totalBytes: number,
   complete: boolean
 ): void {
-  for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) {
-      window.webContents.send('audioCache:progress', {
-        songMid: source.songMid,
-        quality: source.quality,
-        receivedBytes,
-        totalBytes,
-        complete
-      })
-    }
-  }
+  broadcast('audioCache:progress', {
+    songMid: source.songMid,
+    quality: source.quality,
+    receivedBytes,
+    totalBytes,
+    complete
+  })
+}
+
+function notifyCacheStored(source: StreamSource): void {
+  broadcast('audioCache:stored', { songMid: source.songMid, quality: source.quality })
 }
 
 async function cacheChunks(source: StreamSource, chunks: Uint8Array[]): Promise<void> {
@@ -77,6 +83,7 @@ async function cacheChunks(source: StreamSource, chunks: Uint8Array[]): Promise<
     const temp = join(tempDir(), `${source.songMid}-${randomUUID()}`)
     await writeFile(temp, Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))))
     await putCachedAudio(source.songMid, source.quality, temp)
+    notifyCacheStored(source)
   } catch {
     // 缓存失败不影响本轮播放。
   }

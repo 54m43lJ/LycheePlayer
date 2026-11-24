@@ -3351,22 +3351,22 @@ button:focus-visible,
 
 .song-icon.cached:not(.downloaded)::before,
 .icon-btn.cached:not(.downloaded)::before {
-  background: var(--panel);
+  background: var(--palette-purple-light);
 }
 
 .song-icon.downloaded::before,
 .icon-btn.downloaded::before {
-  background: var(--accent-soft);
+  background: var(--palette-purple);
 }
 
 .song-icon.cached,
 .icon-btn.cached {
-  color: var(--muted);
+  color: var(--palette-purple);
 }
 
 .song-icon.downloaded,
 .icon-btn.downloaded {
-  color: var(--accent-strong);
+  color: var(--on-accent);
 }
 
 .song-icon.danger:hover {

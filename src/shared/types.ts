@@ -340,6 +340,12 @@ export interface AudioCacheProgress {
   complete: boolean
 }
 
+/** 一次完整音频写入播放缓存成功后的通知。 */
+export interface AudioCacheStored {
+  songMid: string
+  quality: Quality
+}
+
 /** 登录方式；续期与凭证展示按此分流，不从 musickey 前缀或 Cookie 内容推断。 */
 export type LoginMethod = 'qq' | 'wechat'
 

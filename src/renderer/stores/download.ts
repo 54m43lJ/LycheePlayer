@@ -66,6 +66,13 @@ export const useDownloadStore = defineStore('download', () => {
     assets.value = next
   }
 
+  // 缓存写入完成由主进程主动通知；刷新该曲资产，让歌曲表与播放条的下载按钮即时切换。
+  if (typeof window !== 'undefined') {
+    window.lychee?.audioCache?.onStored?.((stored) => {
+      void refreshAssets([stored.songMid])
+    })
+  }
+
   function startPolling(): void {
     if (timer !== null) return
     timer = window.setInterval(() => void load(), DOWNLOAD_POLL_MS)

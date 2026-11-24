@@ -1307,3 +1307,34 @@
 - `structuredClone(reactive(['a']))` 在 Node 中会抛 `DOMException: An object could not be cloned`，与报错一致；改用 `shallowRef` 后克隆正常。
 - `npm run typecheck`、`npm test`（53 个测试文件、284 个用例）与 `npm run build` 通过。
 - 未做真实窗口验收；IPC 可克隆性由 store 单测与 Electron 行为复现确认。
+
+### 4.56 下载按钮缓存 / 下载标记与缓存完成刷新 [已解决] 
+
+**描述**：ISSUE 要求改进下载按钮在已缓存 / 已下载两种状态下的标记对比度，并让缓存写入完成像下载完成一样主动触发按钮更新，覆盖歌单页与播放条。
+
+**解决方案**：
+
+- 已缓存按钮的 24px 背景块改用 purple-light，图标改为 purple；已下载按钮的背景块改用 purple，图标改用 `--on-accent`（dark 取 cream，light 取 highlight）；两种状态继续互斥，图标颜色不写死单主题色值。
+- 主进程在完整音频写入播放缓存成功后新增 `audioCache:stored` 通知，携带 `songMid` 与 `quality`；只在真正落盘后发送一次，缓存命中与普通进度上报不触发。
+- `preload` 暴露 `audioCache.onStored`；`stores/download` 创建时订阅该事件，收到后调用 `refreshAssets([songMid])`。歌曲表与播放条读取同一份 `assets`，按钮即时更新，不需要重新进入页面。
+- 新增测试：音频协议完整响应落盘后发送一次 `audioCache:stored`；下载 store 收到通知后刷新该曲资产。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 下载按钮标记条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“下载按钮缓存 / 下载标记与缓存完成刷新” | 增 | 记录配色、事件通路与测试。 |
+| `USER.html` | §5.2.3 播放条 / §5.2.4 歌曲列表 | 改 | 下载按钮状态改为 purple-light 背景 + purple 图标（已缓存）、purple 背景 + on-accent 图标（已下载，dark cream / light highlight），并说明缓存完成后即时更新。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | 新增 `AudioCacheStored`。 |
+| `CORE.html` | §4.2 `shared/ipc.ts`（`#c4-2`） | 改 | `audioCache` 增加 `onStored`。 |
+| `CORE.html` | §4.59 `audio-protocol.ts`（`#c4-59`） | 改 | 说明落盘后推送 `audioCache:stored`。 |
+| `CORE.html` | §4.71 `stores/download.ts`（`#c4-71`） | 改 | 订阅缓存写入完成并刷新资产。 |
+| `CORE.html` | §5.18 音频缓存进度 | 改 | 调用树补充写入完成通知与下载 store 刷新。 |
+
+**工作记录**：
+
+- 已下载图标不使用 `purple-light`，改用 accent 前景角色 `--on-accent`：light 主题解析为 highlight `#E9DBF2`，dark 主题解析为 cream `#FFF7E4`，与下载按钮的 purple 填充形成对应关系。
+- 缓存命中 `file` 分支与本地下载文件播放也会上报 `complete: true` 的进度；因此按钮刷新不复用进度事件，改用独立的写入完成通知，避免每次播放 / seek 都触发资产查询。
+- `npm run typecheck`、`npm test`（54 个测试文件、286 个用例）与 `npm run build` 通过。
+- 未做真实窗口验收；配色由 CSS token 审阅覆盖，事件链路由主进程协议测试与 store 单测覆盖。
