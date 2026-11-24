@@ -162,6 +162,35 @@ describe('back navigation', () => {
     remove()
   })
 
+  it('replaces the current entry when only the query changes', () => {
+    const { router, navigate, replace } = fakeRouter('/discover')
+    const remove = installPageHistory(router)
+
+    navigate('/search')
+    navigate('/search?q=a')
+    navigate('/search?q=a&type=singer')
+    navigate('/search?q=a&type=album')
+    goBack()
+
+    expect(replace).toHaveBeenLastCalledWith('/discover')
+    goForward()
+    expect(replace).toHaveBeenLastCalledWith('/search?q=a&type=album')
+
+    remove()
+  })
+
+  it('keeps separate entries for different base paths', () => {
+    const { router, navigate, replace } = fakeRouter('/discover')
+    const remove = installPageHistory(router)
+
+    navigate('/artist/a?view=albums')
+    navigate('/artist/b?view=albums')
+    goBack()
+    expect(replace).toHaveBeenLastCalledWith('/artist/a?view=albums')
+
+    remove()
+  })
+
   it('ignores a repeated navigation to the current page', () => {
     const { router, navigate, replace } = fakeRouter('/discover')
     const remove = installPageHistory(router)

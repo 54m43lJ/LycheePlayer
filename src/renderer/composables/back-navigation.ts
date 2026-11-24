@@ -54,6 +54,11 @@ export function useBackDismiss(isOpen: () => boolean, dismiss: Dismiss): void {
   })
 }
 
+/** 去掉 query / hash 后的页面路径；用于识别同一页面内的状态变化。 */
+function basePath(path: string): string {
+  return path.split(/[?#]/)[0]
+}
+
 function recordPage(path: string): void {
   if (!path || path === '/') return
   // 任何普通页面导航都会截断前进链，等价于浏览器的新导航。
@@ -64,7 +69,14 @@ function recordPage(path: string): void {
     pageStack.push(path)
     return
   }
-  if (pageStack[pageStack.length - 1] === path) return
+  const top = pageStack[pageStack.length - 1]
+  if (top === path) return
+  // 同一 base path 下只改 query（搜索词 / 类型、筛选、页签）时替换当前栈项，
+  // 避免后退必须逐次经过每个中间状态。
+  if (top && basePath(top) === basePath(path)) {
+    pageStack[pageStack.length - 1] = path
+    return
+  }
   pageStack.push(path)
 }
 

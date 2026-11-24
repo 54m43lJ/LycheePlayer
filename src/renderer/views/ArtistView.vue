@@ -56,7 +56,11 @@ const error = ref('')
 const loadingMore = ref(false)
 const songsLoading = ref(false)
 const songSort = ref<ArtistSongSort>('hot')
-const view = ref<'songs' | 'albums'>('songs')
+function queryView(): 'songs' | 'albums' {
+  return route.query.view === 'albums' ? 'albums' : 'songs'
+}
+
+const view = ref<'songs' | 'albums'>(queryView())
 const albums = ref<ArtistAlbum[]>([])
 const albumTotal = ref(0)
 const albumsLoaded = ref(false)
@@ -206,12 +210,32 @@ async function loadAlbums(): Promise<void> {
   }
 }
 
+/** 歌曲 / 专辑页签写入 URL；同一页面内的切换由页面栈去重。 */
+function syncViewQuery(): void {
+  const query = { ...route.query }
+  if (view.value === 'albums') query.view = 'albums'
+  else delete query.view
+  void router.replace({ path: route.path, query })
+}
+
 function changeView(next: 'songs' | 'albums'): void {
   if (view.value === next) return
   view.value = next
+  syncViewQuery()
   scrollRoot?.scrollTo({ top: 0 })
   if (next === 'albums' && !albumsLoaded.value && !albumsLoading.value) void loadAlbums()
 }
+
+watch(
+  () => route.query.view,
+  () => {
+    const next = queryView()
+    if (next === view.value) return
+    view.value = next
+    scrollRoot?.scrollTo({ top: 0 })
+    if (next === 'albums' && !albumsLoaded.value && !albumsLoading.value) void loadAlbums()
+  }
+)
 
 function changeAlbumSort(next: ArtistAlbumSort): void {
   if (albumSort.value === next) return
@@ -247,8 +271,9 @@ watch(
   mid,
   () => {
     resetAlbums()
-    view.value = 'songs'
+    view.value = queryView()
     void load()
+    if (view.value === 'albums') void loadAlbums()
   },
   { immediate: true }
 )

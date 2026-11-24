@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { createSSRApp } from 'vue'
 import { renderToString } from '@vue/server-renderer'
 import { createPinia, setActivePinia } from 'pinia'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import type { DownloadTask } from '../src/shared/types'
 import DownloadsView from '../src/renderer/views/DownloadsView.vue'
 import { useDownloadStore } from '../src/renderer/stores/download'
@@ -31,7 +32,13 @@ describe('DownloadsView', () => {
     const store = useDownloadStore()
     store.tasks = [task('a'), task('b')]
 
-    const app = createSSRApp(DownloadsView).use(pinia)
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [{ path: '/downloads', component: DownloadsView }]
+    })
+    await router.push('/downloads')
+    await router.isReady()
+    const app = createSSRApp(DownloadsView).use(pinia).use(router)
     const html = await renderToString(app)
 
     expect(html).toContain('Song a')

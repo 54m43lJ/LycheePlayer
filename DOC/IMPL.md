@@ -1517,3 +1517,36 @@
 - 新增 / 更新测试：`test/member-badge.test.ts` 覆盖 `Lv. 7` 文本与仅图标模式的无障碍名称、缺失等级不渲染；`test/api/vip-status.test.ts` 覆盖 `identity.level` 映射与未知 / 非会员的 `null` 回退。
 - `npm run typecheck`、`npm test`（55 个测试文件、301 个用例）与 `npm run build` 通过。
 - 未做真实窗口截图验收；侧栏昵称省略与等级不收缩由 CSS 契约保证。
+
+### 4.62 核心页面状态写入 URL 与页面栈 base URL 去重 [已解决]
+
+**描述**：TODO 第二项要求把核心状态写入 URL 参数，方便前进 / 后退恢复；同时前进 / 后退栈需要按 base URL 去重，例如切换搜索类型时应替换当前栈项，而不是为每个类型新增一条后退记录。子项覆盖歌手页歌曲 / 专辑切换、下载页过滤与搜索页搜索词 / 类型。
+
+**解决方案**：
+
+- `back-navigation` 新增 `basePath()`，记录页面栈时比较去掉 query / hash 的路径：同一 base path 下只改 query 时替换栈顶，不新增后退步骤；不同路径仍正常入栈。
+- 搜索页：关键词与类型同步到 `?q=` / `?type=`（`song` 省略）；提交搜索、切换类型时用 `router.replace` 更新 query；`watch(route.query)` 在直接打开、后退 / 前进时恢复状态并重新搜索，并用 `loading` / `searched` 避免 query 回写触发重复请求。
+- 歌手页：歌曲 / 专辑页签同步到 `?view=albums`（歌曲省略）；切换页签用 `router.replace`，`watch(route.query.view)` 恢复页签并在需要时补拉专辑；切换歌手时按当前 URL 初始化页签。
+- 下载中心：状态过滤同步到 `?filter=active|done|failed`（全部省略）；切换过滤用 `router.replace`，`watch(route.query.filter)` 在后退 / 前进时恢复。
+- 默认值不写入 URL；直接打开带参数的地址时按参数恢复，非法参数按默认值处理。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 2 项“优化URL形式” | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“核心页面状态写入 URL 与页面栈 base URL 去重” | 增 | 记录参数、恢复逻辑与页面栈去重。 |
+| `USER.html` | §2 CONVENTIONS · 后退 / 前进手势 | 改 | 增加同一 base path 仅 query 变化时替换栈项。 |
+| `USER.html` | §2 CONVENTIONS · 页面状态与 URL | 增 | 记录搜索 / 歌手 / 下载页的 query 参数、默认值省略与直接打开恢复。 |
+| `USER.html` | §5.2.8 搜索页 / 歌手页 / 下载中心 | 改 | 补充对应 URL 参数与恢复行为。 |
+| `CORE.html` | §4.44 `SearchView.vue`（`#c4-44`） | 改 | 记录 `q` / `type` 同步与 query 恢复去重。 |
+| `CORE.html` | §4.67 `DownloadsView.vue`（`#c4-67`） | 改 | 记录 `filter` 同步与恢复。 |
+| `CORE.html` | §4.73 `ArtistView.vue`（`#c4-73`） | 改 | 记录 `view=albums` 同步与恢复。 |
+| `CORE.html` | §4.92 `back-navigation.ts`（`#c4-92`） | 改 | 记录 base path 去重替换栈顶。 |
+
+**工作记录**：
+
+- `test/back-navigation.test.ts` 新增两条用例：同一路径仅 query 变化时后退直接回到进入页、不同 base path 仍分别入栈。
+- `test/downloads-view.test.ts` 的 SSR 渲染补装内存路由，以提供 `useRoute` / `useRouter` 上下文。
+- `npm run typecheck`、`npm test`（55 个测试文件、303 个用例）与 `npm run build` 通过。
+- 未做真实窗口导航验收；URL 参数与页面栈行为由单元测试和类型检查覆盖。

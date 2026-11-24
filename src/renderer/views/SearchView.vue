@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import type { SearchRequest, SearchResult } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import CardPlayButton from '../components/CardPlayButton.vue'
@@ -21,6 +21,7 @@ import { mergeSearchResult } from '../utils/search-results'
 type SearchType = SearchRequest['type']
 
 const router = useRouter()
+const route = useRoute()
 const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
@@ -149,8 +150,58 @@ onBeforeUnmount(() => {
 function switchTab(tab: SearchType): void {
   if (activeTab.value === tab) return
   activeTab.value = tab
+  syncQuery()
   if (keyword.value.trim()) void search(1)
 }
+
+function queryText(value: unknown): string {
+  const raw = Array.isArray(value) ? value[0] : value
+  return typeof raw === 'string' ? raw : ''
+}
+
+function querySearchType(value: unknown): SearchType {
+  const raw = queryText(value)
+  return TABS.some((item) => item.value === raw) ? (raw as SearchType) : 'song'
+}
+
+/** 搜索词与类型写入 URL；同一页面内的变化由页面栈去重。 */
+function syncQuery(): void {
+  const term = keyword.value.trim()
+  const query: Record<string, string> = {}
+  if (term) query.q = term
+  if (activeTab.value !== 'song') query.type = activeTab.value
+  void router.replace({ path: '/search', query })
+}
+
+function submitSearch(): void {
+  if (!keyword.value.trim()) return
+  syncQuery()
+  void search(1)
+}
+
+function applyQuery(): void {
+  const nextKeyword = queryText(route.query.q)
+  const nextTab = querySearchType(route.query.type)
+  const changed = nextKeyword !== keyword.value || nextTab !== activeTab.value
+  keyword.value = nextKeyword
+  activeTab.value = nextTab
+  if (!nextKeyword.trim()) {
+    if (!changed) return
+    requestId += 1
+    result.value = null
+    searched.value = false
+    error.value = ''
+    loading.value = false
+    loadingMore.value = false
+    moreAvailable.value = false
+    pageNo.value = 0
+    return
+  }
+  // 提交 / 切换类型已经主动发起请求时，避免 query 同步触发第二次。
+  if (changed || (!searched.value && !loading.value)) void search(1)
+}
+
+watch(() => route.query, applyQuery, { immediate: true })
 
 function playSongAt(index: number): void {
   player.playList(songs.value, index)
@@ -174,7 +225,7 @@ function openPlaylist(id: string): void {
     <section class="search-hero">
       <div class="eyebrow">Explore</div>
       <h1>搜你想听的</h1>
-      <form class="search-box" @submit.prevent="search(1)">
+      <form class="search-box" @submit.prevent="submitSearch">
         <span class="search-icon"><AppIcon name="search" :size="19" /></span>
         <input
           v-model="keyword"

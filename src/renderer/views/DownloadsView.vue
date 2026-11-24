@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import type { DownloadTask } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
@@ -20,6 +21,8 @@ const FILTERS: Array<{ value: DownloadFilter; label: string }> = [
   { value: 'failed', label: '未成功' }
 ]
 
+const route = useRoute()
+const router = useRouter()
 const downloads = useDownloadStore()
 const toast = useToast()
 const pageRef = ref<HTMLElement | null>(null)
@@ -35,7 +38,34 @@ const storage = computed(() => downloads.storage)
 const activeText = computed(() =>
   progress.value.active > 0 ? `${progress.value.active} 个任务进行中` : '没有进行中的任务'
 )
-const filter = ref<DownloadFilter>('all')
+function queryFilter(value: unknown): DownloadFilter {
+  const raw = Array.isArray(value) ? value[0] : value
+  return FILTERS.some((item) => item.value === raw) ? (raw as DownloadFilter) : 'all'
+}
+
+const filter = ref<DownloadFilter>(queryFilter(route.query.filter))
+
+/** 过滤条件写入 URL；同一页面内的切换由页面栈去重。 */
+function syncFilterQuery(): void {
+  const query = { ...route.query }
+  if (filter.value === 'all') delete query.filter
+  else query.filter = filter.value
+  void router.replace({ path: '/downloads', query })
+}
+
+function setFilter(next: DownloadFilter): void {
+  if (filter.value === next) return
+  filter.value = next
+  syncFilterQuery()
+}
+
+watch(
+  () => route.query.filter,
+  () => {
+    const next = queryFilter(route.query.filter)
+    if (next !== filter.value) filter.value = next
+  }
+)
 // 纯本地搜索：只过滤已加载的任务快照，不发请求、不扫描下载目录。
 const searchText = ref('')
 // 任务顺序降序展示，新任务在最前；只影响显示，不改变主进程队列处理顺序。
@@ -211,7 +241,7 @@ onBeforeUnmount(() => downloads.setVisible(false))
                 type="button"
                 class="downloads-filter-btn"
                 :class="{ active: filter === item.value }"
-                @click="filter = item.value"
+                @click="setFilter(item.value)"
               >
                 {{ item.label }}
               </button>
