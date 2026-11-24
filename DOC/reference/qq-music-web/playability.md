@@ -23,6 +23,7 @@ disabled  = !(play || payable || tryPlay)
 - **试听不是灰色**：`try` 位为 1 且 `file.size_try > 0` 时，`disabled == false`，显示试听入口。
 - `file.size_*`、`status`、`pay_month`、`pay_status` 都不参与官方这个灰色公式；它们分别表示「曲库有哪些档位」「上游状态」「会员档位细化」。`status` 可作为项目侧的显式兜底（1/2 直接灰），但不能替代 `switch`。
 - `disabled` 是**按请求上下文（账号 + 地区 + 登录态）算出来的**。同一首歌换账号或换出口地区，`switch` 的 play 位会变，灰色状态也随之变。
+- **歌单 / “我喜欢”列表里的 `action.switch` 可能是过期快照**：同一首歌在列表接口里仍带 play 位，在详情、专辑列表和取流 `auth_switch` 里却没有 play 位。官方详情页 / 专辑页因此能正确置灰；只读歌单列表的客户端会把它显示成可播。判定时必须以详情侧（`get_song_detail_yqq`、`CgiGetTrackInfo`、`GetAlbumSongList`）的 `action.switch` 为准，详见下文「实测：歌单列表 action 与详情不一致」。
 
 ## 官方解析代码（原文片段）
 
@@ -105,12 +106,106 @@ u.action=d,...
 
 `0012KYia1pEVNN` 的 `icons = 2621441`，按官方算法解出 `copyright = 1`（最低位）和 `isVip = 0`；`000GoA8y4KpBFd` 的 `icons = 524288`，解出 `copyright = 0`。两者都被置灰，但 `copyright` 位不同，说明「地区/版权不可用」与「下架/无授权」共用 `disabled` 表现，需要额外用 `copyright` 或详情接口的 `disableInfo` 区分原因。
 
+## 实测：歌单列表 action 与详情不一致
+
+2026-11-24 用当前登录账号复核「我喜欢」全量 668 首，同时请求：
+
+- 列表侧：`music.srfDissInfo.DissInfo` / `CgiGetDiss`，以及官方网页端实际使用的 `music.srfDissInfo.aiDissInfo` / `uniform_get_Dissinfo`。
+- 详情侧：`music.pf_song_detail_svr` / `get_song_detail_yqq`（逐首）与 `music.trackInfo.UniformRuleCtrl` / `CgiGetTrackInfo`（批量）。
+- 取流侧：`vkey.GetVkeyServer` / `CgiGetVkey` 返回的 `auth_switch`。
+
+结果：**668 首中有 10 首的列表 `action.switch` 与详情不一致，全部是「列表说可播、详情说不可播」**。两个列表接口（`CgiGetDiss` 与 `uniform_get_Dissinfo`）对这 10 首返回的值相同；两个详情接口（`get_song_detail_yqq` 与 `CgiGetTrackInfo`）对这 10 首也返回相同的值。其中 `OK (feat. Don Toliver|Explicit)` 的 mid 为 `002uJC3o1pQozM`，是本次问题的直接样本。
+
+| 歌曲 | 专辑 | 列表 `switch` | 详情 `switch` | 列表 `msgid` | 详情 `msgid` | 列表 `icons` | 详情 `icons` |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| PUNCH DRUNK | BULLY - DELUXE (Explicit) | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| OK (feat. Don Toliver\|Explicit) | BULLY - DELUXE (Explicit) | 134327679 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| WHATEVER WORKS | BULLY (Explicit) | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| ALL THE LOVE (feat. Andre Troutman) (Explicit) | BULLY (Explicit) | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| BEAUTY AND THE BEAST | BULLY (Explicit) | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| WHITE LINES (feat. Andre Troutman) | BULLY (Explicit) | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| PREACHER MAN | BULLY (Explicit) | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| LAST BREATH | BULLY | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| PREACHER MAN (Explicit) | BULLY (Explicit) | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+| Ain't No Fun(If the Homies Cant Have None) | Doggystyle | 134331775 | 134283265 | 0 | 3 | 131073 | 2621441 |
+
+字段差异不止 `switch`：
+
+- 列表 `switch2` 在 9 首里是 `21541888` / `21536768`，详情 `switch2` 全部为 `0`；`PUNCH DRUNK` 的列表 `switch2` 本身也是 `0`，所以 `switch2` 不能单独当判别条件。
+- 列表 `msgid = 0`，详情 `msgid = 3`。`msgid = 1` 的四首已下架歌曲（`Ambitionz Az A Ridah`、`6 Foot 7 Foot`、`Kangaroo Court`、`Blow`）列表与详情一致，都是 `switch = 65537`、`icons = 524288`。
+- `pay`、`file.size_try`、`status` 在这 10 首的列表与详情之间完全相同：`pay_play = 0`、`pay_down = 0`、`size_try = 0`、`status = 0`。因此无法用 `pay` 或 `status` 区分。
+
+按官方公式解码：
+
+```text
+详情 switch 134283265 = 0b1000000000010000000000000001
+  只有哨兵位 0 与 poster 位 16 为 1，play_lq / play_hq / play_sq / play_5_1 全为 0
+  pay_play = pay_down = 0，try 位为 0
+  → disabled = true
+
+列表 switch 134331775 = 0b1000000000011010110101111111
+  play_lq / play_hq / play_sq 均为 1
+  → disabled = false
+```
+
+### 与取流结果对照
+
+对这 10 首中的多首请求 `CgiGetVkey`（128k），`midurlinfo[0].auth_switch` 都等于详情侧的 `134283265`，`result = 104003`，`purl` 为空；而可播样本 `001wQLnw0g7jh4`（After Party）的 `auth_switch = 16905999`，与详情 `switch` 相同，`result = 0`，`purl` 非空。也就是说：
+
+```text
+详情 action.switch == vkey auth_switch == 实际是否有权取流
+歌单列表 action.switch != 详情 action.switch（仅对部分歌曲）
+```
+
+### 对照样本
+
+- 同账号另一份 468 首歌单：列表与详情 0 差异，说明不是所有歌单、所有歌曲都会过期。
+- `BULLY - DELUXE` 专辑页 `GetAlbumSongList` 的 20 首 `action.switch` 与 `CgiGetTrackInfo` 全部一致（其中 19 首为 `134283265`，`MISSION CONTROL` 为 `134217729`），`msgid` 均为 `3`。所以官方专辑页能正确置灰这 10 首中的 9 首。
+- 「我喜欢」中已下架的 4 首，列表与详情一致，所以此前只修列表字段就能解决；本次 10 首属于另一种情况：**歌曲还在专辑里，但列表接口保留了旧的权益位**。
+
+### 为什么官方客户端能正确标灰
+
+官方网页端详情页调用的是 `get_song_detail_yqq`，专辑页调用的是 `GetAlbumSongList`，两者都返回详情侧的正确 `switch`，再走同一套 `disabled` 公式，所以 `OK` 这类歌曲在详情 / 专辑上下文里是灰色。歌单列表接口返回的是另一份（过期的）`action`；如果只读列表，官方网页端的通用歌单列表也会把它当成可播。官方客户端最终的标灰结果与「详情 `switch`」和「vkey `auth_switch`」一致，说明它读的是详情侧（或其等价的按歌曲权益）数据，而不是歌单列表里的 `action`。
+
+对上表 10 首，列表与详情的 `pay`、`size_try`、`status` 完全一致，只有 `action` 不同；上游为什么没有刷新这部分 `action` 无法仅从响应判断（可能是按歌曲缓存的权益快照），但能确定的是详情侧与取流侧一致，列表侧不可信。
+
+对本项目而言，`CgiGetDiss` / `uniform_get_Dissinfo` 只能用来获取顺序和基础元数据，**不能直接把它的 `action.switch` 当作判灰依据**。可靠且成本可控的做法是用 `CgiGetTrackInfo` 批量复核 `action.switch`、`file.size_try` 与 `pay` 字段；详情侧与列表侧一致时无需变更，不一致时以详情侧为准。不要为了判灰逐首申请 vkey：`switch` 已经够用，vkey 只在实际播放 / 下载时请求。
+
+### 批量接口与客户端分片
+
+这里要区分两件事：
+
+- **上游批量**：`CgiGetTrackInfo` 本身就是批量接口。一次 `musicu` 请求的 `req_0.param.mids` 可以带多首，响应 `req_0.data.tracks` 一次返回多首；不是「客户端循环 N 次、每次一首」。
+- **客户端分片**：上游对单次 `mids` 有上限，所以客户端仍然要拆成多次 HTTP 请求。拆的是「100 首 / 请求」，不是「1 首 / 请求」。
+
+2026-11-24 实测该接口的单次上限与速度：
+
+| 单次 `mids` 数 | 结果 | 耗时（单请求） |
+| ---: | --- | ---: |
+| 1–100 | `code=0`，返回全部请求的歌曲 | 约 0.1–0.2 s |
+| 110–160 | `code=0`，但只返回前 100 首，后面的静默丢弃 | 约 0.1–0.2 s |
+| 180 及以上 | HTTP/2 会话被关闭（`ERR_HTTP2_SESSION_ERROR`） | — |
+
+668 首「我喜欢」按 100 首分片：
+
+- 7 个请求；串行、请求之间不加延迟，总耗时约 0.9 s；
+- 7 个请求并发，总耗时约 0.15 s；
+- 连续 3 轮（共 21 个请求）全部 `code=0`、无缺曲、未出现 `2001` / `104604` / `104009`。
+
+因此：
+
+- 项目侧不再把分片大小暴露给调用方：`CgiGetTrackInfo` 封装为 `fetchTrackInfoByMids(mids)`，内部固定 100 首 / 请求；668 首从 14 个请求降到 7 个。完整方案见 [`song-availability-plan.md`](./song-availability-plan.md)。
+- `CgiGetTrackInfo` 不需要像 vkey 那样加 300 ms 间隔；封装内部只是顺序 `await`，没有人为延迟。
+- 需要严格限速的是 `CgiGetVkey`：它只接受单首、项目侧 `VKEY_MIN_INTERVAL_MS = 300`；那条规则只服务实际播放 / 下载，不要拿来限制判灰用的 `CgiGetTrackInfo`。
+- 「只复核当前可见页」是请求量取舍，不是上游限制。对 668 首这种规模，整份复核只有 7 个请求，完全可以直接做；对几万首的超大歌单再按页或分批。
+
 ## 字段关系
 
 | 字段 | 是否决定灰色 | 说明 |
 | --- | --- | --- |
-| `action.switch` | **是（核心）** | 账号 + 地区 + 登录态的权益位图；play 位为 0 才可能灰 |
-| `action.icons` | 辅助 | 最低位 `copyright`；第 18 位 `isVip`；用于区分灰的原因/徽标 |
+| `action.switch` | **是（核心）** | 账号 + 地区 + 登录态的权益位图；play 位为 0 才可能灰。**必须取详情侧的值**；歌单列表的值可能是过期快照 |
+| `action.msgid` | 辅助 | 详情侧的 `3` 对应「豪华付费音乐包」提示；本轮 10 首「列表可播 / 详情不可播」样本均为详情 `3`、列表 `0`。它不能单独判灰，只用于区分原因 |
+| `action.icons` | 辅助 | 最低位 `copyright`；第 18 位 `isVip`；用于区分灰的原因/徽标。本轮样本中列表与详情的 `icons` 也不一致 |
 | `pay.pay_play` | **是（反向）** | `1` 表示有付费路径，**不会灰**；不是「不可播」 |
 | `pay.pay_down` | **是（反向）** | 官方把「可下载」也算作不灰的条件 |
 | `file.size_try` | **是（配合 `try` 位）** | `try` 位为 1 且 `size_try > 0` → 试听，不灰 |
@@ -123,8 +218,10 @@ u.action=d,...
 
 | 接口 | `action.switch` | `file.size_try` | `pay.*` | 能否直接判灰 |
 | --- | --- | --- | --- | --- |
-| 歌单 / 专辑 / 歌手歌曲列表（`music.srfDissInfo.aiDissInfo`、`GetAlbumSongList` 等） | 有 | 有 | 有 | 能 |
-| 单曲详情（`music.pf_song_detail_svr.get_song_detail_yqq`） | 有 | 有 | 有 | 能 |
+| 歌单 / 「我喜欢」列表（`CgiGetDiss`、`uniform_get_Dissinfo`） | 有，但可能是过期快照 | 有 | 有 | **不能**；需用详情 / `CgiGetTrackInfo` 复核 |
+| 专辑列表（`GetAlbumSongList`） | 有（本轮 20 首与详情全部一致） | 有 | 有 | 能 |
+| 歌手歌曲列表 | 视接口而定；本轮未复核 | 视接口而定 | 视接口而定 | 建议按详情复核 |
+| 单曲详情 / 批量详情（`get_song_detail_yqq`、`CgiGetTrackInfo`） | 有（权威） | 有 | 有 | 能 |
 | 搜索（`DoSearchForQQMusicDesktop`） | 无（本项目 fixture 只有 `pay.pay_play`） | 无 | 部分 | 不能；先按 `unknown` 展示，播放失败再兜底 |
 | 推荐 / 首页货架 | 视模块而定 | 视模块而定 | 视模块而定 | 缺字段时按 `unknown` |
 
@@ -194,13 +291,15 @@ export function songFlags(song: { action?: { icons?: number | null } | null }) {
 补充约束：
 
 - `switch` 与账号/地区强相关。登录、退出、切换账号、切换网络出口后，已缓存的 `switch` 会过期；这些时点应让歌单/详情缓存失效或至少重新拉取当前列表。
-- 不要为了判灰去批量申请 vkey。`switch` 已经包含当前上下文的可播权益；vkey 只在真正播放/下载时请求。
+- 歌单 / 「我喜欢」列表的 `action.switch` 不能直接写进 `Song.playSwitch`。即使列表与详情大多一致，也可能出现本轮的 10 首「列表可播、详情不可播」；应按当前可见页用 `CgiGetTrackInfo` 批量复核（50 首 / 请求），只把详情侧的 `action.switch`、`file.size_try`、`pay` 字段写入 `Song`，列表字段继续用于顺序和基础元数据。
+- 不要为了判灰去批量申请 vkey。`switch` 已经包含当前上下文的可播权益；vkey 只在真正播放/下载时请求。详情侧的 `switch` 与 vkey 的 `auth_switch` 在本轮样本中完全一致，可作为对照证据。
 - `switch` 在某些响应里可能缺失或为 0；官方此时会回退到 `403`（`403` 解码后 `play_lq = 1`，即当作可播）。本项目建议按 `unknown` 保守处理，避免把未知误判成灰；若要和网页端完全一致，可在 `raw == null || raw === 0` 时改用 403。
 - `switch` 是官方网页客户端的实现细节，不是公开契约；上游改位表时以实际页面行为为准。
 
 <ul class="note">
 <li>取证页面：<code>https://y.qq.com/n/ryqq/songDetail/000GoA8y4KpBFd</code>、<code>.../0012KYia1pEVNN</code>、<code>.../003BkwkH0iS8Ko</code>、<code>.../00271ray3rOgaB</code>。</li>
 <li>服务端渲染数据位于 <code>window.__INITIAL_DATA__.songList[0]</code>，其中 <code>action</code> 已含解析后的 24 个命名位；列表接口的原始歌曲只给 <code>action.switch</code>，需要自行解析。</li>
+<li>2026-11-24 用登录账号复核「我喜欢」668 首，发现 10 首歌单列表 <code>action.switch</code> 仍带 play 位、详情与 vkey <code>auth_switch</code> 已无 play 位；详情见「实测：歌单列表 action 与详情不一致」。</li>
 <li><code>songlist__item--disable</code> 是官方列表的灰色行 class；点击被 <code>if (song.disabled) return ...</code> 分支拦下，弹出「无版权歌曲」。</li>
 <li>本页只描述网页端的展示判定；实际能否取到音频仍由播放时的 vkey 决定，见 <code>DOC/IMPL.md</code> 4.24 与 <code>DOC/PROVIDER.html</code>。</li>
 </ul>
