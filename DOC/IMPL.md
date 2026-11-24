@@ -1256,3 +1256,29 @@
 - `npm run build` 产物包含 `noto-sans-avestan-avestan-400-normal-*.woff2` / `.woff`。
 - `npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
 - 未做真实窗口截图验收；字符覆盖由 fontconfig 字符集与构建产物验证。
+
+### 4.54 移除搜索页固定推荐搜索词 [已解决] 
+
+**描述**：ISSUE 要求去掉搜索框下方固定的推荐搜索词 chips；若有可用的上游接口则改为动态推荐，没有则直接移除。
+
+**解决方案**：
+
+- 调查后确认没有可用的动态热词来源：旧接口 `c.y.qq.com/splcloud/fcgi-bin/gethotkey.fcg` 虽返回 `code=0`，但内容停留在 2019 年（“我们的歌”“冰雪奇缘2”“桥边姑娘”等），不再维护；musicu `music.search.SearchCgiService` 的 `GetHotKey`、`GetHotSearch`、`HotSearch`、`GetHotSearchKey`、`GetSearchTips`、`GetHotWords` 与 `music.search.HotSearchSvr / GetHotSearchList` 全部返回 `500003 / 860100001`；当前 `y.qq.com` 搜索页打包产物中没有热词接口引用。
+- 按 ISSUE 的兜底要求移除固定推荐词：删除 `HOT_KEYWORDS` 常量、`useKeyword()` 与搜索框下方的 chips 模板。
+- 删除只服务该区块的 `.chips` 样式；`.chip` 仍由歌手页的专辑筛选使用，保留。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 搜索页固定推荐搜索词条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“移除搜索页固定推荐搜索词” | 增 | 记录接口调查结论与移除范围。 |
+| `USER.html` | §5.2.8 页面结构 · 搜索 | 改 | 页面结构去掉“热门关键词 chips”。 |
+| `CORE.html` | §4.44 `SearchView.vue`（`#c4-44`） | 改 | 说明不显示热门关键词 / 固定推荐词及其原因。 |
+
+**工作记录**：
+
+- `gethotkey.fcg` 响应示例：`{"code":0,"data":{"hotkey":[{"k":"我们的歌 ","n":765562}, ...]}}`，数据与当前热门无关，不适合作为动态推荐。
+- musicu 探测均返回 `req_0.code=500003`、`subcode=860100001`（方法不存在）。
+- 移除后搜索页保留页头、搜索框、五类标签与结果区；`npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
+- 未做窗口截图验收；搜索页布局由模板与样式审阅覆盖。

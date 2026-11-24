@@ -1861,7 +1861,7 @@ const emit = defineEmits&lt;{
 <pre><code>// 无 props / emits。
 </code></pre>
 <ul class="note">
-  <li>页面状态：关键词、当前类型、累计结果、已加载页、加载 / 加载更多与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。五类标签为单曲 / 歌手 / 专辑 / 歌单 / MV，MV 作为独立标签通过 <code>search.byType({ type: 'mv' })</code> 加载，不再附加在单曲结果底部。在线搜索框不显示占位文字，用 <code>aria-label="搜索歌曲、歌手、专辑、歌单或 MV"</code> 保留无障碍名称。单曲结果使用 <a href="#c4-101">SongListTable</a>；单曲播放由页面提供，下一首播放、收藏、下载与加入歌单由组件统一处理。</li>
+  <li>页面状态：关键词、当前类型、累计结果、已加载页、加载 / 加载更多与已搜索标记；请求带自增序号，避免旧响应覆盖新结果。五类标签为单曲 / 歌手 / 专辑 / 歌单 / MV，MV 作为独立标签通过 <code>search.byType({ type: 'mv' })</code> 加载，不再附加在单曲结果底部。在线搜索框不显示占位文字，用 <code>aria-label="搜索歌曲、歌手、专辑、歌单或 MV"</code> 保留无障碍名称。搜索框下方不显示热门关键词 chips 或固定推荐词：上游没有维护中的热词接口（<code>gethotkey.fcg</code> 只返回旧数据，musicu 无对应方法），因此不做动态推荐。单曲结果使用 <a href="#c4-101">SongListTable</a>；单曲播放由页面提供，下一首播放、收藏、下载与加入歌单由组件统一处理。</li>
   <li>结果分页按累计模式：每页请求固定 <code>SEARCH_PAGE_SIZE_DEFAULT = 48</code>（歌手固定 <code>SEARCH_SINGER_PAGE_SIZE = 24</code>），与宽 / 窄屏列数无关；追加时按 <code>songMid</code> / 歌手 <code>mid</code> / 专辑 <code>mid</code> / 歌单 <code>id</code> / <code>mvId</code> 去重。<code>meta.nextpage</code> 决定是否还有下一页；<code>.main</code> 滚动到底自动加载，同时保留“加载更多”按钮。新关键词或切换标签时重置并回顶；加载更多失败只 Toast，保留已加载内容。</li>
   <li>上游会按 <code>perpage</code> 限制每页上限，但返回条数可能少于请求值（歌单常见 48 / 46 / 45，重复请求同一页结果稳定，属于服务端过滤而非随机）；歌手 <code>perpage &gt; 40</code> 会返回 <code>is_filter=-2</code> 与空列表。页面不额外补页凑整，末行可能不满，这是上游不可控行为。</li>
   <li>宽屏（&gt;900px）歌手 / 专辑 / 歌单固定 8 列，窄屏 3 列；MV 宽屏 6 列、窄屏 2 列，卡片宽度随内容区缩放。MV 封面使用源图 640×360 的 16:9 比例；封面使用原生 <code>&lt;img&gt;</code>，若 URL 为 GIF / WebP 动图则按浏览器原生行为播放，不做冻结或重绘。当前搜索接口的 <code>mv_pic_url</code> 通常是静态 JPEG（例如 Bound 2 (Network Edit)），客户端看到的“动”是视频预览而非动图，接口本身没有提供动画帧。</li>

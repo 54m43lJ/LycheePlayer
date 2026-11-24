@@ -734,13 +734,6 @@ button:focus-visible,
   box-shadow: var(--shadow-sm);
 }
 
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
-}
-
 .chip {
   padding: 7px 12px;
   border: 1px solid var(--border);
