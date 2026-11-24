@@ -8,7 +8,7 @@ import type {
   ArtistDetail,
   ArtistSongSort
 } from '@shared/types'
-import { ARTIST_ALBUM_PAGE_MAX } from '@shared/constants'
+import { ARTIST_ALBUM_PAGE_MAX, SCROLL_LOAD_THRESHOLD } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
 import CatalogDescription from '../components/CatalogDescription.vue'
 import CoverArt from '../components/CoverArt.vue'
@@ -88,7 +88,6 @@ const loadedSongSort = ref<ArtistSongSort | null>(null)
 const loadedAlbumSort = ref<ArtistAlbumSort | null>(null)
 const pageRef = ref<HTMLElement | null>(null)
 const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
-const SCROLL_LOAD_THRESHOLD = 160
 let scrollRoot: HTMLElement | null = null
 let token = 0
 let albumToken = 0

@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import type { AlbumDetail } from '@shared/types'
+import { SCROLL_LOAD_THRESHOLD } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
 import CatalogDescription from '../components/CatalogDescription.vue'
 import CoverArt from '../components/CoverArt.vue'
@@ -10,6 +11,7 @@ import SongListTable from '../components/SongListTable.vue'
 import { describeError, unwrap } from '../api'
 import { goBack } from '../composables/back-navigation'
 import { usePageJump } from '../composables/page-jump'
+import { useToast } from '../composables/toast'
 import { useAuthStore } from '../stores/auth'
 import { useDownloadStore } from '../stores/download'
 import { usePlayerStore } from '../stores/player'
@@ -20,6 +22,7 @@ const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
 const download = useDownloadStore()
 const auth = useAuthStore()
+const toast = useToast()
 
 const pageRef = ref<HTMLElement | null>(null)
 const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
@@ -28,6 +31,7 @@ const loading = ref(false)
 const error = ref('')
 const loadingMore = ref(false)
 let token = 0
+let scrollRoot: HTMLElement | null = null
 const mid = computed(() => String(route.params.mid ?? ''))
 const songs = computed(() => detail.value?.songs ?? [])
 
@@ -55,7 +59,10 @@ async function load(reset = true): Promise<void> {
     void playlistEdit.loadFavorites(data.songs.map((song) => song.songMid))
     void download.refreshAssets(data.songs.map((song) => song.songMid))
   } catch (err) {
-    if (request === token) error.value = describeError(err)
+    if (request === token) {
+      if (reset) error.value = describeError(err)
+      else toast.error(describeError(err))
+    }
   } finally {
     if (request === token) {
       loading.value = false
@@ -71,6 +78,24 @@ function playAll(): void {
 function playAt(index: number): void {
   player.playList(songs.value, index)
 }
+
+function maybeLoadMore(): void {
+  if (loading.value || loadingMore.value || !detail.value?.hasMore) return
+  const el = scrollRoot
+  if (el && el.scrollTop + el.clientHeight >= el.scrollHeight - SCROLL_LOAD_THRESHOLD) {
+    void load(false)
+  }
+}
+
+onMounted(() => {
+  scrollRoot = pageRef.value?.closest<HTMLElement>('.main') ?? null
+  scrollRoot?.addEventListener('scroll', maybeLoadMore, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  scrollRoot?.removeEventListener('scroll', maybeLoadMore)
+  scrollRoot = null
+})
 
 watch(mid, () => void load(), { immediate: true })
 </script>
@@ -145,10 +170,13 @@ watch(mid, () => void load(), { immediate: true })
       </div>
 
       <div v-if="detail.hasMore" class="feed-footer">
-        <button class="btn ghost small" :disabled="loadingMore" @click="load(false)">
-          {{ loadingMore ? '加载中' : '加载更多' }}
-        </button>
+        <template v-if="loadingMore">
+          <span class="spinner" />
+          <span>正在加载更多</span>
+        </template>
+        <span v-else>继续向下滚动加载更多</span>
       </div>
+      <div v-else-if="songs.length > 0" class="feed-footer">已经到底了</div>
 
       <PageJump
         :show-top="showTop"
