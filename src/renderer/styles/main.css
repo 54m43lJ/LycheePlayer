@@ -980,10 +980,11 @@ button:focus-visible,
   white-space: nowrap;
 }
 
-/* 歌名副标题：与歌名同一行，弱化字重与颜色，空间不足时先省略。 */
+/* 歌名副标题：与歌名同一行，弱化字重与颜色；空间不足时先收缩副标题，再压缩歌名。 */
 .song-subtitle {
-  flex: 0 1 auto;
-  min-width: 0;
+  /* 极大的收缩优先级让副标题先让位，歌名保持完整；最小宽度保证副标题不会完全消失。 */
+  flex: 0 1000 auto;
+  min-width: 4em;
   margin-left: 6px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -3981,8 +3982,18 @@ button:focus-visible,
 }
 
 .lyrics-page-title {
+  display: flex;
+  align-items: center;
+  min-width: 0;
   font-size: 16px;
   font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.lyrics-page-title-text {
+  flex: 0 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
