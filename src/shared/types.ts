@@ -162,6 +162,8 @@ export interface CommentLikeResult {
 
 export interface CommentPage {
   comments: Comment[]
+  /** 首屏热评附加模块：按点赞数降序；仅评论首屏返回。 */
+  hotComments?: Comment[]
   /** 首屏回复热评：按点赞数降序、最多 COMMENT_HOT_REPLY_LIMIT 条；仅回复首屏返回。 */
   hotReplies?: Comment[]
   total: number

@@ -4088,16 +4088,36 @@ button:focus-visible,
 }
 
 .comments-toolbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 16px 22px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.comments-heading {
+  padding: 16px 0 20px;
+}
+
+.comments-heading-ruled .comments-title {
+  width: 33%;
+  border-bottom: 1px solid var(--border);
+}
+
+.comments-heading-split {
+  margin-top: 20px;
 }
 
 .comments-title {
   color: var(--text);
-  font-size: 13px;
+  font-size: 22px;
   font-weight: 600;
 }
 

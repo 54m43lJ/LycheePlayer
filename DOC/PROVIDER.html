@@ -178,7 +178,7 @@
   </tr>
   <tr>
     <td>评论读取</td>
-    <td>未登录时匿名发送；登录后携带 Cookie 以读取 <code>IsPraised</code>。单页条数不超过 25，应用固定 25。条数与上游参数见 <a href="#p4-1">§4.1</a>，内部签名见 <a href="CORE.html#c4-15">CORE §4.15</a>。</td>
+    <td>未登录时匿名发送；登录后携带 Cookie 以读取 <code>IsPraised</code>。单页条数不超过 25，应用固定 25。首屏额外传 <code>WithHot=1</code>，只读取 <code>CommentList2</code> 的热评附加模块作为热评区内容：按 <code>PraiseNum</code> 降序全部展示，不参与评论游标分页，后续页不再请求；上游没有按点赞排序参数。条数与上游参数见 <a href="#p4-1">§4.1</a>，内部签名见 <a href="CORE.html#c4-15">CORE §4.15</a>。</td>
   </tr>
   <tr>
     <td>评论正文换行</td>
@@ -455,7 +455,7 @@
   </tr>
   <tr>
     <td>歌曲 / MV 评论</td>
-    <td>歌曲：<code>BizId</code>（数字歌曲 ID） · <code>BizType</code>（1） · <code>BizSubType</code>（2）；MV：<code>BizId</code>（MV vid） · <code>BizType</code>（5），不传 <code>BizSubType</code>；均含 <code>PageSize</code>（≤25） · <code>PageNum</code> · <code>LastCommentSeqNo</code> · <code>HashTagID</code> · <code>SelfSeeEnable</code> · <code>PicEnable</code> · <code>AudioEnable</code> · <code>WithHot</code>（1 附带热评）</td>
+    <td>歌曲：<code>BizId</code>（数字歌曲 ID） · <code>BizType</code>（1） · <code>BizSubType</code>（2）；MV：<code>BizId</code>（MV vid） · <code>BizType</code>（5），不传 <code>BizSubType</code>；均含 <code>PageSize</code>（≤25） · <code>PageNum</code> · <code>LastCommentSeqNo</code> · <code>HashTagID</code> · <code>SelfSeeEnable</code> · <code>PicEnable</code> · <code>AudioEnable</code> · <code>WithHot</code>（首屏 1，附带热评模块 <code>CommentList2</code>）</td>
   </tr>
   <tr>
     <td>评论回复</td>
@@ -892,7 +892,8 @@ interface QqCommentLikeResult {
 
 interface QqCommentList {
   // 上游没有按点赞排序参数；GetHotCommentList 返回业务码 10000。
-  // WithHot=1 的 CommentList2 是仅首屏的热评附加模块，不是可分页评论列表，应用不读取。
+  // WithHot=1 的 CommentList2 是仅首屏的热评附加模块，不是可分页评论列表；
+  // 应用只在首屏读取它作为“热评”区内容，按 PraiseNum 降序全部展示。
   CommentList?: {
     Comments?: QqComment[];
     Total?: number;
@@ -1010,7 +1011,7 @@ interface QqLoginPayload {
   <tr>
     <td><code>QqCommentList</code></td>
     <td><code>CommentList.Comments[]</code> 的 <code>CmId</code> / <code>SeqNo</code> / <code>Nick</code> / <code>Avatar</code> / <code>Content</code> / <code>PubTime</code> / <code>PraiseNum</code> / <code>ReplyCnt</code> / <code>IsPraised</code> / <code>IsLiked</code> / <code>State</code> / <code>RepliedComments</code> · <code>CommentList.Total</code> · <code>CommentList.HasMore</code></td>
-    <td>缺少 <code>CmId</code> 的记录被过滤；正文与媒体都为空且 <code>State !== 2</code> 的记录被过滤，已删除记录保留占位。<code>Content</code> 的真实 / 字面量换行统一归一化为 <code>\n</code> 后再映射；<code>Nick</code> / <code>RepliedComments[].Nick</code> 与 <code>Content</code> 中的 C0 / C1 控制字符在映射前移除，正文只保留换行。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。<code>State === 2</code> 映射为 <code>deleted</code>；<code>RepliedComments[0].Nick</code> 映射为 <code>replyToNickname</code>。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。顶层评论只提供最新评论读取，不提供“最旧”排序，上游也没有按点赞排序参数；不读取 <code>CommentList2</code> / <code>WithHot</code>。<code>GetReplyCommentList</code> 复用同一映射，单页 10 条；<code>RankType=1</code> 时按点赞数降序返回，应用只用于取首屏点赞数超过 3 的前 3 条回复热评（不足 3 条时按实际条数），该模式的分页游标为 <code>LastRankScore</code>，与普通页的 <code>LastCommentSeqNo</code> 不混用。</td>
+    <td>缺少 <code>CmId</code> 的记录被过滤；正文与媒体都为空且 <code>State !== 2</code> 的记录被过滤，已删除记录保留占位。<code>Content</code> 的真实 / 字面量换行统一归一化为 <code>\n</code> 后再映射；<code>Nick</code> / <code>RepliedComments[].Nick</code> 与 <code>Content</code> 中的 C0 / C1 控制字符在映射前移除，正文只保留换行。<code>PubTime</code> 映射为 <code>createdAtMs</code>；<code>IsPraised</code> 优先映射为 <code>liked</code>，缺失时回退 <code>IsLiked</code>，两者都缺失按未点赞处理；登录后才会按当前用户返回点赞状态。<code>State === 2</code> 映射为 <code>deleted</code>；<code>RepliedComments[0].Nick</code> 映射为 <code>replyToNickname</code>。分页必须使用最后一条评论的 <code>SeqNo</code> 作为 <code>LastCommentSeqNo</code> 游标，<code>PageNum</code> 不生效；<code>SeqNo</code> 为 19 位整数，解析时必须按字符串保留精度。顶层评论只提供最新评论读取，不提供“最旧”排序，上游也没有按点赞排序参数；首屏额外传 <code>WithHot=1</code>，应用读取 <code>CommentList2</code> 作为热评区内容，按 <code>PraiseNum</code> 降序全部展示，热评模块不参与游标分页。<code>GetReplyCommentList</code> 复用同一映射，单页 10 条；<code>RankType=1</code> 时按点赞数降序返回，应用只用于取首屏点赞数超过 3 的前 3 条回复热评（不足 3 条时按实际条数），该模式的分页游标为 <code>LastRankScore</code>，与普通页的 <code>LastCommentSeqNo</code> 不混用。</td>
   </tr>
   <tr>
     <td><code>QqAddCommentResult</code></td>

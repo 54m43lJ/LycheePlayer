@@ -44,6 +44,8 @@ interface RawCommentList {
 
 interface CommentListData {
   CommentList?: RawCommentList
+  /** WithHot=1 时返回的热评附加模块；仅首屏。 */
+  CommentList2?: RawCommentList
 }
 
 interface CommentLikeData {
@@ -74,13 +76,28 @@ function mapComments(raw: RawComment[]): Comment[] {
     )
 }
 
-function toCommentPage(list: RawCommentList, pageSize: number): CommentPage {
+/** 首屏热评附加模块：按点赞数降序返回全部热评，并按 ID 去重。 */
+function toHotComments(list: RawCommentList | undefined): Comment[] {
+  if (!list) return []
+  const unique = new Map<string, Comment>()
+  for (const comment of mapComments(list.Comments ?? [])) {
+    if (!unique.has(comment.id)) unique.set(comment.id, comment)
+  }
+  return [...unique.values()].sort((left, right) => right.likedCount - left.likedCount)
+}
+
+function toCommentPage(
+  list: RawCommentList,
+  pageSize: number,
+  hotList?: RawCommentList
+): CommentPage {
   const raw = list.Comments ?? []
   const nextCursor = String(raw.at(-1)?.SeqNo ?? '')
   const comments = mapComments(raw).slice(0, pageSize)
 
   return {
     comments,
+    hotComments: toHotComments(hotList),
     total: Number(list.Total ?? comments.length),
     hasMore: Boolean(list.HasMore) && /^\d+$/.test(nextCursor),
     nextCursor
@@ -167,6 +184,8 @@ interface CommentQuery extends Record<string, unknown> {
   BizId: string
   AudioEnable: number
   BizSubType?: number
+  /** 首屏 1：附带热评模块 CommentList2。 */
+  WithHot?: number
 }
 
 async function fetchComments(
@@ -191,6 +210,9 @@ async function fetchComments(
     AudioEnable: 1
   }
   if (bizSubType !== undefined) param.BizSubType = bizSubType
+  const firstPage = cursor === ''
+  // 热评附加模块只存在于首屏，后续页不再请求。
+  if (firstPage) param.WithHot = 1
   const data = await musicu<CommentListData>(
     'music.globalComment.CommentRead',
     'GetNewCommentList',
@@ -202,7 +224,7 @@ async function fetchComments(
   if (!list) {
     throw new UpstreamError('UPSTREAM_CHANGED', '评论响应缺少 CommentList')
   }
-  return toCommentPage(list, COMMENT_PAGE_SIZE)
+  return toCommentPage(list, COMMENT_PAGE_SIZE, firstPage ? data.CommentList2 : undefined)
 }
 
 /** 歌曲评论；songId 为上游数字歌曲 ID。 */
