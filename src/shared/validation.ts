@@ -51,8 +51,11 @@ export function isSong(value: unknown): value is Song {
     typeof pay.album === 'boolean' &&
     isNumberOrNull(value.status) &&
     isNumberOrNull(value.pay_play) &&
-    isNumberOrNull(value.pay_month) &&
-    isNumberOrNull(value.pay_status) &&
+    isNumberOrNull(value.payDown) &&
+    isNumberOrNull(value.playSwitch) &&
+    isNumberOrNull(value.sizeTry) &&
+    isNumberOrNull(value.tryStartMs) &&
+    isNumberOrNull(value.tryEndMs) &&
     isQualityOrNull(value.maxQuality) &&
     typeof value.mvId === 'string'
   )

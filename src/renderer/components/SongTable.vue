@@ -1,13 +1,12 @@
 <script setup lang="ts">
-import type { PlaybackPermission, Song, SongAssetState } from '@shared/types'
+import type { Song, SongAssetState, SongPlayState } from '@shared/types'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { playbackPermission } from '@shared/permission'
+import { canDownloadSong, songPlayState } from '@shared/permission'
 import AppIcon from './AppIcon.vue'
 import CoverArt from './CoverArt.vue'
 import MarqueeText from './MarqueeText.vue'
 import MvButton from './MvButton.vue'
-import { useAuthStore } from '../stores/auth'
 import { usePlayerStore } from '../stores/player'
 import { formatDuration, singerNames, songCover } from '../utils/format'
 import { downloadStateIcon, resolveDownloadState } from '../utils/download-state'
@@ -45,23 +44,27 @@ const emit = defineEmits<{
 }>()
 
 const player = usePlayerStore()
-const auth = useAuthStore()
 const playing = computed(() => player.status === 'playing')
 const compactQuery = window.matchMedia('(max-width: 900px)')
 const compact = ref(compactQuery.matches)
 const menuIndex = ref<number | null>(null)
 let mediaListener: ((event: MediaQueryListEvent) => void) | null = null
 
-function permission(song: Song): PlaybackPermission {
-  return playbackPermission(song, auth.vip)
+function playState(song: Song): SongPlayState {
+  return songPlayState(song)
 }
 
-function isPlayable(song: Song, index: number): boolean {
-  return permission(song).playable && index >= 0
+/** 不可播行不响应播放类操作；付费墙行仍可点击，以提示开通或购买。 */
+function isInteractive(song: Song): boolean {
+  return playState(song) !== 'disabled'
+}
+
+function canDownload(song: Song): boolean {
+  return canDownloadSong(playState(song))
 }
 
 function qualityLabel(song: Song): string {
-  const quality = permission(song).maxQuality
+  const quality = song.maxQuality
   if (quality === 'flac') return 'FLAC'
   if (quality === '320k') return '320K'
   if (quality === '128k') return '128K'
@@ -153,9 +156,9 @@ onBeforeUnmount(() => {
         :data-song-mid="song.songMid"
         :class="{
           active: song.songMid === activeMid,
-          unavailable: !permission(song).playable
+          unavailable: playState(song) === 'disabled'
         }"
-        @dblclick="isPlayable(song, index) && emit('play', index)"
+        @dblclick="isInteractive(song) && emit('play', index)"
       >
         <td class="song-index">
           <span class="song-index-slot">
@@ -163,7 +166,7 @@ onBeforeUnmount(() => {
             <button
               class="song-play"
               :aria-label="song.songMid === activeMid ? (playing ? '暂停' : '继续播放') : '播放'"
-              :disabled="!isPlayable(song, index)"
+              :disabled="!isInteractive(song)"
               @click.stop="song.songMid === activeMid ? emit('toggle') : emit('play', index)"
             >
               <AppIcon :name="song.songMid === activeMid && playing ? 'pause' : 'play'" :size="13" />
@@ -179,8 +182,11 @@ onBeforeUnmount(() => {
                 <span v-if="song.pay.album" class="pay-badge album">数字专辑</span>
                 <span v-else-if="song.pay.vip" class="pay-badge">VIP</span>
                 <span v-else-if="!song.pay.free" class="pay-badge">付费</span>
-                <span v-if="!permission(song).playable" class="quality-badge unavailable"
+                <span v-if="playState(song) === 'disabled'" class="quality-badge unavailable"
                   >不可播</span
+                >
+                <span v-else-if="playState(song) === 'trial'" class="quality-badge trial"
+                  >试听</span
                 >
                 <span v-else-if="qualityLabel(song)" class="quality-badge">{{
                   qualityLabel(song)
@@ -228,7 +234,7 @@ onBeforeUnmount(() => {
               class="song-icon"
               :class="downloadState(song) === 'none' ? null : downloadState(song)"
               :aria-label="downloadTitle(song)"
-              :disabled="!downloadable || !permission(song).playable"
+              :disabled="!downloadable || !canDownload(song)"
               @click.stop="emit('download', index)"
             >
               <AppIcon :name="downloadIcon(song)" :size="15" />
@@ -236,7 +242,7 @@ onBeforeUnmount(() => {
             <button
               class="song-icon"
               aria-label="下一首播放"
-              :disabled="!isPlayable(song, index)"
+              :disabled="!isInteractive(song)"
               @click.stop="emit('playNext', index)"
             >
               <AppIcon name="play-next" :size="16" />
@@ -272,13 +278,13 @@ onBeforeUnmount(() => {
                 {{ isFavorite(song) ? '取消收藏' : '收藏' }}
               </button>
               <button
-                :disabled="!downloadable || !permission(song).playable"
+                :disabled="!downloadable || !canDownload(song)"
                 @click="run(() => emit('download', index))"
               >
                 <AppIcon :name="downloadIcon(song)" :size="15" />
                 {{ downloadTitle(song) }}
               </button>
-              <button :disabled="!isPlayable(song, index)" @click="run(() => emit('playNext', index))">
+              <button :disabled="!isInteractive(song)" @click="run(() => emit('playNext', index))">
                 <AppIcon name="play-next" :size="15" />
                 下一首播放
               </button>

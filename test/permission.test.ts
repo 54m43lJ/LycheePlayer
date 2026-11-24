@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Song, VipLevel, VipStatus } from '../src/shared/types'
-import { playbackPermission } from '../src/shared/permission'
+import type { Song } from '../src/shared/types'
+import { canDownloadSong, canStartPlayback, songPlayState } from '../src/shared/permission'
 
 function song(overrides: Partial<Song> = {}): Song {
   return {
@@ -13,72 +13,72 @@ function song(overrides: Partial<Song> = {}): Song {
     pay: { free: true, vip: false, album: false },
     status: null,
     pay_play: null,
-    pay_month: null,
-    pay_status: null,
+    payDown: null,
+    playSwitch: null,
+    sizeTry: null,
+    tryStartMs: null,
+    tryEndMs: null,
     maxQuality: null,
     mvId: '',
     ...overrides
   }
 }
 
-function vip(level: VipLevel, state: VipStatus['state'] = 'known'): VipStatus {
-  return { state, isVip: level !== 'none', level, expiresAtMs: null }
-}
-
-describe('playbackPermission blocking stack', () => {
-  it('blocks status 1 and 2 without looking at payment', () => {
-    expect(playbackPermission(song({ status: 1 }), vip('super')).playable).toBe(false)
-    expect(playbackPermission(song({ status: 2 }), vip('super')).playable).toBe(false)
+describe('songPlayState', () => {
+  it('treats status 1 and 2 as disabled regardless of switch', () => {
+    expect(songPlayState(song({ status: 1, playSwitch: 81683 }))).toBe('disabled')
+    expect(songPlayState(song({ status: 2, playSwitch: 81683 }))).toBe('disabled')
   })
 
-  it('allows songs that do not require a paid play', () => {
-    expect(playbackPermission(song({ status: 3, pay_play: 0 }), vip('none')).playable).toBe(true)
-    expect(playbackPermission(song({ status: 3 }), vip('none')).playable).toBe(true)
+  it('treats missing, zero or non-finite switch as unknown', () => {
+    expect(songPlayState(song())).toBe('unknown')
+    expect(songPlayState(song({ playSwitch: 0 }))).toBe('unknown')
+    expect(songPlayState(song({ playSwitch: Number.NaN }))).toBe('unknown')
   })
 
-  it('blocks every paid song when VIP state is unknown', () => {
+  it('is playable when any play bit is set', () => {
+    for (const bit of [1, 2, 3, 17]) {
+      expect(songPlayState(song({ playSwitch: 2 ** bit }))).toBe('playable')
+    }
+  })
+
+  it('treats the lowest play bit as playable even without higher qualities', () => {
+    expect(songPlayState(song({ playSwitch: 81683 }))).toBe('playable')
+  })
+
+  it('is paywall when no play bit but a pay path exists', () => {
+    expect(songPlayState(song({ playSwitch: 65537, pay_play: 1 }))).toBe('paywall')
+    expect(songPlayState(song({ playSwitch: 65537, payDown: 1 }))).toBe('paywall')
+    expect(songPlayState(song({ playSwitch: 16897793, pay_play: 1 }))).toBe('paywall')
+  })
+
+  it('is trial when the try bit is set and a try file exists', () => {
     expect(
-      playbackPermission(
-        song({ pay_play: 1, pay_month: 1, pay_status: 1 }),
-        vip('none', 'unknown')
-      ).playable
-    ).toBe(false)
+      songPlayState(song({ playSwitch: 2 ** 14, sizeTry: 960887 }))
+    ).toBe('trial')
+    expect(songPlayState(song({ playSwitch: 2 ** 14, sizeTry: 0 }))).toBe('disabled')
   })
 
-  it('requires deluxe for pay_month 0', () => {
-    const paid = { pay_play: 1, pay_month: 0 }
-    expect(playbackPermission(song(paid), vip('vip')).playable).toBe(false)
-    expect(playbackPermission(song(paid), vip('none')).playable).toBe(false)
-    expect(playbackPermission(song(paid), vip('deluxe')).playable).toBe(true)
-    expect(playbackPermission(song(paid), vip('super')).playable).toBe(true)
+  it('is disabled when no play, pay or try condition is met', () => {
+    expect(songPlayState(song({ playSwitch: 134283265 }))).toBe('disabled')
+    expect(songPlayState(song({ playSwitch: 2 ** 8 }))).toBe('disabled')
+  })
+})
+
+describe('play state helpers', () => {
+  it('only starts playable, trial and unknown songs automatically', () => {
+    expect(canStartPlayback('playable')).toBe(true)
+    expect(canStartPlayback('trial')).toBe(true)
+    expect(canStartPlayback('unknown')).toBe(true)
+    expect(canStartPlayback('paywall')).toBe(false)
+    expect(canStartPlayback('disabled')).toBe(false)
   })
 
-  it('requires vip for pay_month 1', () => {
-    const paid = { pay_play: 1, pay_month: 1 }
-    expect(playbackPermission(song(paid), vip('none')).playable).toBe(false)
-    expect(playbackPermission(song(paid), vip('vip')).playable).toBe(true)
-    expect(playbackPermission(song(paid), vip('deluxe')).playable).toBe(true)
-  })
-
-  it('treats missing pay_month as unknown below vip', () => {
-    const paid = { pay_play: 1, pay_month: null }
-    expect(playbackPermission(song(paid), vip('none')).playable).toBe(false)
-    expect(playbackPermission(song(paid), vip('vip')).playable).toBe(true)
-  })
-
-  it('blocks non-members even when they purchased the song', () => {
-    expect(
-      playbackPermission(song({ pay_play: 1, pay_month: 1, pay_status: 1 }), vip('none')).playable
-    ).toBe(false)
-    expect(
-      playbackPermission(song({ pay_play: 1, pay_month: null, pay_status: 1 }), vip('none'))
-        .playable
-    ).toBe(false)
-  })
-
-  it('keeps the library max quality for display on blocked songs', () => {
-    const permission = playbackPermission(song({ status: 1, maxQuality: 'flac' }), vip('none'))
-    expect(permission.playable).toBe(false)
-    expect(permission.maxQuality).toBe('flac')
+  it('only downloads playable and unknown songs', () => {
+    expect(canDownloadSong('playable')).toBe(true)
+    expect(canDownloadSong('unknown')).toBe(true)
+    expect(canDownloadSong('trial')).toBe(false)
+    expect(canDownloadSong('paywall')).toBe(false)
+    expect(canDownloadSong('disabled')).toBe(false)
   })
 })

@@ -41,6 +41,9 @@ export interface PayInfo {
   album: boolean
 }
 
+/** 歌曲对当前账号的可播状态；由官方网页端的权益位图与元数据派生。 */
+export type SongPlayState = 'playable' | 'paywall' | 'trial' | 'disabled' | 'unknown'
+
 export interface Song {
   songMid: string
   songId: string
@@ -53,21 +56,19 @@ export interface Song {
   status: number | null
   /** 上游 pay.pay_play；1 表示需要会员或购买，缺失为 null。 */
   pay_play: number | null
-  /** 上游 pay.pay_month；0 / 1 以外的值（含缺失）按未知处理。 */
-  pay_month: number | null
-  /** 上游 pay.pay_status；0 表示未单独购买，缺失为 null。 */
-  pay_status: number | null
+  /** 上游 pay.pay_down；1 表示存在付费下载路径，缺失为 null。 */
+  payDown: number | null
+  /** 上游 action.switch 权益位图；缺失、0 或非法表示无法判定。 */
+  playSwitch: number | null
+  /** 上游 file.size_try；试听位为 1 且大于 0 时可试听。 */
+  sizeTry: number | null
+  /** 上游 file.try_begin / try_end（毫秒）；试听片段边界，缺失为 null。 */
+  tryStartMs: number | null
+  tryEndMs: number | null
   /** 曲库存在的最高音质档位，不代表当前账号一定可取流。 */
   maxQuality: Quality | null
   /** 上游绑定的 MV vid；无绑定或未提供时为空字符串。 */
   mvId: string
-}
-
-/** 由 Song 元数据与账号会员状态派生的播放权限。 */
-export interface PlaybackPermission {
-  playable: boolean
-  /** 曲库最高音质；只用于展示，不代表当前账号一定可取流。 */
-  maxQuality: Quality | null
 }
 
 export type PlaylistKind = 'normal' | 'favorites'

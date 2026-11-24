@@ -17,7 +17,7 @@ import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { usePlaylistStore } from '../stores/playlist'
 import { PLAYLIST_POLL_INTERVAL_MS } from '@shared/constants'
-import { playbackPermission } from '@shared/permission'
+import { canDownloadSong, canStartPlayback, songPlayState } from '@shared/permission'
 import { dailyPlaylistName, singerNames } from '../utils/format'
 
 const route = useRoute()
@@ -71,8 +71,8 @@ const error = computed(() =>
 const removable = computed(
   () => Boolean(meta.value && meta.value.editable && meta.value.kind === 'normal')
 )
-const playableSongs = computed(() =>
-  songs.value.filter((song) => playbackPermission(song, auth.vip).playable)
+const downloadableSongs = computed(() =>
+  songs.value.filter((song) => canDownloadSong(songPlayState(song)))
 )
 
 function source(): { kind: 'playlist'; id: string } {
@@ -87,17 +87,17 @@ function startAt(index: number): void {
 }
 
 function playAll(): void {
-  const start = filteredSongs.value.findIndex(
-    (song) => playbackPermission(song, auth.vip).playable
+  const start = filteredSongs.value.findIndex((song) =>
+    canStartPlayback(songPlayState(song))
   )
   if (start >= 0) startAt(start)
 }
 
 async function downloadAll(): Promise<void> {
-  if (!meta.value || playableSongs.value.length === 0) return
+  if (!meta.value || downloadableSongs.value.length === 0) return
   try {
     await download.startMany(
-      playableSongs.value.map((song) => ({
+      downloadableSongs.value.map((song) => ({
         songMid: song.songMid,
         name: song.name,
         singers: song.singers.map((singer) => singer.name).filter(Boolean),
@@ -258,7 +258,7 @@ onBeforeUnmount(() => {
             </button>
             <button
               class="btn ghost"
-              :disabled="!auth.loggedIn || playableSongs.length === 0"
+              :disabled="!auth.loggedIn || downloadableSongs.length === 0"
               @click="downloadAll()"
             >
               <AppIcon name="download" :size="15" />

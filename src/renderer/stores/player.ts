@@ -9,6 +9,7 @@ import {
 } from '@shared/constants'
 import { IpcCallError, describeError, unwrap } from '../api'
 import { createAudioEngine, type AudioEngine, type AudioEngineHandlers } from '../audio/engine'
+import { canStartPlayback, songPlayState } from '@shared/permission'
 import { useToast } from '../composables/toast'
 import { useAuthStore } from './auth'
 import { useHistoryStore } from './history'
@@ -66,6 +67,9 @@ export const usePlayerStore = defineStore('player', () => {
   let lastErrorRetry = { songMid: '', at: 0 }
   let noStreamStreak = 0
   let seekWatch: number | null = null
+  /** 试听片段边界；裁剪后的流在 trialStopMs 暂停。 */
+  let trialWindow: { start: number; end: number } | null = null
+  let trialStopMs: number | null = null
   let engine: AudioEngine
 
   function clampVolume(value: number): number {
@@ -132,11 +136,23 @@ export const usePlayerStore = defineStore('player', () => {
   const handlers: AudioEngineHandlers = {
     onTimeUpdate(position) {
       if (loading.value) return
+      if (trialStopMs !== null && position >= trialStopMs) {
+        positionMs.value = trialStopMs
+        engine.pause()
+        status.value = 'paused'
+        sendState()
+        return
+      }
       positionMs.value = position
       sendStateThrottled()
     },
     onDurationChange(duration) {
       durationMs.value = duration
+      // 上游有时直接返回试听片段：实际时长不超过试听终点时按片段播放，不再裁剪。
+      if (trialWindow && trialStopMs === null && duration > trialWindow.end) {
+        trialStopMs = trialWindow.end
+        seek(trialWindow.start)
+      }
     },
     onBufferChange(buffered) {
       bufferedMs.value = buffered
@@ -218,11 +234,37 @@ export const usePlayerStore = defineStore('player', () => {
     if (playHistory.value.length > PLAY_HISTORY_MAX) playHistory.value.shift()
   }
 
+  /** 明确不可播与付费墙都不能开始播放；付费墙给出开通 / 购买提示。 */
+  function notifyBlocked(song: Song): boolean {
+    const state = songPlayState(song)
+    if (state !== 'disabled' && state !== 'paywall') return false
+    if (state === 'paywall') {
+      toast.error(
+        auth.loggedIn
+          ? '该歌曲需要 VIP 或购买后才能播放'
+          : '该歌曲需要登录并开通 VIP 或购买后才能播放'
+      )
+    }
+    return true
+  }
+
+  /** 准备试听片段：只有在完整流上才按 try_begin–try_end 裁剪。 */
+  function beginTrial(song: Song): void {
+    trialWindow = null
+    trialStopMs = null
+    if (songPlayState(song) !== 'trial') return
+    const end = song.tryEndMs ?? 0
+    if (end <= 0) return
+    trialWindow = { start: Math.max(0, song.tryStartMs ?? 0), end }
+  }
+
   async function loadAndPlay(
     song: Song,
     forcedQuality?: Quality,
     resumeAtMs = 0
   ): Promise<void> {
+    const state = songPlayState(song)
+    if (state === 'disabled' || state === 'paywall') return
     const token = ++loadToken
     if (seekWatch !== null) {
       window.clearTimeout(seekWatch)
@@ -232,6 +274,7 @@ export const usePlayerStore = defineStore('player', () => {
     engine.stop()
     loading.value = true
     current.value = song
+    beginTrial(song)
     playable.value = true
     positionMs.value = 0
     durationMs.value = song.durationMs
@@ -289,8 +332,10 @@ export const usePlayerStore = defineStore('player', () => {
   /** 低层定位与加载；不写播放历史。 */
   function playAt(target: number): void {
     if (target < 0 || target >= playOrder.value.length) return
+    const song = playOrder.value[target]
+    if (!song || notifyBlocked(song)) return
     index.value = target
-    void loadAndPlay(playOrder.value[target])
+    void loadAndPlay(song)
     if (queueSource.value?.kind === 'radio' && target === playOrder.value.length - 1) {
       void ensureRadioBatch()
     }
@@ -304,9 +349,10 @@ export const usePlayerStore = defineStore('player', () => {
   /** 双击、单曲播放与“播放全部”都替换播放顺序；startIndex 成为当前歌曲。 */
   function playList(songs: Song[], startIndex = 0): void {
     if (songs.length === 0) return
+    const start = Math.min(Math.max(0, startIndex), songs.length - 1)
+    if (notifyBlocked(songs[start])) return
     resetRadioSession()
     noStreamStreak = 0
-    const start = Math.min(Math.max(0, startIndex), songs.length - 1)
     playOrder.value = songs.slice()
     baseOrder.value = songs.slice()
     index.value = start
@@ -319,6 +365,7 @@ export const usePlayerStore = defineStore('player', () => {
 
   /** 从歌单开始播放：记录队列来源，后续由视图用可用性快照补齐队列。 */
   function startPlaylistPlayback(song: Song, source: QueueSource): void {
+    if (notifyBlocked(song)) return
     resetRadioSession()
     noStreamStreak = 0
     playOrder.value = [song]
@@ -333,18 +380,20 @@ export const usePlayerStore = defineStore('player', () => {
   /** 猜你喜欢连续队列：以已有 5 首作为初始队列，播放模式固定为顺序。 */
   function startRadioQueue(songs: Song[]): void {
     if (songs.length === 0) return
+    const start = songs.findIndex((song) => canStartPlayback(songPlayState(song)))
+    if (start < 0) return
     resetRadioSession()
     noStreamStreak = 0
     mode.value = 'sequence'
     playOrder.value = songs.slice()
     baseOrder.value = songs.slice()
-    index.value = 0
+    index.value = start
     playHistory.value = []
     queueSource.value = { kind: 'radio', id: 'guess' }
     queueBuilding.value = false
     // 初始 5 首来自发现页 loadGuess 的第 1 页。
     radioPage = 2
-    playAt(0)
+    playAt(start)
   }
 
   /** 队尾预取下一批猜你喜欢；同一次队列只保留一个进行中的请求。 */
@@ -521,6 +570,10 @@ export const usePlayerStore = defineStore('player', () => {
       playAt(0)
       return
     }
+    // 试听片段在终点暂停后，再次播放从头重放片段。
+    if (trialWindow && trialStopMs !== null && positionMs.value >= trialStopMs) {
+      seek(trialWindow.start)
+    }
     try {
       await engine.play()
       status.value = 'playing'
@@ -551,16 +604,28 @@ export const usePlayerStore = defineStore('player', () => {
     sendState()
   }
 
+  /** 从 from 起按 step 找第一首可以直接开始播放的歌曲；全部不可开始时返回 -1。 */
+  function startableIndex(from: number, step: 1 | -1): number {
+    for (let cursor = from; cursor >= 0 && cursor < playOrder.value.length; cursor += step) {
+      if (canStartPlayback(songPlayState(playOrder.value[cursor]))) return cursor
+    }
+    return -1
+  }
+
   function advance(recordHistory: boolean, allowWrap = true): void {
     if (playOrder.value.length === 0) return
     if (recordHistory && current.value) pushHistory(current.value)
-    if (index.value < playOrder.value.length - 1) {
-      playAt(index.value + 1)
+    const next = startableIndex(index.value + 1, 1)
+    if (next >= 0) {
+      playAt(next)
       return
     }
     if (allowWrap && (mode.value === 'repeat-all' || mode.value === 'shuffle')) {
-      playAt(0)
-      return
+      const first = startableIndex(0, 1)
+      if (first >= 0 && first !== index.value) {
+        playAt(first)
+        return
+      }
     }
     stopAtEnd()
   }
@@ -585,6 +650,7 @@ export const usePlayerStore = defineStore('player', () => {
     }
     const historySong = playHistory.value.pop()
     if (historySong) {
+      if (notifyBlocked(historySong)) return
       const position = playOrder.value.findIndex((song) => song.songMid === historySong.songMid)
       if (position >= 0) {
         index.value = position
@@ -602,13 +668,17 @@ export const usePlayerStore = defineStore('player', () => {
       }
       return
     }
-    if (index.value > 0) {
-      playAt(index.value - 1)
+    const previousIndex = startableIndex(index.value - 1, -1)
+    if (previousIndex >= 0) {
+      playAt(previousIndex)
       return
     }
     if (mode.value === 'repeat-all' && playOrder.value.length > 0) {
-      playAt(playOrder.value.length - 1)
-      return
+      const last = startableIndex(playOrder.value.length - 1, -1)
+      if (last >= 0) {
+        playAt(last)
+        return
+      }
     }
     seek(0)
   }

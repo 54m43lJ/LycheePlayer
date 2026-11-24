@@ -13,8 +13,11 @@ function song(singers: Song['singers'], name = 'Song'): Song {
     pay: { free: true, vip: false, album: false },
     status: null,
     pay_play: null,
-    pay_month: null,
-    pay_status: null,
+    payDown: null,
+    playSwitch: null,
+    sizeTry: null,
+    tryStartMs: null,
+    tryEndMs: null,
     maxQuality: null,
     mvId: ''
   }

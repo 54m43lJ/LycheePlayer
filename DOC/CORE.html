@@ -34,7 +34,7 @@
 │   │   ├── <a href="#c4-1">types.ts</a>                      跨进程数据模型
 │   │   ├── <a href="#c4-2">ipc.ts</a>                        主进程 / 渲染进程 API 契约
 │   │   ├── <a href="#c4-50">constants.ts</a>                 工程常量集中声明
-│   │   ├── <a href="#c4-105">permission.ts</a>                播放权限派生（阻断判定栈）
+│   │   ├── <a href="#c4-105">permission.ts</a>                可播状态派生（switch 位图）
 │   │   ├── <a href="#c4-106">shortcuts.ts</a>                 快捷键默认值与匹配/格式化
 │   │   ├── <a href="#c4-103">validation.ts</a>               持久化缓存结构校验
 │   │   └── <a href="#c4-3">xlogin.ts</a>                     官方 xlogin 组件地址
@@ -277,7 +277,7 @@
   </tr>
   <tr>
     <td>可播性判定</td>
-    <td>列表不申请 vkey；播放权限由 <a href="#c4-105">§4.105</a> 的阻断判定栈从 <code>Song</code> 元数据与账号会员状态派生，只作为展示与按钮禁用依据。实际可播性仍以播放时取流结果为准，失败由 <code>NO_STREAM</code> 沿队列兜底。</td>
+    <td>列表不申请 vkey；<code>SongPlayState</code> 由 <a href="#c4-105">§4.105</a> 的 <code>songPlayState()</code> 从 <code>Song</code> 元数据（<code>status</code> / <code>action.switch</code> / <code>pay_play</code> / <code>pay_down</code> / <code>file.size_try</code>）派生，只作为展示与按钮启用依据。实际可播性仍以播放时取流结果为准，失败由 <code>NO_STREAM</code> 沿队列兜底。</td>
   </tr>
   <tr>
     <td>vkey 请求</td>
@@ -372,6 +372,8 @@ export interface PayInfo {
   album: boolean;
 }
 
+export type SongPlayState = 'playable' | 'paywall' | 'trial' | 'disabled' | 'unknown';
+
 export interface Song {
   songMid: string;
   songId: string;
@@ -384,21 +386,19 @@ export interface Song {
   status: number | null;
   /** 上游 pay.pay_play；1 表示需要会员或购买，缺失为 null。 */
   pay_play: number | null;
-  /** 上游 pay.pay_month；0 / 1 以外的值（含缺失）按未知处理。 */
-  pay_month: number | null;
-  /** 上游 pay.pay_status；0 表示未单独购买，缺失为 null。 */
-  pay_status: number | null;
+  /** 上游 pay.pay_down；1 表示存在付费下载路径，缺失为 null。 */
+  payDown: number | null;
+  /** 上游 action.switch 权益位图；缺失、0 或非法表示无法判定。 */
+  playSwitch: number | null;
+  /** 上游 file.size_try；试听位为 1 且大于 0 时可试听。 */
+  sizeTry: number | null;
+  /** 上游 file.try_begin / try_end（毫秒）；试听片段边界，缺失为 null。 */
+  tryStartMs: number | null;
+  tryEndMs: number | null;
   /** 曲库存在的最高音质档位，不代表当前账号一定可取流。 */
   maxQuality: Quality | null;
   /** 上游绑定的 MV vid；无绑定或未提供时为空字符串。 */
   mvId: string;
-}
-
-/** 由 Song 元数据与账号会员状态派生的播放权限。 */
-export interface PlaybackPermission {
-  playable: boolean;
-  /** 曲库最高音质；只用于展示，不代表当前账号一定可取流。 */
-  maxQuality: Quality | null;
 }
 
 export type PlaylistKind = 'normal' | 'favorites';
@@ -811,7 +811,7 @@ export interface FlagsFile {
   <li><code>PlaylistDetail.songs</code> 是歌单当前已载入的歌曲；<code>playlist.get</code> 使用 <code>PlaylistPage</code> 分页返回，<code>playlist.getCached</code> / <code>playlist.saveCache</code> 使用整份 <code>PlaylistCacheEntry</code> / <code>PlaylistSnapshot</code>。</li>
   <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。<code>id</code> 是歌单标识（tid / disstid），<code>dirId</code> 是当前账号目录 ID（写入接口使用），两者不能互换；公开歌单可能没有 <code>dirId</code>。</li>
   <li><code>Lyric.format</code> 为 <code>lrc</code> / <code>qrc</code>；逐字行类型见 <a href="#c4-33">§4.33</a>。</li>
-  <li><code>PlaybackPermission</code> 是列表展示与按钮禁用使用的派生模型，不是跨 IPC 数据；派生规则见 <a href="#c4-105">§4.105</a>。旧缓存缺少 <code>status</code> / <code>pay_*</code> / <code>maxQuality</code> 时按 <a href="#c4-103">§4.103</a> 整份失效。</li>
+  <li><code>SongPlayState</code> 是列表展示与按钮启用使用的派生状态，不是跨 IPC 数据；判定规则见 <a href="#c4-105">§4.105</a>。旧缓存缺少 <code>playSwitch</code> / <code>payDown</code> / <code>sizeTry</code> / 试听边界等字段时按 <a href="#c4-103">§4.103</a> 整份失效，重新从上游获取当前账号的权益位图。</li>
   <li><code>VipLevel</code> 的 <code>vip</code> / <code>deluxe</code> / <code>super</code> 分别对应绿钻 / 豪华绿钻 / 超级会员；与上游字段的映射见 <a href="#c4-13">§4.13</a> 与 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>，展示规则见 <a href="#c4-107">§4.107</a>。</li>
   <li><code>RecommendSection.expiresAtMs</code> 表示内容失效时间：每日推荐为下一个上海自然日 0 点，其余分区为抓取后 24 小时；占位分区为 0。</li>
 </ul>
@@ -1156,7 +1156,7 @@ function buildStreamUrl(purl: string): string;
   <li>vkey 的两个入口与 104009 截断都由 <a href="#c4-110">§4.110</a> 统一处理：先走 <code>vkey.GetVkeyServer / CgiGetVkey</code>，只有该入口返回 <code>104009</code> 才尝试 <code>music.vkey.GetVkey / UrlGetVkey</code> 一次。备用入口仍失败时 <code>mapUpstreamCode</code> 将 104009 映射为 <code>UPSTREAM_NETWORK</code>，提示检查网络 / VPN / 代理出口，不按单曲下架继续切歌。</li>
   <li>全部档位均无链接时优先按 <code>result</code> 映射：<code>104004</code> → <code>UPSTREAM_NETWORK</code>，<code>104013</code> → <code>NO_PERMISSION</code>，<code>104003</code> 再结合登录态、VIP 与数字专辑标记生成权限 / 授权提示；没有可用 <code>result</code> 时才回退到 <a href="#c4-13">§4.13</a> 的 <code>getVipStatus()</code> 通用文案。</li>
   <li><code>rawSongToSong</code> 供搜索与歌单响应复用，避免重复的原始歌曲映射；<code>trackMetaCache</code> 同时缓存 <code>mediaMid</code> 与付费标记，避免重复请求歌曲详情。</li>
-  <li><code>toSong</code> 同时映射 <code>status</code>、<code>pay_play</code>、<code>pay_month</code>、<code>pay_status</code>（缺失为 <code>null</code>），并按 <code>file.size_flac</code> → <code>size_320mp3</code> → <code>size_128mp3</code> 取第一个非零档写入 <code>maxQuality</code>。该字段只表示曲库存在该档，不代表当前账号可取流；播放权限派生见 <a href="#c4-105">§4.105</a>。<code>mv.vid</code>（缺失时回退扁平 <code>vid</code>）写入 <code>mvId</code>，无绑定为空字符串。</li>
+  <li><code>toSong</code> 映射 <code>status</code>、<code>pay_play</code>、<code>pay_down</code>、<code>action.switch</code>、<code>file.size_try</code> 与 <code>file.try_begin</code> / <code>try_end</code>（缺失为 <code>null</code>），并按 <code>file.size_flac</code> → <code>size_320mp3</code> → <code>size_128mp3</code> 取第一个非零档写入 <code>maxQuality</code>。该字段只表示曲库存在该档，不代表当前账号可取流；可播状态派生见 <a href="#c4-105">§4.105</a>。<code>PayInfo.free</code> 在 <code>pay_play</code> 与 <code>pay_down</code> 都不为 1 且非数字专辑时为真，<code>vip</code> 仍表示 <code>pay_play = 1</code> 的播放付费墙。<code>mv.vid</code>（缺失时回退扁平 <code>vid</code>）写入 <code>mvId</code>，无绑定为空字符串。</li>
   <li><code>getMvId</code> 供播放条补查搜索 / 推荐等未携带绑定的歌曲：优先读 <code>trackMetaCache</code>，未命中时用 <code>fetchTracksById</code> 单曲拉取详情并缓存 <code>mediaMid</code> / <code>pay</code> / <code>mvId</code>；取流与下载共用该缓存，因此播放开始后查询通常不产生额外上游请求。上游未提供绑定或详情失败时返回空字符串，不按歌名模糊匹配。</li>
   <li><code>fetchTrackBatch</code> 按 <code>SONG_DETAIL_BATCH = 50</code> 分块调用 <code>music.trackInfo.UniformRuleCtrl / CgiGetTrackInfo</code>（<code>mids</code> / <code>types</code> / <code>modify_stamp</code> / <code>ctx</code> / <code>client</code>），按 <code>mid</code> 建索引；<code>fetchTracksById</code> 先走批量详情，仅对缺失歌曲用 <code>SONG_DETAIL_CONCURRENCY = 2</code> 单曲兜底；<code>getDetail</code> 与 <code>resolveStreams</code> 共用该入口。</li>
   <li><code>getStreamUrls</code> 先通过下载注册表查询已下载文件；命中时直接返回带本地 <code>filePath</code> 的音频代理 URL，跳过详情与 vkey，只有未命中歌曲才进入上游取流。播放取源优先级固定为“本机下载文件 &gt; 播放缓存 &gt; 网络”，与 <a href="#c4-59">§4.59</a> 的 <code>handleStream</code> 顺序一致。</li>
@@ -1503,7 +1503,7 @@ interface AuthStore {
 <ul class="note">
   <li><code>applyStatus</code> 同步 <code>refreshState</code>，并在 <code>AuthStatus.reauthReason</code> 非空时设置 <code>reauthReason</code>；用户选择“稍后”后记录本次已忽略的原因，同一原因不重复弹出，登录成功、退出或再次手动续期时清除。App 通过 <code>login.onStatus</code> 把后台续期结果交给该入口。</li>
   <li><code>logout</code> 只调用登录 IPC、清空自身状态并派发 <code>lychee:logout</code> 事件；不直接导入 playlist / recommend / player store。应用层监听事件完成跨 store 重置。</li>
-  <li><code>vip</code> 是全局会员状态，供列表派生 <a href="#c4-105">§4.105</a> 的播放权限，并供侧栏与设置页的 <a href="#c4-107">MemberBadge</a> 展示会员档位。登录态变化时调用 <code>loadVip()</code>；接口失败保持 <code>state='unknown'</code>，退出登录重置为已知 <code>none</code>。设置页不再单独查询会员状态。</li>
+  <li><code>vip</code> 是全局会员状态，供侧栏与设置页的 <a href="#c4-107">MemberBadge</a> 展示会员档位；列表可播状态不再按会员档位比较。登录态变化时调用 <code>loadVip()</code>；接口失败保持 <code>state='unknown'</code>，退出登录重置为已知 <code>none</code>。设置页不再单独查询会员状态。</li>
 </ul>
 
 <h3 id="c4-29">4.29 src/renderer/stores/player.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -1577,6 +1577,8 @@ interface PlayerStore {
   <li><code>startPlaylistPlayback</code> / <code>appendPlaylistQueue</code> / <code>replacePlaylistQueue</code> 维护 <code>queueSource</code> 与 <code>queueBuilding</code>；<code>appendPlaylistQueue</code> / <code>replacePlaylistQueue</code> 只在 <code>queueSource.kind === 'playlist'</code> 时生效。队列构建由 playlist store 在“歌单快照 → 队列”边界按原顺序整体追加 / 替换，不按可播性过滤；播放器只负责追加 / 替换，不做检测或清理。未完成快照前只允许一次临时快照；最终快照按签名比较后替换，保留手动“下一首播放”的歌曲、当前曲、进度与历史。</li>
   <li><code>startRadioQueue(songs)</code> 用发现页已拉取的 5 首建立猜你喜欢连续队列：<code>queueSource = { kind: 'radio', id: 'guess' }</code>，模式强制为 <code>sequence</code>，并从第 2 页开始预取。队列激活时 <code>modeLocked = true</code>，<code>setMode</code> / <code>cycleMode</code> / <code>setShuffle</code> / <code>setLoopStatus</code> 均不改变模式；<code>playList</code> / <code>startPlaylistPlayback</code> 会递增 radio 会话并解除锁定。</li>
   <li>猜你喜欢队列在 <code>playAt()</code> 定位到当前队列最后一首时调用 <code>ensureRadioBatch()</code>：通过 <code>window.lychee.recommend.guess(page)</code> 拉取下一批，按 songMid 去重后追加到 <code>playOrder</code> / <code>baseOrder</code>；同一会话最多一个进行中的请求，最多连续翻 3 页；预取较慢且队尾已停止时，补入后自动从新歌继续。失败只提示，不改变当前歌曲与已加载队列。</li>
+  <li><code>loadAndPlay(song)</code> 在取流前按 <a href="#c4-105">§4.105</a> 的 <code>songPlayState()</code> 拦截：<code>disabled</code> 静默返回，<code>paywall</code> 由 <code>notifyBlocked()</code> 提示开通 VIP 或购买；<code>playAt</code> / <code>playList</code> / <code>startPlaylistPlayback</code> 在改变队列前同样拦截，避免点击付费墙歌曲后清空当前队列。<code>advance()</code> / <code>previous()</code> 只定位到可开始播放的歌曲（可播 / 试听 / 未知），跳过不可播与付费墙。</li>
+  <li>试听态歌曲在加载后按 <code>tryStartMs</code>–<code>tryEndMs</code> 裁剪：实际时长超过终点时从起点播放并在终点暂停，再次播放重置到起点；实际时长不超过终点（上游直接返回片段）时按整段播放。</li>
   <li><code>onError</code> 对同一歌曲最多每 30 秒自动刷新一次播放链接并从原位置继续；再次失败才提示“音频加载失败，可能链接已过期”并暂停。当前曲不可播（<code>NO_STREAM</code>）时由播放条沿队列向后尝试，内部计数连续不可播次数；达到 <code>NO_STREAM_SKIP_LIMIT</code> 后停止并提示检查登录 / 风控，<code>playList</code> / <code>playNext</code> / <code>previous</code> / <code>setQuality</code> 与成功加载会清零计数。</li>
   <li><code>seek</code> 在 duration 未知时也直接设置位置；播放中 1.2 秒后若实际位置与目标相差超过 2.5 秒，会再触发一次定位（seek 看门狗），用于兜底连续 Range 定位。</li>
   <li>播放模式对 <code>playOrder</code> 的处理：顺序播放到队尾停止；列表循环回到 <code>playOrder</code> 头部；单曲循环重播 <code>current</code>；随机播放只打乱 <code>playOrder</code> 中当前曲之后的部分，<code>baseOrder</code> 始终保持歌单原始顺序。离开随机模式时 <code>restoreNormalOrder()</code> 按 <code>baseOrder</code> 重排 <code>playOrder</code> 并把 <code>index</code> 定位到当前曲，之后按原始顺序续播；随机期间的 <code>addNext</code> / <code>removeFromQueue</code> / <code>clearQueue</code> 与歌单快照替换会同步维护 <code>baseOrder</code>，结构变化在退出随机后仍保留。</li>
@@ -1785,8 +1787,8 @@ const emit = defineEmits&lt;{
 <ul class="note">
   <li>列顺序固定为 <code># / 标题 / 专辑 / 操作 / 时长</code>，所有 <code>th</code> 与操作 / 时长单元格左对齐；操作列在时长列左侧。≤900px 隐藏专辑列。</li>
   <li><code>play</code> 由双击与非当前行的播放按钮触发，执行单曲播放并替换队列；当前行按钮发出 <code>toggle</code>，切换暂停 / 继续；<code>playNext</code> 由加号图标按钮触发，只插入队列头。非当前 / 非悬停行的 <code>#</code> 列显示从 1 开始的序号文本。</li>
-  <li>每行按 <code>playbackPermission(song, auth.vip)</code> 派生 <code>PlaybackPermission</code>（<a href="#c4-105">§4.105</a>）；<code>playable === false</code> 的行显示“不可播”、禁用 <code>play</code> / <code>playNext</code> / 下载并降低标题与歌手透明度。收藏与下载按钮分别发出 <code>favorite</code> / <code>download</code>。</li>
-  <li>音质角标只读取 <code>PlaybackPermission.maxQuality</code>，表示曲库最高音质（FLAC / 320K / 128K），不暗示当前账号一定可取流；不可播时由“不可播”角标取代音质角标。</li>
+  <li>每行按 <a href="#c4-105">§4.105</a> 的 <code>songPlayState(song)</code> 派生状态：<code>disabled</code> 行显示“不可播”、禁用 <code>play</code> / <code>playNext</code> / 下载并降低标题与歌手透明度；<code>paywall</code> 行保持正常外观与可点击，播放事件交给 player store 提示开通 / 购买；<code>trial</code> 行显示“试听”并允许播放。收藏与下载按钮分别发出 <code>favorite</code> / <code>download</code>。</li>
+  <li>音质角标读取 <code>song.maxQuality</code>，表示曲库最高音质（FLAC / 320K / 128K），不暗示当前账号一定可取流；不可播时由“不可播”角标取代音质角标，试听时由“试听”角标取代。下载按钮只在 <code>playable</code> / <code>unknown</code> 状态可用。</li>
   <li>歌曲带 <code>Song.mvId</code> 时，在标题徽标之后渲染 <a href="#c4-108">MvButton</a>；无绑定不显示，列表不逐行补查。按钮使用 <code>@click.stop</code> / <code>@dblclick.stop</code>，避免触发行播放。</li>
   <li><code>assetStates</code> 按歌曲提供缓存 / 下载档位与任务状态；下载按钮三态由 <code>resolveDownloadState</code> 派生为唯一状态（已下载 / 已缓存 / 普通），class、图标与无障碍名称共用该状态。已缓存与已下载互斥，下载优先；即使资产同时带两个档位也只显示已下载，无障碍名称只显示当前状态。状态框固定 24px，按钮点击热区不变。</li>
   <li>专辑列与歌手行渲染为链接：歌手 <code>mid</code> 非空链接到 <code>/artist/:mid</code>，专辑 <code>mid</code> 非空链接到 <code>/album/:mid</code>，点击不触发行播放；<code>mid</code> 为空时按纯文本展示，名称为空不渲染。标题、歌手、专辑统一使用 <code>MarqueeText</code>，仅在溢出时滚动；≤900px 隐藏专辑列。</li>
@@ -1899,7 +1901,7 @@ const emit = defineEmits&lt;{
   <li>歌单头标题与删除确认中的歌单名通过 <code>dailyPlaylistName</code> 展示；每日推荐歌单显示为“昵称的今日私享”，其余歌单名保持原值，不改写缓存元数据。</li>
   <li>心跳只在页面挂载且 <code>document.visibilityState === 'visible'</code> 时存在：隐藏时清除 interval，恢复可见时立即 <code>poll</code> 一次并重新计时；切换歌单或卸载时清除 interval 并调用 <code>playlist.stop(id)</code>。</li>
   <li>心跳由 <code>playlist.poll(id)</code> 用 <code>PLAYLIST_POLL_INTERVAL_MS = 15_000</code> 检查首页；发现名称、封面、首屏顺序或数量显著变化时立即后台刷新，并取消待执行的 5 分钟 timeout。</li>
-  <li>不再触发列表级探测；“播放全部”从筛选结果中第一首 <code>playbackPermission(song, auth.vip).playable</code> 的歌曲开始，“下载全部”只入队权限判定可播的歌曲；其余队列仍由 playlist store 用完整快照构建。</li>
+  <li>不再触发列表级探测；“播放全部”从筛选结果中第一首可开始播放（可播 / 试听 / 未知）的歌曲开始，“下载全部”只入队可下载（可播 / 未知）的歌曲，跳过不可播与付费墙；其余队列仍由 playlist store 用完整快照构建。</li>
   <li>进入页面时先读取整份缓存快照：完整缓存可临时顶替队列，不完整缓存标记为 <code>error</code> / <code>stale</code> 并触发重新加载。</li>
   <li>删除入口仅在普通且 <code>PlaylistMeta.editable</code> 为真的歌单向 <code>SongListTable</code> 传入 <code>removable</code>；「我喜欢」与公开 / 他人歌单不显示删除按钮。处理 <code>SongListTable</code> 的 <code>remove</code>：先弹出含歌曲名与歌单名的 <a href="#c4-81">ConfirmDialog</a>（危险态），确认后调用 <code>playlist-edit.removeSongs(id, [mid])</code>，立即移除行并更新歌曲数，成功后由 <code>stores/playlist-edit</code> 的统一刷新流程确认，失败恢复行与计数并提示。删除仅作用于歌单成员，不修改播放队列。</li>
   <li>下载按钮由 <code>SongListTable</code> 统一调用 <a href="#c4-84">useDownloadAction</a> 的 <code>requestDownload</code>：已下载时由全局 <a href="#c4-85">DownloadDeleteDialog</a> 询问是否删除本机文件，未下载时加入统一队列；页面不自行判断资产状态或维护确认框。</li>
@@ -1974,6 +1976,7 @@ const emit = defineEmits&lt;{
   <li>歌曲表操作列五个图标按钮等距排列，窄屏菜单为五项；“添加到歌单”使用简单加号，“下一首播放”使用横线 + 上箭头。发现页首行 <code>.discover-top</code> 使用 flex 横向左对齐放置猜你喜欢与每日推荐卡片（猜你喜欢在左），<code>.discover-top-item</code> 固定 <code>flex: 0 0 150px</code> 并设 <code>min-width: 0</code>，保持原卡片尺寸与封面 1:1 比例，不随首行宽度放大；骨架内的 <code>.discover-playlists</code> 取消 <code>margin-top</code> / <code>padding-top</code> / <code>overflow</code>。专属雷达继续使用 flexbox 横向排列固定宽度条目、纵向 3 行、横向滚动，条目文本溢出时走跑马灯。</li>
   <li>歌手 / 专辑链接沿用表格文字色，悬停加下划线；<code>.marquee</code> 容器隐藏溢出，仅在文本实际超宽时启用滚动；≤900px 的专辑列由表格列显示开关控制，不用 CSS 隐藏单元格内容。</li>
   <li><code>.song-title .marquee</code> 使用 <code>flex: 0 1 auto</code>，不得用 <code>flex: 1 1 auto</code> 撑满标题列；短标题按内容宽度显示，<code>.pay-badge</code> / <code>.quality-badge</code> 紧随其后，长标题才收缩并滚动。</li>
+  <li>可播状态角标复用 <code>.quality-badge</code>：<code>.unavailable</code> 使用 <code>--danger</code> 边框与文字，<code>.trial</code> 使用 <code>--accent-strong</code> 边框与文字；付费墙不新增行级样式，仍以 <code>.pay-badge</code> 表达 VIP / 数字专辑 / 付费。</li>
   <li><code>.player-title</code> 与歌曲表标题相同，使用 <code>flex: 0 1 auto</code>；标题行宽度由较长的歌手行或可用宽度决定时，短歌名仍按内容宽度显示，<code>.quality-mark</code> / <code>.mv-mark</code> 紧随其后，长歌名才收缩并滚动。</li>
   <li><code>.mv-mark</code> 为 26×18px、5px 圆角的长方形入口，边框与底色使用 accent，内嵌的 13px 播放三角由 <a href="#c4-108">MvButton</a> 的 <code>size</code> prop 控制。歌曲表 <code>.song-mv</code> 与队列 <code>.queue-mv</code> 使用 6px 左间距；队列 <code>.song-title</code> 改为 flex，歌名由 <code>.queue-title</code> 单独省略，MV 图标不被压缩。</li>
   <li>会员标记 <code>.member-badge</code> 为 inline-flex，图标 <code>.member-badge-icon</code> 不收缩；<code>.member-diamond</code> 使用 <code>--member-green</code> 填充、<code>--member-green-edge</code> 描边，无腰线；<code>.member-v</code> 使用 <code>--member-gold</code> 填充，路径为左右镜像的等宽 V，直接写入 24×24 图标坐标。超级会员 <code>.member-super</code> 将钻石填充与描边切换为 <code>--member-gold</code> / <code>--member-gold-edge</code>，V 使用 <code>--member-gold-edge</code> 填充。设置页的文字标签 <code>.member-badge-label</code> 为 11px、600 字重、正文色；侧栏账号行 <code>.user-name-row</code> 让昵称省略而图标保持完整。</li>
@@ -3013,7 +3016,7 @@ export function isPlaylistCacheEntry(value: unknown): value is PlaylistCacheEntr
 export function isRecentPlaylist(value: unknown): value is RecentPlaylist;
 </code></pre>
 <ul class="note">
-  <li>持久化缓存结构校验的唯一来源：完整检查 <code>Song</code> 的歌手 / 专辑 / pay / <code>status</code> / <code>pay_play</code> / <code>pay_month</code> / <code>pay_status</code> / <code>maxQuality</code> / <code>mvId</code>、<code>PlaylistMeta</code>、<code>PlaylistSnapshot</code>、歌单缓存条目与最近歌单条目；不负责读取文件或 localStorage。旧版本缺少权限字段的歌曲快照按失效处理。</li>
+  <li>持久化缓存结构校验的唯一来源：完整检查 <code>Song</code> 的歌手 / 专辑 / pay / <code>status</code> / <code>pay_play</code> / <code>payDown</code> / <code>playSwitch</code> / <code>sizeTry</code> / <code>tryStartMs</code> / <code>tryEndMs</code> / <code>maxQuality</code> / <code>mvId</code>、<code>PlaylistMeta</code>、<code>PlaylistSnapshot</code>、歌单缓存条目与最近歌单条目；不负责读取文件或 localStorage。旧版本缺少权限字段的歌曲快照按失效处理。</li>
   <li>校验失败即视为缓存失效；调用方负责删除损坏文件 / 键并从上游或空状态重建。主进程与渲染进程共用同一组校验函数，避免各处只做浅层字段判断。</li>
 </ul>
 
@@ -3030,14 +3033,15 @@ export function isRecentPlaylist(value: unknown): value is RecentPlaylist;
 </ul>
 
 <h3 id="c4-105">4.105 src/shared/permission.ts <a class="backlink" href="#c1">文件树</a></h3>
-<pre><code>export function playbackPermission(song: Song, vip: VipStatus): PlaybackPermission;
+<pre><code>export function songPlayState(song: Song): SongPlayState;
+export function canStartPlayback(state: SongPlayState): boolean;
+export function canDownloadSong(state: SongPlayState): boolean;
 </code></pre>
 <ul class="note">
-  <li>阻断判定栈只列不可播条件，自上而下求值：命中任一条件返回 <code>playable: false</code>，全部未命中返回 <code>true</code>；不存在“条件成立即可播”的正向分支。</li>
-  <li><code>status</code> 为 1 / 2 直接阻断；<code>pay_play !== 1</code>（含缺失）不进入付费判定。</li>
-  <li><code>vip.state === 'unknown'</code> 直接阻断，不参与档位比较；档位顺序为 <code>none &lt; vip &lt; deluxe &lt; super</code>，<code>VIP &lt; L</code> 只比较已知档位。</li>
-  <li><code>pay_month === 0</code> 要求 <code>deluxe</code> 及以上；<code>VIP &lt; vip</code> 时，<code>pay_status === 0</code>、<code>pay_month</code> 非 0 / 1、<code>pay_month === 1</code> 分别阻断。已知 <code>none</code> 由档位比较拦截。</li>
-  <li>返回的 <code>maxQuality</code> 原样取自 <code>Song.maxQuality</code>，即使不可播也保留，供音质角标展示曲库最高档。</li>
+  <li>可播状态的唯一实现，按官方网页端公式求值：<code>status</code> 为 1 / 2 时直接 <code>disabled</code>；<code>switch</code> 缺失、0 或非法时 <code>unknown</code>；<code>play_lq</code> / <code>play_hq</code> / <code>play_sq</code> / <code>play_5_1</code>（实际位 1 / 2 / 3 / 17）任一位为 1 时 <code>playable</code>；否则 <code>pay_play</code> 或 <code>pay_down</code> 为 1 时 <code>paywall</code>；否则 <code>try</code> 位（实际位 14）为 1 且 <code>sizeTry &gt; 0</code> 时 <code>trial</code>；其余 <code>disabled</code>。</li>
+  <li>位读取使用 <code>Math.floor(flags / 2 ** bit) % 2</code>，避免 32 位按位运算把大整数截断；位表与官方解析代码见 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a> 与 <code>DOC/reference/qq-music-web/playability.md</code>。</li>
+  <li><code>canStartPlayback()</code> 只放行 <code>playable</code> / <code>trial</code> / <code>unknown</code>；<code>canDownloadSong()</code> 只放行 <code>playable</code> / <code>unknown</code>。付费墙与不可播不进入自动播放和下载。</li>
+  <li>不再按账号会员档位比较 <code>pay_month</code> / <code>pay_status</code>：官方灰色公式不读取这两个字段，付费墙只表达“不灰、点击后提示开通 / 购买”。</li>
 </ul>
 
 <h3 id="c4-106">4.106 src/shared/shortcuts.ts <a class="backlink" href="#c1">文件树</a></h3>
@@ -3545,23 +3549,25 @@ api/client::musicu(...)
 </ul>
 
 <h3 id="c5-11">5.11 可播性判定与播放兜底</h3>
-<pre><code>shared/permission::playbackPermission(song, vip)
-├── 判断 status ∈ {1, 2} → 返回不可播
-├── 判断 pay_play !== 1 → 返回可播
-├── 判断 vip.state === 'unknown' → 返回不可播
-├── 判断 pay_month === 0 && VIP &lt; deluxe → 返回不可播
-└── 判断 VIP &lt; vip
-    ├── 判断 pay_status === 0 → 返回不可播
-    ├── 判断 pay_month 非 0 / 1 → 返回不可播
-    └── 判断 pay_month === 1 → 返回不可播
+<pre><code>shared/permission::songPlayState(song)
+├── 判断 status ∈ {1, 2} → 返回 disabled
+├── 判断 playSwitch 缺失 / 0 / 非法 → 返回 unknown
+├── 判断 play_lq / play_hq / play_sq / play_5_1 任一位 → 返回 playable
+├── 判断 pay_play === 1 || payDown === 1 → 返回 paywall
+├── 判断 try 位 &amp;&amp; sizeTry &gt; 0 → 返回 trial
+└── 返回 disabled
 
 player::loadAndPlay(song)
-└── 判断 getUrls 返回 NO_STREAM → player::advance()
-    └── 判断连续失败数 ≥ NO_STREAM_SKIP_LIMIT → 停止自动切歌
+├── 判断 songPlayState(song) === disabled / paywall → 返回
+├── 判断 getUrls 返回 NO_STREAM → player::advance()
+│   └── 判断连续失败数 ≥ NO_STREAM_SKIP_LIMIT → 停止自动切歌
+└── 判断 songPlayState(song) === trial → 按 tryStartMs–tryEndMs 裁剪
+    └── 判断实际时长 ≤ tryEndMs → 按上游片段整段播放
 </code></pre>
 <ul class="note">
-  <li>列表只读 <code>Song</code> 元数据派生权限，不申请 vkey；只有真实播放与下载调用 <code>song.getUrls</code>。</li>
-  <li>元数据判定只用于展示与按钮禁用；实际可播性仍由播放时取流决定，失败沿队列向后尝试。</li>
+  <li>列表只读 <code>Song</code> 元数据派生状态，不申请 vkey；只有真实播放与下载调用 <code>song.getUrls</code>。</li>
+  <li>元数据判定只用于展示与按钮启用；实际可播性仍由播放时取流决定，失败沿队列向后尝试。<code>advance()</code> / <code>previous()</code> 跳过不可播与付费墙，未知状态与试听照常尝试。</li>
+  <li><code>switch</code> 是官方网页客户端的实现细节，不是公开契约；上游变更位表时以实际页面行为为准。</li>
 </ul>
 
 <h3 id="c5-12">5.12 歌单分页加载与队列构建</h3>

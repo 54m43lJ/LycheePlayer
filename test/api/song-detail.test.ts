@@ -182,4 +182,52 @@ describe('api/song batch detail', () => {
 
     expect(await getMvId('mv-none')).toBe('')
   })
+
+  it('maps switch flags, pay_down and the try window for availability', async () => {
+    musicuMock.mockResolvedValue({
+      tracks: [
+        {
+          ...rawTrack('avail'),
+          status: 0,
+          action: { switch: 16897793, icons: 12992510 },
+          pay: { pay_play: 1, pay_down: 1, price_album: 0 },
+          file: {
+            media_mid: 'media-avail',
+            size_128mp3: 4663780,
+            size_try: 960887,
+            try_begin: 30514,
+            try_end: 72292
+          }
+        }
+      ]
+    })
+    const { getDetail } = await import('../../src/main/api/song')
+
+    const [song] = await getDetail(['avail'])
+
+    expect(song.status).toBe(0)
+    expect(song.playSwitch).toBe(16897793)
+    expect(song.payDown).toBe(1)
+    expect(song.sizeTry).toBe(960887)
+    expect(song.tryStartMs).toBe(30514)
+    expect(song.tryEndMs).toBe(72292)
+    expect(song.pay).toEqual({ free: false, vip: true, album: false })
+  })
+
+  it('treats a download-only pay path as not free', async () => {
+    musicuMock.mockResolvedValue({
+      tracks: [
+        {
+          ...rawTrack('download-only'),
+          pay: { pay_play: 0, pay_down: 1, price_album: 0 }
+        }
+      ]
+    })
+    const { getDetail } = await import('../../src/main/api/song')
+
+    const [song] = await getDetail(['download-only'])
+
+    expect(song.payDown).toBe(1)
+    expect(song.pay).toEqual({ free: false, vip: false, album: false })
+  })
 })

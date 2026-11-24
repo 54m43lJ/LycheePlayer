@@ -1338,3 +1338,48 @@
 - 缓存命中 `file` 分支与本地下载文件播放也会上报 `complete: true` 的进度；因此按钮刷新不复用进度事件，改用独立的写入完成通知，避免每次播放 / seek 都触发资产查询。
 - `npm run typecheck`、`npm test`（54 个测试文件、286 个用例）与 `npm run build` 通过。
 - 未做真实窗口验收；配色由 CSS token 审阅覆盖，事件链路由主进程协议测试与 store 单测覆盖。
+
+### 4.57 歌曲可播状态改为官方权益位图判定 [已解决] 
+
+**描述**：ISSUE 要求按 reference 文件夹的参考文献重做歌曲可用性逻辑。旧实现按 `status`、`pay_play`、`pay_month`、`pay_status` 的阻断判定栈判断，把付费墙显示成灰色不可播；调查表也确认 `status` / `pay` / `file.size_*` 无法单独表达地区版权与账号权限。
+
+**解决方案**：
+
+- 以 `DOC/reference/qq-music-web/playability.md`（官方网页端生产构建取证）为权威：`status` 1 / 2 直接不可播；`action.switch` 的 `play_lq` / `play_hq` / `play_sq` / `play_5_1` 任一位为 1 时可播；否则 `pay_play` 或 `pay_down` 为 1 时为付费墙；否则 `try` 位为 1 且 `file.size_try > 0` 时为试听；其余不可播。`switch` 缺失、为 0 或非法时为未知，界面保持正常并尝试播放。
+- `Song` 增加 `playSwitch`、`payDown`、`sizeTry`、`tryStartMs`、`tryEndMs`，移除不再参与判定的 `pay_month` / `pay_status`；`PayInfo.free` 改为 `pay_play` 与 `pay_down` 都不为 1；旧缓存缺少新字段时按 4.22 整份失效。
+- `shared/permission.ts` 由阻断判定栈改为 `songPlayState()` 五态（`playable` / `paywall` / `trial` / `disabled` / `unknown`）与 `canStartPlayback()` / `canDownloadSong()`；位读取使用除法取模，避免 32 位按位运算截断。
+- `SongTable`：不可播行灰化并禁用播放 / 下一首 / 下载；付费墙行保持正常显示与可点击，由 player store 提示开通 VIP 或购买；试听行显示“试听”角标并允许播放；未知状态按正常行处理；下载只允许可播与未知状态。
+- player store 在取流前拦截不可播与付费墙，`playList` / `playAt` / `startPlaylistPlayback` 在改变队列前同样拦截，避免点击付费墙歌曲后清空当前队列；自动续播与上一首只定位到可开始播放的歌曲；试听歌曲按 `try_begin`–`try_end` 裁剪，若上游直接返回片段则整段播放。
+- `PlaylistView` 的“播放全部”从第一首可开始播放的歌曲起播，“下载全部”只入队可下载歌曲；CSS 增加 `.quality-badge.trial`。
+- 搜索接口不返回 `switch`，搜索结果按未知状态展示并尝试播放，不为判灰逐行补详情。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | “重做歌曲可用性这块的逻辑”条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“歌曲可播状态改为官方权益位图判定” | 增 | 记录判定公式、字段调整、交互与文档操作。 |
+| `DOC/reference/qq-music-web/playability.md` | 新增 | 增 | 纳入官方网页端可播判定取证文档，作为可播逻辑的权威来源。 |
+| `USER.html` | §1 TERMS | 改 | 权限（PayInfo）改为只表达角标；新增权益位图、可播状态、试听。 |
+| `USER.html` | §2 CONVENTIONS | 改 | “不可播标记与曲库最高音质”改为“可播状态判定”与“可播状态的时效”。 |
+| `USER.html` | §5.2.4 歌曲列表 | 改 | 五种状态的角标与交互、试听片段、下载范围。 |
+| `USER.html` | §5.2.9 播放队列 / §5.3 错误与通知 | 改 | 自动续播跳过不可播与付费墙；未知状态尝试播放后兜底。 |
+| `CORE.html` | §1 文件树 / §2 CONVENTIONS | 改 | `permission.ts` 改为可播状态派生；可播性判定改为读取权益位图。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | 新增 `SongPlayState` 与 `Song` 新字段，删除 `PlaybackPermission` 与 `pay_month` / `pay_status`。 |
+| `CORE.html` | §4.11 `api/song.ts`（`#c4-11`） | 改 | 记录 `action.switch`、`pay_down`、试听字段映射与 `PayInfo.free` 新语义。 |
+| `CORE.html` | §4.29 `stores/player.ts`（`#c4-29`） | 改 | 记录取流前拦截、队列定位跳过与试听裁剪。 |
+| `CORE.html` | §4.39 `SongTable.vue`（`#c4-39`） / §4.46 `PlaylistView.vue`（`#c4-46`） | 改 | 状态渲染、交互与播放 / 下载过滤。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 增加 `.quality-badge.trial` 样式契约。 |
+| `CORE.html` | §4.103 `validation.ts`（`#c4-103`） | 改 | 校验新字段，旧结构失效。 |
+| `CORE.html` | §4.105 `permission.ts`（`#c4-105`） | 改 | 记录五态判定公式、位读取与两个 helper。 |
+| `CORE.html` | §5.11 可播性判定与播放兜底（`#c5-11`） | 改 | 调用树改为 switch 判定与试听裁剪。 |
+| `PROVIDER.html` | §4.1 / §4.3 | 改 | 补充 `action.switch` / `pay_down` / 试听字段、位表、搜索无 switch 与 `PayInfo` 新映射。 |
+| `README.md` / `ABOUT.html` | 歌单行 | 改 | 改为按权益位图标记可播 / 付费墙 / 试听 / 不可播 / 未知。 |
+
+**工作记录**：
+
+- `DOC/reference/` 原先只存在于另一个工作树且未提交；本轮把 `qq-music-web/playability.md` 纳入当前任务分支，作为可播判定唯一外部权威来源。
+- 新增 / 更新测试：`test/permission.test.ts` 覆盖五态与官方样本（`81683` 可播、`16897793` 付费墙、`134283265` 不可播）；`test/api/song-detail.test.ts` 覆盖 `switch` / `pay_down` / 试听字段映射；`test/player-store.test.ts` 覆盖自动续播跳过付费墙与不可播、点击付费墙不替换队列；`test/validation.test.ts` 改为校验 `playSwitch`。
+- `npm run typecheck`、`npm test`（54 个测试文件、291 个用例）与 `npm run build` 通过。
+- 未做真实窗口截图验收；真实账号的 `switch` 位未重新抓取（reference 样本为未登录、非中国大陆出口），应用以当前账号响应为准，判定公式与官方代码一致。
+- `investigate-song-meta.html` 仅作为早期调查参考，且被 `.gitignore` 忽略，不纳入文档集。

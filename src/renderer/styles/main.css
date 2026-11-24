@@ -3004,6 +3004,11 @@ button:focus-visible,
   color: var(--danger);
 }
 
+.quality-badge.trial {
+  border-color: color-mix(in srgb, var(--accent-strong) 60%, transparent);
+  color: var(--accent-strong);
+}
+
 .song-icon {
   display: inline-grid;
   place-items: center;

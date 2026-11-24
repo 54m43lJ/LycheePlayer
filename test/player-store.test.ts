@@ -38,7 +38,7 @@ vi.mock('../src/renderer/audio/remote-engine', () => ({
   })
 }))
 
-function song(id: string, name: string): Song {
+function song(id: string, name: string, overrides: Partial<Song> = {}): Song {
   return {
     songMid: id,
     songId: id,
@@ -49,10 +49,14 @@ function song(id: string, name: string): Song {
     pay: { free: true, vip: false, album: false },
     status: null,
     pay_play: null,
-    pay_month: null,
-    pay_status: null,
+    payDown: null,
+    playSwitch: null,
+    sizeTry: null,
+    tryStartMs: null,
+    tryEndMs: null,
     maxQuality: null,
-    mvId: ''
+    mvId: '',
+    ...overrides
   }
 }
 
@@ -320,6 +324,47 @@ describe('player queue', () => {
     await vi.waitFor(() => expect(player.status).toBe('stopped'))
 
     expect(history.entries).toEqual([])
+  })
+
+  it('skips paywall and disabled songs when advancing', async () => {
+    ;(window as unknown as { lychee: { song: { getUrls: unknown } } }).lychee.song.getUrls = (
+      mids: string[]
+    ) =>
+      Promise.resolve({
+        ok: true,
+        data: mids.map((songMid) => ({ songMid, url: 'stream', quality: '320k' }))
+      })
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    const first = song('1', 'a', { playSwitch: 81683 })
+    const paywall = song('2', 'b', { playSwitch: 65537, pay_play: 1 })
+    const disabled = song('3', 'c', { playSwitch: 134283265 })
+    const last = song('4', 'd', { playSwitch: 81683 })
+
+    player.playList([first, paywall, disabled, last], 0)
+    await vi.waitFor(() => expect(player.status).toBe('playing'))
+
+    player.playNext()
+    await vi.waitFor(() => expect(player.current?.songMid).toBe('4'))
+  })
+
+  it('prompts for a paywall song instead of replacing the queue', async () => {
+    ;(window as unknown as { lychee: { song: { getUrls: unknown } } }).lychee.song.getUrls = (
+      mids: string[]
+    ) =>
+      Promise.resolve({
+        ok: true,
+        data: mids.map((songMid) => ({ songMid, url: 'stream', quality: '320k' }))
+      })
+    const { usePlayerStore } = await import('../src/renderer/stores/player')
+    const player = usePlayerStore()
+    player.playList([song('1', 'a', { playSwitch: 81683 })], 0)
+    await vi.waitFor(() => expect(player.status).toBe('playing'))
+
+    player.playList([song('paid', 'p', { playSwitch: 65537, pay_play: 1 })], 0)
+
+    expect(player.current?.songMid).toBe('1')
+    expect(player.playOrder.map((item) => item.songMid)).toEqual(['1'])
   })
 
   it('stops skipping after ten consecutive NO_STREAM results', async () => {

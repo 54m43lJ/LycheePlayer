@@ -18,17 +18,23 @@ interface RawSong {
   mv?: { id?: number | string; vid?: string; name?: string; title?: string }
   singer?: Array<{ mid?: string; name?: string }>
   album?: { mid?: string; name?: string }
+  action?: {
+    switch?: number | string
+    icons?: number
+  }
   pay?: {
     pay_play?: number
-    pay_month?: number
+    pay_down?: number
     price_album?: number
-    pay_status?: number
   }
   file?: {
     media_mid?: string
     size_128mp3?: number
     size_320mp3?: number
     size_flac?: number
+    size_try?: number
+    try_begin?: number
+    try_end?: number
   }
 }
 
@@ -88,6 +94,7 @@ function libraryMaxQuality(file: RawSong['file']): Song['maxQuality'] {
 function toSong(raw: RawSong): Song {
   const pay = raw.pay ?? {}
   const albumOnly = Number(pay.price_album ?? 0) > 0
+  const payable = pay.pay_play === 1 || pay.pay_down === 1
   const vip = pay.pay_play === 1 && !albumOnly
   // 标题优先使用 title：官方客户端展示的版本标签（Explicit / Remix 等）在 title 中；
   // name 是去掉标签的基础名，可能带尾部空白，需 trim 后再兜底。
@@ -103,14 +110,17 @@ function toSong(raw: RawSong): Song {
     album: { mid: raw.album?.mid ?? '', name: (raw.album?.name ?? '').trim() },
     durationMs: Math.max(0, Number(raw.interval ?? 0)) * 1000,
     pay: {
-      free: pay.pay_play === 0 && !albumOnly,
+      free: !payable && !albumOnly,
       vip,
       album: albumOnly
     },
     status: numberOrNull(raw.status),
     pay_play: numberOrNull(pay.pay_play),
-    pay_month: numberOrNull(pay.pay_month),
-    pay_status: numberOrNull(pay.pay_status),
+    payDown: numberOrNull(pay.pay_down),
+    playSwitch: numberOrNull(raw.action?.switch),
+    sizeTry: numberOrNull(raw.file?.size_try),
+    tryStartMs: numberOrNull(raw.file?.try_begin),
+    tryEndMs: numberOrNull(raw.file?.try_end),
     maxQuality: libraryMaxQuality(raw.file),
     mvId: (raw.mv?.vid ?? raw.vid ?? '').trim()
   }
