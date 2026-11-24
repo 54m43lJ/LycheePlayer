@@ -1427,6 +1427,9 @@
 - `npm run typecheck`、`npm test`（55 个测试文件、299 个用例）与 `npm run build` 通过。
 - 未用真实账号重新复核 668 首；数据来源与样本沿用调查分支的实测记录。
 
+- 代表样本：OK / ALL THE LOVE 等 10 首列表 `switch` 为 `134331775`（OK 为 `134327679`，play 位为 1），详情与 vkey `auth_switch` 为 `134283265`（无 play 位），两边 `pay_play = pay_down = 0`、`size_try = 0`、`status = 0`，vkey `result = 104003`；已下架 4 首（Ambitionz Az A Ridah、6 Foot 7 Foot、Kangaroo Court、Blow）列表与详情均为 `65537`；可播样本 After Party 两侧均为 `16905999`。同账号 468 首歌单、BULLY - DELUXE 专辑 20 首两组对照均无列表 / 详情差异。
+- 官方详情页 / 专辑页读取详情侧 `switch`，因此能正确置灰；只读歌单列表的客户端会误判。`action.icons` 最低位为 `copyright`、第 18 位为 `isVip`，`action.msgid`（本轮详情 `3` / 列表 `0`）可辅助解释灰显原因，但本应用不消费，不进入 `Song` 模型；判灰只使用 `switch`、`pay`、`size_try` 与 `status`。
+
 ### 4.59 清理 reference 参考文档 [已解决]
 
 **描述**：可播检测与批量详情方案已落地，reference 文件夹中的取证与方案内容已并入 PROVIDER / CORE / IMPL，不再需要作为独立参考文件保留。
@@ -1434,7 +1437,7 @@
 **解决方案**：
 
 - 删除 `DOC/reference/qq-music-web/playability.md` 与 `DOC/reference/qq-music-web/song-availability-plan.md`。
-- 移除 USER / CORE / PROVIDER 中指向 reference 文件的链接；switch 位表、灰色公式、列表快照过期结论与 100 首批量上限保留在 PROVIDER §4.3、CORE §4.105 与 §5.10。
+- 移除 USER / CORE / PROVIDER 中指向 reference 文件的链接；switch 位表、灰色公式、列表快照过期结论保留在 PROVIDER §4.3、CORE §4.105 与 §5.10；100 首批量上限保留在 CORE §4.50 / §4.112。
 - IMPL 4.57 / 4.58 保留历史实施记录，不再指向可访问的参考文件。
 
 **文档操作**：

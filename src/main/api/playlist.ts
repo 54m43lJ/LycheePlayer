@@ -109,10 +109,7 @@ function canEdit(data: PlaylistData): boolean {
   return Number.isSafeInteger(me) && me > 0 && owner === me
 }
 
-/**
- * 列表接口只提供顺序与基础元数据；可播权益必须按详情侧批量复核。
- * 返回与入参等长的歌曲数组，缺失详情时保留列表字段。
- */
+/** 用详情侧权益覆盖列表歌曲；缺失详情的歌曲保留列表字段。 */
 async function applyDetailEntitlements(songs: Song[]): Promise<Song[]> {
   if (songs.length === 0) return songs
   const tracks = await fetchTrackInfoByMids(songs.map((song) => song.songMid))

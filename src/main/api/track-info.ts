@@ -16,8 +16,6 @@ export interface RawTrack {
   album?: { mid?: string; name?: string }
   action?: {
     switch?: number | string
-    icons?: number
-    msgid?: number
   }
   pay?: {
     pay_play?: number
@@ -84,10 +82,7 @@ async function mapLimit<T, R>(
   return results
 }
 
-/**
- * 批量详情：调用方只传任意数量的 mid，内部去重、按 TRACK_INFO_BATCH_MAX 分片并串行请求。
- * 批量响应缺失的歌曲用单曲详情兜底；任一批次失败会让整次调用失败。
- */
+/** 批量详情：调用方只传任意数量的 mid，内部分片请求并返回按 mid 索引的原始歌曲。 */
 export async function fetchTrackInfoByMids(mids: string[]): Promise<Map<string, RawTrack>> {
   const unique = [...new Set(mids.map((mid) => mid.trim()).filter(Boolean))]
   const result = new Map<string, RawTrack>()
