@@ -37,8 +37,6 @@ const TABS: Array<{ value: SearchType; label: string }> = [
   { value: 'mv', label: 'MV' }
 ]
 
-const HOT_KEYWORDS = ['周杰伦', '林俊杰', '陈奕迅', '邓紫棋', '五月天', '告五人', 'Taylor Swift']
-
 const keyword = ref('')
 const activeTab = ref<SearchType>('song')
 const result = ref<SearchResult | null>(null)
@@ -154,12 +152,6 @@ function switchTab(tab: SearchType): void {
   if (keyword.value.trim()) void search(1)
 }
 
-function useKeyword(term: string): void {
-  keyword.value = term
-  activeTab.value = 'song'
-  void search(1)
-}
-
 function playSongAt(index: number): void {
   player.playList(songs.value, index)
 }
@@ -195,11 +187,6 @@ function openPlaylist(id: string): void {
           {{ loading ? '搜索中' : '搜索' }}
         </button>
       </form>
-      <div class="chips">
-        <button v-for="hot in HOT_KEYWORDS" :key="hot" class="chip" @click="useKeyword(hot)">
-          {{ hot }}
-        </button>
-      </div>
     </section>
 
     <div class="tabs">

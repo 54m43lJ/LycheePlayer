@@ -300,7 +300,7 @@ onBeforeUnmount(() => {
               <AppIcon name="play" :size="15" />
               播放全部
             </button>
-            <button class="btn ghost" @click="router.push('/search')">返回搜索</button>
+            <button class="btn ghost" @click="goBack()">返回</button>
           </div>
         </div>
       </section>

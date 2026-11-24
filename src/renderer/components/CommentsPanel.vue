@@ -15,6 +15,7 @@ import { useAuthStore } from '../stores/auth'
 import { usePlayerStore } from '../stores/player'
 import { useToast } from '../composables/toast'
 import { formatCount } from '../utils/format'
+import { buildCommentSections } from '../utils/comment-sections'
 import { scrollWithTransition } from '../utils/page-jump'
 import {
   hotRepliesFirst,
@@ -37,7 +38,35 @@ const props = withDefaults(
 )
 
 const comments = ref<Comment[]>([])
+const hotComments = ref<Comment[]>([])
 const total = ref(0)
+/** 区块构造与“热评是否存在”的检测都集中在 buildCommentSections()，组件不再单独判断。 */
+const sections = computed(() =>
+  buildCommentSections(hotComments.value, comments.value, total.value)
+)
+const hasContent = computed(() => sections.value.some((section) => section.comments.length > 0))
+/** 常驻标题栏对应的区块下标：随滚动位置切换。 */
+const activeIndex = ref(0)
+const activeSection = computed(() => sections.value[activeIndex.value] ?? sections.value[0])
+const activeTitle = computed(() => activeSection.value?.title ?? '评论')
+const activeCount = computed(() => activeSection.value?.count ?? 0)
+interface CommentRow {
+  key: string
+  kind: 'heading' | 'comment'
+  title?: string
+  index: number
+  comment?: Comment
+}
+const commentRows = computed<CommentRow[]>(() => {
+  const rows: CommentRow[] = []
+  sections.value.forEach((section, index) => {
+    rows.push({ key: `${section.key}-heading`, kind: 'heading', title: section.title, index })
+    for (const comment of section.comments) {
+      rows.push({ key: `${section.key}-${comment.id}`, kind: 'comment', index, comment })
+    }
+  })
+  return rows
+})
 const hasMore = ref(false)
 const cursor = ref('')
 const loading = ref(false)
@@ -45,6 +74,7 @@ const loadingMore = ref(false)
 const loadingAll = ref(false)
 const error = ref('')
 const listRef = ref<HTMLElement | null>(null)
+const topbarRef = ref<HTMLElement | null>(null)
 const showTop = ref(false)
 const showBottom = ref(false)
 const resolvedId = computed(
@@ -104,16 +134,34 @@ function timeLabel(ms: number): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`
 }
 
+function updateActiveSection(): void {
+  const el = listRef.value
+  if (!el || sections.value.length === 0) {
+    activeIndex.value = 0
+    return
+  }
+  const headings = el.querySelectorAll<HTMLElement>('.comments-heading')
+  // 标题完全进入遮罩条下方后才切换，保证同一标题不会同时出现在遮罩内外。
+  const maskBottom = el.getBoundingClientRect().top + (topbarRef.value?.offsetHeight ?? 0)
+  let index = 0
+  headings.forEach((heading, position) => {
+    if (heading.getBoundingClientRect().bottom <= maskBottom) index = position
+  })
+  activeIndex.value = Math.min(index, sections.value.length - 1)
+}
+
 function updateJumpControls(): void {
   const el = listRef.value
   if (!el) {
     showTop.value = false
     showBottom.value = false
+    activeIndex.value = 0
     return
   }
   const max = el.scrollHeight - el.clientHeight
   showTop.value = el.scrollTop > 120
   showBottom.value = hasMore.value || (max > 40 && el.scrollTop < max - 120)
+  updateActiveSection()
 }
 
 function scrollToTop(): void {
@@ -375,6 +423,7 @@ async function load(): Promise<void> {
   const id = resolvedId.value
   if (!id) {
     comments.value = []
+    hotComments.value = []
     total.value = 0
     hasMore.value = false
     cursor.value = ''
@@ -391,18 +440,21 @@ async function load(): Promise<void> {
   error.value = ''
   cursor.value = ''
   failedMedia.value = {}
+  hotComments.value = []
   if (listRef.value) listRef.value.scrollTop = 0
   try {
     const page = unwrap(await fetchPage(id, ''))
     if (request !== token) return
     comments.value = page.comments
+    hotComments.value = page.hotComments ?? []
     total.value = page.total
     hasMore.value = page.hasMore
     cursor.value = page.nextCursor ?? ''
-    prefetchReplies(page.comments)
+    prefetchReplies([...hotComments.value, ...page.comments])
   } catch (err) {
     if (request !== token) return
     comments.value = []
+    hotComments.value = []
     total.value = 0
     hasMore.value = false
     cursor.value = ''
@@ -603,10 +655,10 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="lyrics-page-side comments-side">
-    <div class="comments-toolbar">
-      <div class="comments-title">评论</div>
+    <div ref="topbarRef" class="comments-toolbar">
+      <div class="comments-title">{{ activeTitle }}</div>
       <div class="comments-toolbar-right">
-        <span v-if="total > 0" class="faint">{{ formatCount(total) }} 条</span>
+        <span v-if="activeCount > 0" class="faint">{{ formatCount(activeCount) }} 条</span>
         <button class="icon-btn" aria-label="刷新评论" :disabled="loading" @click="load()">
           <span v-if="loading" class="spinner" />
           <AppIcon v-else name="refresh" :size="17" />
@@ -620,7 +672,7 @@ onBeforeUnmount(() => {
         <span>{{ emptyLabel }}</span>
       </div>
 
-      <div v-else-if="loading && comments.length === 0" class="lyrics-empty">
+      <div v-else-if="loading && !hasContent" class="lyrics-empty">
         <span class="spinner" />
         <span>正在加载评论</span>
       </div>
@@ -630,13 +682,25 @@ onBeforeUnmount(() => {
         <button class="btn ghost small" @click="load()">重试</button>
       </div>
 
-      <div v-else-if="comments.length === 0" class="lyrics-empty">
+      <div v-else-if="!hasContent" class="lyrics-empty">
         <AppIcon name="music" :size="26" />
         <span>暂无评论</span>
       </div>
 
       <template v-else>
-        <article v-for="comment in comments" :key="comment.id" class="comment">
+        <template v-for="row in commentRows" :key="row.key">
+          <div
+            v-if="row.kind === 'heading'"
+            class="comments-heading"
+            :class="{
+              'comments-heading-ruled': row.index > 0,
+              'comments-heading-split': row.index > 0
+            }"
+          >
+            <div class="comments-title">{{ row.title }}</div>
+          </div>
+          <article v-else-if="row.comment" class="comment">
+            <template v-for="comment in [row.comment]" :key="comment.id">
           <span class="comment-avatar">
             <img v-if="comment.avatarUrl" :src="comment.avatarUrl" alt="" />
             <template v-else>{{ avatarLetter(comment.nickname) }}</template>
@@ -963,7 +1027,9 @@ onBeforeUnmount(() => {
               </div>
             </template>
           </div>
-        </article>
+            </template>
+          </article>
+        </template>
         <div v-if="loadingMore" class="comments-more"><span class="spinner" />加载更多</div>
         <div v-else-if="!hasMore" class="comments-more faint">已经到底了</div>
       </template>

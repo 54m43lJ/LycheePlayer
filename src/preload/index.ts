@@ -10,6 +10,7 @@ import type {
   ArtistSongPage,
   ArtistSongSort,
   AudioCacheProgress,
+  AudioCacheStored,
   AuthStatus,
   CommentLikeResult,
   CommentPage,
@@ -194,6 +195,14 @@ const api: LycheeApi = {
       ): void => callback(progress)
       ipcRenderer.on('audioCache:progress', listener)
       return () => ipcRenderer.removeListener('audioCache:progress', listener)
+    },
+    onStored: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        stored: AudioCacheStored
+      ): void => callback(stored)
+      ipcRenderer.on('audioCache:stored', listener)
+      return () => ipcRenderer.removeListener('audioCache:stored', listener)
     }
   },
   cache: {

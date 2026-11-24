@@ -20,4 +20,12 @@ describe('ui store song picker', () => {
     ui.openSongPicker(['', ''], 'Song')
     expect(ui.songPicker).toBeNull()
   })
+
+  it('keeps the picker request cloneable for IPC', () => {
+    const ui = useUiStore()
+    ui.openSongPicker(['m1'], 'Song')
+
+    expect(() => structuredClone(ui.songPicker)).not.toThrow()
+    expect(() => structuredClone(ui.songPicker?.songMids)).not.toThrow()
+  })
 })

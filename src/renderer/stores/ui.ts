@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, shallowRef } from 'vue'
 
 /** 全局“添加到歌单”选择器请求；播放条与快捷键共用。 */
 export interface SongPickerRequest {
@@ -11,7 +11,8 @@ export const useUiStore = defineStore('ui', () => {
   const queueOpen = ref(false)
   const lyricsOpen = ref(false)
   const sidebarOpen = ref(false)
-  const songPicker = ref<SongPickerRequest | null>(null)
+  /** 浅层引用：选择器里的 songMids 会原样传给主进程，不能被 Vue 深度代理包裹，否则 IPC 克隆失败。 */
+  const songPicker = shallowRef<SongPickerRequest | null>(null)
 
   function openSongPicker(songMids: string[], songName: string): void {
     const mids = songMids.filter(Boolean)

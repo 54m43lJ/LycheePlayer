@@ -1,11 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createPinia, setActivePinia } from 'pinia'
-import type { DownloadTask } from '../src/shared/types'
+import type { AudioCacheStored, DownloadTask } from '../src/shared/types'
 
 const list = vi.fn()
 const storage = vi.fn()
 const assetStates = vi.fn()
 const resumeAll = vi.fn()
+const onStored = vi.fn(() => () => undefined)
 
 function task(id: string): DownloadTask {
   return {
@@ -27,7 +28,7 @@ function task(id: string): DownloadTask {
 
 beforeEach(() => {
   vi.stubGlobal('window', {
-    lychee: { download: { list, storage, assetStates, resumeAll } },
+    lychee: { download: { list, storage, assetStates, resumeAll }, audioCache: { onStored } },
     setInterval: vi.fn(() => 1),
     clearInterval: vi.fn()
   })
@@ -36,6 +37,7 @@ beforeEach(() => {
   storage.mockReset()
   assetStates.mockReset()
   resumeAll.mockReset()
+  onStored.mockClear()
 })
 
 afterEach(() => {
@@ -72,6 +74,30 @@ describe('download store visibility', () => {
     store.reset()
     await vi.waitFor(() => expect(list).toHaveBeenCalledTimes(2))
     await vi.waitFor(() => expect(store.tasks).toHaveLength(1))
+  })
+})
+
+describe('download store cache sync', () => {
+  it('refreshes the song asset when a cache write completes', async () => {
+    assetStates.mockResolvedValue({
+      ok: true,
+      data: [
+        {
+          songMid: 'mid-a',
+          cachedQuality: '320k',
+          downloadedQuality: null,
+          taskStatus: null
+        }
+      ]
+    })
+    const { useDownloadStore } = await import('../src/renderer/stores/download')
+    const store = useDownloadStore()
+    const push = onStored.mock.calls[0][0] as (stored: AudioCacheStored) => void
+
+    push({ songMid: 'mid-a', quality: '320k' })
+
+    await vi.waitFor(() => expect(store.assets['mid-a']?.cachedQuality).toBe('320k'))
+    expect(assetStates).toHaveBeenCalledWith(['mid-a'])
   })
 })
 

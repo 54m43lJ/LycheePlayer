@@ -162,6 +162,8 @@ export interface CommentLikeResult {
 
 export interface CommentPage {
   comments: Comment[]
+  /** 首屏热评附加模块：按点赞数降序；仅评论首屏返回。 */
+  hotComments?: Comment[]
   /** 首屏回复热评：按点赞数降序、最多 COMMENT_HOT_REPLY_LIMIT 条；仅回复首屏返回。 */
   hotReplies?: Comment[]
   total: number
@@ -336,6 +338,12 @@ export interface AudioCacheProgress {
   receivedBytes: number
   totalBytes: number
   complete: boolean
+}
+
+/** 一次完整音频写入播放缓存成功后的通知。 */
+export interface AudioCacheStored {
+  songMid: string
+  quality: Quality
 }
 
 /** 登录方式；续期与凭证展示按此分流，不从 musickey 前缀或 Cookie 内容推断。 */

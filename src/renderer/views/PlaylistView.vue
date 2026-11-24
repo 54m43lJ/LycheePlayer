@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
 import PageJump from '../components/PageJump.vue'
 import SongListTable from '../components/SongListTable.vue'
 import { describeError } from '../api'
+import { goBack } from '../composables/back-navigation'
 import { useCurrentSongJump } from '../composables/current-song-jump'
 import { usePageJump } from '../composables/page-jump'
 import { useToast } from '../composables/toast'
@@ -20,7 +21,6 @@ import { playbackPermission } from '@shared/permission'
 import { dailyPlaylistName, singerNames } from '../utils/format'
 
 const route = useRoute()
-const router = useRouter()
 const playlist = usePlaylistStore()
 const player = usePlayerStore()
 const playlistEdit = usePlaylistEditStore()
@@ -237,7 +237,7 @@ onBeforeUnmount(() => {
       <p>{{ error }}</p>
       <div class="empty-actions">
         <button class="btn small" @click="retry()">重试</button>
-        <button class="btn ghost small" @click="router.push('/library')">返回我的歌单</button>
+        <button class="btn ghost small" @click="goBack()">返回</button>
       </div>
     </div>
 
@@ -264,7 +264,7 @@ onBeforeUnmount(() => {
               <AppIcon name="download" :size="15" />
               下载全部
             </button>
-            <button class="btn ghost" @click="router.push('/library')">返回我的歌单</button>
+            <button class="btn ghost" @click="goBack()">返回</button>
           </div>
         </div>
       </section>

@@ -71,6 +71,7 @@
     'Segoe UI',
     'Noto Sans Yi',
     'Noto Sans Linear B',
+    'Noto Sans Avestan',
     sans-serif;
   color: var(--text);
   background: var(--bg);
@@ -731,13 +732,6 @@ button:focus-visible,
   background: var(--panel-strong);
   color: var(--text);
   box-shadow: var(--shadow-sm);
-}
-
-.chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 14px;
 }
 
 .chip {
@@ -3357,22 +3351,22 @@ button:focus-visible,
 
 .song-icon.cached:not(.downloaded)::before,
 .icon-btn.cached:not(.downloaded)::before {
-  background: var(--panel);
+  background: var(--palette-purple-light);
 }
 
 .song-icon.downloaded::before,
 .icon-btn.downloaded::before {
-  background: var(--accent-soft);
+  background: var(--palette-purple);
 }
 
 .song-icon.cached,
 .icon-btn.cached {
-  color: var(--muted);
+  color: var(--palette-purple);
 }
 
 .song-icon.downloaded,
 .icon-btn.downloaded {
-  color: var(--accent-strong);
+  color: var(--on-accent);
 }
 
 .song-icon.danger:hover {
@@ -4088,16 +4082,36 @@ button:focus-visible,
 }
 
 .comments-toolbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 2;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: 16px 22px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.comments-heading {
+  padding: 16px 0 20px;
+}
+
+.comments-heading-ruled .comments-title {
+  width: 33%;
+  border-bottom: 1px solid var(--border);
+}
+
+.comments-heading-split {
+  margin-top: 20px;
 }
 
 .comments-title {
   color: var(--text);
-  font-size: 13px;
+  font-size: 22px;
   font-weight: 600;
 }
 

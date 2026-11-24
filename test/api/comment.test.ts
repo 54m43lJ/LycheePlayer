@@ -20,7 +20,7 @@ function respond(data: unknown): Response {
 }
 
 describe('api/comment', () => {
-  it('uses GetNewCommentList without WithHot for the latest comments', async () => {
+  it('requests WithHot only on the first comment page', async () => {
     const requests: Array<{ method: string; param: Record<string, unknown> }> = []
     vi.stubGlobal('fetch', async (url: string | URL) => {
       const data = new URL(String(url)).searchParams.get('data')
@@ -53,8 +53,47 @@ describe('api/comment', () => {
     const { getComments } = await import('../../src/main/api/comment')
     const latest = await getComments('123', '')
     expect(requests[0]?.method).toBe('GetNewCommentList')
-    expect(requests[0]?.param.WithHot).toBeUndefined()
+    expect(requests[0]?.param.WithHot).toBe(1)
     expect(latest.comments.map((comment) => comment.id)).toEqual(['b', 'a'])
+
+    await getComments('123', '100')
+    expect(requests[1]?.param.WithHot).toBeUndefined()
+  })
+
+  it('returns all hot comments in descending like order on the first page', async () => {
+    vi.stubGlobal('fetch', async () =>
+      respond({
+        code: 0,
+        req_0: {
+          code: 0,
+          data: {
+            CommentList: {
+              Comments: [{ CmId: 'latest', Nick: 'L', Content: '最新', PubTime: 300 }],
+              Total: 1,
+              HasMore: 0
+            },
+            CommentList2: {
+              Comments: [
+                { CmId: 'a', Nick: 'A', Content: 'A', PraiseNum: 5 },
+                { CmId: 'b', Nick: 'B', Content: 'B', PraiseNum: 20 },
+                { CmId: 'c', Nick: 'C', Content: 'C', PraiseNum: 8 },
+                { CmId: 'd', Nick: 'D', Content: 'D', PraiseNum: 12 },
+                { CmId: 'b', Nick: 'B', Content: 'B duplicate', PraiseNum: 20 },
+                { CmId: '', Nick: 'X', Content: 'missing id' }
+              ],
+              Total: 6
+            }
+          }
+        }
+      })
+    )
+
+    const { getComments } = await import('../../src/main/api/comment')
+    const page = await getComments('123', '')
+
+    expect(page.hotComments?.map((comment) => comment.id)).toEqual(['b', 'd', 'c', 'a'])
+    expect(page.hotComments?.map((comment) => comment.likedCount)).toEqual([20, 12, 8, 5])
+    expect(page.comments.map((comment) => comment.id)).toEqual(['latest'])
   })
 
   it('normalizes both real and literal escaped newlines in comment content', async () => {

@@ -1161,3 +1161,180 @@
 - 新增 / 更新测试覆盖首屏热评请求、后续页不请求热评、热评失败降级、点赞数不超过 3 的回复被排除、合格回复不足 3 条时按实际条数返回，以及 `hotRepliesFirst()` 的置顶 / 去重。
 - `npm run typecheck`、`npm test`（53 个测试文件、280 个用例）与 `npm run build` 通过。
 - 未做真实窗口验收；置顶顺序与分页边界由接口测试与工具函数单测覆盖。
+
+### 4.51 评论栏新增同级热评区 [已解决] 
+
+**描述**：TODO 要求加入热评区，用单独的部分展示热评，与评论区同级，标题就是“热评”。此前评论区只读取最新评论游标分页，上游热评附加模块 `CommentList2` 未被使用。
+
+**解决方案**：
+
+- 评论首屏请求追加 `WithHot: 1`，后续页不再请求；`api/comment.ts` 从 `CommentList2` 映射热评，按 `PraiseNum` 降序、按 `CmId` 去重后写入 `CommentPage.hotComments`，全量保留上游首屏返回的热评、不截断；热评模块不参与游标分页。歌曲与 MV 评论共用同一实现。
+- `CommentPage` 增加可选字段 `hotComments`；回复热评仍使用独立的 `hotReplies`。
+- `CommentsPanel` 保存 `hotComments`；区块构造与“热评是否存在”的检测解耦到 `utils/comment-sections.ts::buildCommentSections()`：热评非空才生成热评区块，其余区块始终保留并剔除重复条目。组件按返回的区块顺序把标题与条目展开为 `commentRows`，不再分散判断有没有热评，后续新增区块只需在构建函数中追加。
+- 评论栏顶部增加常驻标题栏：绝对定位覆盖在滚动区上，带不透明背景与底部 1px 分隔线，充当遮罩；滚动内容从栏目顶部开始，初始区块标题被盖住，同一标题任何时候只出现一次。标题、条数与刷新入口随当前滚动区块切换，当前区块按所有 `.comments-heading` 与滚动区顶部的相对位置取下标。
+- 区块内部的标题不再带条数统计与刷新按钮，仅作为分隔保留：字号 22px、下内边距 20px；首个区块标题始终被遮罩、不画线，其余区块标题在文字下方各画一条占内容宽度 33% 的 1px 短线；两个区块之间以空白分隔而非分区线。
+- 热评条目复用顶层评论的点赞、回复、图片与表情渲染逻辑，并对有回复的热评预取回复线程；刷新、切歌或目标变化时随评论一起重载。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 加入热评区条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“评论栏新增同级热评区” | 增 | 记录热评来源、区块布局与去重规则。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 评论栏上下两个同级区块、遮罩式常驻标题栏、标题 22px 与细分隔线；热评全部降序展示，评论保留分页。 |
+| `CORE.html` | §1 文件树 | 增 | 增加 `utils/comment-sections.ts` 条目。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | `CommentPage` 增加 `hotComments`。 |
+| `CORE.html` | §4.15 `api/comment.ts`（`#c4-15`） | 改 | 首屏 `WithHot=1` 读取 `CommentList2`，降序去重写入 `hotComments`。 |
+| `CORE.html` | §4.42 `CommentsPanel.vue`（`#c4-42`） | 改 | 记录遮罩式常驻标题栏、`buildCommentSections()` 区块顺序、共用滚动与同 ID 去重。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | `.comments-toolbar` 改为绝对定位遮罩条并带底边线；标题 22px、下内边距 20px、标题下细分隔线，区块间用空白分隔。 |
+| `CORE.html` | §4.111 `utils/comment-sections.ts`（`#c4-111`） | 增 | 区块构建签名与“热评存在性”集中控制说明。 |
+| `CORE.html` | §5.9 歌词与评论 | 改 | 调用树补 `WithHot=1` 与 `commentRows`，说明首屏热评区块。 |
+| `PROVIDER.html` | §2 CONVENTIONS 评论读取 | 改 | 首屏 `WithHot=1` 读取热评模块并全部降序展示。 |
+| `PROVIDER.html` | §4.1 评论读取 / §4.3 `QqCommentList` | 改 | `WithHot` 仅首屏；`CommentList2` 作为“热评”区内容，不参与分页。 |
+
+**工作记录**：
+
+- 真实匿名请求歌曲 `107471791`：`WithHot=1` 时 `CommentList2` 返回 24 条 `State=3` 热评，`PraiseNum` 已按 1550 → 108 降序，与同页最新评论无重叠；`CommentList2.Total` 为 505 但不分页，应用只展示首屏模块内容。
+- 热评在 API 层重新按 `likedCount` 降序并做 `CmId` 去重，不依赖上游顺序；渲染层按 `CmId` 从“评论”区块移除重复条目。
+- 新增测试覆盖首屏 `WithHot`、后续页不携带、热评降序 / 去重 / 全量保留，以及 `buildCommentSections()` 的热评区块存在性与去重。
+- 顶部标题栏改为绝对定位遮罩：滚动内容从栏目顶部开始，初始区块标题被标题栏覆盖；标题栏与区块标题不会同时出现同一文字，标题字号 22px，顶部标题栏与区块标题均带底边线。
+- `npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
+- 未做真实窗口验收；区块顺序、遮罩层叠与去重逻辑由接口测试、工具函数单测与模板审阅覆盖。
+
+### 4.52 页面级“返回”按钮复用后退逻辑 [已解决] 
+
+**描述**：ISSUE 要求所有页面级“返回”按钮遵守与后退键相同的后退逻辑：“返回”表示回到进入本页的入口，应复用后退逻辑，而不是写死目标路由。
+
+**解决方案**：
+
+- 专辑页与歌手页的“返回搜索”、歌单页的“返回我的歌单”（含加载失败状态）统一改为“返回”并调用 `goBack()`，与后退键共用浮层关闭与页面访问栈逻辑。
+- 移除 `AlbumView` / `PlaylistView` 中因此不再使用的 `useRouter` / `router`；已使用 `goBack()` 的专辑 / 歌手 / MV 页头返回按钮保持不变。
+- 页面级返回不再依赖来自搜索或我的歌单的假设，入口可以是搜索、发现、最近歌单、歌手页等任意上一页。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 页面级返回按钮条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“页面级‘返回’按钮复用后退逻辑” | 增 | 记录统一入口与移除的写死路由。 |
+| `USER.html` | §2 CONVENTIONS · 后退 / 前进手势 | 改 | 页面级“返回”按钮与后退键共用同一后退逻辑。 |
+| `CORE.html` | §4.92 `back-navigation.ts`（`#c4-92`） | 改 | 返回按钮（含错误状态）统一调用 `goBack()`，不写死目标路由。 |
+
+**工作记录**：
+
+- 全仓检索页面级“返回”按钮：专辑 / 歌手 / MV 页头与专辑 / 歌手 / 歌单的详情动作区、歌单错误状态全部调用 `goBack()`，不再存在 `router.push('/search')` / `router.push('/library')` 形式的返回入口。
+- `npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
+- 未做真实窗口验收；页面栈行为由既有 `test/back-navigation.test.ts` 覆盖，本次仅统一按钮入口。
+
+### 4.53 评论昵称 Avestan 字母缺字修复 [已解决] 
+
+**描述**：ISSUE 报告 Atwood - Hush 的 2020-02-26 18:36 评论昵称 `🥚🥚🖱️🖱️𐬼𐬻𐬺` 为乱码。核对上游原始响应：`Nick` 与上报文本完全一致，并非取字或清洗损坏。码位为 `U+1F95A` ×2、`U+1F5B1` + `U+FE0F` ×2 与 `U+10B3C` / `U+10B3B` / `U+10B3A`（Avestan 字母）。系统已安装 Noto Color Emoji 覆盖两个表情；但没有字体覆盖 Avestan 区，`fc-list :charset=10b3a` 为空，因此三个 Avestan 字母显示为缺字方框，整体看起来像乱码。
+
+**解决方案**：
+
+- 新增依赖 `@fontsource/noto-sans-avestan`（OFL-1.1），与 Yi、Linear B 的接入方式一致。
+- `src/renderer/main.ts` 导入 `@fontsource/noto-sans-avestan/avestan-400.css`，只加载 Avestan 子集。
+- 正文 `font-family` 在 `Noto Sans Linear B` 之后加入 `Noto Sans Avestan`，仅在现有字体缺字时回退；不修改评论文本，也不替换或过滤原字符。
+- 表情仍由 Noto Color Emoji 渲染，Avestan 为 RTL 文字，按字体自身的书写方向显示。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | Atwood - Hush 评论昵称乱码条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“评论昵称 Avestan 字母缺字修复” | 增 | 记录真实码位、缺字原因与字体回退。 |
+| `CORE.html` | §3 SBOM | 增 | 新增 `@fontsource/noto-sans-avestan`（OFL-1.1），覆盖 `U+10B00-10B3F`。 |
+| `CORE.html` | §4.22 `main.ts`（`#c4-22`） | 改 | 记录 Avestan 样式导入与 `Noto Sans Avestan` 回退。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 罕见文种字体回退补充 Avestan。 |
+| `package.json` | dependencies | 改 | 新增 `@fontsource/noto-sans-avestan`。 |
+
+**工作记录**：
+
+- 上游真实昵称经匿名读取确认：`Nick = "🥚🥚🖱️🖱️𐬼𐬻𐬺"`，评论正文为 `YSC🍟`，`PubTime=1582713379`。
+- `fc-list :charset=1f95a` / `:charset=1f5b1` 均命中 `Noto Color Emoji`；`:charset=10b3a` 无结果，确认缺字来自 Avestan 区。
+- `fc-scan` 确认字体子集字符集为 `10b00-10b35 10b39-10b3f`，覆盖 `U+10B3A`–`U+10B3C`。
+- `npm run build` 产物包含 `noto-sans-avestan-avestan-400-normal-*.woff2` / `.woff`。
+- `npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
+- 未做真实窗口截图验收；字符覆盖由 fontconfig 字符集与构建产物验证。
+
+### 4.54 移除搜索页固定推荐搜索词 [已解决] 
+
+**描述**：ISSUE 要求去掉搜索框下方固定的推荐搜索词 chips；若有可用的上游接口则改为动态推荐，没有则直接移除。
+
+**解决方案**：
+
+- 调查后确认没有可用的动态热词来源：旧接口 `c.y.qq.com/splcloud/fcgi-bin/gethotkey.fcg` 虽返回 `code=0`，但内容停留在 2019 年（“我们的歌”“冰雪奇缘2”“桥边姑娘”等），不再维护；musicu `music.search.SearchCgiService` 的 `GetHotKey`、`GetHotSearch`、`HotSearch`、`GetHotSearchKey`、`GetSearchTips`、`GetHotWords` 与 `music.search.HotSearchSvr / GetHotSearchList` 全部返回 `500003 / 860100001`；当前 `y.qq.com` 搜索页打包产物中没有热词接口引用。
+- 按 ISSUE 的兜底要求移除固定推荐词：删除 `HOT_KEYWORDS` 常量、`useKeyword()` 与搜索框下方的 chips 模板。
+- 删除只服务该区块的 `.chips` 样式；`.chip` 仍由歌手页的专辑筛选使用，保留。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 搜索页固定推荐搜索词条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“移除搜索页固定推荐搜索词” | 增 | 记录接口调查结论与移除范围。 |
+| `USER.html` | §5.2.8 页面结构 · 搜索 | 改 | 页面结构去掉“热门关键词 chips”。 |
+| `CORE.html` | §4.44 `SearchView.vue`（`#c4-44`） | 改 | 说明不显示热门关键词 / 固定推荐词及其原因。 |
+
+**工作记录**：
+
+- `gethotkey.fcg` 响应示例：`{"code":0,"data":{"hotkey":[{"k":"我们的歌 ","n":765562}, ...]}}`，数据与当前热门无关，不适合作为动态推荐。
+- musicu 探测均返回 `req_0.code=500003`、`subcode=860100001`（方法不存在）。
+- 移除后搜索页保留页头、搜索框、五类标签与结果区；`npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
+- 未做窗口截图验收；搜索页布局由模板与样式审阅覆盖。
+
+### 4.55 播放条加入歌单报 IPC 克隆失败 [已解决] 
+
+**描述**：ISSUE 报告 regression：从播放条把歌曲添加到歌单时报错 “An object could not be cloned”。
+
+**解决方案**：
+
+- 根因：`ui` store 用深层 `ref` 保存全局 `songPicker` 请求，`songMids` 数组被 Vue 转为响应式代理；`PlaylistPicker` 把 `props.songMids` 原样传给 `playlistEdit.addSongs()`，预加载再交给 `ipcRenderer.invoke('playlist.addSongs', id, mids)`，Electron 结构化克隆无法克隆 Proxy，于是抛出该错误。
+- `src/renderer/stores/ui.ts` 的 `songPicker` 改为 `shallowRef`，请求对象与数组保持原始引用，不参与深层代理；`openSongPicker()` 仍用 `filter(Boolean)` 生成新的普通数组。
+- 新增 `ui-store` 测试：`openSongPicker()` 后对请求对象和 `songMids` 执行 `structuredClone()` 不抛错，锁定 IPC 可克隆约束。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 播放条加入歌单克隆失败条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“播放条加入歌单报 IPC 克隆失败” | 增 | 记录根因、修复与测试。 |
+| `CORE.html` | §4.31 `stores/ui.ts`（`#c4-31`） | 改 | 说明 `songPicker` 使用 `shallowRef` 以避免 IPC 克隆失败。 |
+
+**工作记录**：
+
+- 该回归由 `78c92d8`（收藏特殊 revealer 与触屏手势）引入：选择器请求从播放条内的 `computed` 数组改为 ui store 的深层 `ref`，数组因此变成 Proxy。
+- `structuredClone(reactive(['a']))` 在 Node 中会抛 `DOMException: An object could not be cloned`，与报错一致；改用 `shallowRef` 后克隆正常。
+- `npm run typecheck`、`npm test`（53 个测试文件、284 个用例）与 `npm run build` 通过。
+- 未做真实窗口验收；IPC 可克隆性由 store 单测与 Electron 行为复现确认。
+
+### 4.56 下载按钮缓存 / 下载标记与缓存完成刷新 [已解决] 
+
+**描述**：ISSUE 要求改进下载按钮在已缓存 / 已下载两种状态下的标记对比度，并让缓存写入完成像下载完成一样主动触发按钮更新，覆盖歌单页与播放条。
+
+**解决方案**：
+
+- 已缓存按钮的 24px 背景块改用 purple-light，图标改为 purple；已下载按钮的背景块改用 purple，图标改用 `--on-accent`（dark 取 cream，light 取 highlight）；两种状态继续互斥，图标颜色不写死单主题色值。
+- 主进程在完整音频写入播放缓存成功后新增 `audioCache:stored` 通知，携带 `songMid` 与 `quality`；只在真正落盘后发送一次，缓存命中与普通进度上报不触发。
+- `preload` 暴露 `audioCache.onStored`；`stores/download` 创建时订阅该事件，收到后调用 `refreshAssets([songMid])`。歌曲表与播放条读取同一份 `assets`，按钮即时更新，不需要重新进入页面。
+- 新增测试：音频协议完整响应落盘后发送一次 `audioCache:stored`；下载 store 收到通知后刷新该曲资产。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 下载按钮标记条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“下载按钮缓存 / 下载标记与缓存完成刷新” | 增 | 记录配色、事件通路与测试。 |
+| `USER.html` | §5.2.3 播放条 / §5.2.4 歌曲列表 | 改 | 下载按钮状态改为 purple-light 背景 + purple 图标（已缓存）、purple 背景 + on-accent 图标（已下载，dark cream / light highlight），并说明缓存完成后即时更新。 |
+| `CORE.html` | §4.1 `types.ts`（`#c4-1`） | 改 | 新增 `AudioCacheStored`。 |
+| `CORE.html` | §4.2 `shared/ipc.ts`（`#c4-2`） | 改 | `audioCache` 增加 `onStored`。 |
+| `CORE.html` | §4.59 `audio-protocol.ts`（`#c4-59`） | 改 | 说明落盘后推送 `audioCache:stored`。 |
+| `CORE.html` | §4.71 `stores/download.ts`（`#c4-71`） | 改 | 订阅缓存写入完成并刷新资产。 |
+| `CORE.html` | §5.18 音频缓存进度 | 改 | 调用树补充写入完成通知与下载 store 刷新。 |
+
+**工作记录**：
+
+- 已下载图标不使用 `purple-light`，改用 accent 前景角色 `--on-accent`：light 主题解析为 highlight `#E9DBF2`，dark 主题解析为 cream `#FFF7E4`，与下载按钮的 purple 填充形成对应关系。
+- 缓存命中 `file` 分支与本地下载文件播放也会上报 `complete: true` 的进度；因此按钮刷新不复用进度事件，改用独立的写入完成通知，避免每次播放 / seek 都触发资产查询。
+- `npm run typecheck`、`npm test`（54 个测试文件、286 个用例）与 `npm run build` 通过。
+- 未做真实窗口验收；配色由 CSS token 审阅覆盖，事件链路由主进程协议测试与 store 单测覆盖。

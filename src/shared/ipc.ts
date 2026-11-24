@@ -6,6 +6,7 @@ import type {
   ArtistSongPage,
   ArtistSongSort,
   AudioCacheProgress,
+  AudioCacheStored,
   AuthStatus,
   CommentLikeResult,
   CommentPage,
@@ -167,6 +168,8 @@ export interface LycheeApi {
   }
   audioCache: {
     onProgress(callback: (progress: AudioCacheProgress) => void): () => void
+    /** 完整音频写入缓存成功后触发；用于刷新对应歌曲的资产状态。 */
+    onStored(callback: (stored: AudioCacheStored) => void): () => void
   }
   cache: {
     /** 列出各账号可管理的缓存占用；未登录作用域为 anonymous。 */
