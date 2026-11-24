@@ -4105,8 +4105,13 @@ button:focus-visible,
   padding: 16px 0 20px;
 }
 
+.comments-heading-ruled {
+  padding-bottom: 12px;
+}
+
 .comments-heading-ruled .comments-title {
   width: 33%;
+  padding-bottom: 8px;
   border-bottom: 1px solid var(--border);
 }
 
