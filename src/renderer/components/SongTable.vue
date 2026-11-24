@@ -196,7 +196,7 @@ onBeforeUnmount(() => {
                 }}</span>
                 <MvButton v-if="song.mvId" :mv-id="song.mvId" class="song-mv" />
               </div>
-              <div v-if="singerNames(song)" class="song-artist">
+              <MarqueeText v-if="singerNames(song)" class="song-artist">
                 <template v-for="(singer, singerIndex) in visibleSingers(song)" :key="`${singer.mid}-${singerIndex}`">
                   <RouterLink
                     v-if="singer.mid"
@@ -208,7 +208,7 @@ onBeforeUnmount(() => {
                   <span v-else>{{ singer.name }}</span>
                   <span v-if="singerIndex < visibleSingers(song).length - 1" class="singer-sep"> / </span>
                 </template>
-              </div>
+              </MarqueeText>
             </div>
           </div>
         </td>
@@ -221,7 +221,7 @@ onBeforeUnmount(() => {
           >
             <MarqueeText :text="song.album.name || '—'" />
           </RouterLink>
-          <div v-else class="song-album">{{ song.album.name || '—' }}</div>
+          <MarqueeText v-else class="song-album" :text="song.album.name || '—'" />
         </td>
         <td class="song-action">
           <div v-if="!compact" class="song-action-inner">

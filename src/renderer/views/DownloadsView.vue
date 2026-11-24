@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import type { DownloadTask } from '@shared/types'
 import AppIcon from '../components/AppIcon.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
+import MarqueeText from '../components/MarqueeText.vue'
 import PageJump from '../components/PageJump.vue'
 import { useDownloadStore } from '../stores/download'
 import { usePageJump } from '../composables/page-jump'
@@ -289,14 +290,16 @@ onBeforeUnmount(() => downloads.setVisible(false))
             <article v-for="task in filteredTasks" :key="task.id" class="download-row">
               <div class="download-main">
                 <div class="song-text">
-                  <div class="song-title">{{ task.name }}</div>
-                  <div class="song-artist">
+                  <div class="song-title">
+                    <MarqueeText class="song-title-text" :text="task.name" />
+                  </div>
+                  <MarqueeText class="song-artist">
                     <template v-if="task.singers.length">{{ task.singers.join(' / ') }} · </template>
                     {{ task.quality.toUpperCase() }} · {{ sourceLabel(task) }} ·
                     {{ statusLabel(task.status) }}
                     <template v-if="task.albumName"> · {{ task.albumName }}</template>
                     <template v-if="task.error"> · {{ task.error }}</template>
-                  </div>
+                  </MarqueeText>
                 </div>
                 <span class="download-size">
                   {{ formatBytes(task.receivedBytes) }}

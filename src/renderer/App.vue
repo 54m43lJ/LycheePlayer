@@ -495,7 +495,7 @@ watch(
                 <MarqueeText :text="player.current.subtitle" />
               </div>
             </div>
-            <div class="song-artist">{{ singerNames(player.current) }}</div>
+            <MarqueeText class="song-artist" :text="singerNames(player.current)" />
           </div>
         </div>
         <div v-else class="queue-empty-inline">暂无歌曲</div>
@@ -542,7 +542,7 @@ watch(
                 @click="ui.closeQueue()"
               />
             </div>
-            <div class="song-artist">{{ singerNames(song) }}</div>
+            <MarqueeText class="song-artist" :text="singerNames(song)" />
           </div>
           <button
             class="song-icon danger"

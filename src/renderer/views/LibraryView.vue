@@ -6,6 +6,7 @@ import AppIcon from '../components/AppIcon.vue'
 import CardPlayButton from '../components/CardPlayButton.vue'
 import ConfirmDialog from '../components/ConfirmDialog.vue'
 import CoverArt from '../components/CoverArt.vue'
+import MarqueeText from '../components/MarqueeText.vue'
 import PageJump from '../components/PageJump.vue'
 import PlaylistEditDialog from '../components/PlaylistEditDialog.vue'
 import { describeError, unwrap } from '../api'
@@ -195,14 +196,14 @@ watch(
                 @play="toggleSource('playlist', playlist.id, () => playPlaylist(playlist))"
               />
             </div>
-            <div class="card-name">
+            <MarqueeText class="card-name">
               {{
                 playlist.kind === 'favorites'
                   ? '我喜欢'
                   : dailyPlaylistName(playlist.name, auth.profile?.nickname ?? '')
               }}
-            </div>
-            <div class="card-sub">{{ playlistSubtitle(playlist) }}</div>
+            </MarqueeText>
+            <MarqueeText class="card-sub" :text="playlistSubtitle(playlist)" />
             <div v-if="playlist.editable && playlist.kind !== 'favorites'" class="card-actions">
               <button class="icon-btn" aria-label="重命名" @click.stop="openRename(playlist)">
                 <AppIcon name="edit" :size="14" />

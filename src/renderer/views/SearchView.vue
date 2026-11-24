@@ -305,7 +305,7 @@ function openPlaylist(id: string): void {
               />
               <template v-else>{{ singer.name.slice(0, 1) }}</template>
             </div>
-            <div class="card-name">{{ singer.name }}</div>
+            <MarqueeText class="card-name" :text="singer.name" />
           </button>
         </div>
         <div v-else class="empty">
@@ -322,7 +322,7 @@ function openPlaylist(id: string): void {
         <div v-if="albums.length > 0" class="card-grid search-grid">
           <button v-for="album in albums" :key="album.mid" class="card" @click="openAlbum(album.mid)">
             <CoverArt :src="albumCover(album.mid)" image-class="card-cover" :icon-size="30" />
-            <div class="card-name">{{ album.name }}</div>
+            <MarqueeText class="card-name" :text="album.name" />
           </button>
         </div>
         <div v-else class="empty">
@@ -355,8 +355,8 @@ function openPlaylist(id: string): void {
                 @play="toggleSource('playlist', playlist.id, () => playPlaylist(playlist))"
               />
             </div>
-            <div class="card-name">{{ playlist.name }}</div>
-            <div class="card-sub">{{ playlistSubtitle(playlist) }}</div>
+            <MarqueeText class="card-name" :text="playlist.name" />
+            <MarqueeText class="card-sub" :text="playlistSubtitle(playlist)" />
           </div>
         </div>
         <div v-else class="empty">
@@ -396,7 +396,7 @@ function openPlaylist(id: string): void {
                 <span v-if="index < item.singers.length - 1" class="singer-sep"> / </span>
               </template>
             </MarqueeText>
-            <div v-else class="card-sub">{{ item.singerName }}</div>
+            <MarqueeText v-else class="card-sub" :text="item.singerName" />
           </div>
         </div>
         <div v-else class="empty">

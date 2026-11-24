@@ -161,8 +161,8 @@ onBeforeUnmount(() => {
                   "
                 />
               </div>
-              <div class="card-name">{{ playlistTitle(section.playlists[0].name) }}</div>
-              <div class="card-sub">{{ section.playlists[0].songCount }} 首歌曲</div>
+              <MarqueeText class="card-name" :text="playlistTitle(section.playlists[0].name)" />
+              <MarqueeText class="card-sub" :text="`${section.playlists[0].songCount} 首歌曲`" />
             </div>
 
             <div
@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
                   @play="toggleSource('radio', 'guess', () => startGuessRadio(section))"
                 />
               </div>
-              <div class="card-name">{{ sectionTitle(section) }}</div>
+              <MarqueeText class="card-name" :text="sectionTitle(section)" />
             </div>
 
             <div v-else class="empty compact">

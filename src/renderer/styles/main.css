@@ -368,6 +368,9 @@ button:focus-visible,
 }
 
 .user-state {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: 11px;
   color: var(--faint);
 }
@@ -975,9 +978,6 @@ button:focus-visible,
 .song-title-text {
   flex: 0 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* 歌名副标题：与歌名同一行，弱化字重与颜色；空间不足时先收缩副标题，再压缩歌名。 */
@@ -1006,18 +1006,12 @@ button:focus-visible,
 }
 
 .song-artist {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   margin-top: 3px;
   font-size: 11px;
   color: var(--muted);
 }
 
 .song-album {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--muted);
   font-size: 12px;
 }
@@ -1162,18 +1156,12 @@ button:focus-visible,
 }
 
 .card-name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   margin-top: 10px;
   font-size: 13px;
   font-weight: 600;
 }
 
 .card-sub {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   margin-top: 4px;
   color: var(--muted);
   font-size: 11px;
@@ -1755,6 +1743,9 @@ button:focus-visible,
 }
 
 .player-artist {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   margin-top: 4px;
   color: var(--muted);
   font-size: 11px;
@@ -3996,9 +3987,6 @@ button:focus-visible,
 .lyrics-page-title-text {
   flex: 0 1 auto;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .lyrics-page-title .song-subtitle {

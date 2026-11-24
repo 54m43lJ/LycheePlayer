@@ -12,6 +12,7 @@ import { ARTIST_ALBUM_PAGE_MAX } from '@shared/constants'
 import AppIcon from '../components/AppIcon.vue'
 import CatalogDescription from '../components/CatalogDescription.vue'
 import CoverArt from '../components/CoverArt.vue'
+import MarqueeText from '../components/MarqueeText.vue'
 import PageJump from '../components/PageJump.vue'
 import SongListTable from '../components/SongListTable.vue'
 import { describeError, unwrap } from '../api'
@@ -443,11 +444,11 @@ onBeforeUnmount(() => {
             @click="router.push(`/album/${album.mid}`)"
           >
             <CoverArt :src="album.coverUrl" image-class="card-cover" :icon-size="26" />
-            <div class="card-name">{{ album.name }}</div>
-            <div class="card-sub">
+            <MarqueeText class="card-name" :text="album.name" />
+            <MarqueeText class="card-sub">
               {{ album.albumType || '专辑' }}
               <template v-if="album.publishDate"> · {{ album.publishDate }}</template>
-            </div>
+            </MarqueeText>
           </button>
         </div>
         <div v-else class="empty compact">
