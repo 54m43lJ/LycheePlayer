@@ -275,7 +275,7 @@
   </tr>
   <tr>
     <td>单行文本溢出</td>
-    <td>所有单行、非固定宽度的展示文字统一使用 <a href="#c4-38">MarqueeText</a>；多行文本、可编辑输入框与固定尺寸控件不要求。已登记的特例见 <a href="#c4-23">§4.23</a>、<a href="#c4-40">§4.40</a>、<a href="#c4-42">§4.42</a> 与 <a href="#c4-77">§4.77</a>；其余单行展示文字不得另写 <code>text-overflow: ellipsis</code>。</td>
+    <td>所有单行、非固定宽度的展示文字统一使用 <a href="#c4-38">MarqueeText</a>；多行文本、可编辑输入框与固定尺寸控件不要求。其余单行展示文字不得另写 <code>text-overflow: ellipsis</code>。</td>
   </tr>
   <tr>
     <td>本地筛选</td>
@@ -1423,10 +1423,10 @@ export function destroyTray(): void;
   <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
   <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
   <li>全局只挂载一个 <a href="#c4-85">DownloadDeleteDialog</a>，读取 <a href="#c4-84">useDownloadAction</a> 的模块级 <code>pendingDelete</code>；播放条与各歌曲表页面不再各自持有删除下载确认框。</li>
-  <li>侧栏底部账号 pill 在已登录时于昵称右侧渲染仅图标的 <a href="#c4-107">MemberBadge</a>，只显示已知会员档位；成长等级可用时随后显示 <code>Lv. X</code>；未登录仍为“登录 QQ 音乐”入口。点击已登录 pill 进入设置页，窄屏点击后关闭抽屉。账号昵称、musicid 与最近歌单名属于 <a href="#c2">§2</a> 单行文本溢出特例，保持单行省略。</li>
+  <li>侧栏底部账号 pill 在已登录时于昵称右侧渲染仅图标的 <a href="#c4-107">MemberBadge</a>，只显示已知会员档位；成长等级可用时随后显示 <code>Lv. X</code>；未登录仍为“登录 QQ 音乐”入口。点击已登录 pill 进入设置页，窄屏点击后关闭抽屉。账号昵称、musicid 与最近歌单名是 <a href="#c2">§2</a>“单行文本溢出”的例外，保持单行省略。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；<code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后只重置 playlist / recommend / download 的内存视图，不再清空最近歌单 local key，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
-  <li>播放队列面板每行字段为序号、封面、歌名（含副标题，按 <a href="USER.html#u2">USER §2</a>）/ 歌手与移除图标按钮；歌曲带 <code>Song.mvId</code> 时在歌名后渲染 <a href="#c4-108">MvButton</a>，点击进入 MV 页、不触发移除，并关闭队列面板。不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。面板顶部“正在播放”条同样在歌名后显示副标题。队列歌名属于 <a href="#c2">§2</a> 单行文本溢出特例；歌手行使用 <code>MarqueeText</code>。</li>
+  <li>播放队列面板每行字段为序号、封面、歌名（含副标题，按 <a href="USER.html#u2">USER §2</a>）/ 歌手与移除图标按钮；歌曲带 <code>Song.mvId</code> 时在歌名后渲染 <a href="#c4-108">MvButton</a>，点击进入 MV 页、不触发移除，并关闭队列面板。不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。面板顶部“正在播放”条同样在歌名后显示副标题。队列歌名是 <a href="#c2">§2</a>“单行文本溢出”的例外；歌手行使用 <code>MarqueeText</code>。</li>
   <li>播放队列筛选输入框不显示占位文字，用 <code>aria-label="筛选队列中的歌曲"</code> 保留无障碍名称；输入值、清除按钮与过滤逻辑不变。</li>
   <li>播放队列面板顶部持有筛选关键词，按 <a href="#c2">§2</a> 的本地筛选规则匹配歌名 / 歌手 / 专辑；行数据由 <code>player.queue.map((song, index) =&gt; ({ song, index }))</code> 生成，<code>index</code> 是当前曲之后的队列下标，序号显示 <code>index + 1</code>，筛选后不重新编号。移除操作把该下标交给 <code>player.removeFromQueue()</code>，由 store 加上当前曲在 <code>playOrder</code> 中的位置后删除；筛选不改变 <code>playOrder</code>、随机顺序与队列快照。</li>
   <li>播放队列头部 <code>.lyrics-head-actions</code> 并排放置“清空播放队列”与“关闭播放队列”两个图标按钮；清空按钮使用 <code>trash</code> 图标，队列为空时 <code>disabled</code> 并沿用 <code>.icon-btn:disabled</code> 灰化，滚动或筛选都不影响入口。列表底部不再渲染 <code>.queue-footer</code> 或文字按钮；<code>player.clearQueue()</code> 仍只清空当前曲之后的队列。</li>
@@ -1829,7 +1829,7 @@ const emit = defineEmits&lt;{
 </code></pre>
 <ul class="note">
   <li>点击封面调用 <code>ui.toggleLyrics()</code> 开合歌词 / 评论弹出层，不导航；<code>title</code> 在“歌词与评论 / 关闭歌词与评论”之间切换，无当前歌曲时封面禁用。播放队列入口切换 <code>UiStore.queueOpen</code>。</li>
-  <li>标题行用 <a href="#c4-38">MarqueeText</a> 渲染歌名；歌名按内容宽度显示，音质标记与 MV 入口紧随其后，短歌名不被撑满的跑马灯推到列尾，布局规则见 <a href="#c4-49">§4.49</a>。<code>Song.subtitle</code> 非空时在歌名后渲染 <code>.song-subtitle</code>，位于音质标记之前，显示契约见 <a href="USER.html#u2">USER §2</a>。歌手·专辑行属于 <a href="#c2">§2</a> 单行文本溢出特例，保持单行省略。</li>
+  <li>标题行用 <a href="#c4-38">MarqueeText</a> 渲染歌名；歌名按内容宽度显示，音质标记与 MV 入口紧随其后，短歌名不被撑满的跑马灯推到列尾，布局规则见 <a href="#c4-49">§4.49</a>。<code>Song.subtitle</code> 非空时在歌名后渲染 <code>.song-subtitle</code>，位于音质标记之前，显示契约见 <a href="USER.html#u2">USER §2</a>。歌手·专辑行是 <a href="#c2">§2</a>“单行文本溢出”的例外，保持单行省略。</li>
   <li>音质标记之后渲染 <a href="#c4-108">MvButton</a>：<code>mvId</code> 非空时显示 26×18px 圆角长方形按钮（内嵌 13px 播放三角），进入 <code>/mv/:id</code>；无绑定不渲染。当前歌曲来自搜索 / 推荐且 <code>Song.mvId</code> 为空时，等 <code>player.loading</code> 结束再调用 <code>song.getMvId</code>，复用取流已缓存的详情；请求带序号，切歌后旧结果不覆盖。</li>
   <li>播放按钮同时受 <code>loading</code> 与 <code>canPlay</code> 约束；当前曲元数据判定不可播时由播放条沿队列向后尝试，连续 <code>NO_STREAM_SKIP_LIMIT</code> 首取流失败后停止。</li>
   <li>提供当前歌曲的收藏与下载入口；下载只对当前账号可播内容可用，按钮按 <code>resolveDownloadState</code> 的唯一状态渲染（普通 / 24px purple-light 状态块 + purple 图标已缓存 / 24px purple 状态块 + on-accent 图标已下载），与歌曲表共用状态与图标；无障碍名称只显示当前优先级状态，不再拼接“已下载 · 已缓存”。收藏状态来自 <code>playlist-edit</code> 的 <code>favorites</code> 集合，实心 / 空心图标与无障碍名称随之切换。</li>
@@ -1879,7 +1879,7 @@ const emit = defineEmits&lt;{
   <li><code>Comment.deleted</code> 为真时顶层评论与回复都只渲染“该评论已删除”，不显示正文、媒体、点赞与回复入口；回复区是否渲染以实际回复列表为准，不只看 <code>replyCount</code>。</li>
   <li>追加下一页前用现有评论的 <code>id</code> 集合去重，只插入未出现过的评论；顺序完全沿用上游“最新”顺序，不按 <code>createdAtMs</code> 本地重排，刷新与翻页重叠不会产生重复行。</li>
   <li>评论行两行布局：第一行头像 + 昵称 + 正文（完整展示，不截断），第二行时间 + 点赞按钮 / 数量；点赞数为 0 时只显示按钮。正文按纯文本渲染，第一个 <code>U+FFFC</code> 占位替换为 <code>emojiUrl</code> 表情图，其余占位显示加载失败图标；没有占位符时表情追加在正文末尾；没有表情也没有附图时，<code>U+FFFC</code> 同样显示失败图标。<code>imageUrl</code> 附图始终显示在正文下方，不消费占位符。只有图片或表情、正文为空的评论照常显示。点赞按当前状态乐观更新，失败回滚并提示，接口与错误映射见 <a href="#c4-15">§4.15</a>。</li>
-  <li>顶层评论昵称 <code>.comment-nick</code> 属于 <a href="#c2">§2</a> 单行文本溢出特例，保持单行省略；正文与回复按多行换行展示，不适用跑马灯。</li>
+  <li>顶层评论昵称 <code>.comment-nick</code> 是 <a href="#c2">§2</a>“单行文本溢出”的例外，保持单行省略；正文与回复按多行换行展示，不适用跑马灯。</li>
   <li>表情或附图的 <code>img</code> 触发 <code>error</code> 时按 URL 记入 <code>failedMedia</code>，改渲染 <code>paper-torn</code> 占位（折角纸张 + 中段人字形断裂，无叉号）：表情占位随字号缩放到 <code>1.15em</code> 并用 <code>vertical-align: -0.18em</code> 与正文基线对齐，附图占位保持 56×42px；刷新评论或切歌时清空失败记录并重新尝试加载。附图加载成功后点击打开 <a href="#c4-93">ImageLightbox</a>，表情不提供查看大图。</li>
   <li>底部固定 <code>.comment-composer</code>：多行输入框（<code>maxlength = COMMENT_CONTENT_MAX</code>）与“发表”按钮；未登录时输入框与按钮禁用，占位文案为“登录后发表评论”。<code>canPost</code> 要求已登录、去空白后非空且不在提交中；提交期间按钮显示 spinner。</li>
   <li>发表成功后清空草稿并重新调用 <code>load()</code> 拉取最新评论（不本地插入返回行），失败保留草稿并 Toast；切歌或评论目标变化时清空草稿。评论滚动区底部 padding 与跳转按钮位置按输入框高度上移，避免最后一条评论或按钮被输入框遮挡。</li>
@@ -2674,7 +2674,7 @@ const emit = defineEmits&lt;{ close: []; added: [id: string] }&gt;();
   <li>打开时对每个歌单并行调用 <code>playlist.getCached</code> 做本地成员预检：只有 <code>complete</code> 快照参与判断，当前歌曲（多选时为全部 mid）已存在时该行置灰、<code>disabled</code> 并显示“已添加”。</li>
   <li>上游没有“一次查询歌曲是否存在于全部歌单”的接口（只有歌单列表与单歌单详情），因此不逐单请求上游；缓存不完整时保持可点击，由写入返回 <code>changed = false</code> 与 Toast“已添加”兜底。</li>
   <li>选择歌单后直接调用 <code>playlist-edit.addSongs</code>；点击时再次用缓存预检兜底。成功发出 <code>added</code> / <code>close</code>，失败提示；<code>createAndAdd</code> 复用同一入口。</li>
-  <li>新建歌单复用 <code>PlaylistEditDialog</code>，创建成功后直接加入当前歌曲；<code>open</code> 关闭时清空临时状态。打开期间通过 <code>useBackDismiss</code> 注册后退关闭。歌单名属于 <a href="#c2">§2</a> 单行文本溢出特例，保持单行省略。</li>
+  <li>新建歌单复用 <code>PlaylistEditDialog</code>，创建成功后直接加入当前歌曲；<code>open</code> 关闭时清空临时状态。打开期间通过 <code>useBackDismiss</code> 注册后退关闭。歌单名是 <a href="#c2">§2</a>“单行文本溢出”的例外，保持单行省略。</li>
 </ul>
 
 <h3 id="c4-79">4.79 src/renderer/utils/download-state.ts <a class="backlink" href="#c1">文件树</a></h3>
