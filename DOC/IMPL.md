@@ -1282,3 +1282,28 @@
 - musicu 探测均返回 `req_0.code=500003`、`subcode=860100001`（方法不存在）。
 - 移除后搜索页保留页头、搜索框、五类标签与结果区；`npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
 - 未做窗口截图验收；搜索页布局由模板与样式审阅覆盖。
+
+### 4.55 播放条加入歌单报 IPC 克隆失败 [已解决] 
+
+**描述**：ISSUE 报告 regression：从播放条把歌曲添加到歌单时报错 “An object could not be cloned”。
+
+**解决方案**：
+
+- 根因：`ui` store 用深层 `ref` 保存全局 `songPicker` 请求，`songMids` 数组被 Vue 转为响应式代理；`PlaylistPicker` 把 `props.songMids` 原样传给 `playlistEdit.addSongs()`，预加载再交给 `ipcRenderer.invoke('playlist.addSongs', id, mids)`，Electron 结构化克隆无法克隆 Proxy，于是抛出该错误。
+- `src/renderer/stores/ui.ts` 的 `songPicker` 改为 `shallowRef`，请求对象与数组保持原始引用，不参与深层代理；`openSongPicker()` 仍用 `filter(Boolean)` 生成新的普通数组。
+- 新增 `ui-store` 测试：`openSongPicker()` 后对请求对象和 `songMids` 执行 `structuredClone()` 不抛错，锁定 IPC 可克隆约束。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | 播放条加入歌单克隆失败条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“播放条加入歌单报 IPC 克隆失败” | 增 | 记录根因、修复与测试。 |
+| `CORE.html` | §4.31 `stores/ui.ts`（`#c4-31`） | 改 | 说明 `songPicker` 使用 `shallowRef` 以避免 IPC 克隆失败。 |
+
+**工作记录**：
+
+- 该回归由 `78c92d8`（收藏特殊 revealer 与触屏手势）引入：选择器请求从播放条内的 `computed` 数组改为 ui store 的深层 `ref`，数组因此变成 Proxy。
+- `structuredClone(reactive(['a']))` 在 Node 中会抛 `DOMException: An object could not be cloned`，与报错一致；改用 `shallowRef` 后克隆正常。
+- `npm run typecheck`、`npm test`（53 个测试文件、284 个用例）与 `npm run build` 通过。
+- 未做真实窗口验收；IPC 可克隆性由 store 单测与 Electron 行为复现确认。

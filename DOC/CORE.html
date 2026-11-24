@@ -1626,6 +1626,7 @@ interface UiStore {
   <li>下载中心是 <code>/downloads</code> 路由页，不进入 ui store，也不参与播放队列 / 侧栏抽屉互斥。</li>
   <li><code>sidebarOpen</code> 只影响 ≤900px 的抽屉；宽屏固定侧栏忽略该状态，路由切换时自动关闭抽屉。</li>
   <li><code>songPicker</code> 是全局“添加到歌单”请求，播放条的收藏弹层与 <code>Ctrl + S</code> 共用；<code>PlayerBar</code> 按它渲染 <a href="#c4-77">PlaylistPicker</a>，Esc / 选择完成 / 关闭都调用 <code>closeSongPicker()</code>。</li>
+  <li><code>songPicker</code> 使用 <code>shallowRef</code>：<code>songMids</code> 会经 <code>PlaylistPicker</code> 原样传给 <code>playlist.addSongs</code> 的 IPC；若用深层 <code>ref</code> 保存，数组会被 Vue 代理包裹，Electron 结构化克隆时报 “An object could not be cloned”。</li>
 </ul>
 
 <h3 id="c4-32">4.32 src/renderer/utils/format.ts <a class="backlink" href="#c1">文件树</a></h3>
