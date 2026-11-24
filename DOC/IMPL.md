@@ -1225,3 +1225,34 @@
 - 全仓检索页面级“返回”按钮：专辑 / 歌手 / MV 页头与专辑 / 歌手 / 歌单的详情动作区、歌单错误状态全部调用 `goBack()`，不再存在 `router.push('/search')` / `router.push('/library')` 形式的返回入口。
 - `npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
 - 未做真实窗口验收；页面栈行为由既有 `test/back-navigation.test.ts` 覆盖，本次仅统一按钮入口。
+
+### 4.53 评论昵称 Avestan 字母缺字修复 [已解决] 
+
+**描述**：ISSUE 报告 Atwood - Hush 的 2020-02-26 18:36 评论昵称 `🥚🥚🖱️🖱️𐬼𐬻𐬺` 为乱码。核对上游原始响应：`Nick` 与上报文本完全一致，并非取字或清洗损坏。码位为 `U+1F95A` ×2、`U+1F5B1` + `U+FE0F` ×2 与 `U+10B3C` / `U+10B3B` / `U+10B3A`（Avestan 字母）。系统已安装 Noto Color Emoji 覆盖两个表情；但没有字体覆盖 Avestan 区，`fc-list :charset=10b3a` 为空，因此三个 Avestan 字母显示为缺字方框，整体看起来像乱码。
+
+**解决方案**：
+
+- 新增依赖 `@fontsource/noto-sans-avestan`（OFL-1.1），与 Yi、Linear B 的接入方式一致。
+- `src/renderer/main.ts` 导入 `@fontsource/noto-sans-avestan/avestan-400.css`，只加载 Avestan 子集。
+- 正文 `font-family` 在 `Noto Sans Linear B` 之后加入 `Noto Sans Avestan`，仅在现有字体缺字时回退；不修改评论文本，也不替换或过滤原字符。
+- 表情仍由 Noto Color Emoji 渲染，Avestan 为 RTL 文字，按字体自身的书写方向显示。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `ISSUE.md` | Atwood - Hush 评论昵称乱码条目 | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“评论昵称 Avestan 字母缺字修复” | 增 | 记录真实码位、缺字原因与字体回退。 |
+| `CORE.html` | §3 SBOM | 增 | 新增 `@fontsource/noto-sans-avestan`（OFL-1.1），覆盖 `U+10B00-10B3F`。 |
+| `CORE.html` | §4.22 `main.ts`（`#c4-22`） | 改 | 记录 Avestan 样式导入与 `Noto Sans Avestan` 回退。 |
+| `USER.html` | §5.2.5 歌词与评论 | 改 | 罕见文种字体回退补充 Avestan。 |
+| `package.json` | dependencies | 改 | 新增 `@fontsource/noto-sans-avestan`。 |
+
+**工作记录**：
+
+- 上游真实昵称经匿名读取确认：`Nick = "🥚🥚🖱️🖱️𐬼𐬻𐬺"`，评论正文为 `YSC🍟`，`PubTime=1582713379`。
+- `fc-list :charset=1f95a` / `:charset=1f5b1` 均命中 `Noto Color Emoji`；`:charset=10b3a` 无结果，确认缺字来自 Avestan 区。
+- `fc-scan` 确认字体子集字符集为 `10b00-10b35 10b39-10b3f`，覆盖 `U+10B3A`–`U+10B3C`。
+- `npm run build` 产物包含 `noto-sans-avestan-avestan-400-normal-*.woff2` / `.woff`。
+- `npm run typecheck`、`npm test`（53 个测试文件、283 个用例）与 `npm run build` 通过。
+- 未做真实窗口截图验收；字符覆盖由 fontconfig 字符集与构建产物验证。

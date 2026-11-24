@@ -21,6 +21,7 @@
     "package:arch": "npm run build && electron-builder --linux dir && node scripts/package-arch.mjs"
   },
   "dependencies": {
+    "@fontsource/noto-sans-avestan": "^5.3.0",
     "@fontsource/noto-sans-linear-b": "^5.3.0",
     "@fontsource/noto-sans-yi": "^5.3.0",
     "mpris-service": "^2.1.2",

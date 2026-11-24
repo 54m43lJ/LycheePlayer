@@ -320,6 +320,7 @@
   <tr><td><code>vue-tsc</code></td><td>Vue SFC 类型检查。</td></tr>
   <tr><td><code>@fontsource/noto-sans-yi</code></td><td>渲染进程内置 Yi 文种字体（OFL-1.1），回退评论等文本中的 ꈍ 等 <code>U+A000-A4C6</code> 字符。</td></tr>
   <tr><td><code>@fontsource/noto-sans-linear-b</code></td><td>渲染进程内置 Linear B 字体（OFL-1.1），回退评论昵称等文本中的 𐂂 等 <code>U+10000-100FF</code> 字符。</td></tr>
+  <tr><td><code>@fontsource/noto-sans-avestan</code></td><td>渲染进程内置 Avestan 字体（OFL-1.1），回退评论昵称等文本中的 𐬼 等 <code>U+10B00-10B3F</code> 字符。</td></tr>
   <tr><td><code>@types/node</code></td><td>Node.js 类型声明。</td></tr>
 </table>
 <ul class="note">
@@ -1379,7 +1380,7 @@ export function destroyTray(): void;
 <pre><code>createApp(App).use(createPinia()).use(router).mount('#app');
 </code></pre>
 <ul class="note">
-  <li>入口导入 <code>@fontsource/noto-sans-yi/yi-400.css</code> 与 <code>@fontsource/noto-sans-linear-b/linear-b-400.css</code>；正文 <code>font-family</code> 在系统字体之后加入 <code>Noto Sans Yi</code> 与 <code>Noto Sans Linear B</code>，仅当现有字体缺字时回退，避免评论中的 Yi 文种字符（如 <code>U+A20D</code>）或 Linear B 字符（如 <code>U+10082</code>）显示为缺字方框。字体以 OFL-1.1 分发。</li>
+  <li>入口导入 <code>@fontsource/noto-sans-yi/yi-400.css</code>、<code>@fontsource/noto-sans-linear-b/linear-b-400.css</code> 与 <code>@fontsource/noto-sans-avestan/avestan-400.css</code>；正文 <code>font-family</code> 在系统字体之后加入 <code>Noto Sans Yi</code>、<code>Noto Sans Linear B</code> 与 <code>Noto Sans Avestan</code>，仅当现有字体缺字时回退，避免评论中的 Yi 文种字符（如 <code>U+A20D</code>）、Linear B 字符（如 <code>U+10082</code>）或 Avestan 字符（如 <code>U+10B3A</code>）显示为缺字方框。字体以 OFL-1.1 分发。</li>
 </ul>
 
 <h3 id="c4-23">4.23 src/renderer/App.vue <a class="backlink" href="#c1">文件树</a></h3>
