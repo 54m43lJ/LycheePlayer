@@ -231,7 +231,7 @@
   </tr>
   <tr>
     <td>页面状态与 URL</td>
-    <td>搜索页的搜索词与类型写入 <code>?q=</code> / <code>?type=song|singer|album|playlist|mv</code>（<code>song</code> 省略）；歌手页的“歌曲 / 专辑”页签写入 <code>?view=albums</code>（歌曲省略）；下载中心的过滤写入 <code>?filter=active|done|failed</code>（全部省略）。默认值不写入；直接打开带参数的 URL 时按参数恢复状态。同一 base path 的 query 变化替换当前页面栈项，见上一条。</td>
+    <td>搜索页的搜索词与类型写入 <code>?q=</code> / <code>?type=song|singer|album|playlist|mv</code>（<code>song</code> 省略）；歌手页的“歌曲 / 专辑”页签写入 <code>?view=albums</code>（歌曲省略），当前页签的排序写入 <code>?sort=latest</code>（最热省略），专辑类型筛选写入 <code>?kind=lp|ep|single|live|other</code>（全部省略，仅专辑页生效）；下载中心的过滤写入 <code>?filter=active|done|failed</code>（全部省略）。默认值不写入；直接打开带参数的 URL 时按参数恢复状态。同一 base path 的 query 变化替换当前页面栈项，见上一条。</td>
   </tr>
   <tr>
     <td>长页面跳转</td>
@@ -792,7 +792,7 @@
   </tr>
   <tr>
     <td>歌手页 / 专辑页</td>
-    <td>路由 <code>/artist/:mid</code> / <code>/album/:mid</code>；展示名称、封面、简介（上游返回时）、歌曲数与歌曲表。歌手页顶部提供“歌曲 / 专辑”切换：歌曲页保持原有分页、滚动加载与“最热 / 最新”排序；专辑页提供“最热 / 最新”排序，并按上游 <code>albumType</code> 元信息提供 LP / EP / 单曲 / 现场 / 其他版本筛选，筛选条位于歌曲 / 专辑切换下方，只显示当前歌手拥有的类型；专辑以卡片网格展示封面、名称、类型与发行日期，点击进入专辑页。支持播放、下一首播放、收藏、下载与加入歌单；歌手页的歌曲可直接进入专辑页，专辑页的歌手可进入歌手页；加载中、空状态与失败重试；返回优先历史。简介超过 4 行时折叠并显示“展开”，展开后可“收起”；短简介不显示切换按钮。歌曲 / 专辑页签写入 URL（<code>view=albums</code>），直接打开带参数的 URL 时恢复对应页签。</td>
+    <td>路由 <code>/artist/:mid</code> / <code>/album/:mid</code>；展示名称、封面、简介（上游返回时）、歌曲数与歌曲表。歌手页顶部提供“歌曲 / 专辑”切换：歌曲页保持原有分页、滚动加载与“最热 / 最新”排序；专辑页提供“最热 / 最新”排序，并按上游 <code>albumType</code> 元信息提供 LP / EP / 单曲 / 现场 / 其他版本筛选，筛选条位于歌曲 / 专辑切换下方，只显示当前歌手拥有的类型；专辑以卡片网格展示封面、名称、类型与发行日期，点击进入专辑页。支持播放、下一首播放、收藏、下载与加入歌单；歌手页的歌曲可直接进入专辑页，专辑页的歌手可进入歌手页；加载中、空状态与失败重试；返回优先历史。简介超过 4 行时折叠并显示“展开”，展开后可“收起”；短简介不显示切换按钮。歌曲 / 专辑页签写入 URL（<code>view=albums</code>），当前页签排序写入 <code>sort=latest</code>（最热省略），专辑类型筛选写入 <code>kind=lp|ep|single|live|other</code>（全部省略，仅专辑页生效）；直接打开带参数的 URL 时恢复对应页签、排序与筛选。</td>
   </tr>
   <tr>
     <td>歌词 / 评论弹出层</td>

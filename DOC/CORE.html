@@ -2584,13 +2584,13 @@ interface DownloadStore {
 <pre><code>// 无 props / emits。路由 /artist/:mid 的歌手页。
 </code></pre>
 <ul class="note">
-  <li>按路由参数调用 <code>artist.get(mid, offset, sort)</code> 加载歌手信息与歌曲，<code>sort</code> 默认 <code>hot</code>；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
+  <li>按路由参数调用 <code>artist.get(mid, offset, sort)</code> 加载歌手信息与歌曲；<code>sort</code> 从 URL 的 <code>sort</code> 恢复（<code>latest</code> 才写入，默认 <code>hot</code>）；首屏展示名称、封面、简介与歌曲数 / 专辑数，简介为空时隐藏该区域。</li>
   <li>简介非空时渲染 <code>CatalogDescription</code>：默认折叠为 4 行（<code>-webkit-line-clamp</code>），用 <code>scrollHeight &gt; clientHeight + 1</code> 判断是否溢出，仅溢出时显示“展开 / 收起”并同步 <code>aria-expanded</code>；<code>ResizeObserver</code> 在尺寸变化时重新测量，<code>text</code> 变化时重置为折叠。短简介不显示切换按钮。</li>
-  <li>顶部提供“歌曲 / 专辑”切换，默认歌曲；页签同步到 URL 的 <code>view</code>（<code>albums</code> 才写入，歌曲省略），直接打开带参数的 URL 时恢复对应页签并补拉专辑。切到专辑时若尚未加载，调用 <code>artist.getAlbums</code> 从偏移 0 连续补拉，直到 <code>hasMore=false</code> 或达到 <code>ARTIST_ALBUM_PAGE_MAX</code>；切换歌手时按当前 URL 重置页签并清空专辑列表。</li>
-  <li>专辑页右侧提供“最热 / 最新”切换，默认最热；切换重载专辑并回顶。筛选条位于歌曲 / 专辑切换下方，按 <code>AlbumKind</code> 过滤（LP / EP / 单曲 / 现场 / 其他），只显示当前歌手拥有的类型，“全部”始终存在；筛选在本地列表上执行，不重新请求。</li>
+  <li>顶部提供“歌曲 / 专辑”切换，默认歌曲；页签同步到 URL 的 <code>view</code>（<code>albums</code> 才写入，歌曲省略），当前页签的排序同步到 <code>sort</code>（<code>latest</code> 才写入；歌曲 / 专辑各自保留选择），专辑类型筛选同步到 <code>kind</code>（<code>all</code> 省略，仅专辑页生效）。直接打开带参数的 URL 时恢复页签、排序与筛选；切换页签时 URL 的 <code>sort</code> 改写为新页签的排序，若对应列表尚未按该排序加载则重新拉取。切到专辑时若尚未加载，调用 <code>artist.getAlbums</code> 从偏移 0 连续补拉，直到 <code>hasMore=false</code> 或达到 <code>ARTIST_ALBUM_PAGE_MAX</code>；切换歌手时按当前 URL 重置页签、排序与筛选并清空专辑列表，URL 中的 <code>kind</code> 不属于该歌手时在专辑完整加载后回退“全部”并清理参数。</li>
+  <li>专辑页右侧提供“最热 / 最新”切换，默认最热；切换重载专辑并回顶，同时把当前排序写入 URL 的 <code>sort</code>。筛选条位于歌曲 / 专辑切换下方，按 <code>AlbumKind</code> 过滤（LP / EP / 单曲 / 现场 / 其他），只显示当前歌手拥有的类型，“全部”始终存在；筛选在本地列表上执行，不重新请求，选中值写入 URL 的 <code>kind</code>。</li>
   <li>专辑卡片显示封面、名称、类型原文与发行日期，点击进入 <code>/album/:mid</code>；加载中、失败、空结果与筛选无结果分别渲染，专辑加载不触发歌曲分页。名称与类型 / 日期行均使用 <a href="#c4-38">MarqueeText</a>。</li>
   <li>歌曲列表复用 <a href="#c4-101">SongListTable</a>（内部渲染 <code>SongTable</code>），播放由页面提供，下一首播放、收藏、下载与加入歌单由组件统一处理。</li>
-  <li>歌曲视图的标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；列表区显示加载态，滚动位置回到页面顶部；失败时回退原排序并保留旧列表。滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
+  <li>歌曲视图的标题右侧提供“最热 / 最新”切换控件，默认“最热”。切换只调用 <code>artist.getSongs(mid, 0, next)</code> 重载歌曲列表并重置偏移，保留歌手头部、封面与简介；切换时立即把排序写入 URL 的 <code>sort</code>，失败且仍在歌曲页时回退排序与 URL；列表区显示加载态，滚动位置回到页面顶部；滚动分页也走 <code>artist.getSongs</code>，不重复请求歌手详情。</li>
   <li>分页固定 50 首/页；根节点 <code>pageRef</code> 通过 <code>closest('.main')</code> 找到外层滚动容器，注册 <code>passive</code> 的 <code>scroll</code> 监听，距底部小于 <code>SCROLL_LOAD_THRESHOLD = 160px</code> 且 <code>hasMore=true</code>、当前没有首屏或追加加载时自动调用 <code>load(false)</code>，卸载时移除监听。页面不提供“加载更多”按钮，底部按状态显示 spinner + “正在加载更多” / “继续向下滚动加载更多”，无更多歌曲时显示“已经到底了”。加载中、合法空状态与失败重试各自渲染，不使用搜索或当前歌单数据兜底。</li>
   <li>返回按钮调用共享 <code>goBack()</code>，按页面访问栈返回上一页；栈底回到发现页。点击歌曲不改变路由。</li>
 </ul>

@@ -56,19 +56,36 @@ const loading = ref(false)
 const error = ref('')
 const loadingMore = ref(false)
 const songsLoading = ref(false)
-const songSort = ref<ArtistSongSort>('hot')
-function queryView(): 'songs' | 'albums' {
-  return route.query.view === 'albums' ? 'albums' : 'songs'
+
+function queryString(value: unknown): string {
+  return Array.isArray(value) ? String(value[0] ?? '') : String(value ?? '')
 }
 
+function queryView(): 'songs' | 'albums' {
+  return queryString(route.query.view) === 'albums' ? 'albums' : 'songs'
+}
+
+function querySort(): ArtistSongSort {
+  return queryString(route.query.sort) === 'latest' ? 'latest' : 'hot'
+}
+
+function queryAlbumFilter(): AlbumFilter {
+  const value = queryString(route.query.kind)
+  return ALBUM_FILTERS.some((item) => item.value === value) ? (value as AlbumFilter) : 'all'
+}
+
+// URL 的 sort 表示当前页签的排序；歌曲 / 专辑各自保留自己的排序选择。
 const view = ref<'songs' | 'albums'>(queryView())
+const songSort = ref<ArtistSongSort>(view.value === 'songs' ? querySort() : 'hot')
+const albumSort = ref<ArtistAlbumSort>(view.value === 'albums' ? querySort() : 'hot')
 const albums = ref<ArtistAlbum[]>([])
 const albumTotal = ref(0)
 const albumsLoaded = ref(false)
 const albumsLoading = ref(false)
 const albumError = ref('')
-const albumSort = ref<ArtistAlbumSort>('hot')
-const albumFilter = ref<AlbumFilter>('all')
+const albumFilter = ref<AlbumFilter>(queryAlbumFilter())
+const loadedSongSort = ref<ArtistSongSort | null>(null)
+const loadedAlbumSort = ref<ArtistAlbumSort | null>(null)
 const pageRef = ref<HTMLElement | null>(null)
 const { showTop, showBottom, scrollToTop, scrollToBottom } = usePageJump(pageRef)
 const SCROLL_LOAD_THRESHOLD = 160
@@ -98,6 +115,7 @@ async function load(reset = true): Promise<void> {
     detail.value = null
     loadingMore.value = false
     songsLoading.value = false
+    loadedSongSort.value = null
   } else {
     if (!detail.value || !detail.value.hasMore) return
     loadingMore.value = true
@@ -108,6 +126,7 @@ async function load(reset = true): Promise<void> {
       const data = unwrap(await window.lychee.artist.get(id, 0, songSort.value))
       if (request !== token) return
       detail.value = data
+      loadedSongSort.value = songSort.value
       void playlistEdit.loadFavorites(data.songs.map((song) => song.songMid))
       void download.refreshAssets(data.songs.map((song) => song.songMid))
       return
@@ -122,6 +141,7 @@ async function load(reset = true): Promise<void> {
       total: page.total,
       hasMore: page.hasMore
     }
+    loadedSongSort.value = songSort.value
     void playlistEdit.loadFavorites(page.songs.map((song) => song.songMid))
     void download.refreshAssets(page.songs.map((song) => song.songMid))
   } catch (err) {
@@ -143,6 +163,7 @@ async function reloadSongs(next: ArtistSongSort): Promise<void> {
   if (!id) return
   const previous = songSort.value
   songSort.value = next
+  syncSortQuery()
   const request = ++token
   loadingMore.value = false
   songsLoading.value = true
@@ -157,11 +178,16 @@ async function reloadSongs(next: ArtistSongSort): Promise<void> {
         hasMore: page.hasMore
       }
     }
+    loadedSongSort.value = songSort.value
     void playlistEdit.loadFavorites(page.songs.map((song) => song.songMid))
     void download.refreshAssets(page.songs.map((song) => song.songMid))
   } catch (err) {
     if (request === token) {
-      songSort.value = previous
+      // 已切到专辑页时保留新排序供专辑使用；仍在歌曲页才回退并同步 URL。
+      if (view.value === 'songs') {
+        songSort.value = previous
+        syncSortQuery()
+      }
       toast.error(describeError(err))
     }
   } finally {
@@ -176,8 +202,7 @@ function resetAlbums(): void {
   albumsLoaded.value = false
   albumsLoading.value = false
   albumError.value = ''
-  albumSort.value = 'hot'
-  albumFilter.value = 'all'
+  loadedAlbumSort.value = null
 }
 
 async function loadAlbums(): Promise<void> {
@@ -189,7 +214,7 @@ async function loadAlbums(): Promise<void> {
   albumError.value = ''
   albums.value = []
   albumTotal.value = 0
-  albumFilter.value = 'all'
+  loadedAlbumSort.value = null
   try {
     let offset = 0
     for (let page = 0; page < ARTIST_ALBUM_PAGE_MAX; page += 1) {
@@ -204,6 +229,15 @@ async function loadAlbums(): Promise<void> {
       if (!data.hasMore || data.albums.length === 0) break
     }
     albumsLoaded.value = true
+    loadedAlbumSort.value = albumSort.value
+    // URL 里的筛选类型可能不属于当前歌手；完整加载后回退到“全部”。
+    if (
+      albumFilter.value !== 'all' &&
+      !albums.value.some((album) => album.kind === albumFilter.value)
+    ) {
+      albumFilter.value = 'all'
+      syncFilterQuery()
+    }
   } catch (err) {
     if (request === albumToken) albumError.value = describeError(err)
   } finally {
@@ -211,11 +245,34 @@ async function loadAlbums(): Promise<void> {
   }
 }
 
-/** 歌曲 / 专辑页签写入 URL；同一页面内的切换由页面栈去重。 */
+/** 当前页签的排序。 */
+function currentViewSort(): ArtistSongSort {
+  return view.value === 'albums' ? albumSort.value : songSort.value
+}
+
+/** 歌曲 / 专辑页签写入 URL，同时写入当前页签排序；同一页面内的切换由页面栈去重。 */
 function syncViewQuery(): void {
   const query = { ...route.query }
   if (view.value === 'albums') query.view = 'albums'
   else delete query.view
+  if (currentViewSort() === 'latest') query.sort = 'latest'
+  else delete query.sort
+  void router.replace({ path: route.path, query })
+}
+
+/** 当前页签的排序写入 URL；默认“最热”省略。 */
+function syncSortQuery(): void {
+  const query = { ...route.query }
+  if (currentViewSort() === 'latest') query.sort = 'latest'
+  else delete query.sort
+  void router.replace({ path: route.path, query })
+}
+
+/** 专辑类型筛选写入 URL；默认“全部”省略。 */
+function syncFilterQuery(): void {
+  const query = { ...route.query }
+  if (albumFilter.value === 'all') delete query.kind
+  else query.kind = albumFilter.value
   void router.replace({ path: route.path, query })
 }
 
@@ -224,17 +281,60 @@ function changeView(next: 'songs' | 'albums'): void {
   view.value = next
   syncViewQuery()
   scrollRoot?.scrollTo({ top: 0 })
-  if (next === 'albums' && !albumsLoaded.value && !albumsLoading.value) void loadAlbums()
+  if (next === 'albums') {
+    if (
+      !albumsLoading.value &&
+      (!albumsLoaded.value || loadedAlbumSort.value !== albumSort.value)
+    ) {
+      void loadAlbums()
+    }
+  } else if (
+    !loading.value &&
+    !songsLoading.value &&
+    loadedSongSort.value !== songSort.value
+  ) {
+    void load()
+  }
 }
 
 watch(
-  () => route.query.view,
+  () => [route.query.view, route.query.sort, route.query.kind] as const,
   () => {
-    const next = queryView()
-    if (next === view.value) return
-    view.value = next
-    scrollRoot?.scrollTo({ top: 0 })
-    if (next === 'albums' && !albumsLoaded.value && !albumsLoading.value) void loadAlbums()
+    const nextView = queryView()
+    const nextSort = querySort()
+    const nextFilter = queryAlbumFilter()
+    const viewChanged = nextView !== view.value
+    if (viewChanged) {
+      view.value = nextView
+      scrollRoot?.scrollTo({ top: 0 })
+    }
+    const viewSort = view.value === 'albums' ? albumSort : songSort
+    const sortChanged = nextSort !== viewSort.value
+    if (nextFilter !== albumFilter.value) albumFilter.value = nextFilter
+    if (sortChanged) {
+      viewSort.value = nextSort
+      scrollRoot?.scrollTo({ top: 0 })
+    }
+    if (viewChanged) {
+      if (view.value === 'albums') {
+        if (
+          !albumsLoading.value &&
+          (!albumsLoaded.value || loadedAlbumSort.value !== albumSort.value)
+        ) {
+          void loadAlbums()
+        }
+      } else if (
+        !loading.value &&
+        !songsLoading.value &&
+        loadedSongSort.value !== songSort.value
+      ) {
+        void load()
+      }
+      return
+    }
+    if (!sortChanged) return
+    if (view.value === 'albums') void loadAlbums()
+    else void load()
   }
 )
 
@@ -242,7 +342,14 @@ function changeAlbumSort(next: ArtistAlbumSort): void {
   if (albumSort.value === next) return
   scrollRoot?.scrollTo({ top: 0 })
   albumSort.value = next
+  syncSortQuery()
   void loadAlbums()
+}
+
+function changeAlbumFilter(next: AlbumFilter): void {
+  if (albumFilter.value === next) return
+  albumFilter.value = next
+  syncFilterQuery()
 }
 
 function maybeLoadMore(): void {
@@ -271,8 +378,11 @@ function playAt(index: number): void {
 watch(
   mid,
   () => {
-    resetAlbums()
     view.value = queryView()
+    songSort.value = view.value === 'songs' ? querySort() : 'hot'
+    albumSort.value = view.value === 'albums' ? querySort() : 'hot'
+    albumFilter.value = queryAlbumFilter()
+    resetAlbums()
     void load()
     if (view.value === 'albums') void loadAlbums()
   },
@@ -420,7 +530,7 @@ onBeforeUnmount(() => {
             :key="item.value"
             class="chip"
             :class="{ active: albumFilter === item.value }"
-            @click="albumFilter = item.value"
+            @click="changeAlbumFilter(item.value)"
           >
             {{ item.label }}
           </button>
