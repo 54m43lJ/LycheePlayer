@@ -5,6 +5,7 @@ import AppIcon from './components/AppIcon.vue'
 import CoverArt from './components/CoverArt.vue'
 import DownloadDeleteDialog from './components/DownloadDeleteDialog.vue'
 import LyricsOverlay from './components/LyricsOverlay.vue'
+import MarqueeText from './components/MarqueeText.vue'
 import MemberBadge from './components/MemberBadge.vue'
 import MvButton from './components/MvButton.vue'
 import PlayerBar from './components/PlayerBar.vue'
@@ -490,9 +491,9 @@ watch(
           <div class="song-text">
             <div class="song-title">
               <span class="queue-title">{{ player.current.name }}</span>
-              <span v-if="player.current.subtitle" class="song-subtitle">{{
-                player.current.subtitle
-              }}</span>
+              <div v-if="player.current.subtitle" class="song-subtitle">
+                <MarqueeText :text="player.current.subtitle" />
+              </div>
             </div>
             <div class="song-artist">{{ singerNames(player.current) }}</div>
           </div>
@@ -531,7 +532,9 @@ watch(
           <div class="song-text">
             <div class="song-title">
               <span class="queue-title">{{ song.name }}</span>
-              <span v-if="song.subtitle" class="song-subtitle">{{ song.subtitle }}</span>
+              <div v-if="song.subtitle" class="song-subtitle">
+                <MarqueeText :text="song.subtitle" />
+              </div>
               <MvButton
                 v-if="song.mvId"
                 :mv-id="song.mvId"

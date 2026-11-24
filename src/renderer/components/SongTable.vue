@@ -179,7 +179,9 @@ onBeforeUnmount(() => {
             <div class="song-text">
               <div class="song-title">
                 <MarqueeText class="song-title-text" :text="song.name" />
-                <span v-if="song.subtitle" class="song-subtitle">{{ song.subtitle }}</span>
+                <div v-if="song.subtitle" class="song-subtitle">
+                  <MarqueeText :text="song.subtitle" />
+                </div>
                 <span v-if="song.pay.album" class="pay-badge album">数字专辑</span>
                 <span v-else-if="song.pay.vip" class="pay-badge">VIP</span>
                 <span v-else-if="!song.pay.free" class="pay-badge">付费</span>

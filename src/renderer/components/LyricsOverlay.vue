@@ -5,6 +5,7 @@ import AppIcon from './AppIcon.vue'
 import CommentsPanel from './CommentsPanel.vue'
 import CoverArt from './CoverArt.vue'
 import LyricsPanel from './LyricsPanel.vue'
+import MarqueeText from './MarqueeText.vue'
 import { pushBackDismiss } from '../composables/back-navigation'
 import { usePlayerStore } from '../stores/player'
 import { useUiStore } from '../stores/ui'
@@ -162,8 +163,10 @@ onBeforeUnmount(() => {
         />
         <div class="lyrics-page-info">
           <div v-if="current" class="lyrics-page-title">
-            <span class="lyrics-page-title-text">{{ current.name }}</span>
-            <span v-if="current.subtitle" class="song-subtitle">{{ current.subtitle }}</span>
+            <MarqueeText class="lyrics-page-title-text" :text="current.name" />
+            <div v-if="current.subtitle" class="song-subtitle">
+              <MarqueeText :text="current.subtitle" />
+            </div>
           </div>
           <div v-else class="lyrics-page-title faint">还没有播放中的歌曲</div>
           <div v-if="current" class="lyrics-page-meta">

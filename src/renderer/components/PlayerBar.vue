@@ -629,7 +629,9 @@ watch(
       <div class="player-text">
         <div class="player-title-row">
           <MarqueeText v-if="hasSong" class="player-title" :text="current?.name ?? ''" />
-          <span v-if="hasSong && current?.subtitle" class="song-subtitle">{{ current?.subtitle }}</span>
+          <div v-if="hasSong && current?.subtitle" class="song-subtitle">
+            <MarqueeText :text="current.subtitle" />
+          </div>
           <span v-else-if="!hasSong" class="player-title">&nbsp;</span>
           <span v-if="hasSong" class="quality-mark">{{ qualityLabel }}</span>
           <MvButton v-if="hasSong && mvId" :mv-id="mvId" />

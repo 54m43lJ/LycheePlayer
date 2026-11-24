@@ -246,7 +246,9 @@ onBeforeUnmount(() => {
               <div class="discover-text">
                 <div class="discover-title">
                   <MarqueeText class="discover-name" :text="song.name" />
-                  <span v-if="song.subtitle" class="song-subtitle">{{ song.subtitle }}</span>
+                  <div v-if="song.subtitle" class="song-subtitle">
+                    <MarqueeText :text="song.subtitle" />
+                  </div>
                 </div>
                 <MarqueeText class="discover-singer" :text="singerNames(song)" />
               </div>

@@ -987,11 +987,13 @@ button:focus-visible,
   min-width: 4em;
   margin-left: 6px;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
   color: var(--muted);
   font-size: 11px;
   font-weight: 400;
+}
+
+.song-subtitle .marquee {
+  width: 100%;
 }
 
 .song-mv {
@@ -5019,7 +5021,7 @@ button:focus-visible,
   }
 }
 
-.song-title .marquee {
+.song-title > .marquee {
   flex: 0 1 auto;
   min-width: 0;
 }
