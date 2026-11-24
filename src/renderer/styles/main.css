@@ -4106,13 +4106,13 @@ button:focus-visible,
 }
 
 .comments-heading-ruled {
-  padding-bottom: 12px;
+  padding-bottom: 9px;
 }
 
 .comments-heading-ruled .comments-title {
   width: 33%;
   padding-bottom: 8px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 4px solid var(--border);
 }
 
 .comments-heading-split {
