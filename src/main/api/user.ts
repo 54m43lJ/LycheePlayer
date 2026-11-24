@@ -56,6 +56,7 @@ interface VipData {
   ystar?: number
   identity?: {
     vip?: number
+    level?: number
     huge_vip?: number
     HugeVip?: number
     year_flag?: number
@@ -85,7 +86,13 @@ function isFlag(value: unknown): boolean {
 }
 
 function unknownVipStatus(): VipStatus {
-  return { state: 'unknown', isVip: false, level: 'none', expiresAtMs: null }
+  return { state: 'unknown', isVip: false, level: 'none', growthLevel: null, expiresAtMs: null }
+}
+
+/** 正整数或 null；用于会员成长等级等只展示的数值字段。 */
+function positiveIntOrNull(value: unknown): number | null {
+  const numeric = Number(value)
+  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : null
 }
 
 /** 上游到期时间可能是秒或毫秒；无法识别时返回 null。 */
@@ -113,7 +120,7 @@ function parseVipOverdate(value: unknown): number | null {
 export async function getVipStatus(): Promise<VipStatus> {
   const credential = getCredential()
   if (!credential) {
-    return { state: 'known', isVip: false, level: 'none', expiresAtMs: null }
+    return { state: 'known', isVip: false, level: 'none', growthLevel: null, expiresAtMs: null }
   }
   if (
     vipCache &&
@@ -134,6 +141,7 @@ export async function getVipStatus(): Promise<VipStatus> {
       state: 'known',
       isVip: level !== 'none',
       level,
+      growthLevel: positiveIntOrNull(identity.level),
       expiresAtMs:
         (superVip
           ? parseVipOverdate(identity.HugeVipEnd)

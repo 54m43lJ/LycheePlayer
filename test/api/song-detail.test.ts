@@ -47,6 +47,7 @@ vi.mock('../../src/main/api/user', () => ({
     state: 'known',
     isVip: false,
     level: 'none',
+    growthLevel: null,
     expiresAtMs: null
   })
 }))

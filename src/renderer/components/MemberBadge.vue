@@ -35,6 +35,18 @@ const level = computed<Exclude<VipLevel, 'none'> | null>(() => {
 })
 
 const label = computed(() => (level.value ? LABELS[level.value] : ''))
+
+const growthLevel = computed(() => {
+  const status = props.status
+  if (!status || status.state !== 'known' || !status.isVip) return null
+  return typeof status.growthLevel === 'number' && status.growthLevel > 0
+    ? status.growthLevel
+    : null
+})
+
+const accessibleLabel = computed(() =>
+  growthLevel.value ? `${label.value}，Lv. ${growthLevel.value}` : label.value
+)
 </script>
 
 <template>
@@ -43,7 +55,7 @@ const label = computed(() => (level.value ? LABELS[level.value] : ''))
     class="member-badge"
     :class="`member-${level}`"
     :role="showLabel ? undefined : 'img'"
-    :aria-label="showLabel ? undefined : label"
+    :aria-label="showLabel ? undefined : accessibleLabel"
   >
     <svg
       class="member-badge-icon"
@@ -57,5 +69,6 @@ const label = computed(() => (level.value ? LABELS[level.value] : ''))
       <path v-else-if="level === 'super'" class="member-v" :d="V_SUPER" />
     </svg>
     <span v-if="showLabel" class="member-badge-label">{{ label }}</span>
+    <span v-if="growthLevel" class="member-level">Lv. {{ growthLevel }}</span>
   </span>
 </template>

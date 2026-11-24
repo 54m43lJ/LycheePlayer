@@ -14,6 +14,7 @@ const KNOWN_NONE: VipStatus = {
   state: 'known',
   isVip: false,
   level: 'none',
+  growthLevel: null,
   expiresAtMs: null
 }
 
@@ -21,6 +22,7 @@ const VIP_UNKNOWN: VipStatus = {
   state: 'unknown',
   isVip: false,
   level: 'none',
+  growthLevel: null,
   expiresAtMs: null
 }
 

@@ -126,7 +126,7 @@
 │       │   ├── <a href="#c4-37">CoverArt.vue</a>              封面与占位
 │       │   ├── <a href="#c4-89">CardPlayButton.vue</a>        歌单卡片居中播放按钮
 │       │   ├── <a href="#c4-38">MarqueeText.vue</a>           超宽文本跑马灯
-│       │   ├── <a href="#c4-107">MemberBadge.vue</a>           会员档位图标与文字
+│       │   ├── <a href="#c4-107">MemberBadge.vue</a>           会员档位图标、文字与成长等级
 │       │   ├── <a href="#c4-39">SongTable.vue</a>             歌曲列表
 │       │   ├── <a href="#c4-101">SongListTable.vue</a>         歌曲表页面共用接线
 │       │   ├── <a href="#c4-40">PlayerBar.vue</a>             播放条
@@ -782,6 +782,8 @@ export interface VipStatus {
   state: 'known' | 'unknown';
   isVip: boolean;
   level: VipLevel;
+  /** 会员成长等级（上游 identity.level）；非会员、缺失或无法识别时为 null。 */
+  growthLevel: number | null;
   expiresAtMs: number | null;
 }
 
@@ -813,7 +815,7 @@ export interface FlagsFile {
   <li><code>PlaylistMeta.kind</code> 区分普通歌单与“我喜欢”；<code>editable</code> 表示当前账号是否可编辑。<code>id</code> 是歌单标识（tid / disstid），<code>dirId</code> 是当前账号目录 ID（写入接口使用），两者不能互换；公开歌单可能没有 <code>dirId</code>。</li>
   <li><code>Lyric.format</code> 为 <code>lrc</code> / <code>qrc</code>；逐字行类型见 <a href="#c4-33">§4.33</a>。</li>
   <li><code>SongPlayState</code> 是列表展示与按钮启用使用的派生状态，不是跨 IPC 数据；判定规则见 <a href="#c4-105">§4.105</a>。旧缓存缺少 <code>playSwitch</code> / <code>payDown</code> / <code>sizeTry</code> / 试听边界等字段时按 <a href="#c4-103">§4.103</a> 整份失效，重新从上游获取当前账号的权益位图。</li>
-  <li><code>VipLevel</code> 的 <code>vip</code> / <code>deluxe</code> / <code>super</code> 分别对应绿钻 / 豪华绿钻 / 超级会员；与上游字段的映射见 <a href="#c4-13">§4.13</a> 与 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>，展示规则见 <a href="#c4-107">§4.107</a>。</li>
+  <li><code>VipLevel</code> 的 <code>vip</code> / <code>deluxe</code> / <code>super</code> 分别对应绿钻 / 豪华绿钻 / 超级会员；<code>growthLevel</code> 是同一响应中的会员成长等级（<code>identity.level</code>），只用于展示 <code>Lv. X</code>，不参与档位判断。与上游字段的映射见 <a href="#c4-13">§4.13</a> 与 <a href="PROVIDER.html#p4-3">PROVIDER §4.3</a>，展示规则见 <a href="#c4-107">§4.107</a>。</li>
   <li><code>RecommendSection.expiresAtMs</code> 表示内容失效时间：每日推荐为下一个上海自然日 0 点，其余分区为抓取后 24 小时；占位分区为 0。</li>
 </ul>
 
@@ -1206,9 +1208,10 @@ export function isVipUser(): Promise&lt;boolean | null&gt;;
 
 </code></pre>
 <ul class="note">
-  <li><code>getVipStatus</code> 通过 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a> 的 VIP 状态接口返回 <code>{ state, isVip, level, expiresAtMs }</code>；接口失败返回 <code>state='unknown'</code>，不能当作非 VIP。未登录返回已知非会员。</li>
+  <li><code>getVipStatus</code> 通过 <a href="PROVIDER.html#p4-1">PROVIDER §4.1</a> 的 VIP 状态接口返回 <code>{ state, isVip, level, growthLevel, expiresAtMs }</code>；接口失败返回 <code>state='unknown'</code>，不能当作非 VIP。未登录返回已知非会员。</li>
   <li>字段映射（同一账号购买超级会员前后对比确认）：<code>identity.vip</code> = 绿钻，<code>svip</code> = 豪华绿钻，<code>identity.HugeVip</code> / <code>huge_vip</code> = 超级会员。对应 <code>level</code> 为 <code>vip</code> / <code>deluxe</code> / <code>super</code>，取最高档；<code>isVip</code> 为三者任一。第三方模型文档曾把 <code>HugeVip</code> 标成豪华绿钻，与真实账号不符；该映射不再作为依据。</li>
   <li>到期时间按当前最高档选择：超级会员优先 <code>identity.HugeVipEnd</code>，豪华绿钻优先 <code>identity.overdate</code>（缺失时 <code>LMEnd</code>），再回退 <code>userinfo.expire</code> 与 <code>overdate</code>。</li>
+  <li><code>growthLevel</code> 读取 <code>identity.level</code>，只接受正整数；缺失、0 或非数值为 <code>null</code>。它是会员成长等级，不改变 <code>level</code> 档位与可播判断。</li>
   <li>成功结果缓存 <code>VIP_CACHE_MS</code>；未知结果只缓存 <code>VIP_UNKNOWN_CACHE_MS</code>，避免失败时每次调用都重试，同时比正常缓存更快恢复。缓存按 <code>musicid</code> 隔离。</li>
   <li><code>isVipUser()</code> 是兼容包装：已知状态返回布尔值，<code>unknown</code> 返回 <code>null</code>。渲染层经 <code>user.vipStatus</code> 查询；会员徽标统一由 <a href="#c4-107">§4.107</a> 的 <code>MemberBadge</code> 按 <code>VipStatus.level</code> 渲染，未知时不显示。</li>
 </ul>
@@ -1409,7 +1412,7 @@ export function destroyTray(): void;
   <li>歌词 / 评论由 <code>ui.lyricsOpen</code> 控制：<code>App.vue</code> 在内容区之后按该状态渲染 <code>LyricsOverlay</code>，打开时覆盖内容区但不覆盖侧栏与播放条；路由变化、侧栏导航与 Esc 都会调用 <code>ui.closeLyrics()</code>，避免弹出层遮住新页面。</li>
   <li>下载中心为 <code>/downloads</code> 路由页，不在 <code>App.vue</code> 内挂载抽屉，也不与播放队列面板互斥；侧栏“下载”使用 <code>RouterLink</code> 进入。</li>
   <li>全局只挂载一个 <a href="#c4-85">DownloadDeleteDialog</a>，读取 <a href="#c4-84">useDownloadAction</a> 的模块级 <code>pendingDelete</code>；播放条与各歌曲表页面不再各自持有删除下载确认框。</li>
-  <li>侧栏底部账号 pill 在已登录时于昵称右侧渲染仅图标的 <a href="#c4-107">MemberBadge</a>，只显示已知会员档位；未登录仍为“登录 QQ 音乐”入口。点击已登录 pill 进入设置页，窄屏点击后关闭抽屉。</li>
+  <li>侧栏底部账号 pill 在已登录时于昵称右侧渲染仅图标的 <a href="#c4-107">MemberBadge</a>，只显示已知会员档位；成长等级可用时随后显示 <code>Lv. X</code>；未登录仍为“登录 QQ 音乐”入口。点击已登录 pill 进入设置页，窄屏点击后关闭抽屉。</li>
   <li>侧栏“应用”组在“下载 / 设置”之后提供“退出”，调用 <code>window.lychee.system.quit()</code> 直接结束进程，不经过窗口关闭流程；“退出”下方提供仅图标、无文字的配色切换按钮（浅色显示 sun，深色显示 moon），读取并写回 <code>Settings.theme</code>，与设置页共用同一 store 与即时应用逻辑；<code>aria-label</code> 为“切换到深色 / 浅色模式”，切换成功不弹 Toast，失败走统一错误提示。</li>
   <li>退出登录由 <code>auth.logout()</code> 派发 <code>lychee:logout</code> 事件；<code>App.vue</code> 监听后只重置 playlist / recommend / download 的内存视图，不再清空最近歌单 local key，登录态变化时清理收藏集合。跨 store 重置不通过 store 互相静态导入，避免循环依赖。</li>
   <li>播放队列面板每行字段为序号、封面、歌名 / 歌手与移除图标按钮；歌曲带 <code>Song.mvId</code> 时在歌名后渲染 <a href="#c4-108">MvButton</a>，点击进入 MV 页、不触发移除，并关闭队列面板。不显示专辑名。网格为 <code>20px 38px minmax(0, 1fr) 32px</code>，歌名单行省略，文本容器隐藏溢出。移除按钮通过 <code>player.removeFromQueue(index)</code> 只移除该待播放歌曲，不触发播放、不切换当前曲。</li>
@@ -1939,7 +1942,7 @@ const emit = defineEmits&lt;{
   <li>“用户缓存管理”打开 <a href="#c4-99">CacheManagerDialog</a>：调用 <code>cache.listUsers()</code>，与 <a href="#c4-100">utils/cache-users.ts</a> 枚举的 localStorage 记录合并，按账号展示播放缓存、歌单缓存与本地记录占用；删除时调用 <code>cache.clearUser(musicid)</code> 并清理对应 local key，随后刷新统计与缓存占用。删除当前账号时重新加载最近歌单与播放历史，不触发上游请求。</li>
   <li>快捷键区按 <a href="#c4-106">§4.106</a> 的 <code>SHORTCUT_ACTIONS</code> 固定顺序渲染五项，显示 <code>formatShortcut()</code> 结果；点击进入录制态，window 捕获阶段监听 <code>keydown</code> 并用 <code>stopImmediatePropagation()</code> 阻止全局快捷键与页面行为。只按修饰键不生效，Esc 取消，与其它动作冲突时提示占用并放弃；保存调用 <code>settings.update({ shortcuts })</code>，“恢复默认”写回 <code>DEFAULT_SHORTCUTS</code>。</li>
   <li>播放引擎固定为 HTML5 Audio，设置页不提供引擎切换项。</li>
-  <li>账号区展示昵称、登录方式、<code>musicid</code> 与到期时间，不显示“已登录”徽标；会员标记由 <a href="#c4-107">MemberBadge</a> 读取全局 <code>auth.vip</code>，已知会员时显示档位图标 + 文字（绿钻 / 豪华绿钻 / 超级会员），<code>unknown</code>、失败或非会员时不显示；组件不再单独调用 <code>user.vipStatus</code>。登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
+  <li>账号区展示昵称、登录方式、<code>musicid</code> 与到期时间，不显示“已登录”徽标；会员标记由 <a href="#c4-107">MemberBadge</a> 读取全局 <code>auth.vip</code>，已知会员时显示档位图标 + 文字（绿钻 / 豪华绿钻 / 超级会员），成长等级可用时随后显示 <code>Lv. X</code>，<code>unknown</code>、失败或非会员时不显示；组件不再单独调用 <code>user.vipStatus</code>。登录后“立即续期”始终可用，不按凭证类型禁用；续期返回 <code>AUTH_EXPIRED</code> 时交由全局重新登录弹层提示，不再重复 Toast。窗口区只保留“关闭到托盘”，右侧列在“关于”之后提供独立“应用”面板与“退出应用”，调用 <code>window.lychee.system.quit()</code>，不受关闭到托盘影响。关于区展示版本、音频引擎与许可证，版本 / 许可证以 <code>package.json</code> 为准。</li>
   <li>播放缓存上限与“退出应用”不再显示解释性 <code>setting-desc</code>；清理策略与退出行为只保留在文档和实际行为中，界面只显示设置名与操作。“播放缓存”标题也不再附加“不影响已下载”等括号说明。</li>
 </ul>
 
@@ -1985,7 +1988,7 @@ const emit = defineEmits&lt;{
   <li>可播状态角标复用 <code>.quality-badge</code>：<code>.unavailable</code> 使用 <code>--danger</code> 边框与文字，<code>.trial</code> 使用 <code>--accent-strong</code> 边框与文字；付费墙不新增行级样式，仍以 <code>.pay-badge</code> 表达 VIP / 数字专辑 / 付费。</li>
   <li><code>.player-title</code> 与歌曲表标题相同，使用 <code>flex: 0 1 auto</code>；标题行宽度由较长的歌手行或可用宽度决定时，短歌名仍按内容宽度显示，<code>.quality-mark</code> / <code>.mv-mark</code> 紧随其后，长歌名才收缩并滚动。</li>
   <li><code>.mv-mark</code> 为 26×18px、5px 圆角的长方形入口，边框与底色使用 accent，内嵌的 13px 播放三角由 <a href="#c4-108">MvButton</a> 的 <code>size</code> prop 控制。歌曲表 <code>.song-mv</code> 与队列 <code>.queue-mv</code> 使用 6px 左间距；队列 <code>.song-title</code> 改为 flex，歌名由 <code>.queue-title</code> 单独省略，MV 图标不被压缩。</li>
-  <li>会员标记 <code>.member-badge</code> 为 inline-flex，图标 <code>.member-badge-icon</code> 不收缩；<code>.member-diamond</code> 使用 <code>--member-green</code> 填充、<code>--member-green-edge</code> 描边，无腰线；<code>.member-v</code> 使用 <code>--member-gold</code> 填充，路径为左右镜像的等宽 V，直接写入 24×24 图标坐标。超级会员 <code>.member-super</code> 将钻石填充与描边切换为 <code>--member-gold</code> / <code>--member-gold-edge</code>，V 使用 <code>--member-gold-edge</code> 填充。设置页的文字标签 <code>.member-badge-label</code> 为 11px、600 字重、正文色；侧栏账号行 <code>.user-name-row</code> 让昵称省略而图标保持完整。</li>
+  <li>会员标记 <code>.member-badge</code> 为 inline-flex，图标 <code>.member-badge-icon</code> 不收缩；<code>.member-diamond</code> 使用 <code>--member-green</code> 填充、<code>--member-green-edge</code> 描边，无腰线；<code>.member-v</code> 使用 <code>--member-gold</code> 填充，路径为左右镜像的等宽 V，直接写入 24×24 图标坐标。超级会员 <code>.member-super</code> 将钻石填充与描边切换为 <code>--member-gold</code> / <code>--member-gold-edge</code>，V 使用 <code>--member-gold-edge</code> 填充。设置页的文字标签 <code>.member-badge-label</code> 为 11px、600 字重、正文色；成长等级 <code>.member-level</code> 为 10px、600 字重、muted 色，不收缩；侧栏账号行 <code>.user-name-row</code> 让昵称省略而图标与等级保持完整。</li>
   <li>下载按钮三态使用共用的 24px <code>::before</code> 状态框：<code>.cached:not(.downloaded)</code> 为 <code>var(--panel)</code> surface 背景，<code>.downloaded</code> 为 <code>var(--accent-soft)</code> 填充且覆盖缓存态；不画按钮外沿 inset 边框，不使用 <code>background-clip</code>，播放条与歌曲表尺寸一致、点击热区不变。</li>
   <li>播放缓存上限滑杆使用 <code>.cache-limit-row</code> / <code>.cache-slider</code> / <code>.cache-slider-nodes</code>：accent 填充轨道、滑块、已选节点与焦点环，未到节点保持弱色；轨道两端各留 7px 与滑块半径对齐，节点绝对定位，首尾标签不挤出面板。</li>
 </ul>
@@ -3078,6 +3081,7 @@ export function formatShortcut(binding: ShortcutBinding): string;
   <li>仅 <code>state === 'known'</code>、<code>isVip</code> 为真且 <code>level !== 'none'</code> 时渲染；档位映射为 <code>vip → 绿钻</code>、<code>deluxe → 豪华绿钻</code>、<code>super → 超级会员</code>，不使用 <code>VIP</code> / <code>SVIP</code> 文案。</li>
   <li>图标为 24×24 视框的实心钻石轮廓（宽高比 6:5，平顶桌面 + 下尖亭部，无腰线）：绿钻为绿色；豪华绿钻为绿色钻石 + 右下区域金色 V；超级会员为金色钻石 + 居中暗金 V。V 以 Roboto Black 的 V 字形为参照重建为左右镜像的对称轮廓，两侧笔画等宽；超级会员的 V 水平居中，四边与钻石边框均留出间距。颜色来自 <code>--member-green</code> / <code>--member-gold</code>，见 <a href="#c4-49">§4.49</a>。</li>
   <li><code>showLabel=false</code> 时只渲染图标，以 <code>role="img"</code> + <code>aria-label</code> 提供档位名；<code>showLabel=true</code> 时图标后显示档位文字，文字供无障碍读取。</li>
+  <li><code>status.growthLevel</code> 为正整数时，在档位文字 / 图标后追加 <code>Lv. X</code> 文本；仅图标模式的 <code>aria-label</code> 同时包含成长等级（例如“绿钻，Lv. 7”）。等级缺失、非会员或状态未知时不渲染。</li>
 </ul>
 
 <h3 id="c4-108">4.108 src/renderer/components/MvButton.vue <a class="backlink" href="#c1">文件树</a></h3>

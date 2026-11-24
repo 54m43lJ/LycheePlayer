@@ -413,6 +413,15 @@ button:focus-visible,
   white-space: nowrap;
 }
 
+.member-level {
+  flex: none;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .sidebar-note {
   padding: 0 10px;
   margin-top: 8px;

@@ -1482,3 +1482,38 @@
 - `npm run typecheck`、`npm test`（55 个测试文件、299 个用例）与 `npm run build` 通过。
 - 间距按 CSS 盒模型核算，滚动定位依赖的标题总高度未变化；左右伸出最终经预览对比后定为左侧 0px、右侧 24px。
 - 未做真实窗口截图验收。
+
+### 4.61 会员成长等级显示 [已解决]
+
+**描述**：TODO 第一项要求加入用户会员等级显示，使用 `Lv. X` 字样。现有会员标记只表达绿钻 / 豪华绿钻 / 超级会员档位，没有数字成长等级。
+
+**解决方案**：
+
+- `VipStatus` 增加 `growthLevel: number | null`，由 `vip_login_base` 的 `identity.level` 映射；只接受正整数，缺失、0 或非数值为 `null`，不参与会员档位与可播判断。
+- `MemberBadge` 在档位图标 / 文字后追加 `Lv. X`；仅图标模式下把成长等级并入 `aria-label`（如“绿钻，Lv. 7”），使侧栏与设置页共用同一展示实现。
+- 新增 `.member-level` 样式：10px、600 字重、muted 色、不收缩；侧栏昵称仍可省略，等级不被裁掉。
+- 侧栏账号 pill 与设置页账号区沿用现有 `MemberBadge`，因此两处同时获得 `Lv. X`；非会员、未知状态或缺少等级时不显示。
+
+**文档操作**：
+
+| 文档 | 章节 | 动作 | 内容 |
+|---|---|---|---|
+| `TODO.md` | 第 1 项“加入用户会员等级显示” | 改 | 行尾追加 ` [已解决] `。 |
+| `IMPL.md` | 新增“会员成长等级显示” | 增 | 记录字段映射、展示位置与无障碍处理。 |
+| `USER.html` | §1 TERMS | 增 | 新增“会员成长等级”，说明与会员档位不是同一概念。 |
+| `USER.html` | §2 CONVENTIONS · 会员状态展示 | 改 | 档位图标 / 文字后显示 `Lv. X`；非会员或缺失不显示。 |
+| `USER.html` | §5.2.2 侧栏与导航 / §5.2.7 设置页 | 改 | 账号 pill 与账号区同步显示成长等级；设置页原型加入 `Lv. 7`。 |
+| `CORE.html` | §1 文件树 / §4.1 `types.ts`（`#c4-1`） | 改 | `MemberBadge` 描述更新；`VipStatus` 增加 `growthLevel`。 |
+| `CORE.html` | §4.13 `api/user.ts`（`#c4-13`） | 改 | 记录 `identity.level` → `growthLevel` 的正整数校验。 |
+| `CORE.html` | §4.23 `App.vue`（`#c4-23`）/ §4.48 `SettingsView.vue`（`#c4-48`） | 改 | 账号区域补充 `Lv. X`。 |
+| `CORE.html` | §4.49 `styles/main.css`（`#c4-49`） | 改 | 新增 `.member-level` 视觉契约。 |
+| `CORE.html` | §4.107 `MemberBadge.vue`（`#c4-107`） | 改 | 记录成长等级渲染、显示条件与 `aria-label`。 |
+| `PROVIDER.html` | §4.1 VIP 状态 / §4.3 `QqVipData` | 改 | 补充 `identity.level` 字段与 `growthLevel` 转换。 |
+| `README.md` / `ABOUT.html` | 登录行 | 改 | 会员档位后补充 `Lv. X`。 |
+
+**工作记录**：
+
+- 用当前登录凭证实测 `vip_login_base`：`identity.vip = 1`、`identity.level = 7`、`nextlevel = 8`、值图标路径为 `lv_7.png`；确认 `identity.level` 是可直接展示的会员成长等级。
+- 新增 / 更新测试：`test/member-badge.test.ts` 覆盖 `Lv. 7` 文本与仅图标模式的无障碍名称、缺失等级不渲染；`test/api/vip-status.test.ts` 覆盖 `identity.level` 映射与未知 / 非会员的 `null` 回退。
+- `npm run typecheck`、`npm test`（55 个测试文件、301 个用例）与 `npm run build` 通过。
+- 未做真实窗口截图验收；侧栏昵称省略与等级不收缩由 CSS 契约保证。

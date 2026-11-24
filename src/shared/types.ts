@@ -456,6 +456,8 @@ export interface VipStatus {
   state: 'known' | 'unknown'
   isVip: boolean
   level: VipLevel
+  /** 会员成长等级（上游 identity.level）；非会员、缺失或无法识别时为 null。只用于展示。 */
+  growthLevel: number | null
   /** 账号会员到期时间（毫秒）；接口未提供或无法解析时为 null。 */
   expiresAtMs: number | null
 }

@@ -4,8 +4,12 @@ import { renderToString } from '@vue/server-renderer'
 import MemberBadge from '../src/renderer/components/MemberBadge.vue'
 import type { VipLevel, VipStatus } from '../src/shared/types'
 
-function status(level: VipLevel, state: VipStatus['state'] = 'known'): VipStatus {
-  return { state, isVip: level !== 'none', level, expiresAtMs: null }
+function status(
+  level: VipLevel,
+  state: VipStatus['state'] = 'known',
+  growthLevel: number | null = null
+): VipStatus {
+  return { state, isVip: level !== 'none', level, growthLevel, expiresAtMs: null }
 }
 
 function render(props: { status: VipStatus | null; showLabel?: boolean }): Promise<string> {
@@ -34,6 +38,22 @@ describe('MemberBadge', () => {
     expect(html).toContain('member-super')
     expect(html).toContain('超级会员')
     expect(html).toContain('member-v')
+  })
+
+  it('renders the growth level as Lv. X next to the tier', async () => {
+    const iconOnly = await render({ status: status('vip', 'known', 7) })
+    expect(iconOnly).toContain('Lv. 7')
+    expect(iconOnly).toContain('aria-label="绿钻，Lv. 7"')
+
+    const labelled = await render({ status: status('deluxe', 'known', 7), showLabel: true })
+    expect(labelled).toContain('豪华绿钻')
+    expect(labelled).toContain('Lv. 7')
+  })
+
+  it('omits the growth level when it is unavailable', async () => {
+    const html = await render({ status: status('vip'), showLabel: true })
+    expect(html).not.toContain('member-level')
+    expect(html).not.toContain('Lv.')
   })
 
   it('renders nothing for unknown, non-member or missing status', async () => {

@@ -24,12 +24,13 @@ beforeEach(() => {
 
 describe('getVipStatus', () => {
   it('maps green diamond to vip and parses seconds expiry', async () => {
-    musicuMock.mockResolvedValue({ identity: { vip: 1 }, userinfo: { expire: 2_000_000_000 } })
+    musicuMock.mockResolvedValue({ identity: { vip: 1, level: 7 }, userinfo: { expire: 2_000_000_000 } })
     const { getVipStatus } = await import('../../src/main/api/user')
     expect(await getVipStatus()).toEqual({
       state: 'known',
       isVip: true,
       level: 'vip',
+      growthLevel: 7,
       expiresAtMs: 2_000_000_000_000
     })
   })
@@ -85,6 +86,7 @@ describe('getVipStatus', () => {
       state: 'known',
       isVip: false,
       level: 'none',
+      growthLevel: null,
       expiresAtMs: null
     })
   })
@@ -96,6 +98,7 @@ describe('getVipStatus', () => {
       state: 'unknown',
       isVip: false,
       level: 'none',
+      growthLevel: null,
       expiresAtMs: null
     })
     expect(await isVipUser()).toBeNull()
