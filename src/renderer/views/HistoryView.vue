@@ -10,6 +10,7 @@ import { useHistoryStore } from '../stores/history'
 import { usePlayerStore } from '../stores/player'
 import { usePlaylistEditStore } from '../stores/playlist-edit'
 import { singerNames } from '../utils/format'
+import { matchesSearchQuery } from '../utils/local-filter'
 
 const history = useHistoryStore()
 const player = usePlayerStore()
@@ -22,12 +23,10 @@ const confirmClearOpen = ref(false)
 
 const songs = computed(() => history.entries.map((entry) => entry.song))
 const filteredSongs = computed(() => {
-  const keyword = searchText.value.trim().toLowerCase()
-  if (!keyword) return songs.value
-  return songs.value.filter((song) => {
-    const haystack = [song.name, singerNames(song), song.album.name].join(' ').toLowerCase()
-    return haystack.includes(keyword)
-  })
+  if (!searchText.value.trim()) return songs.value
+  return songs.value.filter((song) =>
+    matchesSearchQuery([song.name, singerNames(song), song.album.name], searchText.value)
+  )
 })
 const { showCurrent: showJumpCurrent, scrollToCurrent } = useCurrentSongJump(
   pageRef,

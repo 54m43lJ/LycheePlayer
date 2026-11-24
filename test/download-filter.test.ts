@@ -34,4 +34,11 @@ describe('下载中心本地搜索', () => {
     expect(matchesDownloadKeyword(task(), '   ')).toBe(true)
     expect(matchesDownloadKeyword(task(), '不存在')).toBe(false)
   })
+
+  it('忽略标点并按空白拆词', () => {
+    expect(matchesDownloadKeyword(task({ name: "Ain't No Sunshine" }), 'aint sunshine')).toBe(true)
+    expect(matchesDownloadKeyword(task(), '叶惠美 晴天')).toBe(true)
+    expect(matchesDownloadKeyword(task(), '晴天 周杰伦')).toBe(true)
+    expect(matchesDownloadKeyword(task(), '晴天 不存在')).toBe(false)
+  })
 })

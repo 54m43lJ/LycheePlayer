@@ -19,6 +19,7 @@ import { usePlaylistStore } from '../stores/playlist'
 import { PLAYLIST_POLL_INTERVAL_MS } from '@shared/constants'
 import { canDownloadSong, canStartPlayback, songPlayState } from '@shared/permission'
 import { dailyPlaylistName, singerNames } from '../utils/format'
+import { matchesSearchQuery } from '../utils/local-filter'
 
 const route = useRoute()
 const playlist = usePlaylistStore()
@@ -50,12 +51,10 @@ const {
 } = usePageJump(pageRef)
 
 const filteredSongs = computed(() => {
-  const keyword = filterText.value.trim().toLowerCase()
-  if (!keyword) return songs.value
-  return songs.value.filter((song) => {
-    const haystack = [song.name, singerNames(song), song.album.name].join(' ').toLowerCase()
-    return haystack.includes(keyword)
-  })
+  if (!filterText.value.trim()) return songs.value
+  return songs.value.filter((song) =>
+    matchesSearchQuery([song.name, singerNames(song), song.album.name], filterText.value)
+  )
 })
 const { showCurrent: showJumpCurrent, scrollToCurrent } = useCurrentSongJump(
   pageRef,

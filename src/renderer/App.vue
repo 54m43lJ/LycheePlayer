@@ -22,6 +22,7 @@ import { useSettingsStore } from './stores/settings'
 import { useUiStore } from './stores/ui'
 import { useToast } from './composables/toast'
 import { appTitle, dailyPlaylistName, singerNames, songCover } from './utils/format'
+import { matchesSearchQuery } from './utils/local-filter'
 import { FAVORITES_PLAYLIST_ID } from '@shared/constants'
 import { SHORTCUT_ACTIONS, matchesShortcut } from '@shared/shortcuts'
 import type { ShortcutAction } from '@shared/types'
@@ -46,13 +47,11 @@ const avatarLetter = computed(() => {
 
 const queueFilter = ref('')
 const filteredQueue = computed(() => {
-  const keyword = queueFilter.value.trim().toLowerCase()
   const items = player.queue.map((song, index) => ({ song, index }))
-  if (!keyword) return items
-  return items.filter(({ song }) => {
-    const haystack = [song.name, singerNames(song), song.album.name].join(' ').toLowerCase()
-    return haystack.includes(keyword)
-  })
+  if (!queueFilter.value.trim()) return items
+  return items.filter(({ song }) =>
+    matchesSearchQuery([song.name, singerNames(song), song.album.name], queueFilter.value)
+  )
 })
 const showReauth = computed(
   () => Boolean(auth.reauthReason) && route.name !== 'login'
