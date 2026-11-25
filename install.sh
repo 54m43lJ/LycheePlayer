@@ -22,7 +22,7 @@ usage() {
 Lychee Player 安装脚本
 
   --version <ver>   选择 Release；默认 preview（预览版），稳定版传 v0.1.0
-  --local <tarball> 从本地打包产物安装（需要同目录 .sha256；用于开发测试）
+  --local <tarball> 从本地打包产物安装（支持 .tar.gz / .tar.zst，需要同目录 .sha256；用于开发测试）
   --prefix <dir>    用户级安装目录
   --system          安装到 /opt/lychee-player（需要 root / sudo）
   --with-deps       安装运行期依赖（GTK / libsecret / NSS / ALSA / D-Bus）
@@ -195,7 +195,14 @@ fi
 if [ "$DRY_RUN" -eq 0 ]; then
   ( cd "$TMP" && sha256sum -c "$ASSET.sha256" )
   run mkdir -p "$APP_DIR"
-  run tar -xzf "$TMP/$ASSET" -C "$TMP"
+  case "$ASSET" in
+    *.tar.zst) run tar --zstd -xf "$TMP/$ASSET" -C "$TMP" ;;
+    *.tar.gz) run tar -xzf "$TMP/$ASSET" -C "$TMP" ;;
+    *)
+      echo "不支持的安装包格式：$ASSET" >&2
+      exit 1
+      ;;
+  esac
   run cp -a "$TMP/lychee-player/." "$APP_DIR/"
 fi
 

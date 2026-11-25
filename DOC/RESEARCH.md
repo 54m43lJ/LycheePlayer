@@ -9,7 +9,7 @@
 先说三个判断：
 
 1. **当前 308 MiB 里约 92% 是 Electron/Chromium 运行时**，业务代码（`app.asar`）只占 7.6%，其中还有约 22 MiB 是误打包的构建期依赖。换前端框架（Vue → Svelte/Preact/Solid）对体积几乎没有意义，量级只有几十 KB。
-2. **不换壳的前提下，最划算的是“清理 + 换压缩”**：不改一行业务代码，安装后约 278 MiB、下载约 81 MiB（现状 123 MiB），代价 1–2 天。这是必做项，不是备选。
+2. **不换壳的前提下，最划算的是“清理 + 换压缩”**：不改一行业务代码，实测安装后 308 → **279 MiB**，发布包 123.4 → **90.5 MiB**（zstd，−26.7%），代价 1–2 天。这是必做项，不是备选。
 3. **要同时满足“安装包显著变小”和“单可执行文件”，只有换掉 Chromium 内核**：Tauri 2 / Wails v3（保留 Vue，主进程重写）能把下载压到 5–15 MiB、产出单个 ELF；代价是系统 WebKitGTK 依赖（Arch 上约 143 MiB）和媒体编解码风险。Electron 本身**不可能**做成单个 ELF，最多做成单个 AppImage 文件。
 
 一句话路线：**先做 Electron 清理（立刻见效）→ 用一周做 Tauri 2 媒体/登录 PoC → 通过则迁移，不通过则停在 Electron + AppImage/zstd。**
@@ -67,6 +67,8 @@
 
 原因：`electron.vite.config.ts` 对 main/preload 使用 `externalizeDepsPlugin()`，而 electron-builder 默认把 `package.json` 的**全部** `dependencies` 放进 asar，即使 renderer 依赖早已被 Vite 打进 `out/`。实际运行期只需要 `mpris-service`（及其 `dbus-next` 依赖链）。
 
+实测清理后（`dependencies` 只留 `mpris-service`，排除 `*.map`）：`app.asar` 从 23.4 MiB 降到 **3.2 MiB**，其中 `node_modules` 约 3.0 MiB（`mpris-service` 依赖链）、`out` 1.3 MiB；asar 内已无 `@vue` / `@babel` / `vue` / `vue-router`。
+
 ### 2.3 发布包压缩对比（同一棵解压目录）
 
 | 压缩方式 | 字节 | 相对现状 | 解压速度 |
@@ -74,6 +76,8 @@
 | `tar.gz`（现状，gzip -6） | 123.4 MiB | 基线 | 快 |
 | `tar.zst`（zstd -19） | 94.8 MiB | **−23.2%** | 很快 |
 | `tar.xz`（xz -9） | 87.4 MiB | **−29.2%** | 慢 |
+| **清理后** `tar.gz`（实测） | 116.0 MiB | −6.0% | 快 |
+| **清理后** `tar.zst`（实测） | **90.5 MiB** | **−26.7%** | 很快 |
 
 只换压缩算法就能少下 23–29 MiB，且 zstd 解压比 gzip 更快；xz 更小但解压慢、对增量更新不友好。**zstd 是性价比最高的默认选择。**
 
@@ -83,19 +87,23 @@
 
 优先级最高、风险最低。逐项收益（安装后 / 下载）：
 
-| 措施 | 安装后 | 下载（zstd） | 风险 |
+| 措施 | 安装后 | 下载（相对旧 zstd 94.8） | 风险 |
 | --- | ---: | ---: | --- |
-| 把 `vue`、`vue-router`、`pinia`、`@fontsource/*` 移到 `devDependencies`；`dependencies` 只留 `mpris-service` | −22 MiB | −5.5 MiB | 低，需回归主进程 |
-| `electronLanguages: [zh-CN, en-US]` | −8.4 MiB | −8.3 MiB | 低 |
+| 把 `vue`、`vue-router`、`pinia`、`@fontsource/*` 移到 `devDependencies`；`dependencies` 只留 `mpris-service` | −20.2 MiB | −2.4 MiB | 低，需回归主进程 |
+| `electronLanguages: [zh-CN, en-US]` | −8.4 MiB | −1.9 MiB | 低 |
 | 排除 `*.map`、`!**/node_modules/**`（配合上一条） | 已计入 | 已计入 | 低 |
-| 发布改用 `tar.zst` / `tar.xz` | — | −28 / −36 MiB | 低，安装脚本需解压工具 |
+| 发布改用 `tar.zst` / `tar.xz` | — | −28.6 / −36.0 MiB（相对 gzip） | 低，安装脚本需解压工具 |
 | 可选：移除 `libvk_swiftshader.so`、`libvulkan.so.1` | −6.8 MiB | ≈−2.5 MiB | 中，无 GPU/虚拟机可能起不来 |
 | 可选：`LICENSES.chromium.html` 换成 `.gz` | −15.5 MiB | 0 | 中，许可证可读性/合规需确认 |
 | 可选：确认未启用崩溃上报后移除 `chrome_crashpad_handler` | −1.8 MiB | ≈−0.7 MiB | 中，需实测启动 |
 | 可选：`chrome_200_percent.pak`（HiDPI） | −1.2 MiB | ≈−0.5 MiB | 高，不建议 |
 | 可选：对字体做子集化、去掉重复 woff | −0.3 MiB | ≈−0.1 MiB | 低，收益小 |
 
-**L0 合计：安装后 ≈278 MiB，下载 ≈81 MiB（zstd）；把可选高风险项也做掉可到 ≈254 MiB / ≈78 MiB。**
+**L0 合计（实测）：安装后 308 → 279 MiB，发布包 123.4 → 116.0 MiB（gzip）/ 90.5 MiB（zstd）。**
+
+> 注意：locales 的 55 个 `.pak` 彼此高度相似，整体压缩后只占约 2.8 MiB（gzip）/ 2.0 MiB（zstd）；所以删掉 53 个 locale 在安装后省 8.4 MiB，但在发布包里只省约 1.9 MiB。**下载体积的大头来自 gzip → zstd（−28.6 MiB），清理本身贡献 −4.3 MiB（zstd 口径）。**
+
+把可选高风险项也做掉可到 **≈255 MiB / ≈87 MiB（zstd，估算）**。
 
 不做的事：
 
@@ -144,7 +152,7 @@ tar --zstd -cf "dist/lychee-player-${version}-x86_64.tar.zst" -C dist lychee-pla
 
 | 方案 | 安装后 | 下载 | 单文件 | 单可执行 | 评价 |
 | --- | ---: | ---: | :---: | :---: | --- |
-| **AppImage** | ≈278 MiB（挂载后） | ≈95–105 MiB | ✅ | ❌ | 最接近“一个文件”的 Electron 方案；依赖 FUSE，可用 `--appimage-extract-and-run` 兜底 |
+| **AppImage** | ≈279 MiB（挂载后） | ≈90–100 MiB | ✅ | ❌ | 最接近“一个文件”的 Electron 方案；依赖 FUSE，可用 `--appimage-extract-and-run` 兜底 |
 | **系统 Electron**（Arch `electron44`） | 应用 ≈3 MiB + `electron44` 319 MiB（共享） | ≈2–3 MiB | ❌ | ❌ | 包尺寸无敌；依赖系统包与主版本，升级需重打包 |
 | **Flatpak**（Electron BaseApp） | 应用 + 共享 runtime | 首装 ≈60–120 MiB，之后共享 | ❌ | ❌ | 运行时共享、沙箱隔离；MPRIS/托盘/文件访问要走 portal，工作量大 |
 | **Snap** | 类似 Flatpak | 类似 | ❌ | ❌ | 对 Arch 用户不友好 |
@@ -226,9 +234,9 @@ tar --zstd -cf "dist/lychee-player-${version}-x86_64.tar.zst" -C dist lychee-pla
 | 方案 | 安装后 | 下载 | 单文件 | 单 ELF | renderer 复用 | main 改造 | 媒体风险 | 综合建议 |
 | --- | ---: | ---: | :---: | :---: | :---: | --- | --- | --- |
 | 现状 Electron | 308 MiB | 123 MiB | ❌ | ❌ | — | — | 低 | 基线 |
-| **L0 Electron 清理 + zstd** | **≈278 MiB** | **≈81 MiB** | ❌ | ❌ | ✅ | 无 | 低 | **必做** |
-| L0 + 可选激进项 | ≈254 MiB | ≈78 MiB | ❌ | ❌ | ✅ | 无 | 中 | 视合规/兼容性 |
-| Electron + AppImage | ≈278 MiB | ≈95–105 MiB | ✅ | ❌ | ✅ | 无 | 低 | 想要“一个文件”时的低成本解 |
+| **L0 Electron 清理 + zstd** | **279 MiB** | **90.5 MiB** | ❌ | ❌ | ✅ | 无 | 低 | **必做** |
+| L0 + 可选激进项 | ≈255 MiB | ≈87 MiB | ❌ | ❌ | ✅ | 无 | 中 | 视合规/兼容性 |
+| Electron + AppImage | ≈279 MiB | ≈90–100 MiB | ✅ | ❌ | ✅ | 无 | 低 | 想要“一个文件”时的低成本解 |
 | Electron + 系统 electron | ≈3 MiB + 319 MiB 共享 | ≈2–3 MiB | ❌ | ❌ | ✅ | 小 | 低 | Arch 专属的总磁盘最优解 |
 | **Tauri 2** | ≈8–15 MiB + 143 MiB 共享 | **≈5–10 MiB** | ✅ | ✅ | ✅ | Rust 重写 | **高** | **体积/一体化首选，需 PoC** |
 | Wails v3 | ≈12–20 MiB + 141 MiB 共享 | ≈8–15 MiB | ✅ | ✅ | ✅ | Go 重写 | 高 | Go 团队备选 |
@@ -260,7 +268,7 @@ tar --zstd -cf "dist/lychee-player-${version}-x86_64.tar.zst" -C dist lychee-pla
 - 把 renderer 依赖移到 `devDependencies`，`dependencies` 只留 `mpris-service`。
 - `electronLanguages` 只留 `zh-CN` / `en-US`，排除 `*.map`。
 - 发布包改用 `tar.zst`（安装脚本用 `tar --zstd`）。
-- 预期：**308 → ≈278 MiB，123 → ≈81 MiB**，行为不变。
+- 预期：**308 → 279 MiB，123.4 → 90.5 MiB**（zstd；gzip 为 116.0 MiB），行为不变。
 
 ### 第 1 步（0.5–1 天，按需）
 

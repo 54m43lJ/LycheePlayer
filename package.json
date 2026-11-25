@@ -21,18 +21,18 @@
     "package:arch": "npm run build && electron-builder --linux dir && node scripts/package-arch.mjs"
   },
   "dependencies": {
+    "mpris-service": "^2.1.2"
+  },
+  "devDependencies": {
     "@fontsource/noto-sans-avestan": "^5.3.0",
     "@fontsource/noto-sans-linear-b": "^5.3.0",
     "@fontsource/noto-sans-yi": "^5.3.0",
-    "mpris-service": "^2.1.2",
-    "pinia": "^4.1.0",
-    "vue": "^3.5.44",
-    "vue-router": "^5.4.0"
-  },
-  "devDependencies": {
     "@types/node": "^24.0.0",
     "@vitejs/plugin-vue": "^6.0.10",
     "electron": "^44.9.0",
+    "pinia": "^4.1.0",
+    "vue": "^3.5.44",
+    "vue-router": "^5.4.0",
     "electron-builder": "^26.15.3",
     "electron-vite": "^6.0.0",
     "typescript": "^5.9.3",

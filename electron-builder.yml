@@ -3,10 +3,14 @@ productName: Lychee Player
 directories:
   output: dist
   buildResources: build
+electronLanguages:
+  - zh-CN
+  - en-US
 files:
   - out/**/*
   - package.json
   - LICENSE
+  - "!**/*.map"
 extraResources:
   - from: resources
     to: .
