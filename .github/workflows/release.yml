@@ -29,23 +29,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Ensure zstd
+        run: command -v zstd >/dev/null 2>&1 || { sudo apt-get update && sudo apt-get install -y zstd; }
+
       - name: Build package
         run: npm run package:arch
 
       - name: Prepare preview assets
         run: |
           version="$(node -p "require('./package.json').version")"
-          cp "dist/lychee-player-${version}-x86_64.tar.gz" "dist/lychee-player-preview-x86_64.tar.gz"
-          (
-            cd dist
-            sha256sum lychee-player-preview-x86_64.tar.gz > lychee-player-preview-x86_64.tar.gz.sha256
-          )
+          for suffix in tar.zst tar.gz; do
+            cp "dist/lychee-player-${version}-x86_64.$suffix" "dist/lychee-player-preview-x86_64.$suffix"
+            (
+              cd dist
+              sha256sum "lychee-player-preview-x86_64.$suffix" > "lychee-player-preview-x86_64.$suffix.sha256"
+            )
+          done
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: lychee-player-preview
           path: |
+            dist/lychee-player-preview-x86_64.tar.zst
+            dist/lychee-player-preview-x86_64.tar.zst.sha256
             dist/lychee-player-preview-x86_64.tar.gz
             dist/lychee-player-preview-x86_64.tar.gz.sha256
 
@@ -57,6 +64,8 @@ jobs:
           tag="preview"
           notes="自动构建自 main@${GITHUB_SHA:0:7}（$(date -u +%Y-%m-%dT%H:%M:%SZ)）"
           assets=(
+            "dist/lychee-player-preview-x86_64.tar.zst"
+            "dist/lychee-player-preview-x86_64.tar.zst.sha256"
             "dist/lychee-player-preview-x86_64.tar.gz"
             "dist/lychee-player-preview-x86_64.tar.gz.sha256"
           )

@@ -49,14 +49,16 @@ node scripts/probe.mjs</code></pre>
 <pre><code>npm run build</code></pre>
 <p>构建产物进入 <code>out/</code>；版本与许可证从 <code>package.json</code> 注入关于页。</p>
 <ul class="note">
-  <li><code>electron-builder.yml</code> 的关键字段：<code>appId=io.github.lycheeplayer</code>、<code>productName=Lychee Player</code>、<code>directories.output=dist</code>、<code>directories.buildResources=build</code>、<code>linux.target=dir</code>、<code>linux.executableName=lychee-player</code>、<code>linux.icon=build/icon.png</code>。</li>
-  <li><code>files</code> 只包含 <code>out/**/*</code>、<code>package.json</code> 与 <code>LICENSE</code>；<code>extraResources</code> 把 <code>resources/</code> 下的 <code>icon.png</code> / <code>tray.png</code> 复制到 <code>process.resourcesPath</code>，运行时图标读取该路径。</li>
+  <li><code>electron-builder.yml</code> 的关键字段：<code>appId=io.github.lycheeplayer</code>、<code>productName=Lychee Player</code>、<code>directories.output=dist</code>、<code>directories.buildResources=build</code>、<code>linux.target=dir</code>、<code>linux.executableName=lychee-player</code>、<code>linux.icon=build/icon.png</code>、<code>electronLanguages=[zh-CN, en-US]</code>。</li>
+  <li><code>files</code> 只包含 <code>out/**/*</code>、<code>package.json</code> 与 <code>LICENSE</code>，并排除 <code>*.map</code>；运行期 <code>dependencies</code> 只保留主进程需要 externalize 的 <code>mpris-service</code>，renderer 依赖放在 <code>devDependencies</code> 并已被 Vite 打进 <code>out/</code>。<code>extraResources</code> 把 <code>resources/</code> 下的 <code>icon.png</code> / <code>tray.png</code> 复制到 <code>process.resourcesPath</code>，运行时图标读取该路径。</li>
 </ul>
 
 <h2 id="b4">4. 打包</h2>
 <p><a href="#top">↑</a></p>
 <pre><code>npm run package:arch</code></pre>
-<pre><code>dist/lychee-player-&lt;version&gt;-x86_64.tar.gz
+<pre><code>dist/lychee-player-&lt;version&gt;-x86_64.tar.zst
+dist/lychee-player-&lt;version&gt;-x86_64.tar.zst.sha256
+dist/lychee-player-&lt;version&gt;-x86_64.tar.gz
 dist/lychee-player-&lt;version&gt;-x86_64.tar.gz.sha256
 dist/lychee-player/
 ├── lychee-player
@@ -66,7 +68,7 @@ dist/lychee-player/
 ├── lychee-player.desktop
 └── lychee-player.png</code></pre>
 <ul class="note">
-  <li><code>electron-builder --linux dir</code> 生成 <code>dist/linux-unpacked</code> 后由 <code>scripts/package-arch.mjs</code> 复制为 <code>dist/lychee-player</code>、补 <code>LICENSE</code> / 桌面文件 / 图标 / flags 示例，并生成 tar.gz 与 sha256。</li>
+  <li><code>electron-builder --linux dir</code> 生成 <code>dist/linux-unpacked</code> 后由 <code>scripts/package-arch.mjs</code> 复制为 <code>dist/lychee-player</code>、补 <code>LICENSE</code> / 桌面文件 / 图标 / flags 示例，并生成 tar.zst、tar.gz 与 sha256。</li>
   <li><code>electron-builder</code> 26.x 会拒绝 <code>linux.desktop</code> 自定义字段，因此桌面文件不再写在 builder 配置里；<code>packaging/arch/lychee-player.desktop</code> 由打包脚本写入 tar 顶层。</li>
   <li><code>mpris-service</code> 的 <code>abstract-socket</code> 是原生模块，依赖 electron-builder 自带的 rebuild 步骤；打包机需要可用的编译工具链。</li>
   <li>tarball 顶层固定为 <code>lychee-player/</code>，不包含源码、<code>node_modules</code>、测试或构建缓存。</li>
@@ -86,12 +88,12 @@ curl -fsSL https://raw.githubusercontent.com/54m43lJ/LycheePlayer/main/install.s
 curl -fsSL https://raw.githubusercontent.com/54m43lJ/LycheePlayer/main/install.sh | sudo sh -s -- --system
 # 覆盖仓库：LYCHEE_REPO=owner/repo curl ... | sh
 
-# 开发测试：安装本地构建产物（需要同目录 .sha256）
-./install.sh --local dist/lychee-player-0.1.0-x86_64.tar.gz</code></pre>
+# 开发测试：安装本地构建产物（支持 .tar.zst / .tar.gz，需要同目录 .sha256）
+./install.sh --local dist/lychee-player-0.1.0-x86_64.tar.zst</code></pre>
 <table>
   <tr><th>参数</th><th>行为</th></tr>
   <tr><td><code>--version &lt;ver&gt;</code></td><td>默认 <code>preview</code>（预览版）；<code>latest</code> 解析最新稳定版；也可写 <code>0.1.0</code> / <code>v0.1.0</code>。</td></tr>
-  <tr><td><code>--local &lt;tarball&gt;</code></td><td>跳过下载，安装本地 tarball；要求同目录存在 <code>.sha256</code>，不写入远程缓存。用于开发测试。</td></tr>
+  <tr><td><code>--local &lt;tarball&gt;</code></td><td>跳过下载，安装本地 tarball（<code>.tar.zst</code> / <code>.tar.gz</code>）；要求同目录存在 <code>.sha256</code>，不写入远程缓存。用于开发测试。</td></tr>
   <tr><td><code>--with-deps</code></td><td>安装运行期依赖；与 <code>--no-deps</code> 互斥。非交互场景使用。</td></tr>
   <tr><td><code>--no-deps</code></td><td>跳过全部包安装；与 <code>--with-deps</code> 互斥。</td></tr>
   <tr><td><code>--prefix &lt;dir&gt;</code></td><td>用户级安装目录；默认 <code>${XDG_DATA_HOME:-$HOME/.local/share}/lychee-player</code>。</td></tr>
@@ -104,8 +106,8 @@ curl -fsSL https://raw.githubusercontent.com/54m43lJ/LycheePlayer/main/install.s
   <li>当前只发布 Preview 预发布，不做版本管理；默认安装的就是 <code>preview</code> tag 的最新构建。</li>
   <li>默认用户级安装：程序目录 <code>${XDG_DATA_HOME:-$HOME/.local/share}/lychee-player</code>，入口 <code>~/.local/bin/lychee-player</code>，桌面文件与图标写入用户 XDG 目录。</li>
   <li>系统级安装：程序目录 <code>/opt/lychee-player</code>，入口 <code>/usr/bin/lychee-player</code>，桌面文件与图标写入 <code>/usr/share</code>。</li>
-  <li>安装包缓存目录为 <code>${XDG_CACHE_HOME:-$HOME/.cache}/lychee-player/install/</code>，tar.gz 与 <code>.sha256</code> 使用与 Release 资产相同的固定文件名；版本化安装按版本分子目录。目录权限 <code>0700</code>，文件按当前用户可读。</li>
-  <li>每次安装先取远端 <code>.sha256</code>（体积小），再计算本地缓存 tar.gz 的 sha256：一致则跳过下载直接安装；不一致或缓存缺失时下载到 <code>.part</code>，校验通过后原子 <code>mv</code> 到缓存并写入 <code>.sha256</code>。远端校验和不可获取时不使用过期缓存静默安装，给出错误与清缓存提示。</li>
+  <li>安装包缓存目录为 <code>${XDG_CACHE_HOME:-$HOME/.cache}/lychee-player/install/</code>，安装包（tar.zst / tar.gz）与 <code>.sha256</code> 使用与 Release 资产相同的固定文件名；版本化安装按版本分子目录。目录权限 <code>0700</code>，文件按当前用户可读。</li>
+  <li>每次安装先探测远端 <code>.sha256</code>（体积小）：优先 <code>.tar.zst</code>，不存在时回退 <code>.tar.gz</code>；再计算本地缓存安装包的 sha256，一致则跳过下载直接安装；不一致或缓存缺失时下载到 <code>.part</code>，校验通过后原子 <code>mv</code> 到缓存并写入 <code>.sha256</code>。远端校验和不可获取时不使用过期缓存静默安装，给出错误与清缓存提示。</li>
   <li>运行期依赖：未给 <code>--with-deps</code> / <code>--no-deps</code> 且 stdin 是 TTY 时询问“安装运行期依赖？[Y/n]”（默认 Y）；无 TTY 时跳过并打印提示。依赖安装放在客户端安装成功之后，失败只提示可能影响启动，不阻塞已安装的客户端。脚本按 §1 的 Arch 映射执行 <code>pacman -S --needed gtk3 libsecret nss alsa-lib dbus</code>，需要 root 时通过 <code>sudo</code>，用户级安装不静默提权；未检测到 <code>pacman</code> 时跳过并提示自行安装等价依赖。</li>
   <li>安装脚本强制校验 <code>sha256sum</code>；校验和缺失或不匹配时拒绝安装。也可先下载脚本检查再执行。</li>
   <li>安装时会把桌面项的 <code>Exec</code> / <code>TryExec</code> 改写为实际入口的绝对路径，避免 GUI 会话的 PATH 不包含 <code>~/.local/bin</code> 时点击无效。</li>
@@ -120,16 +122,16 @@ git push origin main
 # 手动重跑：GitHub Actions → Preview → Run workflow</code></pre>
 <ul class="note">
   <li><code>.github/workflows/release.yml</code> 在 <code>main</code> push 或 <code>workflow_dispatch</code> 时运行：<code>npm ci</code> → <code>npm run package:arch</code> → 覆盖 <code>preview</code> Release 的资产。</li>
-  <li>产物固定为 <code>lychee-player-preview-x86_64.tar.gz</code> 与 <code>.sha256</code>，release 标记为 prerelease，不占用版本号；<code>preview</code> tag 始终指向最新 <code>main</code> 提交。</li>
+  <li>产物固定为 <code>lychee-player-preview-x86_64.tar.zst</code>（首选）与 <code>lychee-player-preview-x86_64.tar.gz</code>（兼容），各带 <code>.sha256</code>；release 标记为 prerelease，不占用版本号；<code>preview</code> tag 始终指向最新 <code>main</code> 提交。</li>
   <li><code>install.sh</code> 默认下载该 tag 的固定资产；<code>--version latest</code> 保留给未来稳定版，当前没有稳定 Release。</li>
   <li>workflow 需要仓库 Actions 启用，并允许 <code>GITHUB_TOKEN</code> 写 <code>contents</code>（workflow 已声明 <code>permissions: contents: write</code>）。</li>
   <li>需要稳定版时再改回 tag 驱动的版本化发布；当前不要创建 <code>v*</code> Release。</li>
-  <li>只想本地测试时不用发 Release：<code>npm run package:arch &amp;&amp; ./install.sh --local dist/lychee-player-0.1.0-x86_64.tar.gz</code>。</li>
+  <li>只想本地测试时不用发 Release：<code>npm run package:arch &amp;&amp; ./install.sh --local dist/lychee-player-0.1.0-x86_64.tar.zst</code>。</li>
 </ul>
 
 <h2 id="b6">6. 手动运行</h2>
 <p><a href="#top">↑</a></p>
-<pre><code>tar -xzf lychee-player-&lt;version&gt;-x86_64.tar.gz
+<pre><code>tar --zstd -xf lychee-player-&lt;version&gt;-x86_64.tar.zst
 ./lychee-player/lychee-player</code></pre>
 <ul class="note">
   <li>tarball 可解压到任意目录；未来放入 <code>/opt/lychee-player</code> 不需要改结构。</li>
@@ -144,7 +146,7 @@ git push origin main
 <p><a href="#top">↑</a></p>
 <table>
   <tr><th>AUR 需要</th><th>当前产物保证</th></tr>
-  <tr><td>稳定 <code>source</code> URL</td><td>当前 Preview 资产名固定 <code>lychee-player-preview-x86_64.tar.gz</code>；未来版本化 Release 使用 <code>lychee-player-&lt;version&gt;-x86_64.tar.gz</code>。</td></tr>
+  <tr><td>稳定 <code>source</code> URL</td><td>当前 Preview 资产名固定 <code>lychee-player-preview-x86_64.tar.zst</code>（兼容 <code>.tar.gz</code>）；未来版本化 Release 使用 <code>lychee-player-&lt;version&gt;-x86_64.tar.zst</code>（兼容 <code>.tar.gz</code>）。</td></tr>
   <tr><td>安装到 <code>/opt/lychee-player</code></td><td>tarball 顶层目录固定、内容可重定位。</td></tr>
   <tr><td><code>.desktop</code> / 图标 / LICENSE</td><td>已包含在 tarball。</td></tr>
   <tr><td>运行期依赖</td><td>见 §1 与 §11；未来 PKGBUILD 直接复用。</td></tr>
@@ -190,7 +192,7 @@ git push origin main
   <tr><td>歌单缓存</td><td><code>userData/cache/playlist</code>；每份歌单一个整份快照 JSON，<code>complete</code> 标记是否完整；超过 <code>PLAYLIST_CACHE_MAX_BYTES</code> 时按 mtime LRU 清理。</td></tr>
   <tr><td>音频缓存</td><td><code>userData/cache/audio/&lt;musicid|anonymous&gt;/&lt;quality&gt;/&lt;songMid&gt;.&lt;mp3|flac&gt;</code>；同曲可有多档；总容量上限与 LRU 清理由 CORE 常量定义；退出登录不清空。缓存与下载可同时存在，删除下载不删除缓存，清空缓存不删除已下载文件。缓存与下载可能位于不同文件系统；缓存转下载统一复制文件，不使用硬链接；复制失败时改回网络下载。</td></tr>
   <tr><td>下载</td><td>默认 <code>~/Music/Lychee Player</code>（<code>Settings.downloadDir</code> 可改）；下载索引与内容同目录：<code>&lt;downloadDir&gt;/.lychee-downloads-&lt;musicid|anonymous&gt;.json</code>，只有 <code>{ tasks }</code>，按账号记录完成与暂停任务，启动时加载当前账号索引并校验文件存在。索引写入先写 <code>&lt;index&gt;.part</code> 再原子替换；退出时同步写盘，避免异步写入被进程终止截断；从未加载下载模块时不写空索引；切换账号前先把旧账号索引落盘。文件名模板为 <code>歌名-歌手-专辑.&lt;mp3|flac&gt;</code>：多个歌手用顿号连接，缺失片段直接跳过，<code>\ / : * ? " &lt; &gt; |</code> 替换为 <code>_</code> 并压缩空白，全部为空时回退 <code>audio</code>；只有“歌名 + 歌手 + 专辑”完全相同的文件才会覆盖。入队占位路径仍使用 <code>songMid</code>，最终路径在出队时生成。<code>.part</code> 文件用于暂停 / 续传；删除单任务才删除文件，“清除已完成”只清记录；<code>downloadStorage</code> 统计排除 <code>.lychee-downloads-*</code>；仅本机个人使用。</td></tr>
-  <tr><td>安装脚本缓存</td><td><code>${XDG_CACHE_HOME:-$HOME/.cache}/lychee-player/install/</code>；存放 tar.gz 与 <code>.sha256</code>，版本化安装按版本分子目录；目录权限 <code>0700</code>，可随时删除，删除后下次安装重新下载。</td></tr>
+  <tr><td>安装脚本缓存</td><td><code>${XDG_CACHE_HOME:-$HOME/.cache}/lychee-player/install/</code>；存放安装包（tar.zst / tar.gz）与 <code>.sha256</code>，版本化安装按版本分子目录；目录权限 <code>0700</code>，可随时删除，删除后下次安装重新下载。</td></tr>
   <tr><td>凭证 / 设置</td><td><code>userData/credential.bin</code> 由 <code>safeStorage</code> 加密，权限 <code>0600</code>；<code>userData/settings.json</code> 每次保存先写 <code>settings.json.part</code> 再 <code>renameSync</code> 原子替换，权限 <code>0600</code>；退出时同步完成，不依赖异步 Promise。</td></tr>
 </table>
 

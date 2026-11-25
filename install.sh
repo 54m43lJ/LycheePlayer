@@ -4,7 +4,7 @@
 #   curl -fsSL https://raw.githubusercontent.com/54m43lJ/LycheePlayer/main/install.sh | sh
 #   curl -fsSL https://raw.githubusercontent.com/54m43lJ/LycheePlayer/main/install.sh | sh -s -- --version 0.1.0
 #   curl -fsSL https://raw.githubusercontent.com/54m43lJ/LycheePlayer/main/install.sh | sudo sh -s -- --system
-#   ./install.sh --local dist/lychee-player-0.1.0-x86_64.tar.gz
+#   ./install.sh --local dist/lychee-player-0.1.0-x86_64.tar.zst
 set -eu
 
 REPO="${LYCHEE_REPO:-54m43lJ/LycheePlayer}"
@@ -127,7 +127,7 @@ if [ -n "$LOCAL_TARBALL" ]; then
 else
   if [ "$VERSION" = "preview" ]; then
     TAG="preview"
-    ASSET="lychee-player-preview-$ARCH.tar.gz"
+    ASSET_BASE="lychee-player-preview-$ARCH"
     INSTALL_VERSION="预览版"
   elif [ "$VERSION" = "latest" ]; then
     # latest/download 不解析资产名，使用 GitHub API 定位实际稳定版。
@@ -137,49 +137,60 @@ else
       exit 1
     fi
     TAG="$VERSION"
-    ASSET="lychee-player-${TAG#v}-$ARCH.tar.gz"
+    ASSET_BASE="lychee-player-${TAG#v}-$ARCH"
     INSTALL_VERSION="$TAG"
   else
     case "$VERSION" in
       v*) TAG="$VERSION" ;;
       *) TAG="v$VERSION" ;;
     esac
-    ASSET="lychee-player-${TAG#v}-$ARCH.tar.gz"
+    ASSET_BASE="lychee-player-${TAG#v}-$ARCH"
     INSTALL_VERSION="$TAG"
   fi
   BASE="https://github.com/$REPO/releases/download/$TAG"
   CACHE_DIR="$CACHE_BASE/$TAG"
+
+  # 优先 zstd 资产；只提供 gzip 的旧 Release 自动回退。
+  REMOTE_SHA=""
+  ASSET=""
+  for candidate in "$ASSET_BASE.tar.zst" "$ASSET_BASE.tar.gz"; do
+    if REMOTE_SHA="$(curl -fsSL --proto '=https' --tlsv1.2 "$BASE/$candidate.sha256" 2>/dev/null)" && [ -n "$REMOTE_SHA" ]; then
+      ASSET="$candidate"
+      break
+    fi
+  done
+
+  if [ -z "$ASSET" ]; then
+    if [ "$DRY_RUN" -eq 1 ]; then
+      echo "[dry-run] 远端校验和不可用"
+      ASSET="$ASSET_BASE.tar.zst"
+    else
+      echo "无法获取远端校验和；为避免使用过期缓存，已停止安装。" >&2
+      echo "检查网络后重试，或清理缓存目录：$CACHE_BASE" >&2
+      exit 1
+    fi
+  fi
+
   CACHE_TAR="$CACHE_DIR/$ASSET"
   CACHE_SHA="$CACHE_DIR/$ASSET.sha256"
 
   echo "校验缓存 $CACHE_TAR"
-  REMOTE_SHA=""
-  if REMOTE_SHA="$(curl -fsSL --proto '=https' --tlsv1.2 "$BASE/$ASSET.sha256" 2>/dev/null)"; then
-    if [ "$DRY_RUN" -eq 1 ]; then
-      echo "[dry-run] 远端校验和可用；将比对本地缓存后决定是否下载"
-    elif [ -f "$CACHE_TAR" ] && [ -n "$REMOTE_SHA" ]; then
-      LOCAL_SHA="$(sha256sum "$CACHE_TAR" | awk '{print $1}')"
-      WANT_SHA="$(printf '%s\n' "$REMOTE_SHA" | awk '{print $1}')"
-      if [ "$LOCAL_SHA" = "$WANT_SHA" ]; then
-        echo "缓存校验通过，跳过下载"
-      else
-        echo "缓存校验和不匹配，重新下载"
-        rm -f "$CACHE_TAR"
-        fetch_to_cache "$BASE/$ASSET" "$CACHE_TAR"
-        printf '%s\n' "$REMOTE_SHA" > "$CACHE_SHA"
-      fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    echo "[dry-run] 将使用 $ASSET；远端校验和可用；将比对本地缓存后决定是否下载"
+  elif [ -f "$CACHE_TAR" ] && [ -n "$REMOTE_SHA" ]; then
+    LOCAL_SHA="$(sha256sum "$CACHE_TAR" | awk '{print $1}')"
+    WANT_SHA="$(printf '%s\n' "$REMOTE_SHA" | awk '{print $1}')"
+    if [ "$LOCAL_SHA" = "$WANT_SHA" ]; then
+      echo "缓存校验通过，跳过下载"
     else
+      echo "缓存校验和不匹配，重新下载"
+      rm -f "$CACHE_TAR"
       fetch_to_cache "$BASE/$ASSET" "$CACHE_TAR"
       printf '%s\n' "$REMOTE_SHA" > "$CACHE_SHA"
     fi
   else
-    if [ "$DRY_RUN" -eq 1 ]; then
-      echo "[dry-run] 远端校验和不可用"
-    else
-      echo "无法获取远端校验和；为避免使用过期缓存，已停止安装。" >&2
-      echo "可稍后重试，或清理缓存目录：$CACHE_BASE" >&2
-      exit 1
-    fi
+    fetch_to_cache "$BASE/$ASSET" "$CACHE_TAR"
+    printf '%s\n' "$REMOTE_SHA" > "$CACHE_SHA"
   fi
 
   if [ "$DRY_RUN" -eq 1 ] || [ -f "$CACHE_TAR" ]; then
